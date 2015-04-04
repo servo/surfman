@@ -6,6 +6,6 @@ extern crate libc;
 pub mod platform;
 
 trait GLContextMethods {
-	pub fn create_offscreen() -> GLContextMethods;
-	pub fn make_current(&self);
+    pub fn create_offscreen() -> GLContextMethods;
+    pub fn make_current(&self);
 }
