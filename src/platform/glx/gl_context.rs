@@ -6,7 +6,8 @@ use gleam::gl;
 use GLContextMethods;
 
 pub struct GLContext {
-	native : XID
+	display: *mut c_void,
+	native: XID
 }
 
 unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Visual, c_int), &'static str> {
@@ -25,19 +26,19 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 
 // Almost directly ported from
 // https://dxr.mozilla.org/mozilla-central/source/gfx/gl/GLContextProviderGLX.cpp
-fn create_offscreen_rendering_context(width: u32, height: u32) -> Result<GLXPixmap, &'static str> {
-	let dpy = unsafe { XOpenDisplay(0 as *mut c_char) as *mut Display };
+fn create_offscreen_pixmap_content(width: u32, height: u32) -> Result<GLXPixmap, &'static str> {
+	let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
 
-	let attributes: [c_int] = [
-		glx::DRAWABLE_TYPE,
-		glx::PIXMAP_BIT,
-		glx::X_RENDERABLE, 1,
-		glx::NONE
+	let attributes = vec![
+		glx::DRAWABLE_TYPE as c_int,
+		glx::PIXMAP_BIT as c_int,
+		glx::X_RENDERABLE as c_int, 1,
+		glx::NONE as c_int
 	];
 
 	let mut config_count : c_int = 0;
 
-	let configs = unsafe { glx::ChooseFBConfig(dpy as *mut glx::types::Display, XDefaultScreen(dpy), attributes.as_mut() as *mut c_int, &config_count as *mut c_int) };
+	let configs = unsafe { glx::ChooseFBConfig(dpy as *mut glx::types::Display, XDefaultScreen(dpy), attributes.as_mut_ptr(), &mut config_count as *mut c_int) };
 
 	if configs.is_null() {
 		return Err("glx::ChooseFBConfig");
@@ -46,18 +47,18 @@ fn create_offscreen_rendering_context(width: u32, height: u32) -> Result<GLXPixm
 	debug_assert!(config_count > 0);
 
 	let mut config_index = 0;
-	let mut visual_id = glx::NONE;
-	for i in 0..config_count {
+	let mut visual_id = glx::NONE as c_int;
+	for i in 0..(config_count as isize) {
 		unsafe {
-			let config = configs.offset(i);
+			let config = configs.offset(i) as *const c_void;
 			let drawable_type : c_int = 0;
 
 			// glx's `Success` is unreachable from bindings, but it's defined to 0
-			if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID, &drawable_type as *mut c_int) != 0 || ! (drawable_type & glx::PIXMAP_BIT ) {
+			if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut drawable_type as *mut c_int) != 0 || (drawable_type & (glx::PIXMAP_BIT as c_int) == 0) {
 				continue;
 			}
 
-			if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID, &visual_id as *mut c_int) != 0 || visual_id == 0 {
+			if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut visual_id as *mut c_int) != 0 || visual_id == 0 {
 				continue;
 			}
 		}
@@ -67,58 +68,34 @@ fn create_offscreen_rendering_context(width: u32, height: u32) -> Result<GLXPixm
 	}
 
 	if visual_id == 0 {
-		unsafe { XFree(configs) };
+		// TODO: bypass type checking
+		//  expected `*mut libc::types::common::c95::c_void`,
+		//     found `*mut libc::types::common::c95::c_void`
+		// (expected enum `libc::types::common::c95::c_void`,
+		//     found a different enum `libc::types::common::c95::c_void`) [E0308]
+		unsafe { XFree(configs as *mut c_void) };
 		return Err("We don't have any config with visuals");
 	}
 
 	let screen = unsafe { XDefaultScreenOfDisplay(dpy) };
 
 	// TODO: Get visual and depth from visual id... Undoable without access to Screen* structure?
-	let (visual, depth) = try!(unsafe { get_visual_and_depth(screen, visual_id) });
+	let (visual, depth) = try!(unsafe { get_visual_and_depth(screen, visual_id as VisualID) });
 
-	let pixmap = unsafe { XCreatePixmap(dpy, XRootWindowOfScreen(screen), width, height, depth) };
+	let pixmap = unsafe { XCreatePixmap(dpy, XRootWindowOfScreen(screen), width, height, depth as c_uint) };
 
 	if pixmap == 0 {
-		unsafe { XFree(configs) };
+		unsafe { XFree(configs as *mut c_void) };
 		return Err("XCreatePixMap");
 	}
 
-	let glx_pixmap = unsafe { glx::CreatePixmap(dpy, *configs.offset(config_index), pixmap, 0 as *mut c_void) };
+	let glx_pixmap = unsafe { glx::CreatePixmap(dpy as *mut glx::types::Display, *configs.offset(config_index), pixmap, 0 as *const c_int) };
 
-	unsafe { XFree(configs) };
+	unsafe { XFree(configs as *mut c_void) };
 
 	if glx_pixmap == 0 {
 		return Err("glx::createPixmap");
 	}
 
 	Ok(glx_pixmap)
-}
-
-impl GLContextMethods for GLContext {
-	pub fn create_offscreen() -> Result<GLContext, &'static str> {
-		let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
-
-		if dpy.is_null() {
-			return Err("XOpenDisplay");
-		}
-
-		let visual = unsafe {
-			// TODO: allow options to choose more capabilities?
-			let attributes : [c_uint] = [
-				glx::RGBA,
-				glx::DEPTH_SIZE, 1,
-				glx::RED_SIZE, 1,
-				glx::GREEN_SIZE, 1,
-				glx::BLUE_SIZE, 1,
-				glx::NONE
-			];
-			glx::ChooseVisual(dpy as, XDefaultRootWindow(dpy), attributes)
-		};
-
-		if visual.is_null() {
-			return Err("glXChooseVisual");
-		}
-
-		Err("Unimplemented")
-	}
 }
