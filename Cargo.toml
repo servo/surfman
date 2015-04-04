@@ -1,0 +1,15 @@
+[package]
+
+name = "offscreen-gl-context"
+version = "0.0.1"
+authors = ["ecoal95 <ecoal95@gmail.com>"]
+
+[dependencies.xlib]
+git = "https://github.com/servo/rust-xlib"
+
+[dependencies.gleam]
+git = "https://github.com/servo/gleam"
+
+[dependencies.glx]
+git = "https://github.com/servo/rust-glx"
+
