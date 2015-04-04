@@ -73,7 +73,6 @@ pub fn create_offscreen_pixmap_content(width: u32, height: u32) -> Result<GLXPix
 
     let screen = unsafe { XDefaultScreenOfDisplay(dpy) };
 
-    // TODO: Get visual and depth from visual id... Undoable without access to Screen* structure?
     let (visual, depth) = unsafe {
         match get_visual_and_depth(screen, visual_id as VisualID) {
             Ok(r) => r,
