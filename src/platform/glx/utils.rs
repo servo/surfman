@@ -23,7 +23,7 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 pub fn create_offscreen_pixmap_content(width: u32, height: u32) -> Result<GLXPixmap, &'static str> {
     let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
 
-    let attributes = vec![
+    let mut attributes = vec![
         glx::DRAWABLE_TYPE as c_int,
         glx::PIXMAP_BIT as c_int,
         glx::X_RENDERABLE as c_int, 1,
@@ -45,7 +45,7 @@ pub fn create_offscreen_pixmap_content(width: u32, height: u32) -> Result<GLXPix
     for i in 0..(config_count as isize) {
         unsafe {
             let config = configs.offset(i) as *const c_void;
-            let drawable_type : c_int = 0;
+            let mut drawable_type : c_int = 0;
 
             // glx's `Success` is unreachable from bindings, but it's defined to 0
             if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut drawable_type as *mut c_int) != 0 || (drawable_type & (glx::PIXMAP_BIT as c_int) == 0) {
