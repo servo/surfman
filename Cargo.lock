@@ -4,6 +4,7 @@ version = "0.0.1"
 dependencies = [
  "gleam 0.0.1 (git+https://github.com/servo/gleam)",
  "glx 0.0.1 (git+https://github.com/servo/rust-glx)",
+ "libc 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "xlib 0.1.0 (git+https://github.com/servo/rust-xlib)",
 ]
 
@@ -72,7 +73,7 @@ dependencies = [
 [[package]]
 name = "xlib"
 version = "0.1.0"
-source = "git+https://github.com/servo/rust-xlib#715e6f9bb3dfcd925996caedeb77aefb31c2bd65"
+source = "git+https://github.com/servo/rust-xlib#63b219da485cddb8d562186ea846f7e84d6570a5"
 dependencies = [
  "bitflags 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",

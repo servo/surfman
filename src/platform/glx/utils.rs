@@ -44,15 +44,17 @@ pub fn create_offscreen_pixmap_content(width: u32, height: u32) -> Result<GLXPix
     let mut visual_id = glx::NONE as c_int;
     for i in 0..(config_count as isize) {
         unsafe {
-            let config = configs.offset(i) as *const c_void;
+            let config = *configs.offset(i);
             let mut drawable_type : c_int = 0;
 
             // glx's `Success` is unreachable from bindings, but it's defined to 0
-            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut drawable_type as *mut c_int) != 0 || (drawable_type & (glx::PIXMAP_BIT as c_int) == 0) {
+            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut drawable_type as *mut c_int) != 0
+                || (drawable_type & (glx::PIXMAP_BIT as c_int) == 0) {
                 continue;
             }
 
-            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut visual_id as *mut c_int) != 0 || visual_id == 0 {
+            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut visual_id as *mut c_int) != 0
+                || visual_id == 0 {
                 continue;
             }
         }
@@ -62,18 +64,13 @@ pub fn create_offscreen_pixmap_content(width: u32, height: u32) -> Result<GLXPix
     }
 
     if visual_id == 0 {
-        // TODO: bypass type checking
-        //  expected `*mut libc::types::common::c95::c_void`,
-        //     found `*mut libc::types::common::c95::c_void`
-        // (expected enum `libc::types::common::c95::c_void`,
-        //     found a different enum `libc::types::common::c95::c_void`) [E0308]
         unsafe { XFree(configs as *mut c_void) };
         return Err("We don't have any config with visuals");
     }
 
     let screen = unsafe { XDefaultScreenOfDisplay(dpy) };
 
-    let (visual, depth) = unsafe {
+    let (_, depth) = unsafe {
         match get_visual_and_depth(screen, visual_id as VisualID) {
             Ok(r) => r,
             Err(ref s) => {
