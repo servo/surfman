@@ -1,2 +1,2 @@
-mod utils;
+pub mod utils;
 pub mod gl_context;
