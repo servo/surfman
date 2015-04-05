@@ -3,7 +3,7 @@ use platform::glx::utils::{create_offscreen_pixmap_backed_context};
 use libc::*;
 use xlib::*;
 use glx;
-use glx::types::{GLXContext, GLXDrawable, GLXFBConfig};
+use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 
 pub struct GLContext {
     native_context: GLXContext,
@@ -54,6 +54,16 @@ impl GLContext {
     }
 }
 
+impl Drop for GLContext {
+    fn drop(&mut self) {
+        self.make_current().unwrap();
+        unsafe { glx::DestroyContext(self.native_display, self.native_context) };
+        if self.delete_drawable_on_drop {
+            unsafe { glx::DestroyPixmap(self.native_display, self.native_drawable as GLXPixmap); };
+        }
+    }
+}
+
 impl GLContextMethods for GLContext {
     fn create_headless() -> Result<GLContext, &'static str> {
         // 16, 16 => dummy size
@@ -70,3 +80,4 @@ impl GLContextMethods for GLContext {
         Err("Not implemented")
     }
 }
+

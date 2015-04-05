@@ -1,8 +1,7 @@
 use glx;
 use xlib::*;
-use glx::types::{GLXPixmap, GLXDrawable};
+use glx::types::{GLXDrawable};
 use libc::*;
-use gleam::gl;
 use platform::glx::gl_context::{GLContext};
 
 struct ScopedXFree<T> {
