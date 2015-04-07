@@ -110,12 +110,12 @@ pub fn create_offscreen_pixmap_backed_context(width: u32, height: u32) -> Result
 
     unsafe {
         let screen = XDefaultScreenOfDisplay(dpy);
-        
+
         let (_, depth) = try!(get_visual_and_depth(screen, visual_id as VisualID));
-        
+
         let pixmap = XCreatePixmap(dpy,
                                    XRootWindowOfScreen(screen),
-                                   width, 
+                                   width,
                                    height,
                                    depth as c_uint);
 

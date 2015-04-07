@@ -1,9 +1,9 @@
-use GLContextMethods;
-use platform::glx::utils::{create_offscreen_pixmap_backed_context};
+use glx;
 use libc::*;
 use xlib::*;
-use glx;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
+use platform::glx::utils::{create_offscreen_pixmap_backed_context};
+use GLContextMethods;
 
 pub struct GLContext {
     native_context: GLXContext,
@@ -76,13 +76,14 @@ impl GLContextMethods for GLContext {
     }
 
     fn make_current(&self) -> Result<(), &'static str> {
-        if glx::MakeContextCurrent(self.native_display,
-                                   self.native_drawable,
-                                   self.native_drawable,
-                                   self.native_context) {
-            Ok(())
-        } else {
+
+        if unsafe { glx::MakeContextCurrent(self.native_display,
+                                            self.native_drawable,
+                                            self.native_drawable,
+                                            self.native_context) } == 0 {
             Err("glx::MakeContextCurrent")
+        } else {
+            Ok(())
         }
     }
 }
