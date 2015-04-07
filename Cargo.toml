@@ -16,3 +16,8 @@ git = "https://github.com/servo/gleam"
 [dependencies.glx]
 git = "https://github.com/servo/rust-glx"
 
+[dependencies.layers]
+git = "https://github.com/servo/rust-layers"
+
+[dependencies.geom]
+git = "https://github.com/servo/rust-geom"

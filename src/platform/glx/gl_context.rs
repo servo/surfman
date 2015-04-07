@@ -1,16 +1,20 @@
 use glx;
 use libc::*;
 use xlib::*;
+use gleam::gl;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
+use geom::{Size2D};
 use platform::glx::utils::{create_offscreen_pixmap_backed_context};
 use GLContextMethods;
+use gl_screen_buffer::{GLScreenBuffer};
 
 pub struct GLContext {
     native_context: GLXContext,
     native_display: *mut glx::types::Display,
     native_drawable: GLXDrawable,
     delete_drawable_on_drop: bool,
-    is_offscreen: bool
+    is_offscreen: bool,
+    // screen_buffer: Option<&mut GLScreenBuffer>
 }
 
 impl GLContext {
@@ -45,13 +49,35 @@ impl GLContext {
             native_display: display,
             native_drawable: drawable,
             delete_drawable_on_drop: delete_drawable_on_drop,
-            is_offscreen: is_offscreen
+            is_offscreen: is_offscreen,
+            // screen_buffer: None
         })
     }
 
     fn as_native_glx_context(&self) -> GLXContext {
         self.native_context
     }
+
+    // NOTE: This won't work until we have a correct screen buffer interpretation
+    fn init_offscreen(&self, size: Size2D<i32>) -> Result<(), &'static str> {
+        // try!(self.create_screen_buffer(&size));
+
+        self.make_current();
+
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            gl::Scissor(0, 0, size.width, size.height);
+            gl::Viewport(0, 0, size.width, size.height);
+        }
+
+        Ok(())
+    }
+
+    // Screen buffer is an abstraction over a framebuffer
+    // attached to a native shared surface
+    // fn create_screen_buffer(&self, width: usize, height: usize) {
+    //     self.screen_buffer = Some(&mut GLScreenBuffer::new(&self, size));
+    // }
 }
 
 impl Drop for GLContext {
@@ -70,10 +96,13 @@ impl GLContextMethods for GLContext {
         create_offscreen_pixmap_backed_context(16, 16)
     }
 
-    fn create_offscreen() -> Result<GLContext, &'static str> {
-        // TODO
-        Err("Not implemented")
+    fn create_offscreen(size: Size2D<i32>) -> Result<GLContext, &'static str> {
+        let context = try!(GLContext::create_headless());
+        context.init_offscreen(size).unwrap();
+
+        Ok(context)
     }
+
 
     fn make_current(&self) -> Result<(), &'static str> {
         unsafe {
