@@ -50,6 +50,9 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 pub fn create_offscreen_pixmap_backed_context(width: u32, height: u32) -> Result<GLContext, &'static str> {
     let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
 
+    // We try to get possible framebuffer configurations which
+    // can be pixmap-backed and renderable
+
     let mut attributes = [
         glx::DRAWABLE_TYPE as c_int, glx::PIXMAP_BIT as c_int,
         glx::X_RENDERABLE as c_int, 1,
@@ -59,7 +62,10 @@ pub fn create_offscreen_pixmap_backed_context(width: u32, height: u32) -> Result
     let mut config_count : c_int = 0;
 
     let configs = ScopedXFree::new(unsafe {
-        glx::ChooseFBConfig(dpy as *mut glx::types::Display, XDefaultScreen(dpy), attributes.as_mut_ptr(), &mut config_count as *mut c_int)
+        glx::ChooseFBConfig(dpy as *mut glx::types::Display,
+                            XDefaultScreen(dpy),
+                            attributes.as_mut_ptr(),
+                            &mut config_count)
     });
 
     if configs.as_ptr().is_null() {
@@ -75,13 +81,20 @@ pub fn create_offscreen_pixmap_backed_context(width: u32, height: u32) -> Result
             let config = *configs.as_ptr().offset(i);
             let mut drawable_type : c_int = 0;
 
-            // glx's `Success` is unreachable from bindings, but it's defined to 0
-            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut drawable_type as *mut c_int) != 0
+            // NOTE: glx's `Success` is unreachable from bindings, but it's defined to 0
+            // TODO: Check if this conditional is neccesary:
+            //   Actually this gets the drawable type and checks if
+            //   contains PIXMAP_BIT, which should be true due to the attributes
+            //   in glx::ChooseFBConfig
+            //
+            //   It's in Gecko's code, so may there be an implementation which returns bad
+            //   configurations?
+            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::DRAWABLE_TYPE as c_int, &mut drawable_type) != 0
                 || (drawable_type & (glx::PIXMAP_BIT as c_int) == 0) {
                 continue;
             }
 
-            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut visual_id as *mut c_int) != 0
+            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut visual_id) != 0
                 || visual_id == 0 {
                 continue;
             }
@@ -95,23 +108,32 @@ pub fn create_offscreen_pixmap_backed_context(width: u32, height: u32) -> Result
         return Err("We don't have any config with visuals");
     }
 
-    let screen = unsafe { XDefaultScreenOfDisplay(dpy) };
+    unsafe {
+        let screen = XDefaultScreenOfDisplay(dpy);
+        
+        let (_, depth) = try!(get_visual_and_depth(screen, visual_id as VisualID));
+        
+        let pixmap = XCreatePixmap(dpy,
+                                   XRootWindowOfScreen(screen),
+                                   width, 
+                                   height,
+                                   depth as c_uint);
 
-    let (_, depth) = unsafe { try!(get_visual_and_depth(screen, visual_id as VisualID)) };
+        if pixmap == 0 {
+            return Err("XCreatePixMap");
+        }
 
-    let pixmap = unsafe { XCreatePixmap(dpy, XRootWindowOfScreen(screen), width, height, depth as c_uint) };
+        let glx_pixmap = glx::CreatePixmap(dpy as *mut glx::types::Display,
+                                           *configs.as_ptr().offset(config_index),
+                                           pixmap,
+                                           0 as *const c_int);
 
-    if pixmap == 0 {
-        return Err("XCreatePixMap");
+        if glx_pixmap == 0 {
+            return Err("glx::createPixmap");
+        }
+
+        let chosen_config = *configs.as_ptr().offset(config_index);
+
+        GLContext::new(None, true, dpy as *mut glx::types::Display, glx_pixmap as GLXDrawable, chosen_config, true)
     }
-
-    let glx_pixmap = unsafe { glx::CreatePixmap(dpy as *mut glx::types::Display, *configs.as_ptr().offset(config_index), pixmap, 0 as *const c_int) };
-
-    if glx_pixmap == 0 {
-        return Err("glx::createPixmap");
-    }
-
-    let chosen_config = unsafe { *configs.as_ptr().offset(config_index) };
-
-    GLContext::new(None, true, dpy as *mut glx::types::Display, glx_pixmap as GLXDrawable, chosen_config, true)
 }
