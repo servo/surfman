@@ -93,7 +93,7 @@ impl Drop for GLContext {
 impl GLContextMethods for GLContext {
     fn create_headless() -> Result<GLContext, &'static str> {
         // 16, 16 => dummy size
-        create_offscreen_pixmap_backed_context(16, 16)
+        create_offscreen_pixmap_backed_context(Size2D(16, 16))
     }
 
     fn create_offscreen(size: Size2D<i32>) -> Result<GLContext, &'static str> {

@@ -2,6 +2,7 @@ use glx;
 use xlib::*;
 use glx::types::{GLXDrawable};
 use libc::*;
+use geom::{Size2D};
 use platform::glx::gl_context::{GLContext};
 
 struct ScopedXFree<T> {
@@ -47,7 +48,7 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 
 // Almost directly ported from
 // https://dxr.mozilla.org/mozilla-central/source/gfx/gl/GLContextProviderGLX.cpp
-pub fn create_offscreen_pixmap_backed_context(width: u32, height: u32) -> Result<GLContext, &'static str> {
+pub fn create_offscreen_pixmap_backed_context(size: Size2D<u32>) -> Result<GLContext, &'static str> {
     let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
 
     // We try to get possible framebuffer configurations which
@@ -115,8 +116,8 @@ pub fn create_offscreen_pixmap_backed_context(width: u32, height: u32) -> Result
 
         let pixmap = XCreatePixmap(dpy,
                                    XRootWindowOfScreen(screen),
-                                   width,
-                                   height,
+                                   size.width,
+                                   size.height,
                                    depth as c_uint);
 
         if pixmap == 0 {
