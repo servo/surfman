@@ -76,8 +76,14 @@ impl GLContextMethods for GLContext {
     }
 
     fn make_current(&self) -> Result<(), &'static str> {
-        // TODO
-        Err("Not implemented")
+        if glx::MakeContextCurrent(self.native_display,
+                                   self.native_drawable,
+                                   self.native_drawable,
+                                   self.native_context) {
+            Ok(())
+        } else {
+            Err("glx::MakeContextCurrent")
+        }
     }
 }
 
