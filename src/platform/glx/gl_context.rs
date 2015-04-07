@@ -76,14 +76,15 @@ impl GLContextMethods for GLContext {
     }
 
     fn make_current(&self) -> Result<(), &'static str> {
-
-        if unsafe { glx::MakeContextCurrent(self.native_display,
-                                            self.native_drawable,
-                                            self.native_drawable,
-                                            self.native_context) } == 0 {
-            Err("glx::MakeContextCurrent")
-        } else {
-            Ok(())
+        unsafe {
+            if glx::GetCurrentContext() != self.native_context &&
+               glx::MakeCurrent(self.native_display,
+                                self.native_drawable,
+                                self.native_context) == 0 {
+                Err("glx::MakeContextCurrent")
+            } else {
+                Ok(())
+            }
         }
     }
 }
