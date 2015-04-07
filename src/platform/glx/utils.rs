@@ -25,7 +25,9 @@ impl<T> ScopedXFree<T> {
 #[unsafe_destructor]
 impl<T> Drop for ScopedXFree<T> {
     fn drop(&mut self) {
-        unsafe { XFree(self.ptr as *mut c_void); };
+        if ! self.ptr.is_null() {
+            unsafe { XFree(self.ptr as *mut c_void); };
+        }
     }
 }
 
@@ -48,9 +50,8 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 pub fn create_offscreen_pixmap_backed_context(width: u32, height: u32) -> Result<GLContext, &'static str> {
     let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
 
-    let mut attributes = vec![
-        glx::DRAWABLE_TYPE as c_int,
-        glx::PIXMAP_BIT as c_int,
+    let mut attributes = [
+        glx::DRAWABLE_TYPE as c_int, glx::PIXMAP_BIT as c_int,
         glx::X_RENDERABLE as c_int, 1,
         glx::NONE as c_int
     ];
