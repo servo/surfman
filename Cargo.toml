@@ -1,6 +1,6 @@
 [package]
 
-name = "offscreen-gl-context"
+name = "offscreen_gl_context"
 version = "0.0.1"
 authors = ["ecoal95 <ecoal95@gmail.com>"]
 
