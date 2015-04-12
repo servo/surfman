@@ -10,14 +10,11 @@ libc = "*"
 [dependencies.xlib]
 git = "https://github.com/servo/rust-xlib"
 
-[dependencies.gleam]
-git = "https://github.com/servo/gleam"
-
 [dependencies.glx]
 git = "https://github.com/servo/rust-glx"
 
-[dependencies.layers]
-git = "https://github.com/servo/rust-layers"
+[dependencies.gleam]
+git = "https://github.com/servo/gleam"
 
 [dependencies.geom]
 git = "https://github.com/servo/rust-geom"

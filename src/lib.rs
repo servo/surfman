@@ -6,13 +6,11 @@ extern crate gleam;
 extern crate libc;
 extern crate geom;
 
-use geom::{Size2D};
-
 pub mod platform;
-pub mod gl_screen_buffer;
+pub use platform::*;
 
-trait GLContextMethods {
-    fn create_headless() -> Result<Self, &'static str>;
-    fn create_offscreen(Size2D<i32>) -> Result<Self, &'static str>;
-    fn make_current(&self) -> Result<(), &'static str>;
-}
+mod common_methods;
+pub use common_methods::GLContextMethods;
+
+#[cfg(test)]
+mod tests;

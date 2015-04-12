@@ -3,7 +3,7 @@ use xlib::*;
 use glx::types::{GLXDrawable};
 use libc::*;
 use geom::{Size2D};
-use platform::glx::gl_context::{GLContext};
+use platform::with_glx::gl_context::{GLContext};
 
 struct ScopedXFree<T> {
     ptr: *mut T
@@ -48,7 +48,7 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 
 // Almost directly ported from
 // https://dxr.mozilla.org/mozilla-central/source/gfx/gl/GLContextProviderGLX.cpp
-pub fn create_offscreen_pixmap_backed_context(size: Size2D<u32>) -> Result<GLContext, &'static str> {
+pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>) -> Result<GLContext, &'static str> {
     let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
 
     // We try to get possible framebuffer configurations which
@@ -116,8 +116,8 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<u32>) -> Result<GLCon
 
         let pixmap = XCreatePixmap(dpy,
                                    XRootWindowOfScreen(screen),
-                                   size.width,
-                                   size.height,
+                                   size.width as c_uint,
+                                   size.height as c_uint,
                                    depth as c_uint);
 
         if pixmap == 0 {
@@ -135,6 +135,6 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<u32>) -> Result<GLCon
 
         let chosen_config = *configs.as_ptr().offset(config_index);
 
-        GLContext::new(None, true, dpy as *mut glx::types::Display, glx_pixmap as GLXDrawable, chosen_config, true)
+        GLContext::new(None, dpy as *mut glx::types::Display, glx_pixmap as GLXDrawable, chosen_config)
     }
 }
