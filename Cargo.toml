@@ -7,11 +7,11 @@ authors = ["ecoal95 <ecoal95@gmail.com>"]
 [dependencies]
 libc = "*"
 
-[dependencies.xlib]
-git = "https://github.com/servo/rust-xlib"
-
 [dependencies.glx]
 git = "https://github.com/servo/rust-glx"
+
+[dependencies.xlib]
+git = "https://github.com/servo/rust-xlib"
 
 [dependencies.gleam]
 git = "https://github.com/servo/gleam"

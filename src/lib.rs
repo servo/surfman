@@ -1,15 +1,18 @@
 #![feature(unsafe_destructor)]
 
-extern crate xlib;
-extern crate glx;
 extern crate gleam;
 extern crate libc;
 extern crate geom;
 
-pub mod platform;
-pub use platform::*;
+#[cfg(target_os="linux")]
+extern crate xlib;
+#[cfg(target_os="linux")]
+extern crate glx;
 
-mod common_methods;
+pub mod platform;
+pub use platform::GLContext;
+
+pub mod common_methods;
 pub use common_methods::GLContextMethods;
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
-extern crate glx;
-use libc::*;
+use glx;
 use xlib::*;
+use libc::*;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use geom::{Size2D};
 use platform::with_glx::utils::{create_offscreen_pixmap_backed_context};

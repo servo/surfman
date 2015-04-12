@@ -11,7 +11,7 @@ pub mod not_implemented;
 pub use platform::not_implemented::gl_context::{GLContext};
 
 // TODO(ecoal95): Get a machine to test with mac and
-// get android building, so one day:
+// get android building:
 //
 // #[cfg(not(target_os="linux"))]
 // pub mod with_egl;
