@@ -15,5 +15,14 @@ pub use platform::GLContext;
 pub mod common_methods;
 pub use common_methods::GLContextMethods;
 
+pub mod gl_context_attributes;
+pub use gl_context_attributes::GLContextAttributes;
+
+pub mod gl_context_capabilities;
+pub use gl_context_capabilities::GLContextCapabilities;
+
+pub mod gl_feature;
+pub use gl_feature::GLFeature;
+
 #[cfg(test)]
 mod tests;

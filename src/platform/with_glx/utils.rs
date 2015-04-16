@@ -135,6 +135,6 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>) -> Result<GLCon
 
         let chosen_config = *configs.as_ptr().offset(config_index);
 
-        GLContext::new(None, dpy as *mut glx::types::Display, glx_pixmap as GLXDrawable, chosen_config)
+        GLContext::new(None, dpy as *mut glx::types::Display, glx_pixmap as GLXDrawable, chosen_config, None)
     }
 }

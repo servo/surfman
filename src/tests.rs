@@ -1,4 +1,5 @@
 use common_methods::GLContextMethods;
+use gl_context_attributes::GLContextAttributes;
 use platform::GLContext;
 use geom::Size2D;
 use gleam::{self, gl};
@@ -6,7 +7,7 @@ use std::iter::range_step;
 
 #[test]
 fn gl_context_works() {
-    let context = GLContext::create_offscreen(Size2D(4, 4)).unwrap();
+    let context = GLContext::create_offscreen(Size2D(4, 4), GLContextAttributes::default()).unwrap();
 
     context.make_current().unwrap();
 

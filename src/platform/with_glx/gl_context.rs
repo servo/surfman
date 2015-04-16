@@ -5,18 +5,23 @@ use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use geom::{Size2D};
 use platform::with_glx::utils::{create_offscreen_pixmap_backed_context};
 use common_methods::GLContextMethods;
+use gl_context_capabilities::GLContextCapabilities;
+use gl_context_attributes::GLContextAttributes;
 
 pub struct GLContext {
     native_context: GLXContext,
     native_display: *mut glx::types::Display,
-    native_drawable: GLXDrawable
+    native_drawable: GLXDrawable,
+    attributes: GLContextAttributes,
+    capabilities: GLContextCapabilities
 }
 
 impl GLContext {
     pub fn new(share_context: Option<&GLContext>,
                display: *mut glx::types::Display,
                drawable: GLXDrawable,
-               framebuffer_config: GLXFBConfig)
+               framebuffer_config: GLXFBConfig,
+               attributes: Option<GLContextAttributes>)
         -> Result<GLContext, &'static str> {
 
         let shared = match share_context {
@@ -42,6 +47,8 @@ impl GLContext {
             native_context: native,
             native_display: display,
             native_drawable: drawable,
+            attributes: attributes.unwrap_or(GLContextAttributes::any()),
+            capabilities: GLContextCapabilities::detect()
         })
     }
 
@@ -68,10 +75,10 @@ impl GLContextMethods for GLContext {
         create_offscreen_pixmap_backed_context(size)
     }
 
-    fn create_offscreen(size: Size2D<i32>) -> Result<GLContext, &'static str> {
+    fn create_offscreen(size: Size2D<i32>, attributes: GLContextAttributes) -> Result<GLContext, &'static str> {
         let context = try!(GLContext::create_headless(size));
 
-        try!(context.init_offscreen(size));
+        try!(context.init_offscreen(size, attributes));
 
         Ok(context)
     }
