@@ -32,7 +32,8 @@ trait GLContextPrivateMethods {
 }
 
 impl GLContextPrivateMethods for GLContext {
-    // FIXME(ecoal95): resizing should be handled here
+    // FIXME(ecoal95): initial resizing should be handled here,
+    //   generic resizing should be handled in the screen buffer/draw buffer
     fn init_offscreen(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
         try!(self.create_draw_buffer(size));
 
