@@ -3,30 +3,22 @@ use xlib::*;
 use libc::*;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use geom::{Size2D};
-use platform::with_glx::utils::{create_offscreen_pixmap_backed_context};
+use super::utils::{create_offscreen_pixmap_backed_context};
 
-use GLContextMethods;
-use GLContextCapabilities;
-use GLContextAttributes;
-use DrawBuffer;
+use platform::NativeGLContextMethods;
 
-pub struct GLContext {
+pub struct NativeGLContext {
     native_context: GLXContext,
     native_display: *mut glx::types::Display,
     native_drawable: GLXDrawable,
-    // DrawBuffer must be created with the current context up and running
-    pub draw_buffer: Option<DrawBuffer>,
-    pub attributes: GLContextAttributes,
-    pub capabilities: GLContextCapabilities
 }
 
-impl GLContext {
-    pub fn new(share_context: Option<&GLContext>,
+impl NativeGLContext {
+    pub fn new(share_context: Option<&NativeGLContext>,
                display: *mut glx::types::Display,
                drawable: GLXDrawable,
-               framebuffer_config: GLXFBConfig,
-               attributes: Option<GLContextAttributes>)
-        -> Result<GLContext, &'static str> {
+               framebuffer_config: GLXFBConfig)
+        -> Result<NativeGLContext, &'static str> {
 
         let shared = match share_context {
             Some(ctx) => ctx.as_native_glx_context(),
@@ -47,23 +39,10 @@ impl GLContext {
             return Err("Error creating native glx context");
         }
 
-        // FIXME(ecoal95): This feels kind of weird, but we must ensure
-        //   the context is current in order to detect capabilities.
-        //   Another option could be to use `Option<GLContextCapabilities>`
-        //   initialized to none and using some kind of
-        //   context.init/context.detect_capabilities, and the extra option
-        //   will force to `unwrap` each time.
-        unsafe {
-            glx::MakeCurrent(display, drawable, native);
-        }
-
-        Ok(GLContext {
+        Ok(NativeGLContext {
             native_context: native,
             native_display: display,
             native_drawable: drawable,
-            draw_buffer: None,
-            attributes: attributes.unwrap_or(GLContextAttributes::any()),
-            capabilities: GLContextCapabilities::detect()
         })
     }
 
@@ -72,7 +51,7 @@ impl GLContext {
     }
 }
 
-impl Drop for GLContext {
+impl Drop for NativeGLContext {
     fn drop(&mut self) {
         self.make_current().unwrap();
         unsafe {
@@ -82,11 +61,11 @@ impl Drop for GLContext {
     }
 }
 
-impl GLContextMethods for GLContext {
+impl NativeGLContextMethods for NativeGLContext {
     // FIXME(ecoal95): In Gecko this is created with a dummy size
     //   and later resized with corresponding checks about max fb length
     //   we're not handling resizing yet though
-    fn create_headless(size: Size2D<i32>) -> Result<GLContext, &'static str> {
+    fn create_headless(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
         create_offscreen_pixmap_backed_context(size)
     }
 

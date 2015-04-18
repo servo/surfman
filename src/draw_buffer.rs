@@ -2,8 +2,8 @@ use geom::Size2D;
 use gleam::gl;
 use gleam::gl::types::{GLuint, GLenum};
 
-use GLContext;
-use GLContextAttributes;
+use gl_context::GLContext;
+use gl_context_attributes::GLContextAttributes;
 
 /// This structure represents an offscreen context
 /// draw buffer. It has a framebuffer, with at least
@@ -38,9 +38,10 @@ impl DrawBuffer {
     pub fn new(context: &GLContext, size: Size2D<i32>)
         -> Result<DrawBuffer, &'static str> {
 
-        let attrs = &context.attributes;
+        let attrs = context.borrow_attributes();
+        let capabilities = context.borrow_capabilities();
 
-        if attrs.antialias && context.capabilities.max_samples == 0 {
+        if attrs.antialias && capabilities.max_samples == 0 {
             return Err("The given GLContext doesn't support requested antialising");
         }
 

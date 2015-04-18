@@ -9,22 +9,22 @@ extern crate xlib;
 #[cfg(target_os="linux")]
 extern crate glx;
 
-pub mod platform;
-pub use platform::GLContext;
+mod platform;
+pub use platform::{NativeGLContext, NativeGLContextMethods};
 
-pub mod common_methods;
-pub use common_methods::GLContextMethods;
+mod gl_context;
+pub use gl_context::GLContext;
 
-pub mod draw_buffer;
+mod draw_buffer;
 pub use draw_buffer::DrawBuffer;
 
-pub mod gl_context_attributes;
+mod gl_context_attributes;
 pub use gl_context_attributes::GLContextAttributes;
 
-pub mod gl_context_capabilities;
+mod gl_context_capabilities;
 pub use gl_context_capabilities::GLContextCapabilities;
 
-pub mod gl_feature;
+mod gl_feature;
 pub use gl_feature::GLFeature;
 
 #[cfg(test)]

@@ -1,5 +1,4 @@
 
-
 pub enum GLFeature {
     FramebufferMultisample, // Framebuffer multisample, for antialising
 }

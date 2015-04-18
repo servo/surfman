@@ -1,6 +1,5 @@
 use geom::Size2D;
-use common_methods::GLContextMethods;
-use gl_context_attributes::GLContextAttributes;
+use NativeGLContextMethods;
 
 pub struct GLContext;
 

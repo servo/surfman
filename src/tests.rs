@@ -1,8 +1,8 @@
-use common_methods::GLContextMethods;
-use gl_context_attributes::GLContextAttributes;
-use platform::GLContext;
+use GLContextAttributes;
+use GLContext;
+
 use geom::Size2D;
-use gleam::{self, gl};
+use gleam::gl;
 use std::iter::range_step;
 
 #[test]

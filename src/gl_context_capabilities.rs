@@ -1,6 +1,6 @@
 use gleam::gl;
 use gleam::gl::{GLint};
-use gl_feature::GLFeature;
+use GLFeature;
 
 /// This is a cross-platform struct, that every GLContext implementation
 /// should have under the field `capabilities`, as a public field
