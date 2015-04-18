@@ -9,10 +9,6 @@ impl GLContextMethods for GLContext {
         Err("Not implemented (yet)")
     }
 
-    fn create_offscreen(_: Size2D<i32>, _: GLContextAttributes) -> Result<GLContext, &'static str> {
-        Err("Not implemented (yet)")
-    }
-
     fn make_current(&self) -> Result<(), &'static str> {
         Err("Not implemented (yet)")
     }
