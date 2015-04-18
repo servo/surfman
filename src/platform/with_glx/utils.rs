@@ -48,7 +48,7 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 }
 
 // Almost directly ported from
-// https://dxr.mozilla.org/mozilla-central/source/gfx/gl/NativeGLContextProviderGLX.cpp
+// https://dxr.mozilla.org/mozilla-central/source/gfx/gl/GLContextProviderGLX.cpp
 pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
     let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
 

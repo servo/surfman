@@ -2,8 +2,8 @@ use geom::Size2D;
 use gleam::gl;
 use gleam::gl::types::{GLuint, GLenum};
 
-use gl_context::GLContext;
-use gl_context_attributes::GLContextAttributes;
+use GLContext;
+use GLContextAttributes;
 
 /// This structure represents an offscreen context
 /// draw buffer. It has a framebuffer, with at least
