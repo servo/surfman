@@ -1,6 +1,6 @@
 use geom::Size2D;
 use gleam::gl;
-use gleam::gl::types::{GLuint, GLsizei, GLenum};
+use gleam::gl::types::{GLuint, GLenum};
 
 use GLContext;
 use GLContextAttributes;

@@ -8,6 +8,7 @@ pub enum GLFeature {
 ///  * OpenGL version
 ///  * GLES version
 ///  * Extensions
+#[allow(dead_code)]
 pub struct GLFeatureRequirements {
     opengl_version: u32, // OpenGL version: 1.0 => 10, etc...
     gles_version: u32,

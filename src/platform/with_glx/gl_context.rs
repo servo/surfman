@@ -47,6 +47,16 @@ impl GLContext {
             return Err("Error creating native glx context");
         }
 
+        // FIXME(ecoal95): This feels kind of weird, but we must ensure
+        //   the context is current in order to detect capabilities.
+        //   Another option could be to use `Option<GLContextCapabilities>`
+        //   initialized to none and using some kind of
+        //   context.init/context.detect_capabilities, and the extra option
+        //   will force to `unwrap` each time.
+        unsafe {
+            glx::MakeCurrent(display, drawable, native);
+        }
+
         Ok(GLContext {
             native_context: native,
             native_display: display,
@@ -79,15 +89,6 @@ impl GLContextMethods for GLContext {
     fn create_headless(size: Size2D<i32>) -> Result<GLContext, &'static str> {
         create_offscreen_pixmap_backed_context(size)
     }
-
-    fn create_offscreen(size: Size2D<i32>, attributes: GLContextAttributes) -> Result<GLContext, &'static str> {
-        let mut context = try!(GLContext::create_headless(size));
-
-        try!(context.init_offscreen(size, attributes));
-
-        Ok(context)
-    }
-
 
     fn make_current(&self) -> Result<(), &'static str> {
         unsafe {
