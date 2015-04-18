@@ -25,12 +25,15 @@ impl GLContextAttributes {
         }
     }
 
+    // FIXME(ecoal95): `antialias` should be true by default
+    //   but we do not support antialising so... We must change it
+    //   when we do. See GLFeature.
     pub fn default() -> GLContextAttributes {
         GLContextAttributes {
             alpha: true,
             depth: true,
             stencil: false,
-            antialias: true,
+            antialias: false,
             premultiplied_alpha: true,
             preserve_drawing_buffer: false
         }

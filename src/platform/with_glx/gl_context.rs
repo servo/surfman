@@ -4,16 +4,20 @@ use libc::*;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use geom::{Size2D};
 use platform::with_glx::utils::{create_offscreen_pixmap_backed_context};
-use common_methods::GLContextMethods;
-use gl_context_capabilities::GLContextCapabilities;
-use gl_context_attributes::GLContextAttributes;
+
+use GLContextMethods;
+use GLContextCapabilities;
+use GLContextAttributes;
+use DrawBuffer;
 
 pub struct GLContext {
     native_context: GLXContext,
     native_display: *mut glx::types::Display,
     native_drawable: GLXDrawable,
-    attributes: GLContextAttributes,
-    capabilities: GLContextCapabilities
+    // DrawBuffer must be created with the current context up and running
+    pub draw_buffer: Option<DrawBuffer>,
+    pub attributes: GLContextAttributes,
+    pub capabilities: GLContextCapabilities
 }
 
 impl GLContext {
@@ -47,6 +51,7 @@ impl GLContext {
             native_context: native,
             native_display: display,
             native_drawable: drawable,
+            draw_buffer: None,
             attributes: attributes.unwrap_or(GLContextAttributes::any()),
             capabilities: GLContextCapabilities::detect()
         })
@@ -76,7 +81,7 @@ impl GLContextMethods for GLContext {
     }
 
     fn create_offscreen(size: Size2D<i32>, attributes: GLContextAttributes) -> Result<GLContext, &'static str> {
-        let context = try!(GLContext::create_headless(size));
+        let mut context = try!(GLContext::create_headless(size));
 
         try!(context.init_offscreen(size, attributes));
 

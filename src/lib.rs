@@ -15,6 +15,9 @@ pub use platform::GLContext;
 pub mod common_methods;
 pub use common_methods::GLContextMethods;
 
+pub mod draw_buffer;
+pub use draw_buffer::DrawBuffer;
+
 pub mod gl_context_attributes;
 pub use gl_context_attributes::GLContextAttributes;
 
