@@ -6,7 +6,10 @@ use GLContext;
 use GLContextAttributes;
 
 /// This structure represents an offscreen context
-/// draw buffer. It may have a
+/// draw buffer. It has a framebuffer, with at least
+/// color renderbuffer (alpha or not). It may also have
+/// a depth or stencil buffer, depending on context
+/// requirements.
 pub struct DrawBuffer {
     size: Size2D<i32>,
     framebuffer: GLuint,
