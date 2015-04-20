@@ -8,6 +8,10 @@ impl GLContextMethods for GLContext {
         Err("Not implemented (yet)")
     }
 
+    fn is_current() {
+        false
+    }
+
     fn make_current(&self) -> Result<(), &'static str> {
         Err("Not implemented (yet)")
     }
