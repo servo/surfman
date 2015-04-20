@@ -3,6 +3,7 @@ use geom::Size2D;
 pub trait NativeGLContextMethods {
     // TODO(ecoal95): create_headless should not require a size
     fn create_headless(Size2D<i32>) -> Result<Self, &'static str>;
+    fn is_current(&self) -> bool;
     fn make_current(&self) -> Result<(), &'static str>;
 }
 

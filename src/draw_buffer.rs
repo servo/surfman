@@ -54,6 +54,8 @@ impl DrawBuffer {
             // samples: 0,
         };
 
+        try!(context.make_current());
+
         try!(draw_buffer.init(&attrs));
 
         unsafe {
@@ -91,35 +93,42 @@ trait DrawBufferHelpers {
 
 impl DrawBufferHelpers for DrawBuffer {
     fn init(&mut self, attrs: &GLContextAttributes) -> Result<(), &'static str> {
-        // First we try to generate the framebuffer and the color buffer
-        unsafe {
-            gl::GenFramebuffers(1, &mut self.framebuffer);
-        }
-        debug_assert!(self.framebuffer != 0);
-
+        // The color render buffer is always there
         if attrs.alpha {
             self.color_render_buffer = create_render_buffer(gl::RGBA8, &self.size);
+        } else {
+            self.color_render_buffer = create_render_buffer(gl::RGB8, &self.size);
         }
+        debug_assert!(self.color_render_buffer != 0);
 
         // After this we check if we need stencil and depth buffers
         if attrs.depth {
             self.depth_render_buffer = create_render_buffer(gl::DEPTH_COMPONENT16, &self.size);
+            debug_assert!(self.depth_render_buffer != 0);
         }
 
         if attrs.stencil {
             self.stencil_render_buffer = create_render_buffer(gl::STENCIL_INDEX8, &self.size);
+            debug_assert!(self.stencil_render_buffer != 0);
         }
 
+        unsafe {
+            gl::GenFramebuffers(1, &mut self.framebuffer);
+            debug_assert!(self.framebuffer != 0);
+        }
+
+        // Finally we attach them to the framebuffer
         self.attach_renderbuffers_to_framebuffer()
     }
 
     fn attach_renderbuffers_to_framebuffer(&mut self) -> Result<(), &'static str> {
         unsafe {
-            debug_assert!(gl::IsFramebuffer(self.framebuffer) != 0);
             gl::BindFramebuffer(gl::FRAMEBUFFER, self.framebuffer);
+            // NOTE: The assertion fails if the framebuffer is not bound
+            debug_assert!(gl::IsFramebuffer(self.framebuffer) == gl::TRUE);
 
             if self.color_render_buffer != 0 {
-                debug_assert!(gl::IsRenderbuffer(self.color_render_buffer) != 0);
+                // debug_assert!(gl::IsRenderbuffer(self.color_render_buffer) == gl::TRUE);
                 gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
                                             gl::COLOR_ATTACHMENT0,
                                             gl::RENDERBUFFER,
@@ -127,7 +136,7 @@ impl DrawBufferHelpers for DrawBuffer {
             }
 
             if self.depth_render_buffer != 0 {
-                debug_assert!(gl::IsRenderbuffer(self.depth_render_buffer) != 0);
+                // debug_assert!(gl::IsRenderbuffer(self.depth_render_buffer) == gl::TRUE);
                 gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
                                             gl::DEPTH_ATTACHMENT,
                                             gl::RENDERBUFFER,
@@ -135,7 +144,7 @@ impl DrawBufferHelpers for DrawBuffer {
             }
 
             if self.stencil_render_buffer != 0 {
-                debug_assert!(gl::IsRenderbuffer(self.stencil_render_buffer) != 0);
+                // debug_assert!(gl::IsRenderbuffer(self.stencil_render_buffer) == gl::TRUE);
                 gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
                                             gl::STENCIL_ATTACHMENT,
                                             gl::RENDERBUFFER,

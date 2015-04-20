@@ -43,7 +43,7 @@ dependencies = [
 [[package]]
 name = "gleam"
 version = "0.0.1"
-source = "git+https://github.com/servo/gleam#777418cc0ebcec6381ac3fe41483a3ad5a278ccd"
+source = "git+https://github.com/servo/gleam#37bae04ad0a6b8aa1b51a44a3eef819ebe2fd57f"
 dependencies = [
  "gl_common 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "gl_generator 0.0.19 (registry+https://github.com/rust-lang/crates.io-index)",

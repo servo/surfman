@@ -69,9 +69,16 @@ impl NativeGLContextMethods for NativeGLContext {
         create_offscreen_pixmap_backed_context(size)
     }
 
+    #[inline(always)]
+    fn is_current(&self) -> bool {
+        unsafe {
+            glx::GetCurrentContext() == self.native_context
+        }
+    }
+
     fn make_current(&self) -> Result<(), &'static str> {
         unsafe {
-            if glx::GetCurrentContext() != self.native_context
+            if !self.is_current()
                 && glx::MakeCurrent(self.native_display,
                                     self.native_drawable,
                                     self.native_context) == 0 {

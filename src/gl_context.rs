@@ -44,6 +44,11 @@ impl GLContext {
         self.native_context.make_current()
     }
 
+    #[inline(always)]
+    pub fn is_current(&self) -> bool {
+        self.native_context.is_current()
+    }
+
     // Allow borrowing these unmutably
     pub fn borrow_attributes(&self) -> &GLContextAttributes {
         &self.attributes
@@ -64,7 +69,7 @@ impl GLContextPrivateMethods for GLContext {
     // FIXME(ecoal95): initial resizing should be handled here,
     //   generic resizing should be handled in the screen buffer/draw buffer
     fn init_offscreen(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
-        try!(self.create_draw_buffer(size));
+        // try!(self.create_draw_buffer(size));
 
         self.make_current().unwrap();
 
