@@ -1,21 +1,21 @@
 use geom::Size2D;
-use GLContextMethods;
+use NativeGLContextMethods;
 use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
 
 
-pub struct GLContext {
+pub struct NativeGLContext {
     native_surface: EGLSurface,
     native_config: EGLConfig,
-    native_context: EGLContext,
+    native_context: ENativeGLContext,
     is_offscreen: bool
 }
 
-impl GLContext {
-    pub fn new(share_context: Option<&GLContext>,
+impl NativeGLContext {
+    pub fn new(share_context: Option<&NativeGLContext>,
            is_offscreen: bool,
            surface: EGLSurface,
            config: EGLConfig)
-        -> Result<GLContext, &'static str> {
+        -> Result<NativeGLContext, &'static str> {
         let shared = match share_context {
             Some(ctx) => ctx.as_native_egl_context(),
             None => egl::NO_CONTEXT
@@ -35,7 +35,7 @@ impl GLContext {
                 return Err("Error creating native EGL Context");
             }
 
-            Ok(GLContext {
+            Ok(NativeGLContext {
                 native_surface: surface,
                 native_config: config,
                 native_context: native,
@@ -45,18 +45,18 @@ impl GLContext {
     }
 
     #[inline(always)]
-    pub fn as_native_egl_context(&self) -> EGLContext {
+    pub fn as_native_egl_context(&self) -> ENativeGLContext {
         self.native_context
     }
 }
 
 
-impl GLContextMethods for GLContext {
-    fn create_headless(size: Size2D<i32>) -> Result<GLContext, &'static str> {
+impl NativeGLContextMethods for NativeGLContext {
+    fn create_headless(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
         create_pixel_buffer_backed_offscreen_context(size)
     }
 
-    fn create_offscreen(size: Size2D<i32>) -> Result<GLContext, &'static str> {
+    fn create_offscreen(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
         let context = try!(create_headless(size));
 
         try!(context.init_offscreen(size));
@@ -66,11 +66,11 @@ impl GLContextMethods for GLContext {
 
     fn make_current(&self) -> Result<(), &'static str> {
         unsafe {
-            if egl::GetCurrentContext() != self.native_context
-                && egl::MakeCurrent(self.native_display,
-                                    self.native_surface,
-                                    self.native_surface,
-                                    self.native_context) == egl::FALSE {
+            if egl::GetCurrentContext() != self.native_context &&
+                egl::MakeCurrent(self.native_display,
+                                 self.native_surface,
+                                 self.native_surface,
+                                 self.native_context) == egl::FALSE {
                 Err("egl::MakeCurrent")
             } else {
                 Ok(())

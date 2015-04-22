@@ -1,5 +1,6 @@
-pub mod gl_context;
-pub mod utils;
+mod native_gl_context;
+mod utils;
+pub use self::native_gl_context::NativeGLContext;
 
 // The last three zeros arw for workaround buggy implementations
 macro_rules! egl_end_workarounding_bugs {

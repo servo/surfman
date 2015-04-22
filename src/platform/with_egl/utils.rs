@@ -18,7 +18,7 @@ fn create_pbuffer_surface(config: EGLConfig, size: Size2D<i32>) -> Result<EGLSur
     Ok(surface)
 }
 
-fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>) -> Result<GLContext, &'static str> {
+fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
     let mut attributes = [
         egl::SURFACE_TYPE, egl::PBUFFER_BIT,
         egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT,
@@ -42,5 +42,5 @@ fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>) -> Result<GLC
 
     let surface = try!(create_pbuffer_surface(config, size));
 
-    GLContext::new(None, true, surface, config)
+    NativeGLContext::new(None, true, surface, config)
 }
