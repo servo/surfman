@@ -8,6 +8,8 @@ extern crate geom;
 extern crate xlib;
 #[cfg(target_os="linux")]
 extern crate glx;
+#[cfg(target_os="macos")]
+extern crate cgl;
 
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods};

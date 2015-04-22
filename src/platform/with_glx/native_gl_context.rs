@@ -46,7 +46,7 @@ impl NativeGLContext {
         })
     }
 
-    fn as_native_glx_context(&self) -> GLXContext {
+    pub fn as_native_glx_context(&self) -> GLXContext {
         self.native_context
     }
 }

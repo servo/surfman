@@ -13,6 +13,9 @@ git = "https://github.com/servo/rust-glx"
 [dependencies.xlib]
 git = "https://github.com/servo/rust-xlib"
 
+[dependencies.cgl]
+git = "https://github.com/servo/rust-cgl"
+
 [dependencies.gleam]
 git = "https://github.com/servo/gleam"
 

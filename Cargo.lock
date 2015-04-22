@@ -2,6 +2,7 @@
 name = "offscreen_gl_context"
 version = "0.0.1"
 dependencies = [
+ "cgl 0.0.1 (git+https://github.com/servo/rust-cgl)",
  "geom 0.1.0 (git+https://github.com/servo/rust-geom)",
  "gleam 0.0.1 (git+https://github.com/servo/gleam)",
  "glx 0.0.1 (git+https://github.com/servo/rust-glx)",
@@ -13,6 +14,14 @@ dependencies = [
 name = "bitflags"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "cgl"
+version = "0.0.1"
+source = "git+https://github.com/servo/rust-cgl#211afc4d1572d8fe67b91c452441b6cb292a2bc7"
+dependencies = [
+ "gleam 0.0.1 (git+https://github.com/servo/gleam)",
+]
 
 [[package]]
 name = "geom"

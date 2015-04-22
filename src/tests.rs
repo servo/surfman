@@ -2,15 +2,12 @@ use GLContextAttributes;
 use GLContext;
 
 use geom::Size2D;
-use gleam::gl;
 use std::mem;
 use std::iter::range_step;
 use std::ffi::{CStr};
-
-use glx;
-
-#[link(name = "GL")]
-extern {}
+use gleam::gl;
+use gleam::gl::types::*;
+use glutin;
 
 static mut gl_loaded : bool = false;
 
@@ -20,9 +17,11 @@ fn load_gl() {
             return;
         }
 
-        gl::load_with(|s|
-            mem::transmute(glx::GetProcAddress(mem::transmute(&s.as_bytes()[0])))
-        );
+        let window = glutin::Window::new().unwrap();
+
+        window.make_current();
+
+        gl::load_with(|s| window.get_proc_address(s));
 
         gl_loaded = true;
     }
@@ -32,7 +31,7 @@ fn load_gl() {
 fn gl_context_works() {
     load_gl();
 
-    let size = Size2D(256, 256);
+    let size = Size2D(16, 16);
     let context = GLContext::create_offscreen(size, GLContextAttributes::default()).unwrap();
 
     context.make_current().unwrap();
