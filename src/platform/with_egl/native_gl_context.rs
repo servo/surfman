@@ -6,7 +6,7 @@ use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
 pub struct NativeGLContext {
     native_surface: EGLSurface,
     native_config: EGLConfig,
-    native_context: ENativeGLContext,
+    native_context: EGLContext,
     is_offscreen: bool
 }
 
@@ -45,7 +45,7 @@ impl NativeGLContext {
     }
 
     #[inline(always)]
-    pub fn as_native_egl_context(&self) -> ENativeGLContext {
+    pub fn as_native_egl_context(&self) -> EGLContext {
         self.native_context
     }
 }
