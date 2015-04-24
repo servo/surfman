@@ -98,7 +98,7 @@ impl DrawBufferHelpers for DrawBuffer {
         if attrs.alpha {
             self.color_render_buffer = create_render_buffer(gl::RGBA4, &self.size);
         } else {
-            self.color_render_buffer = create_render_buffer(gl::RGB565, &self.size);
+            self.color_render_buffer = create_render_buffer(gl::RGB4, &self.size);
         }
         debug_assert!(self.color_render_buffer != 0);
 

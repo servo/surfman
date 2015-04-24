@@ -28,6 +28,3 @@ pub use gl_context_capabilities::GLContextCapabilities;
 
 mod gl_feature;
 pub use gl_feature::GLFeature;
-
-#[cfg(test)]
-mod tests;

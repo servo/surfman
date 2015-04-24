@@ -1,4 +1,4 @@
-use gleam::gl;
+// use gleam::gl;
 use gleam::gl::{GLint};
 use GLFeature;
 
@@ -13,6 +13,7 @@ pub struct GLContextCapabilities {
 }
 
 impl GLContextCapabilities {
+    #[allow(unused_mut)]
     pub fn detect() -> GLContextCapabilities {
         let mut capabilities = GLContextCapabilities {
             max_samples: 0,
