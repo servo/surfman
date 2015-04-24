@@ -20,7 +20,8 @@ impl GLContextCapabilities {
 
 
         if GLFeature::is_supported(GLFeature::FramebufferMultisample) {
-            unsafe { gl::GetIntegerv(gl::MAX_SAMPLES, &mut capabilities.max_samples as *mut GLint); };
+            // FIXME(ecoal95): uncomment me when we have cross-system constants
+            // unsafe { gl::GetIntegerv(gl::MAX_SAMPLES, &mut capabilities.max_samples as *mut GLint); };
         }
 
         capabilities
