@@ -95,11 +95,13 @@ impl DrawBufferHelpers for DrawBuffer {
     fn init(&mut self, attrs: &GLContextAttributes) -> Result<(), &'static str> {
         // The color render buffer is always there
         // TODO(ecoal95): Allow RGBA8 and RGB8 (via conditional detection)
-        if attrs.alpha {
+        // FIXME(ecoal95): We can't depend on gl::RGB4 (not in GLES) and neither in
+        //   gl::RGB565 (not in OGL 3), so assume there's always alpha channel
+        // if attrs.alpha {
             self.color_render_buffer = create_render_buffer(gl::RGBA4, &self.size);
-        } else {
-            self.color_render_buffer = create_render_buffer(gl::RGB4, &self.size);
-        }
+        // } else {
+        //    self.color_render_buffer = create_render_buffer(gl::RGB4, &self.size);
+        // }
         debug_assert!(self.color_render_buffer != 0);
 
         // After this we check if we need stencil and depth buffers
