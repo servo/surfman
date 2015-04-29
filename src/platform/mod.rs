@@ -1,5 +1,3 @@
-use geom::Size2D;
-
 pub trait NativeGLContextMethods {
     fn create_headless() -> Result<Self, &'static str>;
     fn is_current(&self) -> bool;

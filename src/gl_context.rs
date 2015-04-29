@@ -25,8 +25,8 @@ pub struct GLContext {
 }
 
 impl GLContext {
-    pub fn create_headless(size: Size2D<i32>) -> Result<GLContext, &'static str> {
-        let native_context = try!(NativeGLContext::create_headless(size));
+    pub fn create_headless() -> Result<GLContext, &'static str> {
+        let native_context = try!(NativeGLContext::create_headless());
 
         try!(native_context.make_current());
 
@@ -45,7 +45,7 @@ impl GLContext {
     pub fn create_offscreen(size: Size2D<i32>, attributes: GLContextAttributes) -> Result<GLContext, &'static str> {
         // We create a headless context with a dummy size, we're painting to the
         // draw_buffer's framebuffer anyways.
-        let mut context = try!(GLContext::create_headless(Size2D(16, 16)));
+        let mut context = try!(GLContext::create_headless());
 
         context.formats = GLFormats::detect(&attributes);
         context.attributes = attributes;
