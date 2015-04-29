@@ -1,5 +1,3 @@
-#![feature(unsafe_destructor)]
-
 extern crate gleam;
 extern crate libc;
 extern crate geom;
