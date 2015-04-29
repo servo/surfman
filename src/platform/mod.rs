@@ -5,6 +5,16 @@ pub trait NativeGLContextMethods {
     fn create_headless(Size2D<i32>) -> Result<Self, &'static str>;
     fn is_current(&self) -> bool;
     fn make_current(&self) -> Result<(), &'static str>;
+
+    #[cfg(target_os="android")]
+    fn is_gles() -> bool {
+        true
+    }
+
+    #[cfg(not(target_os="android"))]
+    fn is_gles() -> bool {
+        false
+    }
 }
 
 #[cfg(target_os="linux")]
