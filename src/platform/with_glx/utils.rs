@@ -24,7 +24,6 @@ impl<T> ScopedXFree<T> {
     }
 }
 
-#[unsafe_destructor]
 impl<T> Drop for ScopedXFree<T> {
     fn drop(&mut self) {
         if ! self.ptr.is_null() {
