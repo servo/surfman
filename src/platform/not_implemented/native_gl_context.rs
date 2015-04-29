@@ -1,4 +1,3 @@
-use geom::Size2D;
 use NativeGLContextMethods;
 
 pub struct NativeGLContext;
