@@ -78,10 +78,6 @@ impl GLContext {
         &self.formats
     }
 
-    pub fn borrow_draw_buffer(&self) -> &Option<DrawBuffer> {
-        &self.draw_buffer
-    }
-
     pub fn get_framebuffer(&self) -> GLuint {
         if let Some(ref db) = self.draw_buffer {
             return db.get_framebuffer();
