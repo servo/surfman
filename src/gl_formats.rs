@@ -1,16 +1,65 @@
 use gleam::gl::types::GLenum;
-use GLContextCapabilities;
+use gleam::gl;
+use GLContextAttributes;
 
+/// This structure is here to allow
+/// cross-platform formatting
 pub struct GLFormats {
-    renderbuffer_color: GLenum,
-    texture_internal: GLenum,
-    texture: GLenum,
-    texture_type: GLenum,
+    pub color_renderbuffer: GLenum,
+    pub texture_internal: GLenum,
+    pub texture: GLenum,
+    pub texture_type: GLenum,
+    pub depth: GLenum,
+    pub stencil: GLenum
 }
 
 impl GLFormats {
-    fn detect(capabilities: &GLContextCapabilities, is_gles: bool) -> GLFormats {
-        unimplemented!()
+    // In the future we may use extension detection et-al to improve this, for now
+    // platform depending
+    #[cfg(not(target_os="android"))]
+    pub fn detect(attrs: &GLContextAttributes) -> GLFormats {
+        if attrs.alpha {
+            GLFormats {
+                color_renderbuffer: gl::RGBA8,
+                texture_internal: gl::RGBA8,
+                texture: gl::RGBA,
+                texture_type: gl::UNSIGNED_BYTE,
+                depth: gl::DEPTH_COMPONENT24,
+                stencil: gl::STENCIL_INDEX8,
+            }
+        } else {
+            GLFormats {
+                color_renderbuffer: gl::RGB8,
+                texture_internal: gl::RGB8,
+                texture: gl::RGB,
+                texture_type: gl::UNSIGNED_BYTE,
+                depth: gl::DEPTH_COMPONENT24,
+                stencil: gl::STENCIL_INDEX8,
+            }
+        }
+    }
+
+    #[cfg(target_os="android")]
+    pub fn detect(attrs: &GLContextAttributes) -> GLFormats {
+        if attrs.alpha {
+            GLFormats {
+                color_renderbuffer: gl::RGBA4,
+                texture_internal: gl::RGBA,
+                texture: gl::RGBA,
+                texture_type: gl::UNSIGNED_SHORT_4_4_4_4,
+                depth: gl::DEPTH_COMPONENT16,
+                stencil: gl::STENCIL_INDEX8,
+            }
+        } else {
+            GLFormats {
+                color_renderbuffer: gl::RGB565,
+                texture_internal: gl::RGB,
+                texture: gl::RGB,
+                texture_type: gl::UNSIGNED_SHORT_4_4_4_4,
+                depth: gl::DEPTH_COMPONENT16,
+                stencil: gl::STENCIL_INDEX8,
+            }
+        }
     }
 }
 

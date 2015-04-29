@@ -1,5 +1,7 @@
 // use gleam::gl;
 use gleam::gl::{GLint};
+
+#[allow(unused_imports)]
 use GLFeature;
 
 /// This is a cross-platform struct, that every GLContext implementation
@@ -20,10 +22,10 @@ impl GLContextCapabilities {
         };
 
 
-        if GLFeature::is_supported(GLFeature::FramebufferMultisample) {
-            // FIXME(ecoal95): uncomment me when we have cross-system constants
+        // FIXME(ecoal95): uncomment me when we have cross-system constants
+        // if GLFeature::is_supported(GLFeature::FramebufferMultisample) {
             // unsafe { gl::GetIntegerv(gl::MAX_SAMPLES, &mut capabilities.max_samples as *mut GLint); };
-        }
+        // }
 
         capabilities
     }

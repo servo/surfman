@@ -3,6 +3,7 @@ name = "offscreen_gl_context"
 version = "0.0.1"
 dependencies = [
  "cgl 0.0.1 (git+https://github.com/servo/rust-cgl)",
+ "core_foundation 0.1.0 (git+https://github.com/servo/rust-core-foundation)",
  "geom 0.1.0 (git+https://github.com/servo/rust-geom)",
  "gleam 0.0.1 (git+https://github.com/servo/gleam)",
  "glx 0.0.1 (git+https://github.com/servo/rust-glx)",
@@ -21,6 +22,14 @@ version = "0.0.1"
 source = "git+https://github.com/servo/rust-cgl#211afc4d1572d8fe67b91c452441b6cb292a2bc7"
 dependencies = [
  "gleam 0.0.1 (git+https://github.com/servo/gleam)",
+]
+
+[[package]]
+name = "core_foundation"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-core-foundation#da54b5656490d553cb06031770ff542f0bffff1c"
+dependencies = [
+ "libc 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

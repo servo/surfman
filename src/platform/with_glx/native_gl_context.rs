@@ -62,11 +62,10 @@ impl Drop for NativeGLContext {
 }
 
 impl NativeGLContextMethods for NativeGLContext {
-    // FIXME(ecoal95): In Gecko this is created with a dummy size
-    //   and later resized with corresponding checks about max fb length
-    //   we're not handling resizing yet though
-    fn create_headless(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
-        create_offscreen_pixmap_backed_context(size)
+    fn create_headless() -> Result<NativeGLContext, &'static str> {
+        // We create a context with a dummy size since in other platforms
+        // a default framebuffer is not bound
+        create_offscreen_pixmap_backed_context(Size2D(16, 16))
     }
 
     #[inline(always)]

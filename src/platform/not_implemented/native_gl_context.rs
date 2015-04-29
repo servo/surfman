@@ -4,7 +4,7 @@ use NativeGLContextMethods;
 pub struct NativeGLContext;
 
 impl NativeGLContextMethods for NativeGLContext {
-    fn create_headless(_: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
+    fn create_headless() -> Result<NativeGLContext, &'static str> {
         Err("Not implemented (yet)")
     }
 

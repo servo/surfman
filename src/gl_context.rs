@@ -1,18 +1,27 @@
 use geom::Size2D;
 use gleam::gl;
+use gleam::gl::types::{GLint, GLuint};
 
 use NativeGLContextMethods;
 use GLContextAttributes;
 use GLContextCapabilities;
+use GLFormats;
 use DrawBuffer;
 use NativeGLContext;
 
 
+/// This is a wrapper over a native headless GL context
 pub struct GLContext {
     native_context: NativeGLContext,
+    /// This an abstraction over a custom framebuffer
+    /// with attachments according to WebGLContextAttributes
+    // TODO(ecoal95): Ideally we may want a read and a draw
+    // framebuffer, but this is not supported in GLES2, review
+    // when we have better support
     draw_buffer: Option<DrawBuffer>,
     attributes: GLContextAttributes,
     capabilities: GLContextCapabilities,
+    formats: GLFormats,
 }
 
 impl GLContext {
@@ -21,17 +30,24 @@ impl GLContext {
 
         try!(native_context.make_current());
 
+        let attributes = GLContextAttributes::any();
+        let formats = GLFormats::detect(&attributes);
+
         Ok(GLContext {
             native_context: native_context,
             draw_buffer: None,
-            attributes: GLContextAttributes::any(),
-            capabilities: GLContextCapabilities::detect()
+            attributes: attributes,
+            capabilities: GLContextCapabilities::detect(),
+            formats: formats,
         })
     }
 
     pub fn create_offscreen(size: Size2D<i32>, attributes: GLContextAttributes) -> Result<GLContext, &'static str> {
-        let mut context = try!(GLContext::create_headless(size));
+        // We create a headless context with a dummy size, we're painting to the
+        // draw_buffer's framebuffer anyways.
+        let mut context = try!(GLContext::create_headless(Size2D(16, 16)));
 
+        context.formats = GLFormats::detect(&attributes);
         context.attributes = attributes;
 
         try!(context.init_offscreen(size));
@@ -57,6 +73,26 @@ impl GLContext {
     pub fn borrow_capabilities(&self) -> &GLContextCapabilities {
         &self.capabilities
     }
+
+    pub fn borrow_formats(&self) -> &GLFormats {
+        &self.formats
+    }
+
+    pub fn borrow_draw_buffer(&self) -> &Option<DrawBuffer> {
+        &self.draw_buffer
+    }
+
+    pub fn get_framebuffer(&self) -> GLuint {
+        if let Some(ref db) = self.draw_buffer {
+            return db.get_framebuffer();
+        }
+
+        unsafe {
+            let mut ret : GLint = 0;
+            gl::GetIntegerv(gl::FRAMEBUFFER_BINDING, &mut ret);
+            ret as GLuint
+        }
+    }
 }
 
 
@@ -69,12 +105,12 @@ impl GLContextPrivateMethods for GLContext {
     // FIXME(ecoal95): initial resizing should be handled here,
     //   generic resizing should be handled in the screen buffer/draw buffer
     fn init_offscreen(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
-        // try!(self.create_draw_buffer(size));
+        try!(self.create_draw_buffer(size));
 
         self.make_current().unwrap();
 
         unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, self.draw_buffer.as_ref().unwrap().get_framebuffer());
             gl::Scissor(0, 0, size.width, size.height);
             gl::Viewport(0, 0, size.width, size.height);
         }
