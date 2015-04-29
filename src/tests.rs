@@ -1,6 +1,5 @@
 use gleam::gl;
 use geom::Size2D;
-use std::iter::range_step;
 
 use GLContext;
 use GLContextAttributes;
@@ -80,12 +79,12 @@ fn test_offscreen() {
 
     assert!(pixels.len() == (size.width * size.height * 4) as usize);
 
-    for i in range_step(0, pixels.len(), 4) {
-        println!("{} {} {} {}", pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]);
+    for pixel in pixels.chunks(4) {
+        println!("{:?}", pixel);
 
-        assert!(pixels[i] == 255);
-        assert!(pixels[i + 1] == 0);
-        assert!(pixels[i + 2] == 0);
-        assert!(pixels[i + 3] == 255);
+        assert!(pixel[0] == 255);
+        assert!(pixel[1] == 0);
+        assert!(pixel[2] == 0);
+        assert!(pixel[3] == 255);
     }
 }
