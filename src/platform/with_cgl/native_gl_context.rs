@@ -68,7 +68,7 @@ impl NativeGLContextMethods for NativeGLContext{
                 if tried_accelerated {
                     return Err("No pixel formats available");
                 } else {
-                    debug!("Not accelerated pixel formats found, trying non-accelerated");
+                    debug!("No accelerated pixel formats found, trying non-accelerated");
                     tried_accelerated = true;
                     attributes[0] = 0;
                 }
