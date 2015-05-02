@@ -53,34 +53,20 @@ impl Drop for NativeGLContext {
 
 impl NativeGLContextMethods for NativeGLContext {
     fn create_headless() -> Result<NativeGLContext, &'static str> {
-        // We try first with accelerated support
         let mut attributes = [
-            kCGLPFAAccelerated,
             0
         ];
-
-        let mut tried_accelerated = false;
 
         let mut pixel_format : CGLPixelFormatObj = unsafe { mem::uninitialized() };
         let mut pix_count = 0;
 
         unsafe {
-            loop {
-                if CGLChoosePixelFormat(attributes.as_mut_ptr(), &mut pixel_format, &mut pix_count) != 0 {
-                    return Err("CGLChoosePixelFormat");
-                }
+            if CGLChoosePixelFormat(attributes.as_mut_ptr(), &mut pixel_format, &mut pix_count) != 0 {
+                return Err("CGLChoosePixelFormat");
+            }
 
-                if pix_count != 0 {
-                    break;
-                }
-
-                if tried_accelerated {
-                    return Err("No pixel formats available");
-                } else {
-                    debug!("No accelerated pixel formats found, trying non-accelerated");
-                    tried_accelerated = true;
-                    attributes[0] = 0;
-                }
+            if pix_count == 0 {
+                return Err("No pixel formats available");
             }
         }
 
