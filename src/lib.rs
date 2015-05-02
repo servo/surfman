@@ -30,5 +30,12 @@ pub use gl_feature::GLFeature;
 mod gl_formats;
 pub use gl_formats::GLFormats;
 
+#[macro_use]
+extern crate log;
+
+#[cfg(test)]
+#[cfg(target_os="macos")]
+extern crate core_foundation;
+
 #[cfg(test)]
 mod tests;

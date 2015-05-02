@@ -6,6 +6,7 @@ authors = ["ecoal95 <ecoal95@gmail.com>"]
 
 [dependencies]
 libc = "*"
+log  = "*"
 
 [dependencies.glx]
 git = "https://github.com/servo/rust-glx"

@@ -1,4 +1,7 @@
-use NativeGLContextMethods;
+use cgl::*;
+use std::mem;
+
+use platform::NativeGLContextMethods;
 
 pub struct NativeGLContext {
     native_context: CGLContextObj,
@@ -10,7 +13,7 @@ impl NativeGLContext {
     //
     //   While this can be desirable, we can't rely on it.
     pub fn new(share_context: Option<NativeGLContext>,
-               pixel_format: &CGLPixelFormatObj)
+               pixel_format: &mut CGLPixelFormatObj)
         -> Result<NativeGLContext, &'static str> {
 
         let shared = match share_context {
@@ -18,10 +21,10 @@ impl NativeGLContext {
             None => 0 as CGLContextObj
         };
 
-        let native = unsafe { mem::uninitialized() };
+        let mut native = unsafe { mem::uninitialized() };
 
         unsafe {
-            if CGLCreateContext(pixel_format, shared, &mut native) != 0 {
+            if CGLCreateContext(*pixel_format, shared, &mut native) != 0 {
                 return Err("CGLCreateContext");
             }
         }
@@ -47,24 +50,36 @@ impl NativeGLContextMethods for NativeGLContext{
             0
         ];
 
-        let native : CGLContextObj = unsafe { mem::uninitialized() };
-        let pixel_format : CGLPixelFormatObj = unsafe { mem::uninitialized() };
+        let mut tried_accelerated = false;
 
-        let pix_count = 0;
+        let mut pixel_format : CGLPixelFormatObj = unsafe { mem::uninitialized() };
+        let mut pix_count = 0;
 
         unsafe {
-            if CGLChoosePixelFormat(attributes.as_mut_ptr(), &mut pixel_format, &mut pix_count) != 0 {
-                return Err("CGLChoosePixelFormat");
-            }
+            loop {
+                if CGLChoosePixelFormat(attributes.as_mut_ptr(), &mut pixel_format, &mut pix_count) != 0 {
+                    return Err("CGLChoosePixelFormat");
+                }
 
-            if pix_count == 0 {
-                return Err("No pixel formats available");
+                if pix_count != 0 {
+                    break;
+                }
+
+                if tried_accelerated {
+                    return Err("No pixel formats available");
+                } else {
+                    debug!("Not accelerated pixel formats found, trying non-accelerated");
+                    tried_accelerated = true;
+                    attributes[0] = 0;
+                }
             }
         }
 
-        let result = NativeGLContext::new(None, &pixel_format);
+        let result = NativeGLContext::new(None, &mut pixel_format);
 
-        CGLDestroyPixelFormat(pixel_format);
+        unsafe {
+            CGLDestroyPixelFormat(pixel_format);
+        }
 
         result
     }

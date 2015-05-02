@@ -10,9 +10,21 @@ use std::ffi::CString;
 use glx;
 #[cfg(target_os = "android")]
 use egl;
+
 #[cfg(target_os = "macos")]
 use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
+#[cfg(target_os = "macos")]
+use core_foundation::base::TCFType;
+#[cfg(target_os = "macos")]
+use core_foundation::string::CFString;
 
+use std::str::FromStr;
+
+#[cfg(target_os="macos")]
+#[link(name="OpenGL", kind="framework")]
+extern {}
+
+#[cfg(target_os="linux")]
 #[link(name="GL")]
 extern {}
 
