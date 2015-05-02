@@ -53,8 +53,7 @@ impl Drop for NativeGLContext {
 
 impl NativeGLContextMethods for NativeGLContext {
     fn create_headless() -> Result<NativeGLContext, &'static str> {
-        // NOTE: This attributes force hw acceleration,
-        //   we may want to allow non hw-accelerated contexts
+        // We try first with accelerated support
         let mut attributes = [
             kCGLPFAAccelerated,
             0
