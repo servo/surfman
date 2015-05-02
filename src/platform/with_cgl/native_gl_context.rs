@@ -41,6 +41,16 @@ impl NativeGLContext {
     }
 }
 
+impl Drop for NativeGLContext {
+    fn drop(&mut self) {
+        unsafe {
+            if CGLDestroyContext(self.native_context) != 0 {
+                debug!("CGLDestroyContext returned an error");
+            }
+        }
+    }
+}
+
 impl NativeGLContextMethods for NativeGLContext{
     fn create_headless() -> Result<NativeGLContext, &'static str> {
         // NOTE: This attributes force hw acceleration,
