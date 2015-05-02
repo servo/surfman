@@ -20,7 +20,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "cgl"
 version = "0.0.1"
-source = "git+https://github.com/servo/rust-cgl#16144321dc18d8ab538ee2acc0d2dad155a17899"
+source = "git+https://github.com/servo/rust-cgl#f07028d7e3ef5887812ed74e5169e5dac888564d"
 dependencies = [
  "gleam 0.0.1 (git+https://github.com/servo/gleam)",
  "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -55,7 +55,7 @@ dependencies = [
 
 [[package]]
 name = "gl_generator"
-version = "0.0.24"
+version = "0.0.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "khronos_api 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -69,7 +69,7 @@ version = "0.0.1"
 source = "git+https://github.com/servo/gleam#15148d15aa62a115ae3c8f17d410b97dd398a6fc"
 dependencies = [
  "gl_common 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "gl_generator 0.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gl_generator 0.0.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "khronos_api 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -80,7 +80,7 @@ version = "0.0.1"
 source = "git+https://github.com/servo/rust-glx#60ac0aee2438eadb4b51ddc8eac6fc4b5ca8e447"
 dependencies = [
  "gl_common 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "gl_generator 0.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gl_generator 0.0.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "khronos_api 0.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

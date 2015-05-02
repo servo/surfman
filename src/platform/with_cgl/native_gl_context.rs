@@ -3,11 +3,6 @@ use std::mem;
 
 use platform::NativeGLContextMethods;
 
-// TODO: Remove this when CGLDestroyContext is in rust-cgl
-extern {
-    pub fn CGLDestroyContext(ctx: CGLContextObj) -> CGLError;
-}
-
 pub struct NativeGLContext {
     native_context: CGLContextObj,
 }
