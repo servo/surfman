@@ -61,6 +61,7 @@ impl DrawBuffer {
         try!(draw_buffer.init(&attrs, &formats));
 
         unsafe {
+            debug_assert!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE);
             debug_assert!(gl::GetError() == gl::NO_ERROR);
         }
 

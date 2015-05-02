@@ -26,7 +26,7 @@ impl<T> ScopedXFree<T> {
 
 impl<T> Drop for ScopedXFree<T> {
     fn drop(&mut self) {
-        if ! self.ptr.is_null() {
+        if !self.ptr.is_null() {
             unsafe { XFree(self.ptr as *mut c_void); };
         }
     }
@@ -130,6 +130,7 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>) -> Result<Nativ
                                            0 as *const c_int);
 
         if glx_pixmap == 0 {
+            XFreePixmap(dpy, pixmap);
             return Err("glx::createPixmap");
         }
 

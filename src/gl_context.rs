@@ -89,6 +89,16 @@ impl GLContext {
             ret as GLuint
         }
     }
+
+    // We resize just replacing the draw buffer, we don't perform size optimizations
+    // in order to keep this generic
+    pub fn resize(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
+        if self.draw_buffer.is_some() {
+            self.create_draw_buffer(size)
+        } else {
+            Err("No DrawBuffer found")
+        }
+    }
 }
 
 
@@ -98,15 +108,12 @@ trait GLContextPrivateMethods {
 }
 
 impl GLContextPrivateMethods for GLContext {
-    // FIXME(ecoal95): initial resizing should be handled here,
-    //   generic resizing should be handled in the screen buffer/draw buffer
     fn init_offscreen(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
         try!(self.create_draw_buffer(size));
 
-        self.make_current().unwrap();
+        debug_assert!(self.is_current());
 
         unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, self.draw_buffer.as_ref().unwrap().get_framebuffer());
             gl::Scissor(0, 0, size.width, size.height);
             gl::Viewport(0, 0, size.width, size.height);
         }

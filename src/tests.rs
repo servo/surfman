@@ -92,8 +92,7 @@ fn test_offscreen() {
     assert!(pixels.len() == (size.width * size.height * 4) as usize);
 
     for pixel in pixels.chunks(4) {
-        println!("{:?}", pixel);
-
+        // println!("{:?}", pixel);
         assert!(pixel[0] == 255);
         assert!(pixel[1] == 0);
         assert!(pixel[2] == 0);
