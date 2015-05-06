@@ -57,7 +57,8 @@ impl Drop for ColorAttachment {
                 ColorAttachment::Texture(mut tex_id) => gl::DeleteTextures(1, &mut tex_id),
 
                 #[cfg(feature="texture_surface")]
-                ColorAttachment::TextureWithSurface(_, _) => unimplemented!(),
+                // Their destructors do everything
+                ColorAttachment::TextureWithSurface(_, _) => {},
             }
         }
     }
