@@ -108,3 +108,12 @@ fn test_texture_color_attachment() {
     load_gl();
     test_gl_context(&GLContext::create_offscreen_with_color_attachment(Size2D(256, 256), GLContextAttributes::default(), ColorAttachmentType::Texture).unwrap())
 }
+
+#[test]
+#[cfg(feature="texture_surface")]
+fn test_texture_surface_color_attachment() {
+    load_gl();
+    let ctx = GLContext::create_offscreen_with_color_attachment(Size2D(256, 256), GLContextAttributes::default(), ColorAttachmentType::TextureWithSurface).unwrap();
+    test_gl_context(&ctx);
+    // TODO: check getting the surface colors
+}
