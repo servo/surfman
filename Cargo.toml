@@ -4,6 +4,9 @@ name = "offscreen_gl_context"
 version = "0.0.1"
 authors = ["ecoal95 <ecoal95@gmail.com>"]
 
+[features]
+texture_surface = ["layers"]
+
 [dependencies]
 libc = "*"
 log  = "*"
@@ -25,3 +28,7 @@ git = "https://github.com/servo/rust-geom"
 
 [dependencies.core_foundation]
 git = "https://github.com/servo/rust-core-foundation"
+
+[dependencies.layers]
+git = "https://github.com/servo/rust-layers"
+optional = true

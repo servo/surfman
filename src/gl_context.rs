@@ -7,6 +7,7 @@ use GLContextAttributes;
 use GLContextCapabilities;
 use GLFormats;
 use DrawBuffer;
+use ColorAttachmentType;
 use NativeGLContext;
 
 
@@ -42,7 +43,12 @@ impl GLContext {
         })
     }
 
-    pub fn create_offscreen(size: Size2D<i32>, attributes: GLContextAttributes) -> Result<GLContext, &'static str> {
+    /// This allows to choose a color attachment type
+    /// create_offscreen() chooses the default one
+    pub fn create_offscreen_with_color_attachment(size: Size2D<i32>,
+                                                  attributes: GLContextAttributes,
+                                                  color_attachment_type: ColorAttachmentType)
+        -> Result<GLContext, &'static str> {
         // We create a headless context with a dummy size, we're painting to the
         // draw_buffer's framebuffer anyways.
         let mut context = try!(GLContext::create_headless());
@@ -50,9 +56,15 @@ impl GLContext {
         context.formats = GLFormats::detect(&attributes);
         context.attributes = attributes;
 
-        try!(context.init_offscreen(size));
+        try!(context.init_offscreen(size, color_attachment_type));
 
         Ok(context)
+    }
+
+    #[inline(always)]
+    pub fn create_offscreen(size: Size2D<i32>, attributes: GLContextAttributes)
+        -> Result<GLContext, &'static str> {
+        GLContext::create_offscreen_with_color_attachment(size, attributes, ColorAttachmentType::default())
     }
 
     #[inline(always)]
@@ -78,6 +90,10 @@ impl GLContext {
         &self.formats
     }
 
+    pub fn borrow_draw_buffer(&self) -> Option<&DrawBuffer> {
+        self.draw_buffer.as_ref()
+    }
+
     pub fn get_framebuffer(&self) -> GLuint {
         if let Some(ref db) = self.draw_buffer {
             return db.get_framebuffer();
@@ -90,11 +106,16 @@ impl GLContext {
         }
     }
 
+    pub fn draw_buffer_size(&self) -> Option<Size2D<i32>> {
+        self.draw_buffer.as_ref().map( |db| db.size() )
+    }
+
     // We resize just replacing the draw buffer, we don't perform size optimizations
     // in order to keep this generic
     pub fn resize(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
         if self.draw_buffer.is_some() {
-            self.create_draw_buffer(size)
+            let color_attachment_type = self.borrow_draw_buffer().unwrap().color_attachment_type();
+            self.create_draw_buffer(size, color_attachment_type)
         } else {
             Err("No DrawBuffer found")
         }
@@ -103,13 +124,13 @@ impl GLContext {
 
 
 trait GLContextPrivateMethods {
-    fn init_offscreen(&mut self, Size2D<i32>) -> Result<(), &'static str>;
-    fn create_draw_buffer(&mut self, Size2D<i32>) -> Result<(), &'static str>;
+    fn init_offscreen(&mut self, Size2D<i32>, ColorAttachmentType) -> Result<(), &'static str>;
+    fn create_draw_buffer(&mut self, Size2D<i32>, ColorAttachmentType) -> Result<(), &'static str>;
 }
 
 impl GLContextPrivateMethods for GLContext {
-    fn init_offscreen(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
-        try!(self.create_draw_buffer(size));
+    fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
+        try!(self.create_draw_buffer(size, color_attachment_type));
 
         debug_assert!(self.is_current());
 
@@ -121,8 +142,8 @@ impl GLContextPrivateMethods for GLContext {
         Ok(())
     }
 
-    fn create_draw_buffer(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
-        self.draw_buffer = Some(try!(DrawBuffer::new(&self, size)));
+    fn create_draw_buffer(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
+        self.draw_buffer = Some(try!(DrawBuffer::new(&self, size, color_attachment_type)));
         Ok(())
     }
 }

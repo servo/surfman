@@ -3,6 +3,7 @@ use geom::Size2D;
 
 use GLContext;
 use GLContextAttributes;
+use ColorAttachmentType;
 
 use std::ffi::CString;
 
@@ -73,19 +74,15 @@ fn load_gl() {
     }
 }
 
-#[test]
-fn test_offscreen() {
-    load_gl();
-    let size = Size2D(256, 256);
-
-    let context = GLContext::create_offscreen(size, GLContextAttributes::default()).unwrap();
-
+fn test_gl_context(context: &GLContext) {
     context.make_current().unwrap();
 
     unsafe {
         gl::ClearColor(1.0, 0.0, 0.0, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT);
     }
+
+    let size = context.draw_buffer_size().unwrap();
 
     let pixels = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
 
@@ -98,4 +95,16 @@ fn test_offscreen() {
         assert!(pixel[2] == 0);
         assert!(pixel[3] == 255);
     }
+}
+
+#[test]
+fn test_default_color_attachment() {
+    load_gl();
+    test_gl_context(&GLContext::create_offscreen(Size2D(256, 256), GLContextAttributes::default()).unwrap());
+}
+
+#[test]
+fn test_texture_color_attachment() {
+    load_gl();
+    test_gl_context(&GLContext::create_offscreen_with_color_attachment(Size2D(256, 256), GLContextAttributes::default(), ColorAttachmentType::Texture).unwrap())
 }
