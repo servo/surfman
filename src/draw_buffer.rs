@@ -3,15 +3,13 @@ use gleam::gl;
 use gleam::gl::types::{GLuint, GLenum, GLint};
 
 use GLContext;
-use GLContextAttributes;
-use GLFormats;
 
 use std::ptr;
 
 #[cfg(feature="texture_surface")]
-use layers::texturegl::Texture as LayersTexture;
+use LayersSurfaceWrapper;
 #[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeSurface;
+use layers::texturegl::Texture;
 
 pub enum ColorAttachmentType {
     Texture,
@@ -37,7 +35,7 @@ pub enum ColorAttachment {
     Texture(GLuint),
 
     #[cfg(feature="texture_surface")]
-    TextureWithSurface(LayersTexture, NativeSurface),
+    TextureWithSurface(LayersSurfaceWrapper, Texture),
 }
 
 impl ColorAttachment {
@@ -100,7 +98,6 @@ impl DrawBuffer {
 
         let attrs = context.borrow_attributes();
         let capabilities = context.borrow_capabilities();
-        let formats = context.borrow_formats();
 
         if attrs.antialias && capabilities.max_samples == 0 {
             return Err("The given GLContext doesn't support requested antialising");
@@ -117,7 +114,7 @@ impl DrawBuffer {
 
         try!(context.make_current());
 
-        try!(draw_buffer.init(&attrs, &formats, color_attachment_type));
+        try!(draw_buffer.init(context, color_attachment_type));
 
         unsafe {
             debug_assert!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE);
@@ -167,14 +164,16 @@ impl Drop for DrawBuffer {
 }
 
 trait DrawBufferHelpers {
-    fn init(&mut self, attrs: &GLContextAttributes, formats: &GLFormats, color_attachment_type: ColorAttachmentType)
+    fn init(&mut self, &GLContext, color_attachment_type: ColorAttachmentType)
         -> Result<(), &'static str>;
     fn attach_to_framebuffer(&mut self)
         -> Result<(), &'static str>;
 }
 
 impl DrawBufferHelpers for DrawBuffer {
-    fn init(&mut self, attrs: &GLContextAttributes, formats: &GLFormats, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
+    fn init(&mut self, context: &GLContext, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
+        let attrs = context.borrow_attributes();
+        let formats = context.borrow_formats();
 
         self.color_attachment = match color_attachment_type {
             ColorAttachmentType::Renderbuffer => {
@@ -195,7 +194,8 @@ impl DrawBufferHelpers for DrawBuffer {
                     debug_assert!(texture != 0);
 
                     gl::BindTexture(gl::TEXTURE_2D, texture);
-                    gl::TexImage2D(gl::TEXTURE_2D, 0, formats.texture_internal as GLint, self.size.width, self.size.height, 0, formats.texture, formats.texture_type, ptr::null_mut());
+                    gl::TexImage2D(gl::TEXTURE_2D, 0,
+                                   formats.texture_internal as GLint, self.size.width, self.size.height, 0, formats.texture, formats.texture_type, ptr::null_mut());
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
                     Some(ColorAttachment::Texture(texture))
@@ -203,7 +203,15 @@ impl DrawBufferHelpers for DrawBuffer {
             },
             #[cfg(feature="texture_surface")]
             ColorAttachmentType::TextureWithSurface => {
-                unimplemented!();
+                // TODO(ecoal95): check if this is correct
+                let (flip, target) = Texture::texture_flip_and_target(true);
+                let mut texture = Texture::new(target, Size2D(self.size.width as usize, self.size.height as usize));
+                texture.flip = flip;
+
+                let surface_wrapper = LayersSurfaceWrapper::new(context.get_metadata(), self.size);
+                surface_wrapper.bind_to_texture(&texture);
+
+                Some(ColorAttachment::TextureWithSurface(surface_wrapper, texture))
             }
         };
 
@@ -239,34 +247,36 @@ impl DrawBufferHelpers for DrawBuffer {
                                                 gl::COLOR_ATTACHMENT0,
                                                 gl::RENDERBUFFER,
                                                 color_renderbuffer);
-                    // debug_assert!(gl::IsRenderbuffer(color_renderbuffer) == gl::TRUE);
                 },
-                &ColorAttachment::Texture(texture) => {
+                &ColorAttachment::Texture(texture_id) => {
                     gl::FramebufferTexture2D(gl::FRAMEBUFFER,
                                              gl::COLOR_ATTACHMENT0,
                                              gl::TEXTURE_2D,
-                                             texture, 0);
+                                             texture_id, 0);
                 },
                 #[cfg(feature="texture_surface")]
-                &ColorAttachment::TextureWithSurface(_, _) => {
-                    unimplemented!();
+                &ColorAttachment::TextureWithSurface(_, ref texture) => {
+                    gl::FramebufferTexture2D(gl::FRAMEBUFFER,
+                                             gl::COLOR_ATTACHMENT0,
+                                             texture.target.as_gl_target(),
+                                             texture.native_texture(), 0);
                 }
             }
 
             if self.depth_renderbuffer != 0 {
-                // debug_assert!(gl::IsRenderbuffer(self.depth_renderbuffer) == gl::TRUE);
                 gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
                                             gl::DEPTH_ATTACHMENT,
                                             gl::RENDERBUFFER,
                                             self.depth_renderbuffer);
+                debug_assert!(gl::IsRenderbuffer(self.depth_renderbuffer) == gl::TRUE);
             }
 
             if self.stencil_renderbuffer != 0 {
-                // debug_assert!(gl::IsRenderbuffer(self.stencil_renderbuffer) == gl::TRUE);
                 gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
                                             gl::STENCIL_ATTACHMENT,
                                             gl::RENDERBUFFER,
                                             self.stencil_renderbuffer);
+                debug_assert!(gl::IsRenderbuffer(self.stencil_renderbuffer) == gl::TRUE);
             }
         }
 

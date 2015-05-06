@@ -3,6 +3,9 @@ use std::mem;
 
 use platform::NativeGLContextMethods;
 
+#[cfg(feature="texture_surface")]
+use layers::platform::surface::NativeGraphicsMetadata;
+
 pub struct NativeGLContext {
     native_context: CGLContextObj,
 }
@@ -10,10 +13,8 @@ pub struct NativeGLContext {
 impl NativeGLContext {
     // NOTE: this function doesn't destroy the associated the
     //   corresponding CGLPixelFormatObj.
-    //
-    //   While this can be desirable, we can't rely on it.
     pub fn new(share_context: Option<NativeGLContext>,
-               pixel_format: &mut CGLPixelFormatObj)
+               pixel_format: CGLPixelFormatObj)
         -> Result<NativeGLContext, &'static str> {
 
         let shared = match share_context {
@@ -24,7 +25,7 @@ impl NativeGLContext {
         let mut native = unsafe { mem::uninitialized() };
 
         unsafe {
-            if CGLCreateContext(*pixel_format, shared, &mut native) != 0 {
+            if CGLCreateContext(pixel_format, shared, &mut native) != 0 {
                 return Err("CGLCreateContext");
             }
         }
@@ -33,6 +34,7 @@ impl NativeGLContext {
 
         Ok(NativeGLContext {
             native_context: native,
+            pixel_format: pixel_format,
         })
     }
 
@@ -44,6 +46,9 @@ impl NativeGLContext {
 impl Drop for NativeGLContext {
     fn drop(&mut self) {
         unsafe {
+            if CGLDestroyPixelFormat(self.pixel_format) != 0 {
+                debug!("CGLDestroyPixelformat errored");
+            }
             if CGLDestroyContext(self.native_context) != 0 {
                 debug!("CGLDestroyContext returned an error");
             }
@@ -55,40 +60,23 @@ impl NativeGLContextMethods for NativeGLContext {
     fn create_headless() -> Result<NativeGLContext, &'static str> {
         // We try first with accelerated support
         let mut attributes = [
-            kCGLPFAAccelerated,
             0
         ];
-
-        let mut tried_accelerated = false;
 
         let mut pixel_format : CGLPixelFormatObj = unsafe { mem::uninitialized() };
         let mut pix_count = 0;
 
         unsafe {
-            loop {
-                if CGLChoosePixelFormat(attributes.as_mut_ptr(), &mut pixel_format, &mut pix_count) != 0 {
-                    return Err("CGLChoosePixelFormat");
-                }
+            if CGLChoosePixelFormat(attributes.as_mut_ptr(), &mut pixel_format, &mut pix_count) != 0 {
+                return Err("CGLChoosePixelFormat");
+            }
 
-                if pix_count != 0 {
-                    break;
-                }
-
-                if tried_accelerated {
-                    return Err("No pixel formats available");
-                } else {
-                    debug!("No accelerated pixel formats found, trying non-accelerated");
-                    tried_accelerated = true;
-                    attributes[0] = 0;
-                }
+            if pix_count == 0 {
+                return Err("No pixel formats available");
             }
         }
 
-        let result = NativeGLContext::new(None, &mut pixel_format);
-
-        unsafe {
-            CGLDestroyPixelFormat(pixel_format);
-        }
+        let result = NativeGLContext::new(None, pixel_format);
 
         result
     }
@@ -107,6 +95,13 @@ impl NativeGLContextMethods for NativeGLContext {
             } else {
                 Ok(())
             }
+        }
+    }
+
+    #[cfg(feature="texture_surface")]
+    fn get_metadata(&self) -> NativeGraphicsMetadata {
+        NativeGraphicsMetadata {
+            pixel_format: self.pixel_format,
         }
     }
 }

@@ -35,6 +35,10 @@ extern crate log;
 
 #[cfg(feature="texture_surface")]
 extern crate layers;
+#[cfg(feature="texture_surface")]
+mod layers_surface_wrapper;
+#[cfg(feature="texture_surface")]
+pub use layers_surface_wrapper::LayersSurfaceWrapper;
 
 #[cfg(test)]
 #[cfg(target_os="macos")]

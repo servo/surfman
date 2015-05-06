@@ -10,6 +10,9 @@ use DrawBuffer;
 use ColorAttachmentType;
 use NativeGLContext;
 
+#[cfg(feature="texture_surface")]
+use layers::platform::surface::NativeGraphicsMetadata;
+
 
 /// This is a wrapper over a native headless GL context
 pub struct GLContext {
@@ -119,6 +122,11 @@ impl GLContext {
         } else {
             Err("No DrawBuffer found")
         }
+    }
+
+    #[cfg(feature="texture_surface")]
+    pub fn get_metadata(&self) -> NativeGraphicsMetadata {
+        self.native_context.get_metadata()
     }
 }
 
