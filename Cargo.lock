@@ -37,7 +37,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "cgl"
 version = "0.0.1"
-source = "git+https://github.com/servo/rust-cgl#f07028d7e3ef5887812ed74e5169e5dac888564d"
+source = "git+https://github.com/servo/rust-cgl#851ca1b90081d221c3c38d33548d3e22a19db79f"
 dependencies = [
  "gleam 0.0.1 (git+https://github.com/servo/gleam)",
  "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",

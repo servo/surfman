@@ -47,11 +47,9 @@ impl NativeGLContext {
 impl Drop for NativeGLContext {
     fn drop(&mut self) {
         unsafe {
-            // Depends on rust-layers#6
-            CGLDestroyPixelFormat(self.pixel_format);
-            // if CGLDestroyPixelFormat(self.pixel_format) != 0 {
-            //     debug!("CGLDestroyPixelformat errored");
-            // }
+            if CGLDestroyPixelFormat(self.pixel_format) != 0 {
+                debug!("CGLDestroyPixelformat errored");
+            }
             if CGLDestroyContext(self.native_context) != 0 {
                 debug!("CGLDestroyContext returned an error");
             }
