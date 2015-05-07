@@ -141,6 +141,16 @@ impl DrawBuffer {
     pub fn size(&self) -> Size2D<i32> {
         self.size
     }
+
+    #[inline(always)]
+    #[cfg(feature="texture_surface")]
+    pub fn get_bound_surface_id(&self) -> Option<isize> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _)
+                => Some(surf_wrapper.get_surface_id()),
+            _   => None
+        }
+    }
 }
 
 // NOTE: The initially associated GLContext MUST be the current gl context
@@ -248,6 +258,7 @@ impl DrawBufferHelpers for DrawBuffer {
                                                 gl::COLOR_ATTACHMENT0,
                                                 gl::RENDERBUFFER,
                                                 color_renderbuffer);
+                    debug_assert!(gl::IsRenderbuffer(color_renderbuffer) == gl::TRUE);
                 },
                 &ColorAttachment::Texture(texture_id) => {
                     gl::FramebufferTexture2D(gl::FRAMEBUFFER,
