@@ -29,14 +29,14 @@ fn create_compositing_context(_: &NativeGraphicsMetadata) -> NativeCompositingGr
 }
 
 impl LayersSurfaceWrapper {
-    pub fn new(metadata: NativeGraphicsMetadata, size: Size2D<i32>) -> LayersSurfaceWrapper {
+    pub fn new(metadata: NativeGraphicsMetadata, size: Size2D<i32>, stride: i32) -> LayersSurfaceWrapper {
         let graphics_ctx = NativePaintingGraphicsContext::from_metadata(&metadata);
 
         let compositing_ctx = create_compositing_context(&metadata);
 
 
         // TODO(ecoal95): Check if size.width is the stride we must use
-        let mut surf = NativeSurface::new(&graphics_ctx, size, size.width);
+        let mut surf = NativeSurface::new(&graphics_ctx, size, stride);
         surf.mark_will_leak();
 
         LayersSurfaceWrapper {

@@ -209,7 +209,7 @@ impl DrawBufferHelpers for DrawBuffer {
                 let mut texture = Texture::new(target, Size2D(self.size.width as usize, self.size.height as usize));
                 texture.flip = flip;
 
-                let surface_wrapper = LayersSurfaceWrapper::new(context.get_metadata(), self.size);
+                let surface_wrapper = LayersSurfaceWrapper::new(context.get_metadata(), self.size, self.size.width * (if attrs.alpha { 4 } else { 3 }));
                 surface_wrapper.bind_to_texture(&texture);
 
                 Some(ColorAttachment::TextureWithSurface(surface_wrapper, texture))
