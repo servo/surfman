@@ -77,9 +77,7 @@ impl NativeGLContextMethods for NativeGLContext {
             }
         }
 
-        let result = NativeGLContext::new(None, pixel_format);
-
-        result
+        NativeGLContext::new(None, pixel_format)
     }
 
     fn is_current(&self) -> bool {
