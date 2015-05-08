@@ -29,8 +29,6 @@ git = "https://github.com/servo/rust-geom"
 [dependencies.core_foundation]
 git = "https://github.com/servo/rust-core-foundation"
 
-# Pending servo/rust-layers#156
 [dependencies.layers]
-git = "https://github.com/ecoal95/rust-layers"
-branch = "public-texture-methods"
+git = "https://github.com/servo/rust-layers"
 optional = true

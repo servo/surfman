@@ -34,7 +34,6 @@ impl LayersSurfaceWrapper {
 
         let compositing_ctx = create_compositing_context(&metadata);
 
-
         // TODO(ecoal95): Check if size.width is the stride we must use
         let mut surf = NativeSurface::new(&graphics_ctx, size, stride);
         surf.mark_will_leak();
@@ -50,6 +49,10 @@ impl LayersSurfaceWrapper {
     pub fn bind_to_texture(&self, texture: &Texture) {
         let size = Size2D(self.size.width as isize, self.size.height as isize);
         self.surface.bind_to_texture(&self.compositing_context, texture, size)
+    }
+
+    pub fn borrow_surface(&self) -> &NativeSurface {
+        &self.surface
     }
 
     pub fn get_surface_id(&self) -> isize {
