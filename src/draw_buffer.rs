@@ -137,6 +137,22 @@ impl DrawBuffer {
         self.color_attachment.as_ref().unwrap().color_attachment_type()
     }
 
+    pub fn get_bound_color_renderbuffer_id(&self) -> Option<GLuint> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::Renderbuffer(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    pub fn get_bound_texture_id(&self) -> Option<GLuint> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::Renderbuffer(_) => None,
+            &ColorAttachment::Texture(id) => Some(id),
+            #[cfg(feature="texture_surface")]
+            &ColorAttachment::TextureWithSurface(_, ref tex) => Some(tex.native_texture()),
+        }
+    }
+
     #[inline(always)]
     pub fn size(&self) -> Size2D<i32> {
         self.size
@@ -149,6 +165,15 @@ impl DrawBuffer {
             &ColorAttachment::TextureWithSurface(ref surf_wrapper, _)
                 => Some(surf_wrapper.get_surface_id()),
             _   => None
+        }
+    }
+
+    #[inline(always)]
+    #[cfg(feature="texture_surface")]
+    pub fn borrow_bound_layers_texture(&self) -> Option<&Texture> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::TextureWithSurface(_, ref tex) => Some(tex),
+            _ => None
         }
     }
 }
