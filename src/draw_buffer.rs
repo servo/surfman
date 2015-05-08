@@ -131,6 +131,11 @@ impl DrawBuffer {
     }
 
     #[inline(always)]
+    pub fn size(&self) -> Size2D<i32> {
+        self.size
+    }
+
+    #[inline(always)]
     // NOTE: We unwrap here because after creation the draw buffer
     // always have a color attachment
     pub fn color_attachment_type(&self) -> ColorAttachmentType {
@@ -151,11 +156,6 @@ impl DrawBuffer {
             #[cfg(feature="texture_surface")]
             &ColorAttachment::TextureWithSurface(_, ref tex) => Some(tex.native_texture()),
         }
-    }
-
-    #[inline(always)]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
     }
 
     #[inline(always)]
