@@ -10,6 +10,8 @@ use std::ptr;
 use LayersSurfaceWrapper;
 #[cfg(feature="texture_surface")]
 use layers::texturegl::Texture;
+#[cfg(feature="texture_surface")]
+use layers::platform::surface::NativeSurface;
 
 pub enum ColorAttachmentType {
     Texture,
@@ -148,6 +150,15 @@ impl DrawBuffer {
         match self.color_attachment.as_ref().unwrap() {
             &ColorAttachment::TextureWithSurface(ref surf_wrapper, _)
                 => Some(surf_wrapper.get_surface_id()),
+            _   => None
+        }
+    }
+
+    #[cfg(feature="texture_surface")]
+    pub fn borrow_bound_surface(&self) -> Option<&NativeSurface> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _)
+                => Some(surf_wrapper.borrow_surface()),
             _   => None
         }
     }

@@ -52,6 +52,10 @@ impl LayersSurfaceWrapper {
         self.surface.bind_to_texture(&self.compositing_context, texture, size)
     }
 
+    pub fn borrow_surface(&self) -> &NativeSurface {
+        &self.surface 
+    }
+
     pub fn get_surface_id(&self) -> isize {
         self.surface.get_id()
     }

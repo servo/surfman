@@ -21,6 +21,12 @@ use core_foundation::string::CFString;
 
 use std::str::FromStr;
 
+#[cfg(feature="texture_surface")]
+use layers::texturegl::Texture;
+
+#[cfg(feature="texture_surface")]
+use layers::platform::surface::NativeCompositingGraphicsContext;
+
 #[cfg(target_os="macos")]
 #[link(name="OpenGL", kind="framework")]
 extern {}
@@ -87,9 +93,12 @@ fn test_gl_context(context: &GLContext) {
     let pixels = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
 
     assert!(pixels.len() == (size.width * size.height * 4) as usize);
+    test_pixels(&pixels);
+}
 
+fn test_pixels(pixels: &Vec<u8>) {
     for pixel in pixels.chunks(4) {
-        // println!("{:?}", pixel);
+        println!("{:?}", pixel);
         assert!(pixel[0] == 255);
         assert!(pixel[1] == 0);
         assert!(pixel[2] == 0);
@@ -113,7 +122,35 @@ fn test_texture_color_attachment() {
 #[cfg(feature="texture_surface")]
 fn test_texture_surface_color_attachment() {
     load_gl();
-    let ctx = GLContext::create_offscreen_with_color_attachment(Size2D(256, 256), GLContextAttributes::default(), ColorAttachmentType::TextureWithSurface).unwrap();
+    let size : Size2D<i32> = Size2D(256, 256);
+    let ctx = GLContext::create_offscreen_with_color_attachment(size, GLContextAttributes::default(), ColorAttachmentType::TextureWithSurface).unwrap();
     test_gl_context(&ctx);
-    // TODO: check getting the surface colors
+
+
+    let surface = ctx.borrow_draw_buffer().unwrap().borrow_bound_surface().unwrap();
+    let (flip, target) = Texture::texture_flip_and_target(true);
+    let mut texture = Texture::new(target, Size2D(size.width as usize, size.height as usize));
+    texture.flip = flip;
+
+    surface.bind_to_texture(&NativeCompositingGraphicsContext::new(), &texture, Size2D(size.width as isize, size.height as isize));
+
+    ctx.make_current().unwrap();
+    unsafe {
+        gl::ClearColor(1.0, 1.0, 1.0, 1.0); // This should be overriden by the drawing of the texture
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+    }
+
+    // test_gl_context_draw_buffer_is_red(&ctx);
+
+    let _bound = texture.bind();
+
+    let mut vec : Vec<u8> = vec![];
+
+    vec.reserve((size.width * size.height * 4) as usize);
+    unsafe {
+        gl::TexImage2D(texture.target.as_gl_target(), 0, gl::RGBA8 as i32, size.width, size.height, 0, gl::RGBA, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
+        vec.set_len((size.width * size.height * 4) as usize);
+    }
+
+    test_pixels(&vec);
 }
