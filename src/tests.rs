@@ -136,9 +136,11 @@ fn test_texture_surface_color_attachment() {
     load_gl();
     let size : Size2D<i32> = Size2D(256, 256);
     let ctx = GLContext::create_offscreen_with_color_attachment(size, GLContextAttributes::default(), ColorAttachmentType::TextureWithSurface).unwrap();
+
     test_gl_context(&ctx);
 
-
+    // Pick up the (in theory) painted surface
+    // And bind it to a new Texture
     let surface = ctx.borrow_draw_buffer().unwrap().borrow_bound_surface().unwrap();
     let (flip, target) = Texture::texture_flip_and_target(true);
     let mut texture = Texture::new(target, Size2D(size.width as usize, size.height as usize));
@@ -148,8 +150,8 @@ fn test_texture_surface_color_attachment() {
 
     surface.bind_to_texture(&compositing_context, &texture, Size2D(size.width as isize, size.height as isize));
 
-    ctx.make_current().unwrap();
-
+    // Bind the texture, get its pixels in rgba format and test
+    // if it has the surface contents
     let _bound = texture.bind();
 
     let mut vec : Vec<u8> = vec![];
