@@ -52,7 +52,7 @@ impl LayersSurfaceWrapper {
     }
 
     pub fn borrow_surface(&self) -> &NativeSurface {
-        &self.surface
+        &self.surface 
     }
 
     pub fn get_surface_id(&self) -> isize {

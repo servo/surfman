@@ -174,8 +174,9 @@ impl DrawBuffer {
     #[cfg(feature="texture_surface")]
     pub fn borrow_bound_layers_texture(&self) -> Option<&Texture> {
         match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::TextureWithSurface(_, ref tex) => Some(tex),
-            _ => None
+            &ColorAttachment::TextureWithSurface(_, ref tex) 
+                => Some(tex),
+            _   => None
         }
     }
 
@@ -183,8 +184,9 @@ impl DrawBuffer {
     #[cfg(feature="texture_surface")]
     pub fn borrow_bound_surface(&self) -> Option<&NativeSurface> {
         match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _) => Some(surf_wrapper.borrow_surface()),
-            _ => None
+            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _) 
+                => Some(surf_wrapper.borrow_surface()),
+            _   => None
         }
     }
 }
