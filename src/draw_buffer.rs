@@ -243,8 +243,13 @@ impl DrawBufferHelpers for DrawBuffer {
                     gl::BindTexture(gl::TEXTURE_2D, texture);
                     gl::TexImage2D(gl::TEXTURE_2D, 0,
                                    formats.texture_internal as GLint, self.size.width, self.size.height, 0, formats.texture, formats.texture_type, ptr::null_mut());
+                    // Low filtering to allow rendering
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
+
+                    // TODO(ecoal95): Check if these two are neccessary, probably not
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
                     Some(ColorAttachment::Texture(texture))
                 }
             },
