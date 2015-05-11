@@ -174,7 +174,7 @@ impl DrawBuffer {
     #[cfg(feature="texture_surface")]
     pub fn borrow_bound_layers_texture(&self) -> Option<&Texture> {
         match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::TextureWithSurface(_, ref tex) 
+            &ColorAttachment::TextureWithSurface(_, ref tex)
                 => Some(tex),
             _   => None
         }
@@ -184,7 +184,7 @@ impl DrawBuffer {
     #[cfg(feature="texture_surface")]
     pub fn borrow_bound_surface(&self) -> Option<&NativeSurface> {
         match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _) 
+            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _)
                 => Some(surf_wrapper.borrow_surface()),
             _   => None
         }
@@ -250,8 +250,8 @@ impl DrawBufferHelpers for DrawBuffer {
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
 
                     // TODO(ecoal95): Check if these two are neccessary, probably not
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
                     Some(ColorAttachment::Texture(texture))
                 }
             },

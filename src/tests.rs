@@ -120,11 +120,13 @@ fn test_texture_color_attachment() {
 }
 
 #[cfg(target_os="linux")]
+#[cfg(feature="texture_surface")]
 fn get_compositing_context(gl_context: &GLContext) -> NativeCompositingGraphicsContext {
     NativeCompositingGraphicsContext::from_display(gl_context.get_metadata().display)
 }
 
 #[cfg(not(target_os="linux"))]
+#[cfg(feature="texture_surface")]
 fn get_compositing_context(_: &GLContext) -> NativeCompositingGraphicsContext {
     NativeCompositingGraphicsContext::new()
 }
