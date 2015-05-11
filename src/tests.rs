@@ -35,7 +35,8 @@ extern {}
 #[link(name="GL")]
 extern {}
 
-static mut GL_LOADED: bool = false;
+// This is probably a time bomb
+static mut GL_LOADED : bool = false;
 
 // Shamelessly stolen from glutin
 #[cfg(target_os = "linux")]
@@ -118,6 +119,17 @@ fn test_texture_color_attachment() {
     test_gl_context(&GLContext::create_offscreen_with_color_attachment(Size2D(256, 256), GLContextAttributes::default(), ColorAttachmentType::Texture).unwrap())
 }
 
+#[cfg(target_os="linux")]
+fn get_compositing_context(gl_context: &GLContext) -> NativeCompositingGraphicsContext {
+    NativeCompositingGraphicsContext::from_display(gl_context.get_metadata().display)
+}
+
+#[cfg(not(target_os="linux"))]
+fn get_compositing_context(_: &GLContext) -> NativeCompositingGraphicsContext {
+    NativeCompositingGraphicsContext::new()
+}
+
+
 #[test]
 #[cfg(feature="texture_surface")]
 fn test_texture_surface_color_attachment() {
@@ -132,15 +144,11 @@ fn test_texture_surface_color_attachment() {
     let mut texture = Texture::new(target, Size2D(size.width as usize, size.height as usize));
     texture.flip = flip;
 
-    surface.bind_to_texture(&NativeCompositingGraphicsContext::new(), &texture, Size2D(size.width as isize, size.height as isize));
+    let compositing_context = get_compositing_context(&ctx);
+
+    surface.bind_to_texture(&compositing_context, &texture, Size2D(size.width as isize, size.height as isize));
 
     ctx.make_current().unwrap();
-    unsafe {
-        gl::ClearColor(1.0, 1.0, 1.0, 1.0); // This should be overriden by the drawing of the texture
-        gl::Clear(gl::COLOR_BUFFER_BIT);
-    }
-
-    // test_gl_context_draw_buffer_is_red(&ctx);
 
     let _bound = texture.bind();
 
