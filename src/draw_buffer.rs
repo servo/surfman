@@ -133,15 +133,31 @@ impl DrawBuffer {
     }
 
     #[inline(always)]
+    pub fn size(&self) -> Size2D<i32> {
+        self.size
+    }
+
+    #[inline(always)]
     // NOTE: We unwrap here because after creation the draw buffer
     // always have a color attachment
     pub fn color_attachment_type(&self) -> ColorAttachmentType {
         self.color_attachment.as_ref().unwrap().color_attachment_type()
     }
 
-    #[inline(always)]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
+    pub fn get_bound_color_renderbuffer_id(&self) -> Option<GLuint> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::Renderbuffer(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    pub fn get_bound_texture_id(&self) -> Option<GLuint> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::Renderbuffer(_) => None,
+            &ColorAttachment::Texture(id) => Some(id),
+            #[cfg(feature="texture_surface")]
+            &ColorAttachment::TextureWithSurface(_, ref tex) => Some(tex.native_texture()),
+        }
     }
 
     #[inline(always)]
@@ -154,10 +170,21 @@ impl DrawBuffer {
         }
     }
 
+    #[inline(always)]
+    #[cfg(feature="texture_surface")]
+    pub fn borrow_bound_layers_texture(&self) -> Option<&Texture> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::TextureWithSurface(_, ref tex) 
+                => Some(tex),
+            _   => None
+        }
+    }
+
+    #[inline(always)]
     #[cfg(feature="texture_surface")]
     pub fn borrow_bound_surface(&self) -> Option<&NativeSurface> {
         match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _)
+            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _) 
                 => Some(surf_wrapper.borrow_surface()),
             _   => None
         }

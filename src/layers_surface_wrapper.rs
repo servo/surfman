@@ -34,7 +34,6 @@ impl LayersSurfaceWrapper {
 
         let compositing_ctx = create_compositing_context(&metadata);
 
-
         // TODO(ecoal95): Check if size.width is the stride we must use
         let mut surf = NativeSurface::new(&graphics_ctx, size, stride);
         surf.mark_will_leak();
