@@ -3,17 +3,17 @@ use std::mem;
 
 use platform::NativeGLContextMethods;
 
+#[cfg(feature="texture_surface")]
+use layers::platform::surface::NativeGraphicsMetadata;
+
 pub struct NativeGLContext {
     native_context: CGLContextObj,
+    pixel_format: CGLPixelFormatObj,
 }
 
 impl NativeGLContext {
-    // NOTE: this function doesn't destroy the associated the
-    //   corresponding CGLPixelFormatObj.
-    //
-    //   While this can be desirable, we can't rely on it.
     pub fn new(share_context: Option<NativeGLContext>,
-               pixel_format: &mut CGLPixelFormatObj)
+               pixel_format: CGLPixelFormatObj)
         -> Result<NativeGLContext, &'static str> {
 
         let shared = match share_context {
@@ -24,7 +24,7 @@ impl NativeGLContext {
         let mut native = unsafe { mem::uninitialized() };
 
         unsafe {
-            if CGLCreateContext(*pixel_format, shared, &mut native) != 0 {
+            if CGLCreateContext(pixel_format, shared, &mut native) != 0 {
                 return Err("CGLCreateContext");
             }
         }
@@ -33,6 +33,7 @@ impl NativeGLContext {
 
         Ok(NativeGLContext {
             native_context: native,
+            pixel_format: pixel_format,
         })
     }
 
@@ -44,6 +45,9 @@ impl NativeGLContext {
 impl Drop for NativeGLContext {
     fn drop(&mut self) {
         unsafe {
+            if CGLDestroyPixelFormat(self.pixel_format) != 0 {
+                debug!("CGLDestroyPixelformat errored");
+            }
             if CGLDestroyContext(self.native_context) != 0 {
                 debug!("CGLDestroyContext returned an error");
             }
@@ -70,13 +74,7 @@ impl NativeGLContextMethods for NativeGLContext {
             }
         }
 
-        let result = NativeGLContext::new(None, &mut pixel_format);
-
-        unsafe {
-            CGLDestroyPixelFormat(pixel_format);
-        }
-
-        result
+        NativeGLContext::new(None, pixel_format)
     }
 
     fn is_current(&self) -> bool {
@@ -93,6 +91,13 @@ impl NativeGLContextMethods for NativeGLContext {
             } else {
                 Ok(())
             }
+        }
+    }
+
+    #[cfg(feature="texture_surface")]
+    fn get_metadata(&self) -> NativeGraphicsMetadata {
+        NativeGraphicsMetadata {
+            pixel_format: self.pixel_format,
         }
     }
 }

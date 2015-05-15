@@ -7,6 +7,9 @@ use super::utils::{create_offscreen_pixmap_backed_context};
 
 use platform::NativeGLContextMethods;
 
+#[cfg(feature="texture_surface")]
+use layers::platform::surface::NativeGraphicsMetadata;
+
 pub struct NativeGLContext {
     native_context: GLXContext,
     native_display: *mut glx::types::Display,
@@ -85,6 +88,13 @@ impl NativeGLContextMethods for NativeGLContext {
             } else {
                 Ok(())
             }
+        }
+    }
+
+    #[cfg(feature="texture_surface")]
+    fn get_metadata(&self) -> NativeGraphicsMetadata {
+        NativeGraphicsMetadata {
+            display: self.native_display as *mut Display,
         }
     }
 }

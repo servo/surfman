@@ -7,8 +7,25 @@ dependencies = [
  "geom 0.1.0 (git+https://github.com/servo/rust-geom)",
  "gleam 0.0.1 (git+https://github.com/servo/gleam)",
  "glx 0.0.1 (git+https://github.com/servo/rust-glx)",
+ "layers 0.1.0 (git+https://github.com/servo/rust-layers)",
  "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "xlib 0.1.0 (git+https://github.com/servo/rust-xlib)",
+]
+
+[[package]]
+name = "azure"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-azure#91e18a325fa5fdee9b1634b44a3a3a7ac1fb09ff"
+dependencies = [
+ "core_foundation 0.1.0 (git+https://github.com/servo/rust-core-foundation)",
+ "core_graphics 0.1.0 (git+https://github.com/servo/rust-core-graphics)",
+ "core_text 0.1.0 (git+https://github.com/servo/rust-core-text)",
+ "egl 0.1.0 (git+https://github.com/servo/rust-egl)",
+ "freetype 0.1.0 (git+https://github.com/servo/rust-freetype)",
+ "geom 0.1.0 (git+https://github.com/servo/rust-geom)",
+ "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "skia 0.0.20130412 (git+https://github.com/servo/skia)",
  "xlib 0.1.0 (git+https://github.com/servo/rust-xlib)",
 ]
 
@@ -20,7 +37,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "cgl"
 version = "0.0.1"
-source = "git+https://github.com/servo/rust-cgl#f07028d7e3ef5887812ed74e5169e5dac888564d"
+source = "git+https://github.com/servo/rust-cgl#851ca1b90081d221c3c38d33548d3e22a19db79f"
 dependencies = [
  "gleam 0.0.1 (git+https://github.com/servo/gleam)",
  "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -29,10 +46,55 @@ dependencies = [
 [[package]]
 name = "core_foundation"
 version = "0.1.0"
-source = "git+https://github.com/servo/rust-core-foundation#da54b5656490d553cb06031770ff542f0bffff1c"
+source = "git+https://github.com/servo/rust-core-foundation#c8236c28599b07894fa7d6887db2fa91bc7fda24"
 dependencies = [
  "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "core_graphics"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-core-graphics#2d8d665c5bdd116b4a1addbe5c415735fb78e1a9"
+dependencies = [
+ "core_foundation 0.1.0 (git+https://github.com/servo/rust-core-foundation)",
+ "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "core_text"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-core-text#2b4b546718310a9d3fe4273a1df092c79d9fb2c2"
+dependencies = [
+ "core_foundation 0.1.0 (git+https://github.com/servo/rust-core-foundation)",
+ "core_graphics 0.1.0 (git+https://github.com/servo/rust-core-graphics)",
+ "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "egl"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-egl#c0159346b3adfdcf13f2cd86f5ee41750a72c078"
+dependencies = [
+ "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "expat-sys"
+version = "2.1.0"
+source = "git+https://github.com/servo/libexpat#2c23ee28deb8865b59bf45d8aeb37cefdd1443a6"
+
+[[package]]
+name = "freetype"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-freetype#f256a9ac84893f0a183b8966de2a3a03d7552b8b"
+dependencies = [
+ "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "freetype-sys"
+version = "2.4.11"
+source = "git+https://github.com/servo/libfreetype2#50c1cf412d87f20ccbb940e39a14a38ae7cbb512"
 
 [[package]]
 name = "geom"
@@ -66,7 +128,7 @@ dependencies = [
 [[package]]
 name = "gleam"
 version = "0.0.1"
-source = "git+https://github.com/servo/gleam#15148d15aa62a115ae3c8f17d410b97dd398a6fc"
+source = "git+https://github.com/servo/gleam#f2edabf2ef0474bb270b107e5e68c2727c4a422d"
 dependencies = [
  "gl_common 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "gl_generator 0.0.25 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -86,9 +148,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "io_surface"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-io-surface#ab0ebd4ea6dd953c1581d9486b9e80ecf3c7577d"
+dependencies = [
+ "cgl 0.0.1 (git+https://github.com/servo/rust-cgl)",
+ "core_foundation 0.1.0 (git+https://github.com/servo/rust-core-foundation)",
+ "geom 0.1.0 (git+https://github.com/servo/rust-geom)",
+ "gleam 0.0.1 (git+https://github.com/servo/gleam)",
+ "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "khronos_api"
 version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "layers"
+version = "0.1.0"
+source = "git+https://github.com/servo/rust-layers#88e87c022abb3e810a43b7d69950271ad04e73e4"
+dependencies = [
+ "azure 0.1.0 (git+https://github.com/servo/rust-azure)",
+ "cgl 0.0.1 (git+https://github.com/servo/rust-cgl)",
+ "core_foundation 0.1.0 (git+https://github.com/servo/rust-core-foundation)",
+ "egl 0.1.0 (git+https://github.com/servo/rust-egl)",
+ "geom 0.1.0 (git+https://github.com/servo/rust-geom)",
+ "gleam 0.0.1 (git+https://github.com/servo/gleam)",
+ "glx 0.0.1 (git+https://github.com/servo/rust-glx)",
+ "io_surface 0.1.0 (git+https://github.com/servo/rust-io-surface)",
+ "libc 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "skia 0.0.20130412 (git+https://github.com/servo/skia)",
+ "xlib 0.1.0 (git+https://github.com/servo/rust-xlib)",
+]
 
 [[package]]
 name = "libc"
@@ -124,6 +218,15 @@ dependencies = [
 name = "rustc-serialize"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "skia"
+version = "0.0.20130412"
+source = "git+https://github.com/servo/skia#d60e6753b2b23b3b4ff787b505da56cfad0335c9"
+dependencies = [
+ "expat-sys 2.1.0 (git+https://github.com/servo/libexpat)",
+ "freetype-sys 2.4.11 (git+https://github.com/servo/libfreetype2)",
+]
 
 [[package]]
 name = "xlib"

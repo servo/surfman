@@ -16,7 +16,7 @@ mod gl_context;
 pub use gl_context::GLContext;
 
 mod draw_buffer;
-pub use draw_buffer::DrawBuffer;
+pub use draw_buffer::{DrawBuffer, ColorAttachmentType};
 
 mod gl_context_attributes;
 pub use gl_context_attributes::GLContextAttributes;
@@ -32,6 +32,13 @@ pub use gl_formats::GLFormats;
 
 #[macro_use]
 extern crate log;
+
+#[cfg(feature="texture_surface")]
+extern crate layers;
+#[cfg(feature="texture_surface")]
+mod layers_surface_wrapper;
+#[cfg(feature="texture_surface")]
+pub use layers_surface_wrapper::LayersSurfaceWrapper;
 
 #[cfg(test)]
 #[cfg(target_os="macos")]
