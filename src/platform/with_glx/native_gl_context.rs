@@ -1,5 +1,5 @@
 use glx;
-use xlib::*;
+use x11::xlib::*;
 use libc::*;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use geom::{Size2D};
