@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use geom::Size2D;
 use NativeGLContextMethods;
 use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
@@ -52,6 +53,14 @@ impl NativeGLContext {
 
 
 impl NativeGLContextMethods for NativeGLContext {
+    fn get_proc_address(addr: &str) -> *const () {
+        let addr = CString::new(s.as_bytes()).unwrap();
+        let addr = addr.as_ptr();
+        unsafe {
+            egl::GetProcAddress(addr as *const _) as *const ()
+        }
+    }
+
     fn create_headless() -> Result<NativeGLContext, &'static str> {
         // We create a context with a dummy size, we can't rely on a
         // default framebuffer

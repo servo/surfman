@@ -1,3 +1,5 @@
+use std::ffi::CString;
+
 use glx;
 use x11::xlib::*;
 use libc::*;
@@ -65,6 +67,14 @@ impl Drop for NativeGLContext {
 }
 
 impl NativeGLContextMethods for NativeGLContext {
+    fn get_proc_address(addr: &str) -> *const () {
+        let addr = CString::new(addr.as_bytes()).unwrap();
+        let addr = addr.as_ptr();
+        unsafe {
+            glx::GetProcAddress(addr as *const _) as *const ()
+        }
+    }
+
     fn create_headless() -> Result<NativeGLContext, &'static str> {
         // We create a context with a dummy size since in other platforms
         // a default framebuffer is not bound

@@ -29,6 +29,11 @@ pub struct GLContext {
 }
 
 impl GLContext {
+    #[inline(always)]
+    pub fn get_proc_address(addr: &str) -> *const () {
+        NativeGLContext::get_proc_address(addr)
+    }
+
     pub fn create_headless() -> Result<GLContext, &'static str> {
         let native_context = try!(NativeGLContext::create_headless());
 
