@@ -1,6 +1,11 @@
 use cgl::*;
 use std::mem;
 
+use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
+use core_foundation::base::TCFType;
+use core_foundation::string::CFString;
+use std::str::FromStr;
+
 use platform::NativeGLContextMethods;
 
 #[cfg(feature="texture_surface")]
@@ -56,6 +61,18 @@ impl Drop for NativeGLContext {
 }
 
 impl NativeGLContextMethods for NativeGLContext {
+    fn get_proc_address(addr: &str) -> *const () {
+        let symbol_name: CFString = FromStr::from_str(addr).unwrap();
+        let framework_name: CFString = FromStr::from_str("com.apple.opengl").unwrap();
+        let framework = unsafe {
+            CFBundleGetBundleWithIdentifier(framework_name.as_concrete_TypeRef())
+        };
+        let symbol = unsafe {
+            CFBundleGetFunctionPointerForName(framework, symbol_name.as_concrete_TypeRef())
+        };
+        symbol as *const ()
+    }
+
     fn create_headless() -> Result<NativeGLContext, &'static str> {
         let mut attributes = [
             0
