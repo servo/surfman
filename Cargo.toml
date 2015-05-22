@@ -15,7 +15,7 @@ log  = "*"
 git = "https://github.com/servo/rust-glx"
 
 [dependencies.x11]
-version = "1.1.0"
+version = "1.1.1"
 features = ["xlib"]
 
 [dependencies.cgl]
