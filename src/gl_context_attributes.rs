@@ -9,9 +9,6 @@ pub struct GLContextAttributes {
     pub antialias: bool,
     pub premultiplied_alpha: bool,
     pub preserve_drawing_buffer: bool,
-    // TODO: Some Android devices dont't support
-    //   32 bits per pixel, eventually we may want
-    //   to allow it
 }
 
 impl GLContextAttributes {
