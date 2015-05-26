@@ -106,6 +106,10 @@ impl DrawBuffer {
             return Err("The given GLContext doesn't support requested antialising");
         }
 
+        if attrs.preserve_drawing_buffer {
+            return Err("preserveDrawingBuffer is not supported yet");
+        }
+
         let mut draw_buffer = DrawBuffer {
             size: size,
             framebuffer: 0,
