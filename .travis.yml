@@ -2,4 +2,13 @@ language: rust
 rust: nightly
 sudo: false
 
-script: make tests
+os:
+    - linux
+    - osx
+
+# Needed to build some deps
+compiler: gcc
+
+script:
+    - cargo build --verbose
+    - cargo build --features texture_surface --verbose
