@@ -6,9 +6,8 @@ os:
     - linux
     - osx
 
-# Needed to build some deps
-compiler: gcc
-
 script:
     - cargo build --verbose
-    - cargo build --features texture_surface --verbose
+    # We can't build this since it requires a modern gcc
+    # compiler to build libazure, and travis does not support it
+    # - cargo build --features texture_surface --verbose
