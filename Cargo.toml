@@ -10,25 +10,32 @@ texture_surface = ["layers"]
 libc = "*"
 log  = "*"
 
-[dependencies.glx]
-git = "https://github.com/servo/rust-glx"
-
-[dependencies.x11]
-version = "*"
-features = ["xlib"]
-
-[dependencies.cgl]
-git = "https://github.com/servo/rust-cgl"
-
 [dependencies.gleam]
 git = "https://github.com/servo/gleam"
 
 [dependencies.geom]
 git = "https://github.com/servo/rust-geom"
 
-[dependencies.core_foundation]
-git = "https://github.com/servo/rust-core-foundation"
-
 [dependencies.layers]
 git = "https://github.com/servo/rust-layers"
 optional = true
+
+[target.x86_64-apple-darwin.dependencies.core_foundation]
+git = "https://github.com/servo/rust-core-foundation"
+
+[target.x86_64-apple-darwin.dependencies.cgl]
+git = "https://github.com/servo/rust-cgl"
+
+[target.i686-unknown-linux-gnu.dependencies.glx]
+git = "https://github.com/servo/rust-glx"
+
+[target.x86_64-unknown-linux-gnu.dependencies.glx]
+git = "https://github.com/servo/rust-glx"
+
+[target.i686-unknown-linux-gnu.dependencies.x11]
+version = "*"
+features = ["xlib"]
+
+[target.x86_64-unknown-linux-gnu.dependencies.x11]
+version = "*"
+features = ["xlib"]
