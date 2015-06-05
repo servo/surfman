@@ -20,11 +20,11 @@ git = "https://github.com/servo/rust-geom"
 git = "https://github.com/servo/rust-layers"
 optional = true
 
-[target.x86_64-apple-darwin.dependencies.core_foundation]
-git = "https://github.com/servo/rust-core-foundation"
+[target.x86_64-apple-darwin.dependencies.core-foundation]
+git = "https://github.com/servo/core-foundation-rs"
 
 [target.x86_64-apple-darwin.dependencies.cgl]
-git = "https://github.com/servo/rust-cgl"
+git = "https://github.com/servo/cgl-rs"
 
 [target.i686-unknown-linux-gnu.dependencies.glx]
 git = "https://github.com/servo/rust-glx"
