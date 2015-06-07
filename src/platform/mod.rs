@@ -34,12 +34,11 @@ pub mod with_cgl;
 #[cfg(target_os="macos")]
 pub use self::with_cgl::NativeGLContext;
 
+#[cfg(target_os="android")]
+pub mod with_egl;
 
 #[cfg(target_os="android")]
-pub mod not_implemented;
-
-#[cfg(target_os="android")]
-pub use self::not_implemented::NativeGLContext;
+pub use self::with_egl::NativeGLContext;
 
 // TODO(ecoal95): Get a machine to test with mac and
 // get android building:

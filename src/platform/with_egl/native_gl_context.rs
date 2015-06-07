@@ -1,48 +1,46 @@
-use std::ffi::CString;
 use geom::Size2D;
-use NativeGLContextMethods;
+use platform::NativeGLContextMethods;
 use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
+use egl::egl::{self, EGLint, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
 
 
 pub struct NativeGLContext {
+    native_display: EGLDisplay,
     native_surface: EGLSurface,
-    native_config: EGLConfig,
     native_context: EGLContext,
-    is_offscreen: bool
 }
 
 impl NativeGLContext {
     pub fn new(share_context: Option<&NativeGLContext>,
-           is_offscreen: bool,
-           surface: EGLSurface,
-           config: EGLConfig)
+               display: EGLDisplay,
+               surface: EGLSurface,
+               config: EGLConfig)
         -> Result<NativeGLContext, &'static str> {
+
         let shared = match share_context {
             Some(ctx) => ctx.as_native_egl_context(),
-            None => egl::NO_CONTEXT
+            None => egl::EGL_NO_CONTEXT as EGLContext,
         };
 
-        let mut attributes = [
-            egl::CONTEXT_CLIENT_VERSION, 2,
-            egl_end_workarounding_bugs!()
+        let attributes = [
+            egl::EGL_CONTEXT_CLIENT_VERSION as EGLint, 2,
+            egl::EGL_NONE as EGLint, 0, 0, 0, // see mod.rs
         ];
 
+        let ctx = egl::CreateContext(display, config, shared, attributes.as_ptr());
 
-        unsafe {
-            let native = egl::CreateContext(egl::Display(), config, shared, attributes.as_mut_ptr());
-
-            if native == 0 {
-                egl::DestroySurface(surface);
-                return Err("Error creating native EGL Context");
-            }
-
-            Ok(NativeGLContext {
-                native_surface: surface,
-                native_config: config,
-                native_context: native,
-                is_offscreen: is_offscreen
-            })
+        // TODO: Check for every type of error possible, not just client error?
+        // Note if we do it we must do it too on egl::CreatePBufferSurface, etc...
+        if ctx == (egl::EGL_NO_CONTEXT as EGLContext) {
+            egl::DestroySurface(display, surface);
+            return Err("Error creating an EGL context");
         }
+
+        Ok(NativeGLContext {
+            native_display: display,
+            native_surface: surface,
+            native_context: ctx,
+        })
     }
 
     #[inline(always)]
@@ -53,12 +51,11 @@ impl NativeGLContext {
 
 
 impl NativeGLContextMethods for NativeGLContext {
-    fn get_proc_address(addr: &str) -> *const () {
-        let addr = CString::new(s.as_bytes()).unwrap();
-        let addr = addr.as_ptr();
-        unsafe {
-            egl::GetProcAddress(addr as *const _) as *const ()
-        }
+    fn get_proc_address(_addr: &str) -> *const () {
+        // TODO: add eglGetProcAddress to rust-egl?
+        // let addr = CString::new(addr.as_bytes()).unwrap().as_ptr();
+        // egl::GetProcAddress(addr as *const _) as *const ()
+        0 as *const ()
     }
 
     fn create_headless() -> Result<NativeGLContext, &'static str> {
@@ -67,25 +64,20 @@ impl NativeGLContextMethods for NativeGLContext {
         create_pixel_buffer_backed_offscreen_context(Size2D(16, 16))
     }
 
-    fn create_offscreen(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
-        let context = try!(create_headless(size));
-
-        try!(context.init_offscreen(size));
-
-        Ok(())
+    #[inline(always)]
+    fn is_current(&self) -> bool {
+        egl::GetCurrentContext() == self.native_context
     }
 
     fn make_current(&self) -> Result<(), &'static str> {
-        unsafe {
-            if egl::GetCurrentContext() != self.native_context &&
-                egl::MakeCurrent(self.native_display,
-                                 self.native_surface,
-                                 self.native_surface,
-                                 self.native_context) == egl::FALSE {
-                Err("egl::MakeCurrent")
-            } else {
-                Ok(())
-            }
+        if !self.is_current() &&
+            egl::MakeCurrent(self.native_display,
+                             self.native_surface,
+                             self.native_surface,
+                             self.native_context) == egl::EGL_FALSE {
+            Err("egl::MakeCurrent")
+        } else {
+            Ok(())
         }
     }
 }
