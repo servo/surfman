@@ -3,6 +3,9 @@ use platform::NativeGLContextMethods;
 use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
 use egl::egl::{self, EGLint, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
 
+#[cfg(feature="texture_surface")]
+use layers::platform::surface::NativeGraphicsMetadata;
+
 pub struct NativeGLContext {
     native_display: EGLDisplay,
     native_surface: EGLSurface,
@@ -101,6 +104,13 @@ impl NativeGLContextMethods for NativeGLContext {
             Err("egl::MakeCurrent (on unbind)")
         } else {
             Ok(())
+        }
+    }
+
+    #[cfg(feature="texture_surface")]
+    fn get_metadata(&self) -> NativeGraphicsMetadata {
+        NativeGraphicsMetadata {
+            display: self.native_display
         }
     }
 }
