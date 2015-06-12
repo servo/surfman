@@ -1,6 +1,13 @@
 language: rust
 rust: nightly
-sudo: false
+# sudo: false
+
+before_install:
+    - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    - sudo apt-get update
+    - sudo apt-get install gcc-4.7 g++-4.7
+    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.7 20
+    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.7 20
 
 os:
     - linux
@@ -10,4 +17,4 @@ script:
     - cargo build --verbose
     # We can't build this since it requires a modern gcc
     # compiler to build libazure, and travis does not support it
-    # - cargo build --features texture_surface --verbose
+    - cargo build --features texture_surface --verbose
