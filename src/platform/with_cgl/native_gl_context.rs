@@ -49,12 +49,13 @@ impl NativeGLContext {
 
 impl Drop for NativeGLContext {
     fn drop(&mut self) {
+        let _ = self.unbind();
         unsafe {
-            if CGLDestroyPixelFormat(self.pixel_format) != 0 {
-                debug!("CGLDestroyPixelformat errored");
-            }
             if CGLDestroyContext(self.native_context) != 0 {
                 debug!("CGLDestroyContext returned an error");
+            }
+            if CGLDestroyPixelFormat(self.pixel_format) != 0 {
+                debug!("CGLDestroyPixelformat errored");
             }
         }
     }
@@ -94,6 +95,7 @@ impl NativeGLContextMethods for NativeGLContext {
         NativeGLContext::new(None, pixel_format)
     }
 
+    #[inline(always)]
     fn is_current(&self) -> bool {
         unsafe {
             CGLGetCurrentContext() == self.native_context
@@ -103,8 +105,19 @@ impl NativeGLContextMethods for NativeGLContext {
     fn make_current(&self) -> Result<(), &'static str> {
         unsafe {
             if !self.is_current() &&
-                CGLSetCurrentContext(self.native_context) != 0 {
+               CGLSetCurrentContext(self.native_context) != 0 {
                     Err("CGLSetCurrentContext")
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    fn unbind(&self) -> Result<(), &'static str> {
+        unsafe {
+            if self.is_current() &&
+               CGLSetCurrentContext(0 as CGLContextObj) != 0 {
+                Err("CGLSetCurrentContext (on unbind)")
             } else {
                 Ok(())
             }

@@ -3,7 +3,6 @@ use platform::NativeGLContextMethods;
 use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
 use egl::egl::{self, EGLint, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
 
-
 pub struct NativeGLContext {
     native_display: EGLDisplay,
     native_surface: EGLSurface,
@@ -49,6 +48,18 @@ impl NativeGLContext {
     }
 }
 
+impl Drop for NativeGLContext {
+    fn drop(&mut self) {
+        let _ = self.unbind();
+
+        if egl::DestroySurface(self.native_display, self.native_surface) == 0 {
+            debug!("egl::DestroySurface failed");
+        }
+        if egl::DestroyContext(self.native_display, self.native_context) == 0 {
+            debug!("egl::DestroyContext failed");
+        }
+    }
+}
 
 impl NativeGLContextMethods for NativeGLContext {
     fn get_proc_address(_addr: &str) -> *const () {
@@ -76,6 +87,18 @@ impl NativeGLContextMethods for NativeGLContext {
                              self.native_surface,
                              self.native_context) == egl::EGL_FALSE {
             Err("egl::MakeCurrent")
+        } else {
+            Ok(())
+        }
+    }
+
+    fn unbind(&self) -> Result<(), &'static str> {
+        if self.is_current() &&
+           egl::MakeCurrent(self.native_display,
+                            egl::EGL_NO_SURFACE as EGLSurface,
+                            egl::EGL_NO_SURFACE as EGLSurface,
+                            egl::EGL_NO_CONTEXT as EGLContext) == egl::EGL_FALSE {
+            Err("egl::MakeCurrent (on unbind)")
         } else {
             Ok(())
         }
