@@ -58,7 +58,9 @@ impl NativeGLContext {
 
 impl Drop for NativeGLContext {
     fn drop(&mut self) {
-        self.make_current().unwrap();
+        // Unbind the current context to free the resources
+        // inmediately
+        let _ = self.unbind(); // We don't want to panic
         unsafe {
             glx::DestroyContext(self.native_display, self.native_context);
             glx::DestroyPixmap(self.native_display, self.native_drawable as GLXPixmap);
@@ -90,11 +92,24 @@ impl NativeGLContextMethods for NativeGLContext {
 
     fn make_current(&self) -> Result<(), &'static str> {
         unsafe {
-            if !self.is_current()
-                && glx::MakeCurrent(self.native_display,
-                                    self.native_drawable,
-                                    self.native_context) == 0 {
-                Err("glx::MakeContextCurrent")
+            if !self.is_current() &&
+               glx::MakeCurrent(self.native_display,
+                                self.native_drawable,
+                                self.native_context) == 0 {
+                Err("glx::MakeCurrent")
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    fn unbind(&self) -> Result<(), &'static str> {
+        unsafe {
+            if self.is_current() &&
+               glx::MakeCurrent(self.native_display,
+                                0 as GLXDrawable,
+                                0 as GLXContext) == 0 {
+                Err("glx::MakeCurrent (on unbind)")
             } else {
                 Ok(())
             }

@@ -45,8 +45,4 @@ mod layers_surface_wrapper;
 pub use layers_surface_wrapper::LayersSurfaceWrapper;
 
 #[cfg(test)]
-#[cfg(target_os="macos")]
-extern crate core_foundation;
-
-#[cfg(test)]
 mod tests;

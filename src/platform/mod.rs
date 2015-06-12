@@ -7,19 +7,10 @@ pub trait NativeGLContextMethods {
     fn create_headless() -> Result<Self, &'static str>;
     fn is_current(&self) -> bool;
     fn make_current(&self) -> Result<(), &'static str>;
+    fn unbind(&self) -> Result<(), &'static str>;
 
     #[cfg(feature="texture_surface")]
     fn get_metadata(&self) -> NativeGraphicsMetadata;
-
-    #[cfg(target_os="android")]
-    fn is_gles() -> bool {
-        true
-    }
-
-    #[cfg(not(target_os="android"))]
-    fn is_gles() -> bool {
-        false
-    }
 }
 
 #[cfg(target_os="linux")]

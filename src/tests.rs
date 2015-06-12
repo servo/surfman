@@ -22,7 +22,6 @@ extern {}
 // This is probably a time bomb
 static mut GL_LOADED : bool = false;
 
-
 fn load_gl() {
     unsafe {
         if GL_LOADED {
