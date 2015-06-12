@@ -10,6 +10,8 @@ extern crate glx;
 extern crate cgl;
 #[cfg(target_os="macos")]
 extern crate core_foundation;
+#[cfg(target_os="android")]
+extern crate egl;
 
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods};

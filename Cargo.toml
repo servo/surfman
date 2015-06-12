@@ -46,3 +46,6 @@ features = ["xlib"]
 [target.arm-unknown-linux-gnueabihf.dependencies.x11]
 version = "*"
 features = ["xlib"]
+
+[target.arm-linux-androideabi.dependencies.egl]
+git = "https://github.com/servo/rust-egl"
