@@ -75,7 +75,7 @@ impl NativeGLContextMethods for NativeGLContext {
     fn create_headless() -> Result<NativeGLContext, &'static str> {
         // We create a context with a dummy size, we can't rely on a
         // default framebuffer
-        create_pixel_buffer_backed_offscreen_context(Size2D(16, 16))
+        create_pixel_buffer_backed_offscreen_context(Size2D::new(16, 16))
     }
 
     #[inline(always)]

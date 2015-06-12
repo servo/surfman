@@ -263,7 +263,7 @@ impl DrawBufferHelpers for DrawBuffer {
             ColorAttachmentType::TextureWithSurface => {
                 // TODO(ecoal95): check if this is correct
                 let (flip, target) = Texture::texture_flip_and_target(true);
-                let mut texture = Texture::new(target, Size2D(self.size.width as usize, self.size.height as usize));
+                let mut texture = Texture::new(target, Size2D::new(self.size.width as usize, self.size.height as usize));
                 texture.flip = flip;
 
                 let surface_wrapper = LayersSurfaceWrapper::new(context.get_metadata(), self.size, self.size.width * (if attrs.alpha { 4 } else { 3 }));
