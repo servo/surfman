@@ -62,13 +62,13 @@ fn test_pixels(pixels: &Vec<u8>) {
 #[test]
 fn test_default_color_attachment() {
     load_gl();
-    test_gl_context(&GLContext::create_offscreen(Size2D(256, 256), GLContextAttributes::default()).unwrap());
+    test_gl_context(&GLContext::create_offscreen(Size2D::new(256, 256), GLContextAttributes::default()).unwrap());
 }
 
 #[test]
 fn test_texture_color_attachment() {
     load_gl();
-    test_gl_context(&GLContext::create_offscreen_with_color_attachment(Size2D(256, 256), GLContextAttributes::default(), ColorAttachmentType::Texture).unwrap())
+    test_gl_context(&GLContext::create_offscreen_with_color_attachment(Size2D::new(256, 256), GLContextAttributes::default(), ColorAttachmentType::Texture).unwrap())
 }
 
 #[cfg(target_os="linux")]
@@ -88,7 +88,7 @@ fn get_compositing_context(_: &GLContext) -> NativeCompositingGraphicsContext {
 #[cfg(feature="texture_surface")]
 fn test_texture_surface_color_attachment() {
     load_gl();
-    let size : Size2D<i32> = Size2D(256, 256);
+    let size : Size2D<i32> = Size2D::new(256, 256);
     let ctx = GLContext::create_offscreen_with_color_attachment(size, GLContextAttributes::default(), ColorAttachmentType::TextureWithSurface).unwrap();
 
     test_gl_context(&ctx);
@@ -97,12 +97,12 @@ fn test_texture_surface_color_attachment() {
     // And bind it to a new Texture
     let surface = ctx.borrow_draw_buffer().unwrap().borrow_bound_surface().unwrap();
     let (flip, target) = Texture::texture_flip_and_target(true);
-    let mut texture = Texture::new(target, Size2D(size.width as usize, size.height as usize));
+    let mut texture = Texture::new(target, Size2D::new(size.width as usize, size.height as usize));
     texture.flip = flip;
 
     let compositing_context = get_compositing_context(&ctx);
 
-    surface.bind_to_texture(&compositing_context, &texture, Size2D(size.width as isize, size.height as isize));
+    surface.bind_to_texture(&compositing_context, &texture, Size2D::new(size.width as isize, size.height as isize));
 
     // Bind the texture, get its pixels in rgba format and test
     // if it has the surface contents

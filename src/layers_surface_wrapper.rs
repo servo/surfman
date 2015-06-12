@@ -47,7 +47,7 @@ impl LayersSurfaceWrapper {
     }
 
     pub fn bind_to_texture(&self, texture: &Texture) {
-        let size = Size2D(self.size.width as isize, self.size.height as isize);
+        let size = Size2D::new(self.size.width as isize, self.size.height as isize);
         self.surface.bind_to_texture(&self.compositing_context, texture, size)
     }
 
