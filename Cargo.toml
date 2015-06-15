@@ -9,9 +9,7 @@ texture_surface = ["layers"]
 [dependencies]
 libc = "*"
 log  = "*"
-
-[dependencies.gleam]
-git = "https://github.com/servo/gleam"
+gleam = "0.1"
 
 [dependencies.geom]
 git = "https://github.com/servo/rust-geom"
@@ -22,9 +20,7 @@ optional = true
 
 [target.x86_64-apple-darwin.dependencies]
 core-foundation = "*"
-
-[target.x86_64-apple-darwin.dependencies.cgl]
-git = "https://github.com/servo/cgl-rs"
+cgl = "0.1"
 
 [target.i686-unknown-linux-gnu.dependencies.glx]
 git = "https://github.com/servo/rust-glx"
