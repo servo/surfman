@@ -2,7 +2,7 @@ use glx;
 use x11::xlib::*;
 use glx::types::{GLXDrawable};
 use libc::*;
-use geom::{Size2D};
+use euclid::Size2D;
 
 use NativeGLContext;
 
