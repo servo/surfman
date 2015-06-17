@@ -1,6 +1,6 @@
 use layers::platform::surface::{NativeSurface, NativeGraphicsMetadata, NativePaintingGraphicsContext, NativeCompositingGraphicsContext};
 use layers::texturegl::Texture;
-use geom::Size2D;
+use euclid::Size2D;
 
 /// A surface wrapper that owns the surface,
 /// and thus destroys it on drop
@@ -52,7 +52,7 @@ impl LayersSurfaceWrapper {
     }
 
     pub fn borrow_surface(&self) -> &NativeSurface {
-        &self.surface 
+        &self.surface
     }
 
     pub fn get_surface_id(&self) -> isize {
