@@ -1,4 +1,4 @@
-use geom::Size2D;
+use euclid::Size2D;
 use platform::NativeGLContextMethods;
 use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
 use egl::egl::{self, EGLint, EGLDisplay, EGLSurface, EGLConfig, EGLContext};

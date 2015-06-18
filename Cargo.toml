@@ -10,9 +10,7 @@ texture_surface = ["layers"]
 libc = "*"
 log  = "*"
 gleam = "0.1"
-
-[dependencies.geom]
-git = "https://github.com/servo/rust-geom"
+euclid = "0.1"
 
 [dependencies.layers]
 git = "https://github.com/servo/rust-layers"

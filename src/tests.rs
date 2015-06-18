@@ -1,5 +1,5 @@
 use gleam::gl;
-use geom::Size2D;
+use euclid::Size2D;
 
 use GLContext;
 use GLContextAttributes;

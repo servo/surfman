@@ -4,7 +4,7 @@ use glx;
 use x11::xlib::*;
 use libc::*;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
-use geom::{Size2D};
+use euclid::Size2D;
 use super::utils::{create_offscreen_pixmap_backed_context};
 
 use platform::NativeGLContextMethods;

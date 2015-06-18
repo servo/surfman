@@ -1,6 +1,6 @@
 use egl::egl::{self, EGLNativeDisplayType, EGLDisplay, EGLConfig, EGLSurface, EGLint};
 use std::mem;
-use geom::Size2D;
+use euclid::Size2D;
 use super::NativeGLContext;
 
 fn create_pbuffer_surface(display: EGLDisplay, config: EGLConfig, size: Size2D<i32>) -> Result<EGLSurface, &'static str> {

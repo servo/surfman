@@ -1,4 +1,4 @@
-use geom::Size2D;
+use euclid::Size2D;
 use gleam::gl;
 use gleam::gl::types::{GLint, GLuint};
 

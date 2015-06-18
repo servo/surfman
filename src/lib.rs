@@ -1,6 +1,6 @@
 extern crate gleam;
 extern crate libc;
-extern crate geom;
+extern crate euclid;
 
 #[cfg(target_os="linux")]
 extern crate x11;
