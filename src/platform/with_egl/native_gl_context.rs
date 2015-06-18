@@ -1,7 +1,9 @@
 use euclid::Size2D;
 use platform::NativeGLContextMethods;
 use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
-use egl::egl::{self, EGLint, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
+use std::ffi::CString;
+use egl;
+use egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
 
 #[cfg(feature="texture_surface")]
 use layers::platform::surface::NativeGraphicsMetadata;
@@ -21,20 +23,20 @@ impl NativeGLContext {
 
         let shared = match share_context {
             Some(ctx) => ctx.as_native_egl_context(),
-            None => egl::EGL_NO_CONTEXT as EGLContext,
+            None => egl::NO_CONTEXT as EGLContext,
         };
 
         let attributes = [
-            egl::EGL_CONTEXT_CLIENT_VERSION as EGLint, 2,
-            egl::EGL_NONE as EGLint, 0, 0, 0, // see mod.rs
+            egl::CONTEXT_CLIENT_VERSION as EGLint, 2,
+            egl::NONE as EGLint, 0, 0, 0, // see mod.rs
         ];
 
-        let ctx = egl::CreateContext(display, config, shared, attributes.as_ptr());
+        let ctx =  unsafe { egl::CreateContext(display, config, shared, attributes.as_ptr()) };
 
         // TODO: Check for every type of error possible, not just client error?
         // Note if we do it we must do it too on egl::CreatePBufferSurface, etc...
-        if ctx == (egl::EGL_NO_CONTEXT as EGLContext) {
-            egl::DestroySurface(display, surface);
+        if ctx == (egl::NO_CONTEXT as EGLContext) {
+            unsafe { egl::DestroySurface(display, surface) };
             return Err("Error creating an EGL context");
         }
 
@@ -54,22 +56,23 @@ impl NativeGLContext {
 impl Drop for NativeGLContext {
     fn drop(&mut self) {
         let _ = self.unbind();
-
-        if egl::DestroySurface(self.native_display, self.native_surface) == 0 {
-            debug!("egl::DestroySurface failed");
-        }
-        if egl::DestroyContext(self.native_display, self.native_context) == 0 {
-            debug!("egl::DestroyContext failed");
+        unsafe {
+            if egl::DestroySurface(self.native_display, self.native_surface) == 0 {
+                debug!("egl::DestroySurface failed");
+            }
+            if egl::DestroyContext(self.native_display, self.native_context) == 0 {
+                debug!("egl::DestroyContext failed");
+            }
         }
     }
 }
 
 impl NativeGLContextMethods for NativeGLContext {
-    fn get_proc_address(_addr: &str) -> *const () {
-        // TODO: add eglGetProcAddress to rust-egl?
-        // let addr = CString::new(addr.as_bytes()).unwrap().as_ptr();
-        // egl::GetProcAddress(addr as *const _) as *const ()
-        0 as *const ()
+    fn get_proc_address(addr: &str) -> *const () {
+        unsafe {
+            let addr = CString::new(addr.as_bytes()).unwrap().as_ptr();
+            egl::GetProcAddress(addr as *const _) as *const ()
+        }
     }
 
     fn create_headless() -> Result<NativeGLContext, &'static str> {
@@ -80,30 +83,36 @@ impl NativeGLContextMethods for NativeGLContext {
 
     #[inline(always)]
     fn is_current(&self) -> bool {
-        egl::GetCurrentContext() == self.native_context
+        unsafe {
+            egl::GetCurrentContext() == self.native_context
+        }
     }
 
     fn make_current(&self) -> Result<(), &'static str> {
-        if !self.is_current() &&
-            egl::MakeCurrent(self.native_display,
-                             self.native_surface,
-                             self.native_surface,
-                             self.native_context) == egl::EGL_FALSE {
-            Err("egl::MakeCurrent")
-        } else {
-            Ok(())
+        unsafe {
+            if !self.is_current() &&
+                egl::MakeCurrent(self.native_display,
+                                 self.native_surface,
+                                 self.native_surface,
+                                 self.native_context) == (egl::FALSE as EGLBoolean) {
+                Err("egl::MakeCurrent")
+            } else {
+                Ok(())
+            }
         }
     }
 
     fn unbind(&self) -> Result<(), &'static str> {
-        if self.is_current() &&
-           egl::MakeCurrent(self.native_display,
-                            egl::EGL_NO_SURFACE as EGLSurface,
-                            egl::EGL_NO_SURFACE as EGLSurface,
-                            egl::EGL_NO_CONTEXT as EGLContext) == egl::EGL_FALSE {
-            Err("egl::MakeCurrent (on unbind)")
-        } else {
-            Ok(())
+        unsafe {
+            if self.is_current() &&
+               egl::MakeCurrent(self.native_display,
+                                egl::NO_SURFACE as EGLSurface,
+                                egl::NO_SURFACE as EGLSurface,
+                                egl::NO_CONTEXT as EGLContext) == (egl::FALSE as EGLBoolean) {
+                Err("egl::MakeCurrent (on unbind)")
+            } else {
+                Ok(())
+            }
         }
     }
 
