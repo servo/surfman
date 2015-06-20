@@ -7,6 +7,8 @@ use egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLConte
 
 #[cfg(feature="texture_surface")]
 use layers::platform::surface::NativeGraphicsMetadata;
+#[cfg(feature="texture_surface")]
+use std::mem;
 
 pub struct NativeGLContext {
     native_display: EGLDisplay,
@@ -119,7 +121,8 @@ impl NativeGLContextMethods for NativeGLContext {
     #[cfg(feature="texture_surface")]
     fn get_metadata(&self) -> NativeGraphicsMetadata {
         NativeGraphicsMetadata {
-            display: self.native_display
+            // FIXME: https://github.com/servo/servo/pull/6423#issuecomment-113282933
+            display: unsafe { mem::transmute(self.native_display) }
         }
     }
 }
