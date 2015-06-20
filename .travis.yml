@@ -15,6 +15,5 @@ os:
 
 script:
     - cargo build --verbose
-    # We can't build this since it requires a modern gcc
-    # compiler to build libazure, and travis does not support it
-    - cargo build --features texture_surface --verbose
+    # TODO: reenable when layers compiles on latest nightly
+    # - cargo build --features texture_surface --verbose
