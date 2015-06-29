@@ -11,7 +11,7 @@ use ColorAttachmentType;
 use NativeGLContext;
 
 #[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeGraphicsMetadata;
+use layers::platform::surface::NativeDisplay;
 
 
 /// This is a wrapper over a native headless GL context
@@ -130,8 +130,8 @@ impl GLContext {
     }
 
     #[cfg(feature="texture_surface")]
-    pub fn get_metadata(&self) -> NativeGraphicsMetadata {
-        self.native_context.get_metadata()
+    pub fn get_display(&self) -> NativeDisplay {
+        self.native_context.get_display()
     }
 }
 
