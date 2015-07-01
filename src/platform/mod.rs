@@ -1,5 +1,5 @@
 #[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeGraphicsMetadata;
+use layers::platform::surface::NativeDisplay;
 
 pub trait NativeGLContextMethods {
     fn get_proc_address(&str) -> *const ();
@@ -10,7 +10,7 @@ pub trait NativeGLContextMethods {
     fn unbind(&self) -> Result<(), &'static str>;
 
     #[cfg(feature="texture_surface")]
-    fn get_metadata(&self) -> NativeGraphicsMetadata;
+    fn get_display(&self) -> NativeDisplay;
 }
 
 #[cfg(target_os="linux")]

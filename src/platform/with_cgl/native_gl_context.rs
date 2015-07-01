@@ -9,7 +9,7 @@ use std::str::FromStr;
 use platform::NativeGLContextMethods;
 
 #[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeGraphicsMetadata;
+use layers::platform::surface::NativeDisplay;
 
 pub struct NativeGLContext {
     native_context: CGLContextObj,
@@ -125,8 +125,8 @@ impl NativeGLContextMethods for NativeGLContext {
     }
 
     #[cfg(feature="texture_surface")]
-    fn get_metadata(&self) -> NativeGraphicsMetadata {
-        NativeGraphicsMetadata {
+    fn get_display(&self) -> NativeDisplay {
+        NativeDisplay {
             pixel_format: self.pixel_format,
         }
     }
