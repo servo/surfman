@@ -19,6 +19,8 @@ libc = "*"
 log  = "*"
 gleam = "0.1"
 euclid = "0.1"
+serde = "*"
+serde_macros = "*"
 
 [dependencies.layers]
 git = "https://github.com/servo/rust-layers"

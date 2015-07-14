@@ -1,6 +1,11 @@
+#![feature(custom_derive)]
+#![feature(plugin)]
+#![plugin(serde_macros)]
+
 extern crate gleam;
 extern crate libc;
 extern crate euclid;
+extern crate serde;
 
 #[cfg(target_os="linux")]
 extern crate x11;
