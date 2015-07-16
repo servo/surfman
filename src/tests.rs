@@ -102,7 +102,7 @@ fn test_texture_surface_color_attachment() {
 
     let compositing_context = get_compositing_context(&ctx);
 
-    surface.bind_to_texture(&compositing_context, &texture, Size2D::new(size.width as isize, size.height as isize));
+    surface.bind_to_texture(&compositing_context, &texture);
 
     // Bind the texture, get its pixels in rgba format and test
     // if it has the surface contents
