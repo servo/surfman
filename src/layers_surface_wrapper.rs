@@ -11,7 +11,6 @@ use euclid::Size2D;
 pub struct LayersSurfaceWrapper {
     display: NativeDisplay,
     surface: NativeSurface,
-    size: Size2D<i32>,
 }
 
 impl LayersSurfaceWrapper {
@@ -22,13 +21,11 @@ impl LayersSurfaceWrapper {
         LayersSurfaceWrapper {
             display: display,
             surface: surf,
-            size: size,
         }
     }
 
     pub fn bind_to_texture(&self, texture: &Texture) {
-        let size = Size2D::new(self.size.width as isize, self.size.height as isize);
-        self.surface.bind_to_texture(&self.display, texture, size)
+        self.surface.bind_to_texture(&self.display, texture)
     }
 
     pub fn borrow_surface(&self) -> &NativeSurface {
