@@ -1,7 +1,7 @@
 #[cfg(feature="texture_surface")]
 use layers::platform::surface::NativeDisplay;
 
-pub trait NativeGLContextMethods {
+pub trait NativeGLContextMethods: Sized {
     fn get_proc_address(&str) -> *const ();
 
     fn create_headless() -> Result<Self, &'static str>;
