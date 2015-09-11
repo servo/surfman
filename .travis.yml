@@ -1,19 +1,24 @@
 language: rust
 rust: nightly
-# sudo: false
+sudo: false
+
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - gcc-4.8
+      - g++-4.8
 
 before_install:
-    - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    - sudo apt-get update
-    - sudo apt-get install gcc-4.7 g++-4.7
-    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.7 20
-    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.7 20
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then export CXX=g++-4.8; fi
 
 os:
-    - linux
-    - osx
+  - linux
+  - osx
 
 script:
-    - cargo build --verbose
-    # TODO: reenable when layers compiles on latest nightly
-    # - cargo build --features texture_surface --verbose
+  - cargo build --verbose
+  - cargo build --features texture_surface --verbose
+  # FIXME(ecoal95): Travis' ubuntu doesn't have the neccessary graphics stack and it fails
+  - if [ "$TRAVIS_OS_NAME" != "linux" ]; then cargo test --verbose; fi
