@@ -40,3 +40,8 @@ pub use self::with_egl::NativeGLContext;
 // #[cfg(not(target_os="linux"))]
 // pub use platform::with_egl::NativeGLContext;
 
+#[cfg(target_os="windows")]
+pub mod with_glutin;
+
+#[cfg(target_os="windows")]
+pub use self::with_glutin::NativeGLContext;
