@@ -24,6 +24,7 @@ fn main() {
                                         gl_generator::registry::Ns::Egl,
                                         gl_generator::Fallbacks::All,
                                         khronos_api::EGL_XML, vec![],
-                                        "1.5", "core", &mut file).unwrap();
+                                        "1.4", "core", &mut file).unwrap();
+        println!("cargo:rustc-link-lib=EGL");
     }
 }
