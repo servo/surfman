@@ -13,6 +13,8 @@ extern crate x11;
 extern crate cgl;
 #[cfg(target_os="macos")]
 extern crate core_foundation;
+#[cfg(target_os="windows")]
+extern crate glutin;
 
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods};
