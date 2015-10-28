@@ -31,15 +31,6 @@ pub mod with_egl;
 #[cfg(target_os="android")]
 pub use self::with_egl::NativeGLContext;
 
-// TODO(ecoal95): Get a machine to test with mac and
-// get android building:
-//
-// #[cfg(not(target_os="linux"))]
-// pub mod with_egl;
-//
-// #[cfg(not(target_os="linux"))]
-// pub use platform::with_egl::NativeGLContext;
-
 #[cfg(target_os="windows")]
 pub mod with_glutin;
 
