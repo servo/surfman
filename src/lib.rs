@@ -41,6 +41,7 @@ pub use gl_formats::GLFormats;
 extern crate log;
 
 #[cfg(target_os="linux")]
+#[allow(improper_ctypes)]
 mod glx {
     include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
 }
