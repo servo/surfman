@@ -6,7 +6,7 @@ pub struct NativeGLContext;
 use layers::platform::surface::NativeGraphicsMetadata;
 
 impl NativeGLContextMethods for NativeGLContext {
-    fn get_proc_address(addr: &str) -> *const () {
+    fn get_proc_address(_addr: &str) -> *const () {
         0 as *const ()
     }
 
@@ -20,6 +20,10 @@ impl NativeGLContextMethods for NativeGLContext {
 
     fn make_current(&self) -> Result<(), &'static str> {
         Err("Not implemented (yet)")
+    }
+
+    fn unbind(&self) -> Result<(), &'static str> {
+        unimplemented!()
     }
 
     #[cfg(feature="texture_surface")]

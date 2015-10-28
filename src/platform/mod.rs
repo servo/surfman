@@ -36,3 +36,9 @@ pub mod with_glutin;
 
 #[cfg(target_os="windows")]
 pub use self::with_glutin::NativeGLContext;
+
+#[cfg(not(any(target_os="linux", target_os="macos", target_os="android", target_os="windows")))]
+pub mod not_implemented;
+
+#[cfg(not(any(target_os="linux", target_os="macos", target_os="android", target_os="windows")))]
+pub use self::not_implemented::NativeGLContext;
