@@ -8,9 +8,6 @@ use ColorAttachmentType;
 #[cfg(feature="texture_surface")]
 use layers::texturegl::Texture;
 
-#[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeCompositingGraphicsContext;
-
 #[cfg(target_os="macos")]
 #[link(name="OpenGL", kind="framework")]
 extern {}
@@ -36,10 +33,8 @@ fn load_gl() {
 fn test_gl_context(context: &GLContext) {
     context.make_current().unwrap();
 
-    unsafe {
-        gl::ClearColor(1.0, 0.0, 0.0, 1.0);
-        gl::Clear(gl::COLOR_BUFFER_BIT);
-    }
+    gl::clear_color(1.0, 0.0, 0.0, 1.0);
+    gl::clear(gl::COLOR_BUFFER_BIT);
 
     let size = context.draw_buffer_size().unwrap();
 
@@ -49,13 +44,15 @@ fn test_gl_context(context: &GLContext) {
     test_pixels(&pixels);
 }
 
-fn test_pixels(pixels: &Vec<u8>) {
+fn test_pixels(pixels: &[u8]) {
+    let mut idx = 0;
     for pixel in pixels.chunks(4) {
-        println!("{:?}", pixel);
+        println!("{}: {:?}", idx, pixel);
         assert!(pixel[0] == 255);
         assert!(pixel[1] == 0);
         assert!(pixel[2] == 0);
         assert!(pixel[3] == 255);
+        idx += 1;
     }
 }
 
@@ -71,19 +68,6 @@ fn test_texture_color_attachment() {
     test_gl_context(&GLContext::create_offscreen_with_color_attachment(Size2D::new(256, 256), GLContextAttributes::default(), ColorAttachmentType::Texture).unwrap())
 }
 
-#[cfg(target_os="linux")]
-#[cfg(feature="texture_surface")]
-fn get_compositing_context(gl_context: &GLContext) -> NativeCompositingGraphicsContext {
-    NativeCompositingGraphicsContext::from_display(gl_context.get_metadata().display)
-}
-
-#[cfg(not(target_os="linux"))]
-#[cfg(feature="texture_surface")]
-fn get_compositing_context(_: &GLContext) -> NativeCompositingGraphicsContext {
-    NativeCompositingGraphicsContext::new()
-}
-
-
 #[test]
 #[cfg(feature="texture_surface")]
 fn test_texture_surface_color_attachment() {
@@ -93,27 +77,36 @@ fn test_texture_surface_color_attachment() {
 
     test_gl_context(&ctx);
 
-    // Pick up the (in theory) painted surface
-    // And bind it to a new Texture
-    let surface = ctx.borrow_draw_buffer().unwrap().borrow_bound_surface().unwrap();
-    let (flip, target) = Texture::texture_flip_and_target(true);
-    let mut texture = Texture::new(target, Size2D::new(size.width as usize, size.height as usize));
-    texture.flip = flip;
-
-    let compositing_context = get_compositing_context(&ctx);
-
-    surface.bind_to_texture(&compositing_context, &texture);
+    // Get the bound texture and check we're painting on it
+    let texture = ctx.borrow_draw_buffer().unwrap().borrow_bound_layers_texture().unwrap();
 
     // Bind the texture, get its pixels in rgba format and test
     // if it has the surface contents
     let _bound = texture.bind();
 
-    let mut vec : Vec<u8> = vec![];
+    let mut vec = vec![0u8; (size.width * size.height * 4) as usize];
 
-    vec.reserve((size.width * size.height * 4) as usize);
     unsafe {
-        gl::TexImage2D(texture.target.as_gl_target(), 0, gl::RGBA8 as i32, size.width, size.height, 0, gl::RGBA, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
-        vec.set_len((size.width * size.height * 4) as usize);
+        gl::GetTexImage(texture.target.as_gl_target(), 0, gl::RGBA as u32, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
+        assert!(gl::GetError() == gl::NO_ERROR);
+    }
+
+    test_pixels(&vec);
+
+    // Pick up the (in theory) painted surface
+    // And bind it to a new Texture, to check if we actually painted on it
+    let surface = ctx.borrow_draw_buffer().unwrap().borrow_bound_surface().unwrap();
+    let (flip, target) = Texture::texture_flip_and_target(false);
+    let mut texture = Texture::new(target, Size2D::new(size.width as usize, size.height as usize));
+    texture.flip = flip;
+    surface.bind_to_texture(&ctx.get_display(), &texture);
+
+    let _bound = texture.bind();
+
+    let mut vec = vec![0u8; (size.width * size.height * 4) as usize];
+    unsafe {
+        gl::GetTexImage(texture.target.as_gl_target(), 0, gl::RGBA as u32, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
+        assert!(gl::GetError() == gl::NO_ERROR);
     }
 
     test_pixels(&vec);
