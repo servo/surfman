@@ -262,12 +262,16 @@ impl DrawBufferHelpers for DrawBuffer {
             #[cfg(feature="texture_surface")]
             ColorAttachmentType::TextureWithSurface => {
                 // TODO(ecoal95): check if this is correct
-                let (flip, target) = Texture::texture_flip_and_target(true);
+                let (flip, target) = Texture::texture_flip_and_target(false);
                 let mut texture = Texture::new(target, Size2D::new(self.size.width as usize, self.size.height as usize));
                 texture.flip = flip;
 
                 let surface_wrapper = LayersSurfaceWrapper::new(context.get_display(), self.size);
                 surface_wrapper.bind_to_texture(&texture);
+
+                unsafe {
+                    debug_assert!(gl::GetError() == gl::NO_ERROR);
+                }
 
                 Some(ColorAttachment::TextureWithSurface(surface_wrapper, texture))
             }

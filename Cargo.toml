@@ -46,5 +46,7 @@ features = ["xlib"]
 version = "^2.0.1"
 features = ["xlib"]
 
-[target.x86_64-pc-windows-gnu.dependencies]
-glutin = "*"
+[target.x86_64-pc-windows-gnu.dependencies.glutin]
+git = "https://github.com/servo/glutin"
+branch = "servo"
+

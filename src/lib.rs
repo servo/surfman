@@ -13,6 +13,8 @@ extern crate x11;
 extern crate cgl;
 #[cfg(target_os="macos")]
 extern crate core_foundation;
+#[cfg(target_os="windows")]
+extern crate glutin;
 
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods};
@@ -39,6 +41,7 @@ pub use gl_formats::GLFormats;
 extern crate log;
 
 #[cfg(target_os="linux")]
+#[allow(improper_ctypes)]
 mod glx {
     include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
 }
