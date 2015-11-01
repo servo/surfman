@@ -51,9 +51,12 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
     let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
 
+    if dpy.is_null() {
+        return Err("glx::XOpenDisplay");
+    }
+
     // We try to get possible framebuffer configurations which
     // can be pixmap-backed and renderable
-
     let mut attributes = [
         glx::DRAWABLE_TYPE as c_int, glx::PIXMAP_BIT as c_int,
         glx::X_RENDERABLE as c_int, 1,
