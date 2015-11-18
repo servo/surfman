@@ -12,27 +12,32 @@ use platform::NativeGLContextMethods;
 #[cfg(feature="texture_surface")]
 use layers::platform::surface::NativeDisplay;
 
+pub struct NativeGLContextHandle(pub GLXContext);
+
+unsafe impl Send for NativeGLContextHandle {}
+
 pub struct NativeGLContext {
     native_context: GLXContext,
     native_display: *mut glx::types::Display,
     native_drawable: GLXDrawable,
+    weak: bool,
 }
 
 impl NativeGLContext {
-    pub fn new(share_context: Option<&NativeGLContext>,
+    pub fn new(share_context: Option<&GLXContext>,
                display: *mut glx::types::Display,
                drawable: GLXDrawable,
                framebuffer_config: GLXFBConfig)
         -> Result<NativeGLContext, &'static str> {
 
         let shared = match share_context {
-            Some(ctx) => ctx.as_native_glx_context(),
-            None      => 0 as GLXContext
+            Some(ctx) => *ctx,
+            None      => 0 as GLXContext,
         };
 
         let native = unsafe { glx::CreateNewContext(display, framebuffer_config, glx::RGBA_TYPE as c_int, shared, 1 as glx::types::Bool) };
 
-        if native == (0 as *const c_void) {
+        if native.is_null() {
             unsafe { glx::DestroyPixmap(display, drawable as GLXPixmap) };
             return Err("Error creating native glx context");
         }
@@ -41,6 +46,7 @@ impl NativeGLContext {
             native_context: native,
             native_display: display,
             native_drawable: drawable,
+            weak: false,
         })
     }
 
@@ -53,15 +59,19 @@ impl Drop for NativeGLContext {
     fn drop(&mut self) {
         // Unbind the current context to free the resources
         // inmediately
-        let _ = self.unbind(); // We don't want to panic
-        unsafe {
-            glx::DestroyContext(self.native_display, self.native_context);
-            glx::DestroyPixmap(self.native_display, self.native_drawable as GLXPixmap);
+        if !self.weak {
+            let _ = self.unbind(); // We don't want to panic
+            unsafe {
+                glx::DestroyContext(self.native_display, self.native_context);
+                glx::DestroyPixmap(self.native_display, self.native_drawable as GLXPixmap);
+            }
         }
     }
 }
 
 impl NativeGLContextMethods for NativeGLContext {
+    type Handle = NativeGLContextHandle;
+
     fn get_proc_address(addr: &str) -> *const () {
         let addr = CString::new(addr.as_bytes()).unwrap();
         let addr = addr.as_ptr();
@@ -70,10 +80,33 @@ impl NativeGLContextMethods for NativeGLContext {
         }
     }
 
-    fn create_headless() -> Result<NativeGLContext, &'static str> {
-        // We create a context with a dummy size since in other platforms
-        // a default framebuffer is not bound
-        create_offscreen_pixmap_backed_context(Size2D::new(16, 16))
+    fn current_handle() -> Option<Self::Handle> {
+        let current = unsafe { glx::GetCurrentContext() };
+
+        if current.is_null() {
+            None
+        } else {
+            Some(NativeGLContextHandle(current))
+        }
+    }
+
+    fn current() -> Option<NativeGLContext> {
+        if let Some(handle) = Self::current_handle() {
+            unsafe {
+                Some(NativeGLContext {
+                    native_context: handle.0,
+                    native_display: glx::GetCurrentDisplay(),
+                    native_drawable: glx::GetCurrentDrawable(),
+                    weak: true,
+                })
+            }
+        } else {
+            None
+        }
+    }
+
+    fn create_shared(with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
+        create_offscreen_pixmap_backed_context(Size2D::new(16, 16), with.map(|handle| &handle.0))
     }
 
     #[inline(always)]
@@ -81,6 +114,10 @@ impl NativeGLContextMethods for NativeGLContext {
         unsafe {
             glx::GetCurrentContext() == self.native_context
         }
+    }
+
+    fn handle(&self) -> NativeGLContextHandle {
+        NativeGLContextHandle(self.native_context)
     }
 
     fn make_current(&self) -> Result<(), &'static str> {
@@ -114,4 +151,3 @@ impl NativeGLContextMethods for NativeGLContext {
         NativeDisplay::new(self.native_display as *mut Display)
     }
 }
-
