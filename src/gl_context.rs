@@ -9,6 +9,7 @@ use GLFormats;
 use DrawBuffer;
 use ColorAttachmentType;
 use NativeGLContext;
+use platform::NativeGLContextHandle;
 
 #[cfg(feature="texture_surface")]
 use layers::platform::surface::NativeDisplay;
@@ -29,16 +30,9 @@ pub struct GLContext {
 }
 
 impl GLContext {
-    #[inline(always)]
-    pub fn get_proc_address(addr: &str) -> *const () {
-        NativeGLContext::get_proc_address(addr)
-    }
-
-    pub fn create_headless() -> Result<GLContext, &'static str> {
-        let native_context = try!(NativeGLContext::create_headless());
-
+    pub fn create(shared_with: Option<&NativeGLContextHandle>) -> Result<GLContext, &'static str> {
+        let native_context = try!(NativeGLContext::create_shared(shared_with));
         try!(native_context.make_current());
-
         let attributes = GLContextAttributes::any();
         let formats = GLFormats::detect(&attributes);
 
@@ -51,15 +45,25 @@ impl GLContext {
         })
     }
 
-    /// This allows to choose a color attachment type
-    /// create_offscreen() chooses the default one
-    pub fn create_offscreen_with_color_attachment(size: Size2D<i32>,
-                                                  attributes: GLContextAttributes,
-                                                  color_attachment_type: ColorAttachmentType)
+
+    #[inline(always)]
+    pub fn get_proc_address(addr: &str) -> *const () {
+        NativeGLContext::get_proc_address(addr)
+    }
+
+    #[inline(always)]
+    pub fn current_handle() -> Option<NativeGLContextHandle> {
+        NativeGLContext::current_handle()
+    }
+
+    pub fn new(size: Size2D<i32>,
+               attributes: GLContextAttributes,
+               color_attachment_type: ColorAttachmentType,
+               shared_with: Option<&NativeGLContextHandle>)
         -> Result<GLContext, &'static str> {
         // We create a headless context with a dummy size, we're painting to the
         // draw_buffer's framebuffer anyways.
-        let mut context = try!(GLContext::create_headless());
+        let mut context = try!(GLContext::create(shared_with));
 
         context.formats = GLFormats::detect(&attributes);
         context.attributes = attributes;
@@ -70,14 +74,21 @@ impl GLContext {
     }
 
     #[inline(always)]
-    pub fn create_offscreen(size: Size2D<i32>, attributes: GLContextAttributes)
+    pub fn with_default_color_attachment(size: Size2D<i32>,
+                                         attributes: GLContextAttributes,
+                                         shared_with: Option<&NativeGLContextHandle>)
         -> Result<GLContext, &'static str> {
-        GLContext::create_offscreen_with_color_attachment(size, attributes, ColorAttachmentType::default())
+        GLContext::new(size, attributes, ColorAttachmentType::default(), shared_with)
     }
 
     #[inline(always)]
     pub fn make_current(&self) -> Result<(), &'static str> {
         self.native_context.make_current()
+    }
+
+    #[inline(always)]
+    pub fn unbind(&self) -> Result<(), &'static str> {
+        self.native_context.unbind()
     }
 
     #[inline(always)]

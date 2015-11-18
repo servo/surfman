@@ -16,7 +16,7 @@ extern crate core_foundation;
 extern crate glutin;
 
 mod platform;
-pub use platform::{NativeGLContext, NativeGLContextMethods};
+pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
 
 mod gl_context;
 pub use gl_context::GLContext;
