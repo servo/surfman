@@ -15,19 +15,19 @@ khronos_api = "0.0.8"
 texture_surface = ["layers"]
 
 [dependencies]
-libc = "*"
-log  = "*"
+libc = "0.2"
+log  = "0.3.3"
 gleam = "0.1"
 euclid = "0.3"
-serde = "*"
-serde_macros = "*"
+serde = "0.6.1"
+serde_macros = "0.6.1"
 
 [dependencies.layers]
 git = "https://github.com/servo/rust-layers"
 optional = true
 
 [target.x86_64-apple-darwin.dependencies]
-core-foundation = "*"
+core-foundation = "0.2.0"
 cgl = "0.1"
 
 [target.i686-unknown-linux-gnu.dependencies.x11]
@@ -49,4 +49,3 @@ features = ["xlib"]
 [target.x86_64-pc-windows-gnu.dependencies.glutin]
 git = "https://github.com/servo/glutin"
 branch = "servo"
-
