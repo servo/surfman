@@ -31,19 +31,19 @@ core-foundation = "0.2.0"
 cgl = "0.1"
 
 [target.i686-unknown-linux-gnu.dependencies.x11]
-version = "^2.0.1"
+version = "2.3.0"
 features = ["xlib"]
 
 [target.x86_64-unknown-linux-gnu.dependencies.x11]
-version = "^2.0.1"
+version = "2.3.0"
 features = ["xlib"]
 
 [target.arm-unknown-linux-gnueabihf.dependencies.x11]
-version = "^2.0.1"
+version = "2.3.0"
 features = ["xlib"]
 
 [target.aarch64-unknown-linux-gnu.dependencies.x11]
-version = "^2.0.1"
+version = "2.3.0"
 features = ["xlib"]
 
 [target.x86_64-pc-windows-gnu.dependencies.glutin]
