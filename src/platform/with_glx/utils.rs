@@ -27,7 +27,7 @@ impl<T> ScopedXFree<T> {
 impl<T> Drop for ScopedXFree<T> {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
-            unsafe { XFree(self.ptr as *mut c_void); };
+            unsafe { XFree(self.ptr as *mut _); };
         }
     }
 }
