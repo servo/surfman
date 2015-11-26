@@ -8,7 +8,7 @@ repository = "https://github.com/ecoal95/rust-offscreen-rendering-context"
 build = "build.rs"
 
 [build-dependencies]
-gl_generator = "0.1.0"
+gl_generator = "0.2.0"
 khronos_api = "0.0.8"
 
 [features]
