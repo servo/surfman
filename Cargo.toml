@@ -18,7 +18,7 @@ texture_surface = ["layers"]
 libc = "0.2"
 log  = "0.3.3"
 gleam = "0.1"
-euclid = "0.3"
+euclid = "0.4"
 serde = "0.6.1"
 serde_macros = "0.6.1"
 
