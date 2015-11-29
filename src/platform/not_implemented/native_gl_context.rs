@@ -3,7 +3,7 @@ use NativeGLContextMethods;
 pub struct NativeGLContext;
 
 #[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeGraphicsMetadata;
+use layers::platform::surface::NativeDisplay;
 
 impl NativeGLContextMethods for NativeGLContext {
     fn get_proc_address(_addr: &str) -> *const () {
@@ -27,7 +27,7 @@ impl NativeGLContextMethods for NativeGLContext {
     }
 
     #[cfg(feature="texture_surface")]
-    fn get_metadata(&self) -> NativeGraphicsMetadata {
+    fn get_display(&self) -> NativeDisplay {
         unimplemented!()
     }
 }
