@@ -12,7 +12,7 @@ use platform::NativeGLContextMethods;
 #[cfg(feature="texture_surface")]
 use layers::platform::surface::NativeDisplay;
 
-pub struct NativeGLContextHandle(pub GLXContext);
+pub struct NativeGLContextHandle(pub GLXContext, pub *mut glx::types::Display);
 
 unsafe impl Send for NativeGLContextHandle {}
 
@@ -82,11 +82,12 @@ impl NativeGLContextMethods for NativeGLContext {
 
     fn current_handle() -> Option<Self::Handle> {
         let current = unsafe { glx::GetCurrentContext() };
+        let dpy = unsafe { glx::GetCurrentDisplay() };
 
-        if current.is_null() {
+        if current.is_null() || dpy.is_null() {
             None
         } else {
-            Some(NativeGLContextHandle(current))
+            Some(NativeGLContextHandle(current, dpy))
         }
     }
 
@@ -106,7 +107,7 @@ impl NativeGLContextMethods for NativeGLContext {
     }
 
     fn create_shared(with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
-        create_offscreen_pixmap_backed_context(Size2D::new(16, 16), with.map(|handle| &handle.0))
+        create_offscreen_pixmap_backed_context(Size2D::new(16, 16), with)
     }
 
     #[inline(always)]
@@ -117,7 +118,7 @@ impl NativeGLContextMethods for NativeGLContext {
     }
 
     fn handle(&self) -> NativeGLContextHandle {
-        NativeGLContextHandle(self.native_context)
+        NativeGLContextHandle(self.native_context, self.native_display)
     }
 
     fn make_current(&self) -> Result<(), &'static str> {

@@ -5,21 +5,22 @@ use std::os::raw::*;
 use euclid::Size2D;
 
 use NativeGLContext;
+use NativeGLContextHandle;
 
-struct ScopedXFree<T> {
+pub struct ScopedXFree<T> {
     ptr: *mut T
 }
 
 impl<T> ScopedXFree<T> {
     #[inline(always)]
-    fn new(ptr: *mut T) -> ScopedXFree<T> {
+    pub fn new(ptr: *mut T) -> ScopedXFree<T> {
         ScopedXFree {
             ptr: ptr
         }
     }
 
     #[inline(always)]
-    fn as_ptr(&self) -> *mut T {
+    pub fn as_ptr(&self) -> *mut T {
         self.ptr
     }
 }
@@ -48,12 +49,20 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 
 // Almost directly ported from
 // https://dxr.mozilla.org/mozilla-central/source/gfx/gl/GLContextProviderGLX.cpp
-pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Option<&GLXContext>) -> Result<NativeGLContext, &'static str> {
-    let dpy = unsafe { XOpenDisplay(0 as *mut c_char) };
+pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Option<&NativeGLContextHandle>) -> Result<NativeGLContext, &'static str> {
+    let (shared_with, dpy) = match shared_with {
+        Some(handle) => (Some(&handle.0), handle.1),
+        None => {
+            let dpy = unsafe { XOpenDisplay(0 as *mut c_char) as *mut glx::types::Display };
 
-    if dpy.is_null() {
-        return Err("glx::XOpenDisplay");
-    }
+            if dpy.is_null() {
+                return Err("glx::XOpenDisplay");
+            }
+
+            (None, dpy)
+        }
+    };
+
 
     // We try to get possible framebuffer configurations which
     // can be pixmap-backed and renderable
@@ -66,8 +75,8 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Op
     let mut config_count : c_int = 0;
 
     let configs = ScopedXFree::new(unsafe {
-        glx::ChooseFBConfig(dpy as *mut glx::types::Display,
-                            XDefaultScreen(dpy),
+        glx::ChooseFBConfig(dpy,
+                            XDefaultScreen(dpy as *mut Display),
                             attributes.as_mut_ptr(),
                             &mut config_count)
     });
@@ -93,12 +102,12 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Op
             //
             //   It's in Gecko's code, so may there be an implementation which returns bad
             //   configurations?
-            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::DRAWABLE_TYPE as c_int, &mut drawable_type) != 0
+            if glx::GetFBConfigAttrib(dpy, config, glx::DRAWABLE_TYPE as c_int, &mut drawable_type) != 0
                 || (drawable_type & (glx::PIXMAP_BIT as c_int) == 0) {
                 continue;
             }
 
-            if glx::GetFBConfigAttrib(dpy as *mut glx::types::Display, config, glx::VISUAL_ID as c_int, &mut visual_id) != 0
+            if glx::GetFBConfigAttrib(dpy, config, glx::VISUAL_ID as c_int, &mut visual_id) != 0
                 || visual_id == 0 {
                 continue;
             }
@@ -113,11 +122,11 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Op
     }
 
     unsafe {
-        let screen = XDefaultScreenOfDisplay(dpy);
+        let screen = XDefaultScreenOfDisplay(dpy as *mut _);
 
         let (_, depth) = try!(get_visual_and_depth(screen, visual_id as VisualID));
 
-        let pixmap = XCreatePixmap(dpy,
+        let pixmap = XCreatePixmap(dpy as *mut _,
                                    XRootWindowOfScreen(screen),
                                    size.width as c_uint,
                                    size.height as c_uint,
@@ -127,18 +136,18 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Op
             return Err("XCreatePixMap");
         }
 
-        let glx_pixmap = glx::CreatePixmap(dpy as *mut glx::types::Display,
+        let glx_pixmap = glx::CreatePixmap(dpy,
                                            *configs.as_ptr().offset(config_index),
                                            pixmap,
                                            0 as *const c_int);
 
         if glx_pixmap == 0 {
-            XFreePixmap(dpy, pixmap);
+            XFreePixmap(dpy as *mut _, pixmap);
             return Err("glx::createPixmap");
         }
 
         let chosen_config = *configs.as_ptr().offset(config_index);
 
-        NativeGLContext::new(shared_with, dpy as *mut glx::types::Display, glx_pixmap as GLXDrawable, chosen_config)
+        NativeGLContext::new(shared_with, dpy, glx_pixmap as GLXDrawable, chosen_config)
     }
 }
