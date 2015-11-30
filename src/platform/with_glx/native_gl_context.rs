@@ -2,7 +2,7 @@ use std::ffi::CString;
 
 use glx;
 use x11::xlib::*;
-use libc::*;
+use std::os::raw::*;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use euclid::Size2D;
 use super::utils::{create_offscreen_pixmap_backed_context};
@@ -32,14 +32,7 @@ impl NativeGLContext {
 
         let native = unsafe { glx::CreateNewContext(display, framebuffer_config, glx::RGBA_TYPE as c_int, shared, 1 as glx::types::Bool) };
 
-        // FIXME: This should be:
-        // if native == (0 as *const c_void) {
-        // but that way compilation fails with error:
-        //  expected `*const libc::types::common::c95::c_void`,
-        //     found `*const libc::types::common::c95::c_void`
-        // (expected enum `libc::types::common::c95::c_void`,
-        //     found a different enum `libc::types::common::c95::c_void`) [E0308]
-        if (native as *const c_void) == (0 as *const c_void) {
+        if native == (0 as *const c_void) {
             unsafe { glx::DestroyPixmap(display, drawable as GLXPixmap) };
             return Err("Error creating native glx context");
         }
