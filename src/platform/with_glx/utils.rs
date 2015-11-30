@@ -60,7 +60,7 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>) -> Result<Nativ
     let mut attributes = [
         glx::DRAWABLE_TYPE as c_int, glx::PIXMAP_BIT as c_int,
         glx::X_RENDERABLE as c_int, 1,
-        glx::NONE as c_int
+        0 as c_int
     ];
 
     let mut config_count : c_int = 0;
