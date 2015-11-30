@@ -93,7 +93,7 @@ impl NativeGLContextMethods for NativeGLContext {
             unsafe {
                 Some(NativeGLContext {
                     native_context: handle.0,
-                    native_display: glx::GetCurrentDisplay(),
+                    native_display: handle.1,
                     native_drawable: glx::GetCurrentDrawable(),
                     weak: true,
                 })

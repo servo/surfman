@@ -1,6 +1,6 @@
 use std::mem;
 use euclid::Size2D;
-use super::NativeGLContext;
+use super::{NativeGLContext, NativeGLContextHandle};
 
 use egl;
 use egl::types::{EGLNativeDisplayType, EGLDisplay, EGLConfig, EGLSurface, EGLint};
@@ -21,7 +21,9 @@ fn create_pbuffer_surface(display: EGLDisplay, config: EGLConfig, size: Size2D<i
     Ok(surface)
 }
 
-pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>) -> Result<NativeGLContext, &'static str> {
+pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>,
+                                                    shared_with: Option<&NativeGLContextHandle>)
+    -> Result<NativeGLContext, &'static str> {
     let attributes = [
         egl::SURFACE_TYPE as EGLint, egl::PBUFFER_BIT as EGLint,
         egl::RENDERABLE_TYPE as EGLint, egl::OPENGL_ES2_BIT as EGLint,
@@ -32,13 +34,25 @@ pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>) -> Result
         egl::NONE as EGLint, 0, 0, 0, // see mod.rs
     ];
 
-    // TODO: Check if we should use `egl::GetCurrentDisplay` instead
-    let display = unsafe { egl::GetDisplay(egl::DEFAULT_DISPLAY as EGLNativeDisplayType) };
+    let (shared_with, display) = match shared_with {
+        Some(handle) => (Some(&handle.0), handle.1),
+        None => {
+            let display = unsafe {
+                egl::GetDisplay(egl::DEFAULT_DISPLAY as EGLNativeDisplayType)
+            };
+
+            if display == (egl::NO_DISPLAY as EGLDisplay) {
+                return Err("egl::GetDisplay");
+            }
+
+            (None, display)
+        }
+    };
+
 
     if display == (egl::NO_DISPLAY as EGLDisplay) {
         return Err("egl::GetDisplay");
     }
-
 
     let mut config : EGLConfig = unsafe { mem::uninitialized() };
     let mut found_configs : EGLint = 0;
@@ -55,5 +69,5 @@ pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>) -> Result
 
     let surface = try!(create_pbuffer_surface(display, config, size));
 
-    NativeGLContext::new(None, display, surface, config)
+    NativeGLContext::new(shared_with, display, surface, config)
 }
