@@ -8,21 +8,22 @@ use std::str::FromStr;
 
 use platform::NativeGLContextMethods;
 
-#[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeDisplay;
+pub struct NativeGLContextHandle(CGLContextObj);
+
+unsafe impl Send for NativeGLContextHandle {}
 
 pub struct NativeGLContext {
     native_context: CGLContextObj,
-    pixel_format: CGLPixelFormatObj,
+    weak: bool,
 }
 
 impl NativeGLContext {
-    pub fn new(share_context: Option<NativeGLContext>,
-               pixel_format: CGLPixelFormatObj)
+    pub fn new(share_context: Option<&CGLContextObj>,
+               pixel_format: &CGLPixelFormatObj)
         -> Result<NativeGLContext, &'static str> {
 
         let shared = match share_context {
-            Some(ctx) => ctx.as_native_cgl_context(),
+            Some(ctx) => *ctx,
             None => 0 as CGLContextObj
         };
 
@@ -38,30 +39,27 @@ impl NativeGLContext {
 
         Ok(NativeGLContext {
             native_context: native,
-            pixel_format: pixel_format,
+            weak: false,
         })
-    }
-
-    pub fn as_native_cgl_context(&self) -> CGLContextObj {
-        self.native_context
     }
 }
 
 impl Drop for NativeGLContext {
     fn drop(&mut self) {
         let _ = self.unbind();
-        unsafe {
-            if CGLDestroyContext(self.native_context) != 0 {
-                debug!("CGLDestroyContext returned an error");
-            }
-            if CGLDestroyPixelFormat(self.pixel_format) != 0 {
-                debug!("CGLDestroyPixelformat errored");
+        if !self.weak {
+            unsafe {
+                if CGLDestroyContext(self.native_context) != 0 {
+                    debug!("CGLDestroyContext returned an error");
+                }
             }
         }
     }
 }
 
 impl NativeGLContextMethods for NativeGLContext {
+    type Handle = NativeGLContextHandle;
+
     fn get_proc_address(addr: &str) -> *const () {
         let symbol_name: CFString = FromStr::from_str(addr).unwrap();
         let framework_name: CFString = FromStr::from_str("com.apple.opengl").unwrap();
@@ -74,7 +72,28 @@ impl NativeGLContextMethods for NativeGLContext {
         symbol as *const ()
     }
 
-    fn create_headless() -> Result<NativeGLContext, &'static str> {
+    fn current() -> Option<Self> {
+        if let Some(handle) = Self::current_handle() {
+            Some(NativeGLContext {
+                native_context: handle.0,
+                weak: true,
+            })
+        } else {
+            None
+        }
+
+    }
+
+    fn current_handle() -> Option<Self::Handle> {
+        let current = unsafe { CGLGetCurrentContext() };
+        if current != 0 as CGLContextObj {
+            Some(NativeGLContextHandle(current))
+        } else {
+            None
+        }
+    }
+
+    fn create_shared(with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
         let mut attributes = [
             0
         ];
@@ -92,7 +111,17 @@ impl NativeGLContextMethods for NativeGLContext {
             }
         }
 
-        NativeGLContext::new(None, pixel_format)
+        let result = NativeGLContext::new(with.map(|handle| handle.0), pixel_format);
+
+        if CGLDestroyPixelFormat(pixel_format) != 0 {
+            debug!("CGLDestroyPixelformat errored");
+        }
+
+        result
+    }
+
+    fn handle(&self) -> Self::Handle {
+        NativeGLContextHandle(self.native_context)
     }
 
     #[inline(always)]
@@ -121,13 +150,6 @@ impl NativeGLContextMethods for NativeGLContext {
             } else {
                 Ok(())
             }
-        }
-    }
-
-    #[cfg(feature="texture_surface")]
-    fn get_display(&self) -> NativeDisplay {
-        NativeDisplay {
-            pixel_format: self.pixel_format,
         }
     }
 }
