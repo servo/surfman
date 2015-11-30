@@ -8,16 +8,10 @@ use GLContextCapabilities;
 use GLFormats;
 use DrawBuffer;
 use ColorAttachmentType;
-use NativeGLContext;
-use platform::NativeGLContextHandle;
-
-#[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeDisplay;
-
 
 /// This is a wrapper over a native headless GL context
-pub struct GLContext {
-    native_context: NativeGLContext,
+pub struct GLContext<Native> {
+    native_context: Native,
     /// This an abstraction over a custom framebuffer
     /// with attachments according to WebGLContextAttributes
     // TODO(ecoal95): Ideally we may want a read and a draw
@@ -29,9 +23,10 @@ pub struct GLContext {
     formats: GLFormats,
 }
 
-impl GLContext {
-    pub fn create(shared_with: Option<&NativeGLContextHandle>) -> Result<GLContext, &'static str> {
-        let native_context = try!(NativeGLContext::create_shared(shared_with));
+impl<Native> GLContext<Native>
+    where Native: NativeGLContextMethods {
+    pub fn create(shared_with: Option<&Native::Handle>) -> Result<GLContext<Native>, &'static str> {
+        let native_context = try!(Native::create_shared(shared_with));
         try!(native_context.make_current());
         let attributes = GLContextAttributes::any();
         let formats = GLFormats::detect(&attributes);
@@ -48,22 +43,22 @@ impl GLContext {
 
     #[inline(always)]
     pub fn get_proc_address(addr: &str) -> *const () {
-        NativeGLContext::get_proc_address(addr)
+        Native::get_proc_address(addr)
     }
 
     #[inline(always)]
-    pub fn current_handle() -> Option<NativeGLContextHandle> {
-        NativeGLContext::current_handle()
+    pub fn current_handle() -> Option<Native::Handle> {
+        Native::current_handle()
     }
 
     pub fn new(size: Size2D<i32>,
                attributes: GLContextAttributes,
                color_attachment_type: ColorAttachmentType,
-               shared_with: Option<&NativeGLContextHandle>)
-        -> Result<GLContext, &'static str> {
+               shared_with: Option<&Native::Handle>)
+        -> Result<GLContext<Native>, &'static str> {
         // We create a headless context with a dummy size, we're painting to the
         // draw_buffer's framebuffer anyways.
-        let mut context = try!(GLContext::create(shared_with));
+        let mut context = try!(Self::create(shared_with));
 
         context.formats = GLFormats::detect(&attributes);
         context.attributes = attributes;
@@ -76,8 +71,8 @@ impl GLContext {
     #[inline(always)]
     pub fn with_default_color_attachment(size: Size2D<i32>,
                                          attributes: GLContextAttributes,
-                                         shared_with: Option<&NativeGLContextHandle>)
-        -> Result<GLContext, &'static str> {
+                                         shared_with: Option<&Native::Handle>)
+        -> Result<GLContext<Native>, &'static str> {
         GLContext::new(size, attributes, ColorAttachmentType::default(), shared_with)
     }
 
@@ -147,7 +142,7 @@ trait GLContextPrivateMethods {
     fn create_draw_buffer(&mut self, Size2D<i32>, ColorAttachmentType) -> Result<(), &'static str>;
 }
 
-impl GLContextPrivateMethods for GLContext {
+impl<T: NativeGLContextMethods> GLContextPrivateMethods for GLContext<T> {
     fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
         try!(self.create_draw_buffer(size, color_attachment_type));
 

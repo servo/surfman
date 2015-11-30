@@ -3,6 +3,7 @@ use gleam::gl;
 use gleam::gl::types::{GLuint, GLenum, GLint};
 
 use GLContext;
+use NativeGLContextMethods;
 
 use std::ptr;
 
@@ -64,7 +65,8 @@ pub struct DrawBuffer {
 /// Helper function to create a render buffer
 /// TODO(ecoal95): We'll need to switch between `glRenderbufferStorage` and
 ///   `glRenderbufferStorageMultisample` when we support antialising
-fn create_renderbuffer(format: GLenum, size: &Size2D<i32>) -> GLuint {
+fn create_renderbuffer(format: GLenum,
+                       size: &Size2D<i32>) -> GLuint {
     let mut ret: GLuint = 0;
 
     unsafe {
@@ -77,7 +79,9 @@ fn create_renderbuffer(format: GLenum, size: &Size2D<i32>) -> GLuint {
 }
 
 impl DrawBuffer {
-    pub fn new(context: &GLContext, size: Size2D<i32>, color_attachment_type: ColorAttachmentType)
+    pub fn new<T: NativeGLContextMethods>(context: &GLContext<T>,
+                                          size: Size2D<i32>,
+                                          color_attachment_type: ColorAttachmentType)
         -> Result<DrawBuffer, &'static str> {
 
         let attrs = context.borrow_attributes();
@@ -166,14 +170,19 @@ impl Drop for DrawBuffer {
 }
 
 trait DrawBufferHelpers {
-    fn init(&mut self, &GLContext, color_attachment_type: ColorAttachmentType)
+    fn init<T: NativeGLContextMethods>(&mut self,
+                                       &GLContext<T>,
+                                       color_attachment_type: ColorAttachmentType)
         -> Result<(), &'static str>;
     fn attach_to_framebuffer(&mut self)
         -> Result<(), &'static str>;
 }
 
 impl DrawBufferHelpers for DrawBuffer {
-    fn init(&mut self, context: &GLContext, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
+    fn init<T: NativeGLContextMethods>(&mut self,
+                                       context: &GLContext<T>,
+                                       color_attachment_type: ColorAttachmentType)
+        -> Result<(), &'static str> {
         let attrs = context.borrow_attributes();
         let formats = context.borrow_formats();
 
