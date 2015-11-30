@@ -117,12 +117,4 @@ impl NativeGLContextMethods for NativeGLContext {
             }
         }
     }
-
-    #[cfg(feature="texture_surface")]
-    fn get_display(&self) -> NativeDisplay {
-        unsafe {
-            // FIXME: https://github.com/servo/servo/pull/6423#issuecomment-113282933
-            NativeDisplay::new_with_display(mem::transmute(self.native_display))
-        }
-    }
 }

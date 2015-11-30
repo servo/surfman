@@ -1,6 +1,3 @@
-#[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeDisplay;
-
 pub trait NativeGLContextMethods: Sized {
     type Handle;
 
@@ -20,9 +17,6 @@ pub trait NativeGLContextMethods: Sized {
     fn is_current(&self) -> bool;
     fn make_current(&self) -> Result<(), &'static str>;
     fn unbind(&self) -> Result<(), &'static str>;
-
-    #[cfg(feature="texture_surface")]
-    fn get_display(&self) -> NativeDisplay;
 }
 
 #[cfg(target_os="linux")]
