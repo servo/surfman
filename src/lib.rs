@@ -62,12 +62,5 @@ mod egl {
     include!(concat!(env!("OUT_DIR"), "/egl_bindings.rs"));
 }
 
-#[cfg(feature="texture_surface")]
-extern crate layers;
-#[cfg(feature="texture_surface")]
-mod layers_surface_wrapper;
-#[cfg(feature="texture_surface")]
-pub use layers_surface_wrapper::LayersSurfaceWrapper;
-
 #[cfg(test)]
 mod tests;

@@ -139,11 +139,6 @@ impl GLContext {
             Err("No DrawBuffer found")
         }
     }
-
-    #[cfg(feature="texture_surface")]
-    pub fn get_display(&self) -> NativeDisplay {
-        self.native_context.get_display()
-    }
 }
 
 

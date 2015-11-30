@@ -12,7 +12,8 @@ gl_generator = "0.4"
 khronos_api = "1.0"
 
 [features]
-texture_surface = ["layers"]
+# TODO: remove me!
+texture_surface = []
 
 [dependencies]
 log  = "0.3.3"
@@ -20,10 +21,6 @@ gleam = "0.1"
 euclid = "0.4"
 serde = "0.6.1"
 serde_macros = "0.6.1"
-
-[dependencies.layers]
-git = "https://github.com/servo/rust-layers"
-optional = true
 
 [target.x86_64-apple-darwin.dependencies]
 core-foundation = "0.2.0"
