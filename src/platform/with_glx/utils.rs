@@ -1,7 +1,7 @@
 use glx;
 use x11::xlib::*;
-use glx::types::{GLXDrawable, GLXContext};
-use std::os::raw::*;
+use glx::types::GLXDrawable;
+use libc::*;
 use euclid::Size2D;
 
 use NativeGLContext;
