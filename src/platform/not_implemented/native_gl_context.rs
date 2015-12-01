@@ -1,21 +1,29 @@
 use NativeGLContextMethods;
 
 pub struct NativeGLContext;
-
-#[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeDisplay;
+pub struct NativeGLContextHandle;
 
 impl NativeGLContextMethods for NativeGLContext {
+    type Handle = NativeGLContextHandle;
+
     fn get_proc_address(_addr: &str) -> *const () {
         0 as *const ()
     }
 
-    fn create_headless() -> Result<NativeGLContext, &'static str> {
+    fn create_shared(_with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
         Err("Not implemented (yet)")
     }
 
     fn is_current(&self) -> bool {
         false
+    }
+
+    fn current() -> Option<Self> {
+        None
+    }
+
+    fn current_handle() -> Option<Self::Handle> {
+        None
     }
 
     fn make_current(&self) -> Result<(), &'static str> {
@@ -26,8 +34,7 @@ impl NativeGLContextMethods for NativeGLContext {
         unimplemented!()
     }
 
-    #[cfg(feature="texture_surface")]
-    fn get_display(&self) -> NativeDisplay {
+    fn handle(&self) -> Self::Handle {
         unimplemented!()
     }
 }
