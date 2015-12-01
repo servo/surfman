@@ -11,10 +11,6 @@ build = "build.rs"
 gl_generator = "0.4"
 khronos_api = "1.0"
 
-[features]
-# TODO: remove me!
-texture_surface = []
-
 [dependencies]
 log  = "0.3.3"
 gleam = "0.1"
