@@ -9,6 +9,8 @@ addons:
     packages:
       - gcc-4.8
       - g++-4.8
+      - libxxf86vm-dev
+      - libosmesa6-dev
 
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then export CXX=g++-4.8; fi
