@@ -29,12 +29,14 @@ pub mod with_egl;
 #[cfg(target_os="android")]
 pub use self::with_egl::{NativeGLContext, NativeGLContextHandle};
 
+/*
 #[cfg(target_os="macos")]
 pub mod with_cgl;
 #[cfg(target_os="macos")]
 pub use self::with_cgl::{NativeGLContext, NativeGLContextHandle};
+*/
 
-#[cfg(not(any(target_os="linux", target_os="macos", target_os="android")))]
+#[cfg(not(any(target_os="linux", target_os="android")))]
 pub mod not_implemented;
-#[cfg(not(any(target_os="linux", target_os="macos", target_os="android")))]
+#[cfg(not(any(target_os="linux", target_os="android")))]
 pub use self::not_implemented::{NativeGLContext, NativeGLContextHandle};
