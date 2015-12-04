@@ -12,30 +12,30 @@ gl_generator = "0.4"
 khronos_api = "1.0"
 
 [dependencies]
-log  = "0.3.3"
-gleam = "0.1"
-euclid = "0.4"
-serde = "0.6.1"
-serde_macros = "0.6.1"
+log  = "*"
+gleam = "*"
+euclid = "*"
+serde = "*"
+serde_macros = "*"
 
 [target.x86_64-apple-darwin.dependencies]
-core-foundation = "0.2.0"
-cgl = "0.1"
+core-foundation = "*"
+cgl = "*"
 
 [target.i686-unknown-linux-gnu.dependencies.x11]
-version = "2.3.0"
+version = "*"
 features = ["xlib"]
 
 [target.x86_64-unknown-linux-gnu.dependencies.x11]
-version = "2.3.0"
+version = "*"
 features = ["xlib"]
 
 [target.arm-unknown-linux-gnueabihf.dependencies.x11]
-version = "2.3.0"
+version = "*"
 features = ["xlib"]
 
 [target.aarch64-unknown-linux-gnu.dependencies.x11]
-version = "2.3.0"
+version = "*"
 features = ["xlib"]
 
 [target.x86_64-pc-windows-gnu.dependencies]
