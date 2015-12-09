@@ -110,7 +110,7 @@ impl DrawBuffer {
 
         unsafe {
             debug_assert!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE);
-            debug_assert!(gl::GetError() == gl::NO_ERROR);
+            debug_assert!(gl::get_error() == gl::NO_ERROR);
         }
 
         Ok(draw_buffer)
@@ -207,6 +207,7 @@ impl DrawBufferHelpers for DrawBuffer {
                     gl::BindTexture(gl::TEXTURE_2D, texture);
                     gl::TexImage2D(gl::TEXTURE_2D, 0,
                                    formats.texture_internal as GLint, self.size.width, self.size.height, 0, formats.texture, formats.texture_type, ptr::null_mut());
+
                     // Low filtering to allow rendering
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
@@ -214,6 +215,7 @@ impl DrawBufferHelpers for DrawBuffer {
                     // TODO(ecoal95): Check if these two are neccessary, probably not
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+
                     Some(ColorAttachment::Texture(texture))
                 }
             },

@@ -37,15 +37,23 @@ pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>,
     let (shared_with, display) = match shared_with {
         Some(handle) => (Some(&handle.0), handle.1),
         None => {
-            let display = unsafe {
-                egl::GetDisplay(egl::DEFAULT_DISPLAY as EGLNativeDisplayType)
-            };
+            unsafe {
+                let display = egl::GetDisplay(egl::DEFAULT_DISPLAY as EGLNativeDisplayType);
 
-            if display == (egl::NO_DISPLAY as EGLDisplay) {
-                return Err("egl::GetDisplay");
+                if display == (egl::NO_DISPLAY as EGLDisplay) {
+                    return Err("egl::GetDisplay");
+                }
+
+                // TODO: Ensure this is correct. It seems it's refcounted, but not atomically, so
+                // we can't `Terminate` it on drop.
+                //
+                // It's the default display anyways so it is not a big problem.
+                if egl::Initialize(display, 0 as *mut _, 0 as *mut _) == 0 {
+                    return Err("egl::Initialize");
+                }
+
+                (None, display)
             }
-
-            (None, display)
         }
     };
 
@@ -58,7 +66,11 @@ pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>,
     let mut found_configs : EGLint = 0;
 
     unsafe {
-        if egl::ChooseConfig(display, attributes.as_ptr(), &mut config, 1, &mut found_configs) == 0 {
+        if egl::ChooseConfig(display,
+                             attributes.as_ptr(),
+                             &mut config,
+                             1,
+                             &mut found_configs) == egl::FALSE as u32 {
             return Err("egl::ChooseConfig");
         }
     }

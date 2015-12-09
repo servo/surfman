@@ -19,7 +19,6 @@ extern {}
 
 static LOAD_GL: Once = ONCE_INIT;
 
-
 fn load_gl() {
     LOAD_GL.call_once(|| {
         gl::load_with(|s| GLContext::<NativeGLContext>::get_proc_address(s) as *const _);
@@ -50,6 +49,20 @@ fn test_pixels(pixels: &[u8]) {
         assert!(pixel[3] == 255);
         idx += 1;
     }
+}
+
+
+#[test]
+fn test_unbinding() {
+    let ctx = GLContext::<NativeGLContext>::new(Size2D::new(256, 256),
+                                                GLContextAttributes::default(),
+                                                ColorAttachmentType::Renderbuffer,
+                                                None).unwrap();
+
+    assert!(NativeGLContext::current_handle().is_some());
+
+    ctx.unbind().unwrap();
+    assert!(NativeGLContext::current_handle().is_none());
 }
 
 #[test]
