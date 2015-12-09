@@ -11,6 +11,7 @@ addons:
       - g++-4.8
       - libxxf86vm-dev
       - libosmesa6-dev
+      - libgles2-mesa-dev
 
 before_install:
   - if [ "$TRAVIS_OS_NAME" = "linux" ]; then export CXX=g++-4.8; fi
@@ -21,7 +22,4 @@ os:
 
 script:
   - cargo build --verbose
-  - cargo build --features texture_surface --verbose
-  # FIXME(ecoal95): Travis' ubuntu doesn't have the neccessary graphics stack and it fails
   - if [ "$TRAVIS_OS_NAME" != "linux" ]; then cargo test --verbose; fi
-  - if [ "$TRAVIS_OS_NAME" != "linux" ]; then cargo test --features texture_surface --verbose; fi
