@@ -91,6 +91,12 @@ impl<Native> GLContext<Native>
         self.native_context.is_current()
     }
 
+    #[inline(always)]
+    pub fn handle(&self) -> Native::Handle {
+        self.native_context.handle()
+    }
+
+
     // Allow borrowing these unmutably
     pub fn borrow_attributes(&self) -> &GLContextAttributes {
         &self.attributes

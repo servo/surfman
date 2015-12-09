@@ -27,10 +27,10 @@ impl NativeGLContext {
             None => 0 as CGLContextObj
         };
 
-        let mut native = unsafe { mem::uninitialized() };
+        let mut native: CGLContextObj = unsafe { mem::uninitialized() };
 
         unsafe {
-            if CGLCreateContext(pixel_format, shared, &mut native) != 0 {
+            if CGLCreateContext(*pixel_format, shared, &mut native) != 0 {
                 return Err("CGLCreateContext");
             }
         }
@@ -111,10 +111,12 @@ impl NativeGLContextMethods for NativeGLContext {
             }
         }
 
-        let result = NativeGLContext::new(with.map(|handle| handle.0), pixel_format);
+        let result = NativeGLContext::new(with.map(|handle| &handle.0), &pixel_format);
 
-        if CGLDestroyPixelFormat(pixel_format) != 0 {
-            debug!("CGLDestroyPixelformat errored");
+        unsafe {
+            if CGLDestroyPixelFormat(pixel_format) != 0 {
+                debug!("CGLDestroyPixelformat errored");
+            }
         }
 
         result
