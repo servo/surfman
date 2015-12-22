@@ -4,6 +4,9 @@ use euclid::Size2D;
 use std::sync::{Once, ONCE_INIT};
 
 use GLContext;
+#[cfg(all(target_os = "linux", feature = "test_egl_in_linux"))]
+use platform::with_egl::NativeGLContext;
+#[cfg(not(all(target_os = "linux", feature = "test_egl_in_linux")))]
 use NativeGLContext;
 use NativeGLContextMethods;
 use GLContextAttributes;
@@ -39,21 +42,22 @@ fn test_gl_context<T: NativeGLContextMethods>(context: &GLContext<T>) {
     test_pixels(&pixels);
 }
 
-fn test_pixels(pixels: &[u8]) {
-    let mut idx = 0;
+fn test_pixels_eq(pixels: &[u8], to: &[u8]) {
+    assert!(to.len() == 4);
     for pixel in pixels.chunks(4) {
-        println!("{}: {:?}", idx, pixel);
-        assert!(pixel[0] == 255);
-        assert!(pixel[1] == 0);
-        assert!(pixel[2] == 0);
-        assert!(pixel[3] == 255);
-        idx += 1;
+        assert_eq!(pixel, to);
     }
+
+}
+
+fn test_pixels(pixels: &[u8]) {
+    test_pixels_eq(pixels, &[255, 0, 0, 255]);
 }
 
 
 #[test]
 fn test_unbinding() {
+    load_gl();
     let ctx = GLContext::<NativeGLContext>::new(Size2D::new(256, 256),
                                                 GLContextAttributes::default(),
                                                 ColorAttachmentType::Renderbuffer,
@@ -84,17 +88,19 @@ fn test_texture_color_attachment() {
                                                     None).unwrap();
     test_gl_context(&context);
 
-
     // Get the bound texture and check we're painting on it
     let texture_id = context.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
     assert!(texture_id != 0);
 
-    let mut vec = vec![0u8; (size.width * size.height * 4) as usize];
-    unsafe {
-        gl::GetTexImage(gl::TEXTURE_2D, 0, gl::RGBA as u32, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
-    }
     assert!(gl::get_error() == gl::NO_ERROR);
 
+    // Actually we just check that writing to the framebuffer works, and that there's a texture
+    // attached to it. Doing a getTexImage should be a good idea, but it's not available on gles,
+    // so what we should do is rebinding to another FBO.
+    //
+    // This is done in the `test_sharing` test though, so if that passes we know everything
+    // works and we're just happy.
+    let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
     test_pixels(&vec);
 }
 
@@ -127,16 +133,28 @@ fn test_sharing() {
     primary.make_current().unwrap();
     assert!(unsafe { gl::IsTexture(secondary_texture_id) != 0 });
 
-    let mut vec = vec![0u8; (size.width * size.height * 4) as usize];
-
     // Ensure the old texture is bound, and bind the new one
     assert!(gl::get_integer_v(gl::TEXTURE_BINDING_2D) == primary_texture_id as GLint);
 
+
+    // Clearing and re-binding to a framebuffer instead of using getTexImage since it's not
+    // available in GLES2
+    gl::clear_color(0.0, 0.0, 0.0, 1.0);
+    gl::clear(gl::COLOR_BUFFER_BIT);
+
+    let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
+    test_pixels_eq(&vec, &[0, 0, 0, 255]);
+
     gl::bind_texture(gl::TEXTURE_2D, secondary_texture_id);
+
     unsafe {
-        gl::GetTexImage(gl::TEXTURE_2D, 0, gl::RGBA as u32, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
+        gl::FramebufferTexture2D(gl::FRAMEBUFFER,
+                                 gl::COLOR_ATTACHMENT0,
+                                 gl::TEXTURE_2D,
+                                 secondary_texture_id, 0);
     }
 
+    let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
     assert!(gl::get_error() == gl::NO_ERROR);
 
     test_pixels(&vec);

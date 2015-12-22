@@ -200,7 +200,6 @@ impl DrawBufferHelpers for DrawBuffer {
 
                 // TODO(ecoal95): Check gleam safe wrappers for these functions
                 unsafe {
-                    gl::Enable(gl::TEXTURE_2D);
                     gl::GenTextures(1, &mut texture);
                     debug_assert!(texture != 0);
 
