@@ -12,11 +12,9 @@ extern crate x11;
 extern crate cgl;
 #[cfg(target_os="macos")]
 extern crate core_foundation;
-#[cfg(target_os="windows")]
-extern crate glutin;
 
 mod platform;
-pub use platform::{NativeGLContext, NativeGLContextMethods};
+pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
 
 mod gl_context;
 pub use gl_context::GLContext;
@@ -45,7 +43,7 @@ mod glx {
     include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
 }
 
-#[cfg(target_os="android")]
+#[cfg(any(target_os="linux", target_os="android"))]
 #[allow(non_camel_case_types)]
 mod egl {
     use std::os::raw::{c_long, c_void};
@@ -61,13 +59,6 @@ mod egl {
     pub type NativeWindowType = EGLNativeWindowType;
     include!(concat!(env!("OUT_DIR"), "/egl_bindings.rs"));
 }
-
-#[cfg(feature="texture_surface")]
-extern crate layers;
-#[cfg(feature="texture_surface")]
-mod layers_surface_wrapper;
-#[cfg(feature="texture_surface")]
-pub use layers_surface_wrapper::LayersSurfaceWrapper;
 
 #[cfg(test)]
 mod tests;

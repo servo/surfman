@@ -15,13 +15,16 @@ pub struct GLFormats {
 
 impl GLFormats {
     // In the future we may use extension detection et-al to improve this, for now
-    // platform depending
+    // platform dependent.
+    //
+    // FIXME: In linux with GLES2 texture attachments create INVALID_ENUM errors.
+    // I suspect that it's because of texture formats, but I need time to debugit.
     #[cfg(not(target_os="android"))]
     pub fn detect(attrs: &GLContextAttributes) -> GLFormats {
         if attrs.alpha {
             GLFormats {
                 color_renderbuffer: gl::RGBA8,
-                texture_internal: gl::RGBA8,
+                texture_internal: gl::RGBA,
                 texture: gl::RGBA,
                 texture_type: gl::UNSIGNED_BYTE,
                 depth: gl::DEPTH_COMPONENT24,

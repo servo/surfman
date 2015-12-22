@@ -3,22 +3,13 @@ use gleam::gl;
 use gleam::gl::types::{GLuint, GLenum, GLint};
 
 use GLContext;
+use NativeGLContextMethods;
 
 use std::ptr;
-
-#[cfg(feature="texture_surface")]
-use LayersSurfaceWrapper;
-#[cfg(feature="texture_surface")]
-use layers::texturegl::Texture;
-#[cfg(feature="texture_surface")]
-use layers::platform::surface::NativeSurface;
 
 pub enum ColorAttachmentType {
     Texture,
     Renderbuffer,
-
-    #[cfg(feature="texture_surface")]
-    TextureWithSurface,
 }
 
 impl ColorAttachmentType {
@@ -35,9 +26,6 @@ impl ColorAttachmentType {
 pub enum ColorAttachment {
     Renderbuffer(GLuint),
     Texture(GLuint),
-
-    #[cfg(feature="texture_surface")]
-    TextureWithSurface(LayersSurfaceWrapper, Texture),
 }
 
 impl ColorAttachment {
@@ -45,8 +33,6 @@ impl ColorAttachment {
         match *self {
             ColorAttachment::Renderbuffer(_) => ColorAttachmentType::Renderbuffer,
             ColorAttachment::Texture(_) => ColorAttachmentType::Texture,
-            #[cfg(feature="texture_surface")]
-            ColorAttachment::TextureWithSurface(_, _) => ColorAttachmentType::TextureWithSurface,
         }
     }
 }
@@ -57,10 +43,6 @@ impl Drop for ColorAttachment {
             match *self {
                 ColorAttachment::Renderbuffer(mut id) => gl::DeleteRenderbuffers(1, &mut id),
                 ColorAttachment::Texture(mut tex_id) => gl::DeleteTextures(1, &mut tex_id),
-
-                #[cfg(feature="texture_surface")]
-                // Their destructors do everything
-                ColorAttachment::TextureWithSurface(_, _) => {},
             }
         }
     }
@@ -83,7 +65,8 @@ pub struct DrawBuffer {
 /// Helper function to create a render buffer
 /// TODO(ecoal95): We'll need to switch between `glRenderbufferStorage` and
 ///   `glRenderbufferStorageMultisample` when we support antialising
-fn create_renderbuffer(format: GLenum, size: &Size2D<i32>) -> GLuint {
+fn create_renderbuffer(format: GLenum,
+                       size: &Size2D<i32>) -> GLuint {
     let mut ret: GLuint = 0;
 
     unsafe {
@@ -96,7 +79,9 @@ fn create_renderbuffer(format: GLenum, size: &Size2D<i32>) -> GLuint {
 }
 
 impl DrawBuffer {
-    pub fn new(context: &GLContext, size: Size2D<i32>, color_attachment_type: ColorAttachmentType)
+    pub fn new<T: NativeGLContextMethods>(context: &GLContext<T>,
+                                          size: Size2D<i32>,
+                                          color_attachment_type: ColorAttachmentType)
         -> Result<DrawBuffer, &'static str> {
 
         let attrs = context.borrow_attributes();
@@ -125,7 +110,7 @@ impl DrawBuffer {
 
         unsafe {
             debug_assert!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER) == gl::FRAMEBUFFER_COMPLETE);
-            debug_assert!(gl::GetError() == gl::NO_ERROR);
+            debug_assert!(gl::get_error() == gl::NO_ERROR);
         }
 
         Ok(draw_buffer)
@@ -159,38 +144,6 @@ impl DrawBuffer {
         match self.color_attachment.as_ref().unwrap() {
             &ColorAttachment::Renderbuffer(_) => None,
             &ColorAttachment::Texture(id) => Some(id),
-            #[cfg(feature="texture_surface")]
-            &ColorAttachment::TextureWithSurface(_, ref tex) => Some(tex.native_texture()),
-        }
-    }
-
-    #[inline(always)]
-    #[cfg(feature="texture_surface")]
-    pub fn get_bound_surface_id(&self) -> Option<isize> {
-        match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _)
-                => Some(surf_wrapper.get_surface_id()),
-            _   => None
-        }
-    }
-
-    #[inline(always)]
-    #[cfg(feature="texture_surface")]
-    pub fn borrow_bound_layers_texture(&self) -> Option<&Texture> {
-        match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::TextureWithSurface(_, ref tex)
-                => Some(tex),
-            _   => None
-        }
-    }
-
-    #[inline(always)]
-    #[cfg(feature="texture_surface")]
-    pub fn borrow_bound_surface(&self) -> Option<&NativeSurface> {
-        match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::TextureWithSurface(ref surf_wrapper, _)
-                => Some(surf_wrapper.borrow_surface()),
-            _   => None
         }
     }
 }
@@ -217,14 +170,19 @@ impl Drop for DrawBuffer {
 }
 
 trait DrawBufferHelpers {
-    fn init(&mut self, &GLContext, color_attachment_type: ColorAttachmentType)
+    fn init<T: NativeGLContextMethods>(&mut self,
+                                       &GLContext<T>,
+                                       color_attachment_type: ColorAttachmentType)
         -> Result<(), &'static str>;
     fn attach_to_framebuffer(&mut self)
         -> Result<(), &'static str>;
 }
 
 impl DrawBufferHelpers for DrawBuffer {
-    fn init(&mut self, context: &GLContext, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
+    fn init<T: NativeGLContextMethods>(&mut self,
+                                       context: &GLContext<T>,
+                                       color_attachment_type: ColorAttachmentType)
+        -> Result<(), &'static str> {
         let attrs = context.borrow_attributes();
         let formats = context.borrow_formats();
 
@@ -249,6 +207,7 @@ impl DrawBufferHelpers for DrawBuffer {
                     gl::BindTexture(gl::TEXTURE_2D, texture);
                     gl::TexImage2D(gl::TEXTURE_2D, 0,
                                    formats.texture_internal as GLint, self.size.width, self.size.height, 0, formats.texture, formats.texture_type, ptr::null_mut());
+
                     // Low filtering to allow rendering
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
@@ -256,25 +215,10 @@ impl DrawBufferHelpers for DrawBuffer {
                     // TODO(ecoal95): Check if these two are neccessary, probably not
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+
                     Some(ColorAttachment::Texture(texture))
                 }
             },
-            #[cfg(feature="texture_surface")]
-            ColorAttachmentType::TextureWithSurface => {
-                // TODO(ecoal95): check if this is correct
-                let (flip, target) = Texture::texture_flip_and_target(false);
-                let mut texture = Texture::new(target, Size2D::new(self.size.width as usize, self.size.height as usize));
-                texture.flip = flip;
-
-                let surface_wrapper = LayersSurfaceWrapper::new(context.get_display(), self.size);
-                surface_wrapper.bind_to_texture(&texture);
-
-                unsafe {
-                    debug_assert!(gl::GetError() == gl::NO_ERROR);
-                }
-
-                Some(ColorAttachment::TextureWithSurface(surface_wrapper, texture))
-            }
         };
 
         // After this we check if we need stencil and depth buffers
@@ -317,13 +261,6 @@ impl DrawBufferHelpers for DrawBuffer {
                                              gl::TEXTURE_2D,
                                              texture_id, 0);
                 },
-                #[cfg(feature="texture_surface")]
-                &ColorAttachment::TextureWithSurface(_, ref texture) => {
-                    gl::FramebufferTexture2D(gl::FRAMEBUFFER,
-                                             gl::COLOR_ATTACHMENT0,
-                                             texture.target.as_gl_target(),
-                                             texture.native_texture(), 0);
-                }
             }
 
             if self.depth_renderbuffer != 0 {

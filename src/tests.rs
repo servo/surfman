@@ -1,12 +1,13 @@
 use gleam::gl;
+use gleam::gl::types::GLint;
 use euclid::Size2D;
+use std::sync::{Once, ONCE_INIT};
 
 use GLContext;
+use NativeGLContext;
+use NativeGLContextMethods;
 use GLContextAttributes;
 use ColorAttachmentType;
-
-#[cfg(feature="texture_surface")]
-use layers::texturegl::Texture;
 
 #[cfg(target_os="macos")]
 #[link(name="OpenGL", kind="framework")]
@@ -16,21 +17,15 @@ extern {}
 #[link(name="GL")]
 extern {}
 
-// This is probably a time bomb
-static mut GL_LOADED : bool = false;
+static LOAD_GL: Once = ONCE_INIT;
 
 fn load_gl() {
-    unsafe {
-        if GL_LOADED {
-            return;
-        }
-
-        gl::load_with(|s| GLContext::get_proc_address(s) as *const _);
-        GL_LOADED = true;
-    }
+    LOAD_GL.call_once(|| {
+        gl::load_with(|s| GLContext::<NativeGLContext>::get_proc_address(s) as *const _);
+    });
 }
 
-fn test_gl_context(context: &GLContext) {
+fn test_gl_context<T: NativeGLContextMethods>(context: &GLContext<T>) {
     context.make_current().unwrap();
 
     gl::clear_color(1.0, 0.0, 0.0, 1.0);
@@ -56,58 +51,93 @@ fn test_pixels(pixels: &[u8]) {
     }
 }
 
+
 #[test]
-fn test_default_color_attachment() {
+fn test_unbinding() {
+    let ctx = GLContext::<NativeGLContext>::new(Size2D::new(256, 256),
+                                                GLContextAttributes::default(),
+                                                ColorAttachmentType::Renderbuffer,
+                                                None).unwrap();
+
+    assert!(NativeGLContext::current_handle().is_some());
+
+    ctx.unbind().unwrap();
+    assert!(NativeGLContext::current_handle().is_none());
+}
+
+#[test]
+fn test_renderbuffer_color_attachment() {
     load_gl();
-    test_gl_context(&GLContext::create_offscreen(Size2D::new(256, 256), GLContextAttributes::default()).unwrap());
+    test_gl_context(&GLContext::<NativeGLContext>::new(Size2D::new(256, 256),
+                                                       GLContextAttributes::default(),
+                                                       ColorAttachmentType::Renderbuffer,
+                                                       None).unwrap());
 }
 
 #[test]
 fn test_texture_color_attachment() {
     load_gl();
-    test_gl_context(&GLContext::create_offscreen_with_color_attachment(Size2D::new(256, 256), GLContextAttributes::default(), ColorAttachmentType::Texture).unwrap())
+    let size = Size2D::new(256, 256);
+    let context = GLContext::<NativeGLContext>::new(size,
+                                                    GLContextAttributes::default(),
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
+    test_gl_context(&context);
+
+
+    // Get the bound texture and check we're painting on it
+    let texture_id = context.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+    assert!(texture_id != 0);
+
+    let mut vec = vec![0u8; (size.width * size.height * 4) as usize];
+    unsafe {
+        gl::GetTexImage(gl::TEXTURE_2D, 0, gl::RGBA as u32, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
+    }
+    assert!(gl::get_error() == gl::NO_ERROR);
+
+    test_pixels(&vec);
 }
 
 #[test]
-#[cfg(feature="texture_surface")]
-fn test_texture_surface_color_attachment() {
+fn test_sharing() {
     load_gl();
-    let size : Size2D<i32> = Size2D::new(256, 256);
-    let ctx = GLContext::create_offscreen_with_color_attachment(size, GLContextAttributes::default(), ColorAttachmentType::TextureWithSurface).unwrap();
 
-    test_gl_context(&ctx);
+    let size = Size2D::new(256, 256);
+    let primary = GLContext::<NativeGLContext>::new(size,
+                                                    GLContextAttributes::default(),
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
 
-    // Get the bound texture and check we're painting on it
-    let texture = ctx.borrow_draw_buffer().unwrap().borrow_bound_layers_texture().unwrap();
+    let primary_texture_id = primary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+    assert!(primary_texture_id != 0);
 
-    // Bind the texture, get its pixels in rgba format and test
-    // if it has the surface contents
-    let _bound = texture.bind();
+    let secondary = GLContext::<NativeGLContext>::new(size,
+                                                      GLContextAttributes::default(),
+                                                      ColorAttachmentType::Texture,
+                                                      Some(&primary.handle())).unwrap();
 
-    let mut vec = vec![0u8; (size.width * size.height * 4) as usize];
+    // Paint the second context red
+    test_gl_context(&secondary);
 
-    unsafe {
-        gl::GetTexImage(texture.target.as_gl_target(), 0, gl::RGBA as u32, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
-        assert!(gl::GetError() == gl::NO_ERROR);
-    }
+    // Now the secondary context is bound, get the texture id, switch contexts, and check the
+    // texture is there.
+    let secondary_texture_id = secondary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+    assert!(secondary_texture_id != 0);
 
-    test_pixels(&vec);
-
-    // Pick up the (in theory) painted surface
-    // And bind it to a new Texture, to check if we actually painted on it
-    let surface = ctx.borrow_draw_buffer().unwrap().borrow_bound_surface().unwrap();
-    let (flip, target) = Texture::texture_flip_and_target(false);
-    let mut texture = Texture::new(target, Size2D::new(size.width as usize, size.height as usize));
-    texture.flip = flip;
-    surface.bind_to_texture(&ctx.get_display(), &texture);
-
-    let _bound = texture.bind();
+    primary.make_current().unwrap();
+    assert!(unsafe { gl::IsTexture(secondary_texture_id) != 0 });
 
     let mut vec = vec![0u8; (size.width * size.height * 4) as usize];
+
+    // Ensure the old texture is bound, and bind the new one
+    assert!(gl::get_integer_v(gl::TEXTURE_BINDING_2D) == primary_texture_id as GLint);
+
+    gl::bind_texture(gl::TEXTURE_2D, secondary_texture_id);
     unsafe {
-        gl::GetTexImage(texture.target.as_gl_target(), 0, gl::RGBA as u32, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
-        assert!(gl::GetError() == gl::NO_ERROR);
+        gl::GetTexImage(gl::TEXTURE_2D, 0, gl::RGBA as u32, gl::UNSIGNED_BYTE, vec.as_mut_ptr() as *mut _);
     }
+
+    assert!(gl::get_error() == gl::NO_ERROR);
 
     test_pixels(&vec);
 }

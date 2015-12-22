@@ -18,7 +18,7 @@ fn main() {
                                         "1.4", "core", &mut file).unwrap();
     }
 
-    if target.contains("android") {
+    if target.contains("android") || target.contains("linux") {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         gl_generator::generate_bindings(gl_generator::StaticGenerator,
                                         gl_generator::registry::Ns::Egl,
