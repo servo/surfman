@@ -11,6 +11,11 @@ build = "build.rs"
 gl_generator = "0.4"
 khronos_api = "1.0"
 
+# NOTE: Just for testing use, there are no other changes
+[features]
+default = []
+test_egl_in_linux = []
+
 [dependencies]
 log  = "0.3.3"
 gleam = "0.2"

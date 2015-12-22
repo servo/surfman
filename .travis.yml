@@ -22,4 +22,7 @@ os:
 
 script:
   - cargo build --verbose
+  # We cannot test egl nor glx in Travis' linux
+  # - cargo test --verbose
+  # - cargo test --verbose --features test_egl_in_linux
   - if [ "$TRAVIS_OS_NAME" != "linux" ]; then cargo test --verbose; fi
