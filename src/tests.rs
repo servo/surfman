@@ -159,3 +159,13 @@ fn test_sharing() {
 
     test_pixels(&vec);
 }
+
+#[test]
+fn test_limits() {
+    let size = Size2D::new(256, 256);
+    let context = GLContext::<NativeGLContext>::new(size,
+                                                    GLContextAttributes::default(),
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
+    assert!(context.borrow_limits().max_vertex_attribs != 0);
+}
