@@ -6,6 +6,7 @@ use NativeGLContextMethods;
 use GLContextAttributes;
 use GLContextCapabilities;
 use GLFormats;
+use GLLimits;
 use DrawBuffer;
 use ColorAttachmentType;
 
@@ -21,6 +22,7 @@ pub struct GLContext<Native> {
     attributes: GLContextAttributes,
     capabilities: GLContextCapabilities,
     formats: GLFormats,
+    limits: GLLimits,
 }
 
 impl<Native> GLContext<Native>
@@ -30,6 +32,7 @@ impl<Native> GLContext<Native>
         try!(native_context.make_current());
         let attributes = GLContextAttributes::any();
         let formats = GLFormats::detect(&attributes);
+        let limits = GLLimits::detect();
 
         Ok(GLContext {
             native_context: native_context,
@@ -37,6 +40,7 @@ impl<Native> GLContext<Native>
             attributes: attributes,
             capabilities: GLContextCapabilities::detect(),
             formats: formats,
+            limits: limits,
         })
     }
 
@@ -108,6 +112,10 @@ impl<Native> GLContext<Native>
 
     pub fn borrow_formats(&self) -> &GLFormats {
         &self.formats
+    }
+
+    pub fn borrow_limits(&self) -> &GLLimits {
+        &self.limits
     }
 
     pub fn borrow_draw_buffer(&self) -> Option<&DrawBuffer> {

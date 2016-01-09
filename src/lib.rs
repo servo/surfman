@@ -34,6 +34,9 @@ pub use gl_feature::GLFeature;
 mod gl_formats;
 pub use gl_formats::GLFormats;
 
+mod gl_limits;
+pub use gl_limits::GLLimits;
+
 #[macro_use]
 extern crate log;
 
