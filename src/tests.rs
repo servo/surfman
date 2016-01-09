@@ -162,6 +162,8 @@ fn test_sharing() {
 
 #[test]
 fn test_limits() {
+    load_gl();
+
     let size = Size2D::new(256, 256);
     let context = GLContext::<NativeGLContext>::new(size,
                                                     GLContextAttributes::default(),
