@@ -19,7 +19,7 @@ test_egl_in_linux = []
 [dependencies]
 log  = "0.3.3"
 gleam = "0.2"
-euclid = "0.4"
+euclid = "0.6.1"
 serde = "0.6.1"
 serde_macros = "0.6.1"
 
