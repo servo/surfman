@@ -20,8 +20,8 @@ test_egl_in_linux = []
 log  = "0.3.3"
 gleam = "0.2"
 euclid = "0.6.1"
-serde = "0.6.1"
-serde_macros = "0.6.1"
+serde = ">=0.6.1, <0.8"
+serde_macros = ">=0.6.1, <0.8"
 
 [target.x86_64-apple-darwin.dependencies]
 core-foundation = "0.2.0"
