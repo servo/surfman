@@ -1,7 +1,8 @@
 
 /// This structure represents the attributes the context must support
 /// It's almost (if not) identical to WebGLGLContextAttributes
-#[derive(Clone, Debug, Copy, Deserialize, Serialize)]
+#[derive(Clone, Debug, Copy)]
+#[cfg_attr(feature="serde_serialization", derive(Serialize, Deserialize))]
 pub struct GLContextAttributes {
     pub alpha: bool,
     pub depth: bool,

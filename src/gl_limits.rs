@@ -1,7 +1,8 @@
 use gleam::gl::types::GLint;
 use gleam::gl;
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone)]
+#[cfg_attr(feature="serde_serialization", derive(Serialize, Deserialize))]
 pub struct GLLimits {
     pub max_vertex_attribs: GLint,
 }
