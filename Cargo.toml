@@ -18,7 +18,7 @@ test_egl_in_linux = []
 serde_serialization = ["serde", "serde_macros"]
 
 [dependencies]
-log  = "0.3.3"
+log  = "0.3"
 gleam = "0.2"
 euclid = "0.6.1"
 serde = { version = ">=0.6.1, <0.8", optional = true }

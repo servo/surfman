@@ -1,7 +1,6 @@
 use std::ffi::CString;
 
 use glx;
-use x11::xlib::*;
 use std::os::raw::*;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use euclid::Size2D;

@@ -4,6 +4,9 @@
 extern crate gleam;
 extern crate euclid;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(feature="serde_serialization")]
 extern crate serde;
 
@@ -37,9 +40,6 @@ pub use gl_formats::GLFormats;
 
 mod gl_limits;
 pub use gl_limits::GLLimits;
-
-#[macro_use]
-extern crate log;
 
 #[cfg(target_os="linux")]
 #[allow(improper_ctypes)]
