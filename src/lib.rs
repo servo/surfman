@@ -1,10 +1,7 @@
-#![cfg_attr(feature="serde_serialization", feature(plugin, custom_derive))]
-#![cfg_attr(feature="serde_serialization", plugin(serde_macros))]
-
 extern crate gleam;
 extern crate euclid;
 
-#[cfg(feature="serde_serialization")]
+#[cfg(feature="serde")]
 extern crate serde;
 
 #[cfg(target_os="linux")]
