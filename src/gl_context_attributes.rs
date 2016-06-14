@@ -18,19 +18,14 @@ impl Deserialize for GLContextAttributes {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: Deserializer
     {
-        let alpha = try!(bool::deserialize(deserializer));
-        let depth = try!(bool::deserialize(deserializer));
-        let stencil = try!(bool::deserialize(deserializer));
-        let antialias = try!(bool::deserialize(deserializer));
-        let premultiplied_alpha = try!(bool::deserialize(deserializer));
-        let preserve_drawing_buffer = try!(bool::deserialize(deserializer));
+        let values = try!(<[_; 6]>::deserialize(deserializer));
         Ok(GLContextAttributes {
-            alpha: alpha,
-            depth: depth,
-            stencil: stencil,
-            antialias: antialias,
-            premultiplied_alpha: premultiplied_alpha,
-            preserve_drawing_buffer: preserve_drawing_buffer,
+            alpha: values[0],
+            depth: values[1],
+            stencil: values[2],
+            antialias: values[3],
+            premultiplied_alpha: values[4],
+            preserve_drawing_buffer: values[5],
         })
     }
 }
@@ -40,13 +35,11 @@ impl Serialize for GLContextAttributes {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: Serializer
     {
-        try!(self.alpha.serialize(serializer));
-        try!(self.depth.serialize(serializer));
-        try!(self.stencil.serialize(serializer));
-        try!(self.antialias.serialize(serializer));
-        try!(self.premultiplied_alpha.serialize(serializer));
-        try!(self.preserve_drawing_buffer.serialize(serializer));
-        Ok(())
+        let values = [
+            self.alpha, self.depth, self.stencil,
+            self.antialias, self.premultiplied_alpha, self.preserve_drawing_buffer,
+        ];
+        values.serialize(serializer)
     }
 }
 
