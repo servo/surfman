@@ -14,13 +14,11 @@ impl Deserialize for GLLimits {
     fn deserialize<D>(deserializer: &mut D) -> Result<Self, D::Error>
         where D: Deserializer
     {
-        let max_vertex_attribs = try!(u32::deserialize(deserializer));
-        let max_tex_size = try!(u32::deserialize(deserializer));
-        let max_cube_map_tex_size = try!(u32::deserialize(deserializer));
+        let values = try!(<[_; 3]>::deserialize(deserializer));
         Ok(GLLimits {
-            max_vertex_attribs: max_vertex_attribs,
-            max_tex_size: max_tex_size,
-            max_cube_map_tex_size: max_cube_map_tex_size,
+            max_vertex_attribs: values[0],
+            max_tex_size: values[1],
+            max_cube_map_tex_size: values[2],
         })
     }
 }
@@ -30,10 +28,8 @@ impl Serialize for GLLimits {
     fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
         where S: Serializer
     {
-        try!(self.max_vertex_attribs.serialize(serializer));
-        try!(self.max_tex_size.serialize(serializer));
-        try!(self.max_cube_map_tex_size.serialize(serializer));
-        Ok(())
+        [self.max_vertex_attribs, self.max_tex_size, self.max_cube_map_tex_size]
+            .serialize(serializer)
     }
 }
 
