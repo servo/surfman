@@ -1,7 +1,7 @@
 [package]
 name = "offscreen_gl_context"
 license = "MIT / Apache-2.0"
-version = "0.1.8"
+version = "0.1.9"
 authors = ["Emilio Cobos Álvarez <ecoal95@gmail.com>", "The Servo Project Developers"]
 description = "Creation and manipulation of HW accelerated offscreen rendering contexts in multiple platforms. Originally intended for the Servo project's WebGL implementation."
 repository = "https://github.com/emilio/rust-offscreen-rendering-context"
@@ -20,7 +20,7 @@ serde_serialization = ["serde"]
 [dependencies]
 log  = "0.3"
 gleam = "0.2"
-euclid = "0.6.1"
+euclid = ">=0.6.1, <0.8"
 serde = { version = ">=0.6.1, <0.8", optional = true }
 
 [target.x86_64-apple-darwin.dependencies]
@@ -30,4 +30,3 @@ cgl = "0.1"
 [target.'cfg(target_os = "linux")'.dependencies.x11]
 version = "2.3.0"
 features = ["xlib"]
-
