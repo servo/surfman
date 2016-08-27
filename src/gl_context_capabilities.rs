@@ -8,7 +8,7 @@ use GLFeature;
 /// should have under the field `capabilities`, as a public field
 /// This should allow us to know the capabilities of a given
 /// GLContext without repeating the same code over and over
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct GLContextCapabilities {
     // max antialising samples, 0 if no antialising supported
     pub max_samples: GLint,

@@ -171,3 +171,99 @@ fn test_limits() {
                                                     None).unwrap();
     assert!(context.borrow_limits().max_vertex_attribs != 0);
 }
+
+#[test]
+fn test_no_alpha() {
+    load_gl();
+    let mut attributes = GLContextAttributes::default();
+    attributes.alpha = false;
+
+    let size = Size2D::new(256, 256);
+    let context = GLContext::<NativeGLContext>::new(size,
+                                                    attributes,
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
+    assert!(context.borrow_limits().max_vertex_attribs != 0);
+}
+
+#[test]
+fn test_no_depth() {
+    load_gl();
+    let mut attributes = GLContextAttributes::default();
+    attributes.depth = false;
+
+    let size = Size2D::new(256, 256);
+    let context = GLContext::<NativeGLContext>::new(size,
+                                                    attributes,
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
+    assert!(context.borrow_limits().max_vertex_attribs != 0);
+}
+
+#[test]
+fn test_no_depth_no_alpha() {
+    load_gl();
+    let mut attributes = GLContextAttributes::default();
+    attributes.depth = false;
+    attributes.alpha = false;
+
+    let size = Size2D::new(256, 256);
+    let context = GLContext::<NativeGLContext>::new(size,
+                                                    attributes,
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
+    assert!(context.borrow_limits().max_vertex_attribs != 0);
+}
+
+#[test]
+fn test_no_premul_alpha() {
+    load_gl();
+    let mut attributes = GLContextAttributes::default();
+    attributes.depth = false;
+    attributes.alpha = false;
+    attributes.premultiplied_alpha = false;
+
+    let size = Size2D::new(256, 256);
+    let context = GLContext::<NativeGLContext>::new(size,
+                                                    attributes,
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
+    assert!(context.borrow_limits().max_vertex_attribs != 0);
+}
+
+#[test]
+fn test_in_a_row() {
+    load_gl();
+    let mut attributes = GLContextAttributes::default();
+    attributes.depth = false;
+    attributes.alpha = false;
+    attributes.premultiplied_alpha = false;
+
+    let size = Size2D::new(256, 256);
+    let context = GLContext::<NativeGLContext>::new(size,
+                                                    attributes.clone(),
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
+
+    let handle = context.handle();
+
+    GLContext::<NativeGLContext>::new(size,
+                                      attributes.clone(),
+                                      ColorAttachmentType::Texture,
+                                      Some(&handle)).unwrap();
+
+    GLContext::<NativeGLContext>::new(size,
+                                      attributes.clone(),
+                                      ColorAttachmentType::Texture,
+                                      Some(&handle)).unwrap();
+}
+
+#[test]
+fn test_zero_size() {
+    load_gl();
+
+    GLContext::<NativeGLContext>::new(Size2D::new(0, 320),
+                                      GLContextAttributes::default(),
+                                      ColorAttachmentType::Texture,
+                                      None).unwrap();
+}

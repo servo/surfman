@@ -100,7 +100,6 @@ impl<Native> GLContext<Native>
         self.native_context.handle()
     }
 
-
     // Allow borrowing these unmutably
     pub fn borrow_attributes(&self) -> &GLContextAttributes {
         &self.attributes
@@ -142,7 +141,8 @@ impl<Native> GLContext<Native>
     // in order to keep this generic
     pub fn resize(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
         if self.draw_buffer.is_some() {
-            let color_attachment_type = self.borrow_draw_buffer().unwrap().color_attachment_type();
+            let color_attachment_type =
+                self.borrow_draw_buffer().unwrap().color_attachment_type();
             self.create_draw_buffer(size, color_attachment_type)
         } else {
             Err("No DrawBuffer found")
