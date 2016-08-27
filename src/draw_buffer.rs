@@ -82,12 +82,18 @@ fn create_renderbuffer(format: GLenum,
 
 impl DrawBuffer {
     pub fn new<T: NativeGLContextMethods>(context: &GLContext<T>,
-                                          size: Size2D<i32>,
+                                          mut size: Size2D<i32>,
                                           color_attachment_type: ColorAttachmentType)
-        -> Result<DrawBuffer, &'static str> {
-        debug!("Creating draw buffer {:?}, {:?}", size, color_attachment_type);
+                                          -> Result<DrawBuffer, &'static str>
+    {
+        const MIN_DRAWING_BUFFER_SIZE: i32 = 16;
+        use std::cmp;
+
         let attrs = context.borrow_attributes();
         let capabilities = context.borrow_capabilities();
+
+        debug!("Creating draw buffer {:?}, {:?}, attrs: {:?}, caps: {:?}",
+               size, color_attachment_type, attrs, capabilities);
 
         if attrs.antialias && capabilities.max_samples == 0 {
             return Err("The given GLContext doesn't support requested antialising");
@@ -96,6 +102,10 @@ impl DrawBuffer {
         if attrs.preserve_drawing_buffer {
             return Err("preserveDrawingBuffer is not supported yet");
         }
+
+        // See https://github.com/servo/servo/issues/12320
+        size.width = cmp::max(MIN_DRAWING_BUFFER_SIZE, size.width);
+        size.height = cmp::max(MIN_DRAWING_BUFFER_SIZE, size.height);
 
         let mut draw_buffer = DrawBuffer {
             size: size,

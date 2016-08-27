@@ -257,3 +257,13 @@ fn test_in_a_row() {
                                       ColorAttachmentType::Texture,
                                       Some(&handle)).unwrap();
 }
+
+#[test]
+fn test_zero_size() {
+    load_gl();
+
+    GLContext::<NativeGLContext>::new(Size2D::new(0, 320),
+                                      GLContextAttributes::default(),
+                                      ColorAttachmentType::Texture,
+                                      None).unwrap();
+}
