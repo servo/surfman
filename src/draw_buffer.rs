@@ -7,13 +7,14 @@ use NativeGLContextMethods;
 
 use std::ptr;
 
+#[derive(Debug)]
 pub enum ColorAttachmentType {
     Texture,
     Renderbuffer,
 }
 
-impl ColorAttachmentType {
-    pub fn default() -> ColorAttachmentType {
+impl Default for ColorAttachmentType {
+    fn default() -> ColorAttachmentType {
         ColorAttachmentType::Renderbuffer
     }
 }
@@ -23,6 +24,7 @@ impl ColorAttachmentType {
 /// Or a surface bound to a texture
 /// bound to a framebuffer as a color
 /// attachment
+#[derive(Debug)]
 pub enum ColorAttachment {
     Renderbuffer(GLuint),
     Texture(GLuint),
@@ -83,7 +85,7 @@ impl DrawBuffer {
                                           size: Size2D<i32>,
                                           color_attachment_type: ColorAttachmentType)
         -> Result<DrawBuffer, &'static str> {
-
+        debug!("Creating draw buffer {:?}, {:?}", size, color_attachment_type);
         let attrs = context.borrow_attributes();
         let capabilities = context.borrow_capabilities();
 
@@ -215,6 +217,8 @@ impl DrawBufferHelpers for DrawBuffer {
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
 
+                    debug_assert!(gl::get_error() == gl::NO_ERROR);
+
                     Some(ColorAttachment::Texture(texture))
                 }
             },
@@ -246,15 +250,15 @@ impl DrawBufferHelpers for DrawBuffer {
             // NOTE: The assertion fails if the framebuffer is not bound
             debug_assert!(gl::IsFramebuffer(self.framebuffer) == gl::TRUE);
 
-            match self.color_attachment.as_ref().unwrap() {
-                &ColorAttachment::Renderbuffer(color_renderbuffer) => {
+            match *self.color_attachment.as_ref().unwrap() {
+                ColorAttachment::Renderbuffer(color_renderbuffer) => {
                     gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
                                                 gl::COLOR_ATTACHMENT0,
                                                 gl::RENDERBUFFER,
                                                 color_renderbuffer);
                     debug_assert!(gl::IsRenderbuffer(color_renderbuffer) == gl::TRUE);
                 },
-                &ColorAttachment::Texture(texture_id) => {
+                ColorAttachment::Texture(texture_id) => {
                     gl::FramebufferTexture2D(gl::FRAMEBUFFER,
                                              gl::COLOR_ATTACHMENT0,
                                              gl::TEXTURE_2D,
