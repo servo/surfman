@@ -1,5 +1,4 @@
 use gleam::gl;
-use gleam::gl::types::GLint;
 use euclid::Size2D;
 use std::sync::{Once, ONCE_INIT};
 
@@ -132,10 +131,6 @@ fn test_sharing() {
 
     primary.make_current().unwrap();
     assert!(unsafe { gl::IsTexture(secondary_texture_id) != 0 });
-
-    // Ensure the old texture is bound, and bind the new one
-    assert!(gl::get_integer_v(gl::TEXTURE_BINDING_2D) == primary_texture_id as GLint);
-
 
     // Clearing and re-binding to a framebuffer instead of using getTexImage since it's not
     // available in GLES2
