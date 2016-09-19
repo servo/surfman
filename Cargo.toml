@@ -9,7 +9,6 @@ build = "build.rs"
 
 [build-dependencies]
 gl_generator = "0.5"
-khronos_api = "1.0"
 
 # NOTE: Just for testing use, there are no other changes
 [features]
