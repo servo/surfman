@@ -75,6 +75,7 @@ fn create_renderbuffer(format: GLenum,
         gl::GenRenderbuffers(1, &mut ret);
         gl::BindRenderbuffer(gl::RENDERBUFFER, ret);
         gl::RenderbufferStorage(gl::RENDERBUFFER, format, size.width, size.height);
+        gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
     }
 
     ret
@@ -226,6 +227,8 @@ impl DrawBufferHelpers for DrawBuffer {
                     // TODO(ecoal95): Check if these two are neccessary, probably not
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
                     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+
+                    gl::BindTexture(gl::TEXTURE_2D, 0);
 
                     debug_assert!(gl::get_error() == gl::NO_ERROR);
 

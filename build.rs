@@ -1,5 +1,4 @@
 extern crate gl_generator;
-extern crate khronos_api;
 
 use std::env;
 use std::fs::File;
