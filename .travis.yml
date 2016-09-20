@@ -26,3 +26,4 @@ script:
   # - cargo test --verbose
   # - cargo test --verbose --features test_egl_in_linux
   - if [ "$TRAVIS_OS_NAME" != "linux" ]; then cargo test --verbose; fi
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then cargo test --features "osmesa test_osmesa"; fi

@@ -13,9 +13,13 @@ extern crate x11;
 extern crate cgl;
 #[cfg(target_os="macos")]
 extern crate core_foundation;
+#[cfg(feature="osmesa")]
+extern crate osmesa_sys;
 
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
+#[cfg(feature="osmesa")]
+pub use platform::{OSMesaContext, OSMesaContextHandle};
 
 mod gl_context;
 pub use gl_context::GLContext;
