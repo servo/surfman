@@ -1,5 +1,4 @@
 use std::mem;
-use super::{NativeGLContext, NativeGLContextHandle};
 use super::wgl_attributes::*;
 
 use std::ffi::{CStr, CString, OsStr};
@@ -15,79 +14,74 @@ use gdi32;
 use super::wgl;
 use super::wgl_ext;
 
-pub unsafe fn create_offscreen(shared_with:Option<&NativeGLContextHandle>, settings: &WGLAttributes) 
-    -> Result<NativeGLContext, String> {
+pub unsafe fn create_offscreen(shared_with: winapi::HGLRC,
+                               settings: &WGLAttributes)
+                               -> Result<(winapi::HGLRC, winapi::HDC), String> {
 
-        let window: winapi::HWND = try!(create_hidden_window());
-        let hdc = user32::GetDC(window);
-        if hdc.is_null() {
-            return Err("GetDC function failed".to_owned())
-        }
+    let window: winapi::HWND = try!(create_hidden_window());
+    let hdc = user32::GetDC(window);
+    if hdc.is_null() {
+        return Err("GetDC function failed".to_owned());
+    }
 
-        let extra = try!(load_extra_functions(window));
+    let extra = try!(load_extra_functions(window));
 
-        let extensions = if extra.GetExtensionsStringARB.is_loaded() {
-            let data = extra.GetExtensionsStringARB(hdc as *const _);
-            let data = CStr::from_ptr(data).to_bytes().to_vec();
-            String::from_utf8(data).unwrap()
+    let extensions = if extra.GetExtensionsStringARB.is_loaded() {
+        let data = extra.GetExtensionsStringARB(hdc as *const _);
+        let data = CStr::from_ptr(data).to_bytes().to_vec();
+        String::from_utf8(data).unwrap()
 
-        } else if extra.GetExtensionsStringEXT.is_loaded() {
-            let data = extra.GetExtensionsStringEXT();
-            let data = CStr::from_ptr(data).to_bytes().to_vec();
-            String::from_utf8(data).unwrap()
+    } else if extra.GetExtensionsStringEXT.is_loaded() {
+        let data = extra.GetExtensionsStringEXT();
+        let data = CStr::from_ptr(data).to_bytes().to_vec();
+        String::from_utf8(data).unwrap()
 
-        } else {
-            format!("")
-        };
+    } else {
+        format!("")
+    };
 
 
-        let (id, _) = if extensions.split(' ').find(|&i| i == "WGL_ARB_pixel_format").is_some() {
-            try!(choose_arb_pixel_format(&extra, &extensions, hdc, &settings.pixel_format)
-                                        .map_err(|_| "Pixel format not available".to_owned()))
-        } else {
-            try!(choose_native_pixel_format(hdc,  &settings.pixel_format)
-                                        .map_err(|_| "Pixel format not available".to_owned()))
-        };
+    let (id, _) = if extensions.split(' ').find(|&i| i == "WGL_ARB_pixel_format").is_some() {
+        try!(choose_arb_pixel_format(&extra, &extensions, hdc, &settings.pixel_format)
+            .map_err(|_| "Pixel format not available".to_owned()))
+    } else {
+        try!(choose_native_pixel_format(hdc, &settings.pixel_format)
+            .map_err(|_| "Pixel format not available".to_owned()))
+    };
 
-        try!(set_pixel_format(hdc, id));
+    try!(set_pixel_format(hdc, id));
 
-        let share = match shared_with {
-            Some(ref ctx) => ctx.0,
-            None => ptr::null_mut()
-        };
-        create_full_context(settings, &extra, &extensions, hdc, share)
+    create_full_context(settings, &extra, &extensions, hdc, shared_with)
 
 }
 
-//creates a basic context
-unsafe fn create_basic_context(hdc: winapi::HDC, share: winapi::HGLRC)
-                         -> Result<NativeGLContext, String>
-{
+// creates a basic context
+unsafe fn create_basic_context(hdc: winapi::HDC,
+                               share: winapi::HGLRC)
+                               -> Result<(winapi::HGLRC, winapi::HDC), String> {
     let ctx = wgl::CreateContext(hdc as *const c_void);
     if ctx.is_null() {
         return Err(format!("wglCreateContext failed: {}",
-                            format!("{}", io::Error::last_os_error())));
+                           format!("{}", io::Error::last_os_error())));
     }
 
     if !share.is_null() {
         if wgl::ShareLists(share as *const c_void, ctx) == 0 {
             return Err(format!("wglShareLists failed: {}",
-                        format!("{}", io::Error::last_os_error())));
+                               format!("{}", io::Error::last_os_error())));
         }
     };
 
-    return Ok(NativeGLContext{
-            render_ctx : ctx as winapi::HGLRC,
-            device_ctx: hdc,
-            weak:false
-    });
+    return Ok((ctx as winapi::HGLRC, hdc));
 }
 
-//creates a full context: attempts to use optional ext WGL functions
-unsafe fn create_full_context(settings: &WGLAttributes, extra: &wgl_ext::Wgl, 
-                            extensions: &str, hdc: winapi::HDC, share: winapi::HGLRC)
-                         -> Result<NativeGLContext, String>
-{
+// creates a full context: attempts to use optional ext WGL functions
+unsafe fn create_full_context(settings: &WGLAttributes,
+                              extra: &wgl_ext::Wgl,
+                              extensions: &str,
+                              hdc: winapi::HDC,
+                              share: winapi::HGLRC)
+                              -> Result<(winapi::HGLRC, winapi::HDC), String> {
     if extensions.split(' ').find(|&i| i == "WGL_ARB_create_context").is_none() {
         return create_basic_context(hdc, share);
     }
@@ -98,7 +92,7 @@ unsafe fn create_full_context(settings: &WGLAttributes, extra: &wgl_ext::Wgl,
             attributes.push(wgl_ext::CONTEXT_PROFILE_MASK_ARB as c_int);
             attributes.push(wgl_ext::CONTEXT_ES2_PROFILE_BIT_EXT as c_int);
         } else {
-                return Err("OpenGl Version Not Supported".to_owned());
+            return Err("OpenGl Version Not Supported".to_owned());
         }
     }
 
@@ -110,56 +104,64 @@ unsafe fn create_full_context(settings: &WGLAttributes, extra: &wgl_ext::Wgl,
     }
 
     attributes.push(wgl_ext::CONTEXT_FLAGS_ARB as c_int);
-    attributes.push((if settings.debug {wgl_ext::CONTEXT_FLAGS_ARB} else {0}) as c_int);
+    attributes.push((if settings.debug {
+        wgl_ext::CONTEXT_FLAGS_ARB
+    } else {
+        0
+    }) as c_int);
 
     attributes.push(0);
 
     let ctx = extra.CreateContextAttribsARB(hdc as *const c_void,
-                                                        share as *const c_void,
-                                                        attributes.as_ptr());
+                                            share as *const c_void,
+                                            attributes.as_ptr());
 
     if ctx.is_null() {
         return Err(format!("wglCreateContextAttribsARB failed: {}",
-                            format!("{}", io::Error::last_os_error())));
+                           format!("{}", io::Error::last_os_error())));
     }
 
-    //Disable or enable vsync
+    // Disable or enable vsync
     if extensions.split(' ').find(|&i| i == "WGL_EXT_swap_control").is_some() {
         let _guard = try!(CurrentContextGuard::make_current(hdc, ctx as winapi::HGLRC));
         if extra.SwapIntervalEXT(if settings.vsync { 1 } else { 0 }) == 0 {
             return Err("wglSwapIntervalEXT failed".to_owned());
         }
     }
-        
-    return Ok(NativeGLContext{
-        render_ctx : ctx as winapi::HGLRC,
-        device_ctx: hdc,
-        weak:false
-    });
+
+    return Ok((ctx as winapi::HGLRC, hdc));
 }
 
 unsafe fn create_hidden_window() -> Result<winapi::HWND, &'static str> {
 
     let class_name = register_window_class();
     let mut rect = winapi::RECT {
-        left: 0, right: 1024 as winapi::LONG,
-        top: 0, bottom: 768 as winapi::LONG,
+        left: 0,
+        right: 1024 as winapi::LONG,
+        top: 0,
+        bottom: 768 as winapi::LONG,
     };
     let ex_style = winapi::WS_EX_APPWINDOW | winapi::WS_EX_WINDOWEDGE;
     let style = winapi::WS_OVERLAPPEDWINDOW | winapi::WS_CLIPSIBLINGS | winapi::WS_CLIPCHILDREN;
 
     user32::AdjustWindowRectEx(&mut rect, style, 0, ex_style);
-    let title = OsStr::new("WGLwindow").encode_wide().chain(Some(0).into_iter())
-                                          .collect::<Vec<_>>();
+    let title = OsStr::new("WGLwindow")
+        .encode_wide()
+        .chain(Some(0).into_iter())
+        .collect::<Vec<_>>();
 
-    let win = user32::CreateWindowExW(ex_style, class_name.as_ptr(),
-                                        title.as_ptr(), style,
-                                        winapi::CW_USEDEFAULT, winapi::CW_USEDEFAULT,
-                                        rect.right - rect.left,
-                                        rect.bottom - rect.top,
-                                        ptr::null_mut(), ptr::null_mut(),
-                                        kernel32::GetModuleHandleW(ptr::null()),
-                                        ptr::null_mut());
+    let win = user32::CreateWindowExW(ex_style,
+                                      class_name.as_ptr(),
+                                      title.as_ptr(),
+                                      style,
+                                      winapi::CW_USEDEFAULT,
+                                      winapi::CW_USEDEFAULT,
+                                      rect.right - rect.left,
+                                      rect.bottom - rect.top,
+                                      ptr::null_mut(),
+                                      ptr::null_mut(),
+                                      kernel32::GetModuleHandleW(ptr::null()),
+                                      ptr::null_mut());
     if win.is_null() {
         return Err("CreateWindowEx function failed");
     }
@@ -172,8 +174,10 @@ unsafe fn create_hidden_window() -> Result<winapi::HWND, &'static str> {
 // ***********
 
 unsafe fn register_window_class() -> Vec<u16> {
-    let class_name = OsStr::new("Window Class").encode_wide().chain(Some(0).into_iter())
-                                               .collect::<Vec<_>>();
+    let class_name = OsStr::new("Window Class")
+        .encode_wide()
+        .chain(Some(0).into_iter())
+        .collect::<Vec<_>>();
 
     let class = winapi::WNDCLASSEXW {
         cbSize: mem::size_of::<winapi::WNDCLASSEXW>() as winapi::UINT,
@@ -183,7 +187,7 @@ unsafe fn register_window_class() -> Vec<u16> {
         cbWndExtra: 0,
         hInstance: kernel32::GetModuleHandleW(ptr::null()),
         hIcon: ptr::null_mut(),
-        hCursor: ptr::null_mut(),       // must be null in order for cursor state to work properly
+        hCursor: ptr::null_mut(), // must be null in order for cursor state to work properly
         hbrBackground: ptr::null_mut(),
         lpszMenuName: ptr::null(),
         lpszClassName: class_name.as_ptr(),
@@ -199,20 +203,15 @@ unsafe fn register_window_class() -> Vec<u16> {
     class_name
 }
 
-pub unsafe extern "system" fn proc_callback(window: winapi::HWND, msg: winapi::UINT,
-                                       wparam: winapi::WPARAM, lparam: winapi::LPARAM)
-                                       -> winapi::LRESULT
-{
+pub unsafe extern "system" fn proc_callback(window: winapi::HWND,
+                                            msg: winapi::UINT,
+                                            wparam: winapi::WPARAM,
+                                            lparam: winapi::LPARAM)
+                                            -> winapi::LRESULT {
     match msg {
-        winapi::WM_PAINT => {
-            0
-        },
-        winapi::WM_ERASEBKGND => {
-            0
-        },
-        _ => {
-            user32::DefWindowProcW(window, msg, wparam, lparam)
-        }
+        winapi::WM_PAINT => 0,
+        winapi::WM_ERASEBKGND => 0,
+        _ => user32::DefWindowProcW(window, msg, wparam, lparam),
     }
 }
 
@@ -244,10 +243,11 @@ pub struct PixelFormat {
     pub srgb: bool,
 }
 
-unsafe fn choose_arb_pixel_format(extra: &wgl_ext::Wgl, extensions: &str,
-                                  hdc: winapi::HDC, reqs: &WGLPixelFormat)
-                                  -> Result<(c_int, PixelFormat), ()>
-{
+unsafe fn choose_arb_pixel_format(extra: &wgl_ext::Wgl,
+                                  extensions: &str,
+                                  hdc: winapi::HDC,
+                                  reqs: &WGLPixelFormat)
+                                  -> Result<(c_int, PixelFormat), ()> {
     let descriptor = {
         let mut out: Vec<c_int> = Vec::with_capacity(37);
 
@@ -268,7 +268,7 @@ unsafe fn choose_arb_pixel_format(extra: &wgl_ext::Wgl, extensions: &str,
             out.push(wgl_ext::TYPE_RGBA_ARB as c_int);
         }
 
-        //Force hardware aceleration
+        // Force hardware aceleration
         out.push(wgl_ext::ACCELERATION_ARB as c_int);
         out.push(wgl_ext::FULL_ACCELERATION_ARB as c_int);
 
@@ -329,9 +329,12 @@ unsafe fn choose_arb_pixel_format(extra: &wgl_ext::Wgl, extensions: &str,
 
     let mut format_id = mem::uninitialized();
     let mut num_formats = mem::uninitialized();
-    if extra.ChoosePixelFormatARB(hdc as *const _, descriptor.as_ptr(), ptr::null(), 1,
-                                  &mut format_id, &mut num_formats) == 0
-    {
+    if extra.ChoosePixelFormatARB(hdc as *const _,
+                                  descriptor.as_ptr(),
+                                  ptr::null(),
+                                  1,
+                                  &mut format_id,
+                                  &mut num_formats) == 0 {
         return Err(());
     }
 
@@ -341,16 +344,18 @@ unsafe fn choose_arb_pixel_format(extra: &wgl_ext::Wgl, extensions: &str,
 
     let get_info = |attrib: u32| {
         let mut value = mem::uninitialized();
-        extra.GetPixelFormatAttribivARB(hdc as *const _, format_id as c_int,
-                                        0, 1, [attrib as c_int].as_ptr(),
+        extra.GetPixelFormatAttribivARB(hdc as *const _,
+                                        format_id as c_int,
+                                        0,
+                                        1,
+                                        [attrib as c_int].as_ptr(),
                                         &mut value);
         value as u32
     };
 
     let pf_desc = PixelFormat {
-        hardware_accelerated: get_info(wgl_ext::ACCELERATION_ARB) !=
-                                                                wgl_ext::NO_ACCELERATION_ARB,
-        color_bits: get_info(wgl_ext::RED_BITS_ARB) as u8 + 
+        hardware_accelerated: get_info(wgl_ext::ACCELERATION_ARB) != wgl_ext::NO_ACCELERATION_ARB,
+        color_bits: get_info(wgl_ext::RED_BITS_ARB) as u8 +
                     get_info(wgl_ext::GREEN_BITS_ARB) as u8 +
                     get_info(wgl_ext::BLUE_BITS_ARB) as u8,
         alpha_bits: get_info(wgl_ext::ALPHA_BITS_ARB) as u8,
@@ -370,7 +375,9 @@ unsafe fn choose_arb_pixel_format(extra: &wgl_ext::Wgl, extensions: &str,
         },
         srgb: if extensions.split(' ').find(|&i| i == "WGL_ARB_framebuffer_sRGB").is_some() {
             get_info(wgl_ext::FRAMEBUFFER_SRGB_CAPABLE_ARB) != 0
-        } else if extensions.split(' ').find(|&i| i == "WGL_EXT_framebuffer_sRGB").is_some() {
+        } else if extensions.split(' ')
+            .find(|&i| i == "WGL_EXT_framebuffer_sRGB")
+            .is_some() {
             get_info(wgl_ext::FRAMEBUFFER_SRGB_CAPABLE_EXT) != 0
         } else {
             false
@@ -383,9 +390,9 @@ unsafe fn choose_arb_pixel_format(extra: &wgl_ext::Wgl, extensions: &str,
 // Chooses a pixel formats without using WGL.
 //
 // Gives less precise results than `enumerate_arb_pixel_formats`.
-unsafe fn choose_native_pixel_format(hdc: winapi::HDC, reqs: &WGLPixelFormat)
-                                     -> Result<(c_int, PixelFormat), ()>
-{
+unsafe fn choose_native_pixel_format(hdc: winapi::HDC,
+                                     reqs: &WGLPixelFormat)
+                                     -> Result<(c_int, PixelFormat), ()> {
     // TODO: hardware acceleration is not handled
 
     // handling non-supported stuff
@@ -396,7 +403,7 @@ unsafe fn choose_native_pixel_format(hdc: winapi::HDC, reqs: &WGLPixelFormat)
     match reqs.multisampling {
         Some(0) => (),
         None => (),
-        Some(_) => return Err(())
+        Some(_) => return Err(()),
     };
 
     if reqs.stereoscopy {
@@ -413,7 +420,8 @@ unsafe fn choose_native_pixel_format(hdc: winapi::HDC, reqs: &WGLPixelFormat)
         nVersion: 1,
         dwFlags: {
             let f1 = match reqs.double_buffer {
-                None => winapi::PFD_DOUBLEBUFFER, // Should be PFD_DOUBLEBUFFER_DONTCARE after you can choose
+                // Should be PFD_DOUBLEBUFFER_DONTCARE after you can choose
+                None => winapi::PFD_DOUBLEBUFFER,
                 Some(true) => winapi::PFD_DOUBLEBUFFER,
                 Some(false) => 0,
             };
@@ -459,9 +467,10 @@ unsafe fn choose_native_pixel_format(hdc: winapi::HDC, reqs: &WGLPixelFormat)
 
     // querying back the capabilities of what windows told us
     let mut output: winapi::PIXELFORMATDESCRIPTOR = mem::zeroed();
-    if gdi32::DescribePixelFormat(hdc, pf_id, mem::size_of::<winapi::PIXELFORMATDESCRIPTOR>() as u32,
-                                  &mut output) == 0
-    {
+    if gdi32::DescribePixelFormat(hdc,
+                                  pf_id,
+                                  mem::size_of::<winapi::PIXELFORMATDESCRIPTOR>() as u32,
+                                  &mut output) == 0 {
         return Err(());
     }
 
@@ -526,7 +535,7 @@ unsafe fn set_pixel_format(hdc: winapi::HDC, id: c_int) -> Result<(), String> {
 
     if gdi32::SetPixelFormat(hdc, id, &output) == 0 {
         return Err(format!("SetPixelFormat function failed: {}",
-                    format!("{}", io::Error::last_os_error())));
+                           format!("{}", io::Error::last_os_error())));
     }
 
     Ok(())
@@ -537,8 +546,8 @@ unsafe fn set_pixel_format(hdc: winapi::HDC, id: c_int) -> Result<(), String> {
 // The `window` must be passed because the driver can vary depending on the window's
 // characteristics.
 unsafe fn load_extra_functions(window: winapi::HWND) -> Result<wgl_ext::Wgl, String> {
-    let (ex_style, style) = (winapi::WS_EX_APPWINDOW, winapi::WS_POPUP |
-                             winapi::WS_CLIPSIBLINGS | winapi::WS_CLIPCHILDREN);
+    let (ex_style, style) = (winapi::WS_EX_APPWINDOW,
+                             winapi::WS_POPUP | winapi::WS_CLIPSIBLINGS | winapi::WS_CLIPCHILDREN);
 
     // creating a dummy invisible window
     let dummy_window = {
@@ -556,30 +565,36 @@ unsafe fn load_extra_functions(window: winapi::HWND) -> Result<wgl_ext::Wgl, Str
         let mut class_name = [0u16; 128];
         if user32::GetClassNameW(window, class_name.as_mut_ptr(), 128) == 0 {
             return Err(format!("GetClassNameW function failed: {}",
-                        format!("{}", io::Error::last_os_error())));
+                               format!("{}", io::Error::last_os_error())));
         }
 
         // this dummy window should match the real one enough to get the same OpenGL driver
-        let title = OsStr::new("Dummy").encode_wide().chain(Some(0).into_iter())
-                                          .collect::<Vec<_>>();
-        let win = user32::CreateWindowExW(ex_style, class_name.as_ptr(),
-                                          title.as_ptr(), style,
-                                          winapi::CW_USEDEFAULT, winapi::CW_USEDEFAULT,
+        let title = OsStr::new("Dummy")
+            .encode_wide()
+            .chain(Some(0).into_iter())
+            .collect::<Vec<_>>();
+        let win = user32::CreateWindowExW(ex_style,
+                                          class_name.as_ptr(),
+                                          title.as_ptr(),
+                                          style,
+                                          winapi::CW_USEDEFAULT,
+                                          winapi::CW_USEDEFAULT,
                                           rect.right - rect.left,
                                           rect.bottom - rect.top,
-                                          ptr::null_mut(), ptr::null_mut(),
+                                          ptr::null_mut(),
+                                          ptr::null_mut(),
                                           kernel32::GetModuleHandleW(ptr::null()),
                                           ptr::null_mut());
 
         if win.is_null() {
             return Err(format!("CreateWindowEx function failed: {}",
-                                              format!("{}", io::Error::last_os_error())));
+                               format!("{}", io::Error::last_os_error())));
         }
 
         let hdc = user32::GetDC(win);
         if hdc.is_null() {
             let err = Err(format!("GetDC function failed: {}",
-                                               format!("{}", io::Error::last_os_error())));
+                                  format!("{}", io::Error::last_os_error())));
             return err;
         }
 
@@ -594,8 +609,7 @@ unsafe fn load_extra_functions(window: winapi::HWND) -> Result<wgl_ext::Wgl, Str
 
     // creating the dummy OpenGL context and making it current
     let dummy_context = try!(create_basic_context(dummy_window.1, ptr::null_mut()));
-    let _current_context = try!(CurrentContextGuard::make_current(dummy_window.1,
-                                                                  dummy_context.render_ctx));
+    let _current_context = try!(CurrentContextGuard::make_current(dummy_window.1, dummy_context.0));
 
     // loading the extra WGL functions
     Ok(wgl_ext::Wgl::load_with(|addr| {
@@ -653,21 +667,21 @@ use std::marker::PhantomData;
 pub struct CurrentContextGuard<'a, 'b> {
     previous_hdc: winapi::HDC,
     previous_hglrc: winapi::HGLRC,
-    marker1:PhantomData<&'a ()>,
-    marker2:PhantomData<&'b ()>,
+    marker1: PhantomData<&'a ()>,
+    marker2: PhantomData<&'b ()>,
 }
 
 impl<'a, 'b> CurrentContextGuard<'a, 'b> {
-    pub unsafe fn make_current(hdc: winapi::HDC, context: winapi::HGLRC)
-                               -> Result<CurrentContextGuard<'a, 'b>, String>
-    {
+    pub unsafe fn make_current(hdc: winapi::HDC,
+                               context: winapi::HGLRC)
+                               -> Result<CurrentContextGuard<'a, 'b>, String> {
         let previous_hdc = wgl::GetCurrentDC() as winapi::HDC;
         let previous_hglrc = wgl::GetCurrentContext() as winapi::HGLRC;
 
         let result = wgl::MakeCurrent(hdc as *const _, context as *const _);
         if result == 0 {
             return Err(format!("wglMakeCurrent function failed: {}",
-                                format!("{}", io::Error::last_os_error())));
+                               format!("{}", io::Error::last_os_error())));
         }
 
         Ok(CurrentContextGuard {
@@ -683,10 +697,7 @@ impl<'a, 'b> Drop for CurrentContextGuard<'a, 'b> {
     fn drop(&mut self) {
         unsafe {
             wgl::MakeCurrent(self.previous_hdc as *const c_void,
-                                 self.previous_hglrc as *const c_void);
+                             self.previous_hglrc as *const c_void);
         }
     }
 }
-
-
-

@@ -2,12 +2,12 @@
 #[derive(Clone, Debug)]
 pub struct WGLAttributes {
     //
-    pub opengl_es: bool, //enable or disable OpenGL ES contest
-    pub major_version: u32, //OpenGL major version. Set 0 to select the latest
-    pub minor_version: u32, //OpenGL minor version.
-    pub debug: bool, //Debug mode improves error information. Disabled by default.
-    pub vsync: bool, //Enable or disable vsync for swap_buffers. Disabled by default.
-    pub pixel_format: WGLPixelFormat //Pixel format requirements
+    pub opengl_es: bool, // enable or disable OpenGL ES contest
+    pub major_version: u32, // OpenGL major version. Set 0 to select the latest
+    pub minor_version: u32, // OpenGL minor version.
+    pub debug: bool, // Debug mode improves error information. Disabled by default.
+    pub vsync: bool, // Enable or disable vsync for swap_buffers. Disabled by default.
+    pub pixel_format: WGLPixelFormat, // Pixel format requirements
 }
 
 impl Default for WGLAttributes {
@@ -19,7 +19,7 @@ impl Default for WGLAttributes {
             minor_version: 1,
             debug: false,
             vsync: false,
-            pixel_format: WGLPixelFormat::default()
+            pixel_format: WGLPixelFormat::default(),
         }
     }
 }
