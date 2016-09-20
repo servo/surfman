@@ -24,6 +24,11 @@ pub mod with_glx;
 #[cfg(target_os="linux")]
 pub use self::with_glx::{NativeGLContext, NativeGLContextHandle};
 
+#[cfg(feature="osmesa")]
+pub mod with_osmesa;
+#[cfg(feature="osmesa")]
+pub use self::with_osmesa::{OSMesaContext, OSMesaContextHandle};
+
 #[cfg(any(target_os="android", target_os="linux"))]
 pub mod with_egl;
 #[cfg(target_os="android")]

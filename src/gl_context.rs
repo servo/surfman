@@ -26,7 +26,8 @@ pub struct GLContext<Native> {
 }
 
 impl<Native> GLContext<Native>
-    where Native: NativeGLContextMethods {
+    where Native: NativeGLContextMethods
+{
     pub fn create(shared_with: Option<&Native::Handle>) -> Result<GLContext<Native>, &'static str> {
         let native_context = try!(Native::create_shared(shared_with));
         try!(native_context.make_current());
