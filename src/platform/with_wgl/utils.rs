@@ -14,6 +14,14 @@ use gdi32;
 use super::wgl;
 use super::wgl_ext;
 
+
+// #Attributions
+// This WGL implementation has been inspired by the code originating in Glutin.
+// We have used slightly modified version util functions to manage WGL contexts.
+// We simplified the win32 window creation because we don't need the event handler thread
+// We'd like to credit and thank all of the Glutin contributors for their work.
+// (https://github.com/tomaka/glutin)
+
 pub unsafe fn create_offscreen(shared_with: winapi::HGLRC,
                                settings: &WGLAttributes)
                                -> Result<(winapi::HGLRC, winapi::HDC), String> {
@@ -37,7 +45,7 @@ pub unsafe fn create_offscreen(shared_with: winapi::HGLRC,
         String::from_utf8(data).unwrap()
 
     } else {
-        format!("")
+        String::new()
     };
 
 
@@ -61,18 +69,16 @@ unsafe fn create_basic_context(hdc: winapi::HDC,
                                -> Result<(winapi::HGLRC, winapi::HDC), String> {
     let ctx = wgl::CreateContext(hdc as *const c_void);
     if ctx.is_null() {
-        return Err(format!("wglCreateContext failed: {}",
-                           format!("{}", io::Error::last_os_error())));
+        return Err(format!("wglCreateContext failed: {}", io::Error::last_os_error()));
     }
 
     if !share.is_null() {
         if wgl::ShareLists(share as *const c_void, ctx) == 0 {
-            return Err(format!("wglShareLists failed: {}",
-                               format!("{}", io::Error::last_os_error())));
+            return Err(format!("wglShareLists failed: {}", io::Error::last_os_error()));
         }
     };
 
-    return Ok((ctx as winapi::HGLRC, hdc));
+    Ok((ctx as winapi::HGLRC, hdc))
 }
 
 // creates a full context: attempts to use optional ext WGL functions
@@ -118,7 +124,7 @@ unsafe fn create_full_context(settings: &WGLAttributes,
 
     if ctx.is_null() {
         return Err(format!("wglCreateContextAttribsARB failed: {}",
-                           format!("{}", io::Error::last_os_error())));
+                           io::Error::last_os_error()));
     }
 
     // Disable or enable vsync
@@ -129,7 +135,7 @@ unsafe fn create_full_context(settings: &WGLAttributes,
         }
     }
 
-    return Ok((ctx as winapi::HGLRC, hdc));
+    Ok((ctx as winapi::HGLRC, hdc))
 }
 
 unsafe fn create_hidden_window() -> Result<winapi::HWND, &'static str> {
@@ -170,7 +176,9 @@ unsafe fn create_hidden_window() -> Result<winapi::HWND, &'static str> {
 }
 
 // ***********
-// Utilities to ease WGL context creation: some helper functions taken from glutin
+// Utilities to ease WGL context creation
+// Slightly modified versions of util functions taken from Glutin
+// (https://github.com/tomaka/glutin)
 // ***********
 
 unsafe fn register_window_class() -> Vec<u16> {
@@ -529,13 +537,12 @@ unsafe fn set_pixel_format(hdc: winapi::HDC, id: c_int) -> Result<(), String> {
     if gdi32::DescribePixelFormat(hdc, id, mem::size_of::<winapi::PIXELFORMATDESCRIPTOR>()
                                   as winapi::UINT, &mut output) == 0
     {
-        return Err(format!("DescribePixelFormat function failed: {}",
-                    format!("{}", io::Error::last_os_error())));
+        return Err(format!("DescribePixelFormat function failed: {}",io::Error::last_os_error()));
     }
 
     if gdi32::SetPixelFormat(hdc, id, &output) == 0 {
         return Err(format!("SetPixelFormat function failed: {}",
-                           format!("{}", io::Error::last_os_error())));
+                           io::Error::last_os_error()));
     }
 
     Ok(())
@@ -565,7 +572,7 @@ unsafe fn load_extra_functions(window: winapi::HWND) -> Result<wgl_ext::Wgl, Str
         let mut class_name = [0u16; 128];
         if user32::GetClassNameW(window, class_name.as_mut_ptr(), 128) == 0 {
             return Err(format!("GetClassNameW function failed: {}",
-                               format!("{}", io::Error::last_os_error())));
+                               io::Error::last_os_error()));
         }
 
         // this dummy window should match the real one enough to get the same OpenGL driver
@@ -588,13 +595,12 @@ unsafe fn load_extra_functions(window: winapi::HWND) -> Result<wgl_ext::Wgl, Str
 
         if win.is_null() {
             return Err(format!("CreateWindowEx function failed: {}",
-                               format!("{}", io::Error::last_os_error())));
+                               io::Error::last_os_error()));
         }
 
         let hdc = user32::GetDC(win);
         if hdc.is_null() {
-            let err = Err(format!("GetDC function failed: {}",
-                                  format!("{}", io::Error::last_os_error())));
+            let err = Err(format!("GetDC function failed: {}", io::Error::last_os_error()));
             return err;
         }
 
@@ -681,7 +687,7 @@ impl<'a, 'b> CurrentContextGuard<'a, 'b> {
         let result = wgl::MakeCurrent(hdc as *const _, context as *const _);
         if result == 0 {
             return Err(format!("wglMakeCurrent function failed: {}",
-                               format!("{}", io::Error::last_os_error())));
+                               io::Error::last_os_error()));
         }
 
         Ok(CurrentContextGuard {
