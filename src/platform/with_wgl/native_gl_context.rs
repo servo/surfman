@@ -2,22 +2,21 @@ use platform::NativeGLContextMethods;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
-use std::sync::{Once, ONCE_INIT};
 
 use winapi;
 use user32;
 use kernel32;
 use super::wgl;
 use super::wgl_attributes::*;
-use gleam::gl;
+use super::utils;
 
-/// Wrapper to satisfy `Sync`.
+// Wrappers to satisfy `Sync`.
 struct HMODULEWrapper(winapi::HMODULE);
 unsafe impl Sync for HMODULEWrapper {}
 
 lazy_static! {
     static ref GL_LIB: Option<HMODULEWrapper>  = {
-        let p = unsafe{kernel32::LoadLibraryA(b"opengl32.dll\0".as_ptr() as *const _)};
+        let p = unsafe { kernel32::LoadLibraryA(b"opengl32.dll\0".as_ptr() as *const _) };
         if p.is_null() {
             error!("WGL: opengl32.dll not found!");
             None
@@ -26,13 +25,23 @@ lazy_static! {
             Some(HMODULEWrapper(p))
         }
     };
-}
 
-static LOAD_GL: Once = ONCE_INIT;
-pub fn load_gl() {
-    LOAD_GL.call_once(|| {
-        gl::load_with(|s| NativeGLContext::get_proc_address(s) as *const _);
-    });
+    static ref PROC_ADDR_CTX: Option<NativeGLContext> = {
+        match unsafe { utils::create_offscreen(ptr::null_mut(), &WGLAttributes::default()) } {
+            Ok(ref res) => {
+                let ctx = NativeGLContext {
+                    render_ctx: res.0,
+                    device_ctx: res.1,
+                    weak: false,
+                };
+                Some(ctx)
+            }
+            Err(s) => {
+                error!("Error creating GetProcAddress helper context: {}", s);
+                None
+            }
+        }
+    };
 }
 
 pub struct NativeGLContext {
@@ -54,8 +63,12 @@ impl Drop for NativeGLContext {
     }
 }
 
+unsafe impl Send for NativeGLContext {}
+unsafe impl Sync for NativeGLContext {}
+
 pub struct NativeGLContextHandle(winapi::HGLRC, winapi::HDC);
 unsafe impl Send for NativeGLContextHandle {}
+unsafe impl Sync for NativeGLContextHandle {}
 
 impl NativeGLContextMethods for NativeGLContext {
     type Handle = NativeGLContextHandle;
@@ -64,10 +77,27 @@ impl NativeGLContextMethods for NativeGLContext {
         let addr = CString::new(addr.as_bytes()).unwrap();
         let addr = addr.as_ptr();
         unsafe {
+
+            if wgl::GetCurrentContext().is_null() {
+                // wglGetProcAddress only works in the presence of a valid GL context
+                // We use a dummy ctx when the caller calls this function without a valid GL context
+                if let Some(ref ctx) = *PROC_ADDR_CTX {
+                    if ctx.make_current().is_err() {
+                        return ptr::null_mut();
+                    }
+                } else {
+                    return ptr::null_mut();
+                }
+            }
+
             let p = wgl::GetProcAddress(addr) as *const _;
             if !p.is_null() {
                 return p;
             }
+            // wglGetProcAddress​ doesn't return function pointers for some legacy functions,
+            // (the ones coming from OpenGL 1.1)
+            // These functions are exported by the opengl32.dll itself,
+            // so we have to fallback to kernel32 getProcAddress if wglGetProcAddress​ return null
             match *GL_LIB {
                 Some(ref lib) => kernel32::GetProcAddress(lib.0, addr) as *const _,
                 None => ptr::null_mut(),
@@ -81,17 +111,15 @@ impl NativeGLContextMethods for NativeGLContext {
             Some(ref handle) => handle.0,
             None => ptr::null_mut(),
         };
-        match unsafe { super::utils::create_offscreen(render_ctx, &WGLAttributes::default()) } {
+        match unsafe { utils::create_offscreen(render_ctx, &WGLAttributes::default()) } {
             Ok(ref res) => {
-                // wglGetProcAddress only works in the presence of a valid GL context
-                // OpenGL functions must be loaded after the first context is created
+
                 let ctx = NativeGLContext {
                     render_ctx: res.0,
                     device_ctx: res.1,
                     weak: false,
                 };
                 ctx.make_current().unwrap();
-                load_gl();
                 Ok(ctx)
             }
             Err(s) => {
