@@ -5,7 +5,9 @@ use std::sync::{Once, ONCE_INIT};
 use GLContext;
 #[cfg(all(target_os = "linux", feature = "test_egl_in_linux"))]
 use platform::with_egl::NativeGLContext;
-#[cfg(not(all(target_os = "linux", feature = "test_egl_in_linux")))]
+#[cfg(feature="test_osmesa")]
+use platform::OSMesaContext as NativeGLContext;
+#[cfg(not(any(feature = "test_egl_in_linux", feature = "test_osmesa")))]
 use NativeGLContext;
 use NativeGLContextMethods;
 use GLContextAttributes;
@@ -53,8 +55,8 @@ fn test_pixels(pixels: &[u8]) {
     test_pixels_eq(pixels, &[255, 0, 0, 255]);
 }
 
-
 #[test]
+#[cfg(not(feature = "test_osmesa"))]
 fn test_unbinding() {
     load_gl();
     let ctx = GLContext::<NativeGLContext>::new(Size2D::new(256, 256),
