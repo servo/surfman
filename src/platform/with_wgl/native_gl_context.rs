@@ -118,12 +118,12 @@ impl NativeGLContextMethods for NativeGLContext {
     }
 
     fn current_handle() -> Option<Self::Handle> {
-        let handle = unsafe { wgl::GetCurrentContext() };
-        if !handle.is_null() {
-            let hdc = unsafe { wgl::GetCurrentDC() };
-            Some(NativeGLContextHandle(handle as winapi::HGLRC, hdc as winapi::HDC))
-        } else {
+        let ctx = unsafe { wgl::GetCurrentContext() };
+        let hdc = unsafe { wgl::GetCurrentDC() };
+        if ctx.is_null() || hdc.is_null() {
             None
+        } else {
+            Some(NativeGLContextHandle(ctx as winapi::HGLRC, hdc as winapi::HDC))
         }
     }
 
