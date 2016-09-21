@@ -9,8 +9,11 @@ addons:
     packages:
       - gcc-4.8
       - g++-4.8
+      - python-mako
       - libxxf86vm-dev
       - libosmesa6-dev
+      - libva
+      - libncurses
       - libgles2-mesa-dev
 
 before_install:
@@ -22,6 +25,9 @@ os:
 
 script:
   - cargo build --verbose
+  - git clone --depth 1 https://github.com/glennw/osmesa-src && cd osmesa-src && cargo build --verbose --verbose
+  - cd ..
+  - export LD_LIBRARY_PATH=$(pwd)/osmesa-src/target/debug/build/osmesa-src-daaa519a3db7d8de/out/lib/gallium/
   # We cannot test egl nor glx in Travis' linux
   # - cargo test --verbose
   # - cargo test --verbose --features test_egl_in_linux
