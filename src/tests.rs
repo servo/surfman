@@ -12,7 +12,7 @@ use NativeGLContext;
 use NativeGLContextMethods;
 use GLContextAttributes;
 use ColorAttachmentType;
-use std::{thread, time};
+use std::thread;
 use std::sync::mpsc;
 
 #[cfg(target_os="macos")]
@@ -169,7 +169,8 @@ fn test_multithread_render() {
                                                     ColorAttachmentType::Texture,
                                                     None).unwrap(); 
     test_gl_context(&primary);
-    let (sender, receiver) = mpsc::channel();
+    let (tx, rx) = mpsc::channel();
+    let (end_tx, end_rx) = mpsc::channel();
     thread::spawn(move ||{
         //create the context in a different thread
         let secondary = GLContext::<NativeGLContext>::new(size,
@@ -185,21 +186,21 @@ fn test_multithread_render() {
         let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
         test_pixels_eq(&vec, &[0, 255, 0, 255]);
 
-        sender.send(()).unwrap();
+        tx.send(()).unwrap();
 
         // Avoid drop until test ends
-        loop {
-            thread::sleep(time::Duration::from_millis(200));
-        }
+        end_rx.recv().unwrap();
     });
     // Wait until thread has drawn the texture
-    receiver.recv().unwrap();
+    rx.recv().unwrap();
     // This context must remain to be current in this thread
     assert!(primary.is_current());
 
     // The colors must remain unchanged
     let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
     test_pixels_eq(&vec, &[255, 0, 0, 255]);
+
+    end_tx.send(()).unwrap();
 }
 
 struct SGLUint(gl::GLuint);
@@ -220,7 +221,8 @@ fn test_multithread_sharing() {
     let primary_texture_id = primary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
     assert!(primary_texture_id != 0);
 
-    let (sender, receiver) = mpsc::channel();
+    let (tx, rx) = mpsc::channel();
+    let (end_tx, end_rx) = mpsc::channel();
     let primary_handle = primary.handle();
 
     // Unbind required by some APIs as WGL
@@ -239,14 +241,12 @@ fn test_multithread_sharing() {
         // Send texture_id to main thread
         let texture_id = secondary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
         assert!(texture_id != 0);
-        sender.send(SGLUint(texture_id)).unwrap();
+        tx.send(SGLUint(texture_id)).unwrap();
         // Avoid drop until test ends
-        loop {
-            thread::sleep(time::Duration::from_millis(200));
-        }
+        end_rx.recv().unwrap();
     });
     // Wait until thread has drawn the texture
-    let secondary_texture_id = receiver.recv().unwrap().0;
+    let secondary_texture_id = rx.recv().unwrap().0;
 
     primary.make_current().unwrap();
 
@@ -270,6 +270,7 @@ fn test_multithread_sharing() {
     assert!(gl::get_error() == gl::NO_ERROR);
 
     test_pixels(&vec);
+    end_tx.send(()).unwrap();
 }
 
 #[test]
