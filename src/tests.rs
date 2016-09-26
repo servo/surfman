@@ -12,6 +12,8 @@ use NativeGLContext;
 use NativeGLContextMethods;
 use GLContextAttributes;
 use ColorAttachmentType;
+use std::{thread, time};
+use std::sync::mpsc;
 
 #[cfg(target_os="macos")]
 #[link(name="OpenGL", kind="framework")]
@@ -143,6 +145,119 @@ fn test_sharing() {
     test_pixels_eq(&vec, &[0, 0, 0, 255]);
 
     gl::bind_texture(gl::TEXTURE_2D, secondary_texture_id);
+
+    unsafe {
+        gl::FramebufferTexture2D(gl::FRAMEBUFFER,
+                                 gl::COLOR_ATTACHMENT0,
+                                 gl::TEXTURE_2D,
+                                 secondary_texture_id, 0);
+    }
+
+    let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
+    assert!(gl::get_error() == gl::NO_ERROR);
+
+    test_pixels(&vec);
+}
+
+#[test]
+fn test_multithread_render() {
+    load_gl();
+
+    let size = Size2D::new(256, 256);
+    let primary = GLContext::<NativeGLContext>::new(size,
+                                                    GLContextAttributes::default(),
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap(); 
+    test_gl_context(&primary);
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move ||{
+        //create the context in a different thread
+        let secondary = GLContext::<NativeGLContext>::new(size,
+                                                      GLContextAttributes::default(),
+                                                      ColorAttachmentType::Texture,
+                                                      None).unwrap();
+        secondary.make_current().unwrap();
+        assert!(secondary.is_current());
+        //render green adn test pixels
+        gl::clear_color(0.0, 1.0, 0.0, 1.0);
+        gl::clear(gl::COLOR_BUFFER_BIT);
+
+        let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
+        test_pixels_eq(&vec, &[0, 255, 0, 255]);
+
+        sender.send(()).unwrap();
+
+        // Avoid drop until test ends
+        loop {
+            thread::sleep(time::Duration::from_millis(200));
+        }
+    });
+    // Wait until thread has drawn the texture
+    receiver.recv().unwrap();
+    // This context must remain to be current in this thread
+    assert!(primary.is_current());
+
+    // The colors must remain unchanged
+    let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
+    test_pixels_eq(&vec, &[255, 0, 0, 255]);
+}
+
+struct SGLUint(gl::GLuint);
+unsafe impl Sync for SGLUint {}
+unsafe impl Send for SGLUint {}
+
+#[test]
+fn test_multithread_sharing() {
+    load_gl();
+
+    let size = Size2D::new(256, 256);
+    let primary = GLContext::<NativeGLContext>::new(size,
+                                                    GLContextAttributes::default(),
+                                                    ColorAttachmentType::Texture,
+                                                    None).unwrap();
+    primary.make_current().unwrap();
+    
+    let primary_texture_id = primary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+    assert!(primary_texture_id != 0);
+
+    let (sender, receiver) = mpsc::channel();
+    let primary_handle = primary.handle();
+
+    // Unbind required by some APIs as WGL
+    primary.unbind().unwrap();
+
+    thread::spawn(move || {
+        // Create the context in a different thread
+        let secondary = GLContext::<NativeGLContext>::new(size,
+                                                      GLContextAttributes::default(),
+                                                      ColorAttachmentType::Texture,
+                                                      Some(&primary_handle)).unwrap();
+        // Make the context current on this thread only
+        secondary.make_current().unwrap();
+        // Paint the second context red
+        test_gl_context(&secondary);
+        // Send texture_id to main thread
+        let texture_id = secondary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+        assert!(texture_id != 0);
+        sender.send(SGLUint(texture_id)).unwrap();
+        // Avoid drop until test ends
+        loop {
+            thread::sleep(time::Duration::from_millis(200));
+        }
+    });
+    // Wait until thread has drawn the texture
+    let secondary_texture_id = receiver.recv().unwrap().0;
+
+    primary.make_current().unwrap();
+
+    // Clearing and re-binding to a framebuffer instead of using getTexImage since it's not
+    // available in GLES2
+    gl::clear_color(0.0, 0.0, 0.0, 1.0);
+    gl::clear(gl::COLOR_BUFFER_BIT);
+
+    let vec = gl::read_pixels(0, 0, size.width, size.height, gl::RGBA, gl::UNSIGNED_BYTE);
+    test_pixels_eq(&vec, &[0, 0, 0, 255]);
+
 
     unsafe {
         gl::FramebufferTexture2D(gl::FRAMEBUFFER,
