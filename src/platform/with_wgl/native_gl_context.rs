@@ -113,13 +113,11 @@ impl NativeGLContextMethods for NativeGLContext {
         };
         match unsafe { utils::create_offscreen(render_ctx, &WGLAttributes::default()) } {
             Ok(ref res) => {
-
                 let ctx = NativeGLContext {
                     render_ctx: res.0,
                     device_ctx: res.1,
                     weak: false,
                 };
-                ctx.make_current().unwrap();
                 Ok(ctx)
             }
             Err(s) => {
@@ -160,7 +158,7 @@ impl NativeGLContextMethods for NativeGLContext {
             if wgl::MakeCurrent(self.device_ctx as *const _, self.render_ctx as *const _) != 0 {
                 Ok(())
             } else {
-                Err("wgl::makeCurrent failed")
+                Err("WGL::makeCurrent failed")
             }
         }
     }
@@ -168,7 +166,7 @@ impl NativeGLContextMethods for NativeGLContext {
     fn unbind(&self) -> Result<(), &'static str> {
         unsafe {
             if self.is_current() && wgl::MakeCurrent(ptr::null_mut(), ptr::null_mut()) == 0 {
-                Err("gwl::MakeCurrent (on unbind)")
+                Err("WGL::MakeCurrent (on unbind)")
             } else {
                 Ok(())
             }

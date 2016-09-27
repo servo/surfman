@@ -88,13 +88,14 @@ unsafe fn create_full_context(settings: &WGLAttributes,
                               hdc: winapi::HDC,
                               share: winapi::HGLRC)
                               -> Result<(winapi::HGLRC, winapi::HDC), String> {
-    if extensions.split(' ').find(|&i| i == "WGL_ARB_create_context").is_none() {
+    let mut extensions = extensions.split(' ');
+    if extensions.find(|&i| i == "WGL_ARB_create_context").is_none() {
         return create_basic_context(hdc, share);
     }
 
     let mut attributes = Vec::new();
     if settings.opengl_es {
-        if extensions.split(' ').find(|&i| i == "WGL_EXT_create_context_es2_profile").is_some() {
+        if extensions.find(|&i| i == "WGL_EXT_create_context_es2_profile").is_some() {
             attributes.push(wgl_ext::CONTEXT_PROFILE_MASK_ARB as c_int);
             attributes.push(wgl_ext::CONTEXT_ES2_PROFILE_BIT_EXT as c_int);
         } else {
@@ -127,9 +128,11 @@ unsafe fn create_full_context(settings: &WGLAttributes,
                            io::Error::last_os_error()));
     }
 
+    if wgl::MakeCurrent(hdc as *const _, ctx as *const _) == 0  {
+        return Err("wglMakeCurrent failed".to_owned());
+    }
     // Disable or enable vsync
-    if extensions.split(' ').find(|&i| i == "WGL_EXT_swap_control").is_some() {
-        let _guard = try!(CurrentContextGuard::make_current(hdc, ctx as winapi::HGLRC));
+    if extensions.find(|&i| i == "WGL_EXT_swap_control").is_some() {
         if extra.SwapIntervalEXT(if settings.vsync { 1 } else { 0 }) == 0 {
             return Err("wglSwapIntervalEXT failed".to_owned());
         }
@@ -139,7 +142,6 @@ unsafe fn create_full_context(settings: &WGLAttributes,
 }
 
 unsafe fn create_hidden_window() -> Result<winapi::HWND, &'static str> {
-
     let class_name = register_window_class();
     let mut rect = winapi::RECT {
         left: 0,
