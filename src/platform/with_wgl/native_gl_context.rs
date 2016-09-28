@@ -54,8 +54,11 @@ impl Drop for NativeGLContext {
     fn drop(&mut self) {
         unsafe {
             if !self.weak {
+                // the context to be deleted needs to be unbound
+                self.unbind().unwrap();
                 wgl::DeleteContext(self.render_ctx as *const _);
                 let window = user32::WindowFromDC(self.device_ctx);
+                debug_assert!(!window.is_null());
                 user32::ReleaseDC(window, self.device_ctx);
                 user32::DestroyWindow(window);
             }
@@ -77,7 +80,6 @@ impl NativeGLContextMethods for NativeGLContext {
         let addr = CString::new(addr.as_bytes()).unwrap();
         let addr = addr.as_ptr();
         unsafe {
-
             if wgl::GetCurrentContext().is_null() {
                 // wglGetProcAddress only works in the presence of a valid GL context
                 // We use a dummy ctx when the caller calls this function without a valid GL context
@@ -103,7 +105,6 @@ impl NativeGLContextMethods for NativeGLContext {
                 None => ptr::null_mut(),
             }
         }
-
     }
 
     fn create_shared(with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {

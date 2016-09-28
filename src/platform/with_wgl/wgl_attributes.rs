@@ -1,7 +1,6 @@
 // Attributes to use when creating an OpenGL context.
 #[derive(Clone, Debug)]
 pub struct WGLAttributes {
-    //
     pub opengl_es: bool, // enable or disable OpenGL ES contest
     pub major_version: u32, // OpenGL major version. Set 0 to select the latest
     pub minor_version: u32, // OpenGL minor version.
