@@ -29,7 +29,13 @@ impl<Native> GLContext<Native>
     where Native: NativeGLContextMethods
 {
     pub fn create(shared_with: Option<&Native::Handle>) -> Result<GLContext<Native>, &'static str> {
-        let native_context = try!(Native::create_shared(shared_with));
+        Self::create_shared_with_dispatcher(shared_with, None)
+    }
+
+    pub fn create_shared_with_dispatcher(shared_with: Option<&Native::Handle>,
+                                         dispatcher: Option<Box<GLContextDispatcher>>)
+        -> Result<GLContext<Native>, &'static str> {
+        let native_context = try!(Native::create_shared_with_dispatcher(shared_with, dispatcher));
         try!(native_context.make_current());
         let attributes = GLContextAttributes::any();
         let formats = GLFormats::detect(&attributes);
@@ -44,7 +50,6 @@ impl<Native> GLContext<Native>
             limits: limits,
         })
     }
-
 
     #[inline(always)]
     pub fn get_proc_address(addr: &str) -> *const () {
@@ -61,9 +66,18 @@ impl<Native> GLContext<Native>
                color_attachment_type: ColorAttachmentType,
                shared_with: Option<&Native::Handle>)
         -> Result<GLContext<Native>, &'static str> {
+        Self::new_shared_with_dispatcher(size, attributes, color_attachment_type, shared_with, None)
+    }
+
+    pub fn new_shared_with_dispatcher(size: Size2D<i32>,
+                                      attributes: GLContextAttributes,
+                                      color_attachment_type: ColorAttachmentType,
+                                      shared_with: Option<&Native::Handle>,
+                                      dispatcher: Option<Box<GLContextDispatcher>>)
+        -> Result<GLContext<Native>, &'static str> {
         // We create a headless context with a dummy size, we're painting to the
         // draw_buffer's framebuffer anyways.
-        let mut context = try!(Self::create(shared_with));
+        let mut context = try!(Self::create_shared_with_dispatcher(shared_with, dispatcher));
 
         context.formats = GLFormats::detect(&attributes);
         context.attributes = attributes;
@@ -151,6 +165,12 @@ impl<Native> GLContext<Native>
     }
 }
 
+// Dispatches functions to the thread where a NativeGLContext is bound.
+// Right now it's used in the WGL implementation to dispatch functions to the thread
+// where the context we share from is bound. See the WGL implementation for more details.
+pub trait GLContextDispatcher {
+    fn dispatch(&self, Box<Fn() + Send>);
+}
 
 trait GLContextPrivateMethods {
     fn init_offscreen(&mut self, Size2D<i32>, ColorAttachmentType) -> Result<(), &'static str>;
