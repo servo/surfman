@@ -5,8 +5,13 @@ use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFuncti
 use core_foundation::base::TCFType;
 use core_foundation::string::CFString;
 use std::str::FromStr;
+use std::sync::Mutex;
 
 use platform::NativeGLContextMethods;
+
+lazy_static! {
+    static ref CHOOSE_PIXEL_FORMAT_MUTEX: Mutex<()> = Mutex::new(());
+}
 
 pub struct NativeGLContextHandle(CGLContextObj);
 
@@ -94,6 +99,12 @@ impl NativeGLContextMethods for NativeGLContext {
     }
 
     fn create_shared(with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
+        // CGLChoosePixelFormat fails if multiple threads try to open a display connection
+        // simultaneously. The following error is returned by CGLChoosePixelFormat: 
+        // kCGLBadConnection - Invalid connection to Core Graphics.
+        // We use a static mutex guard to fix this issue
+        let _guard = CHOOSE_PIXEL_FORMAT_MUTEX.lock().unwrap();
+
         let mut attributes = [
             0
         ];

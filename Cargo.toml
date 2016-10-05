@@ -38,4 +38,6 @@ winapi = "0.2"
 gdi32-sys = "0.2"
 user32-sys = "0.2"
 kernel32-sys = "0.2"
+
+[target.'cfg(any(target_os="macos", target_os="windows"))'.dependencies]
 lazy_static = "0.2"
