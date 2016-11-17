@@ -15,7 +15,7 @@ fn main() {
             .write_bindings(gl_generator::StaticGenerator, &mut file).unwrap();
     }
 
-    if target.contains("android") || target.contains("linux") {
+    if target.contains("android") || (target.contains("linux") && cfg!(feature = "test_egl_in_linux")) {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         Registry::new(Api::Egl, (1, 4), Profile::Core, Fallbacks::All, [])
             .write_bindings(gl_generator::StaticGenerator, &mut file).unwrap();
