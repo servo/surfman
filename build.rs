@@ -22,7 +22,7 @@ fn main() {
         println!("cargo:rustc-link-lib=EGL");
     }
 
-    if target.contains("windows") {        
+    if target.contains("windows") {
         let mut file = File::create(&dest.join("wgl_bindings.rs")).unwrap();
         Registry::new(Api::Wgl, (1, 0), Profile::Core, Fallbacks::All, [])
             .write_bindings(gl_generator::StaticGenerator, &mut file)
@@ -46,6 +46,6 @@ fn main() {
                       ])
             .write_bindings(gl_generator::StructGenerator, &mut file).unwrap();
 
-        
+
     }
 }
