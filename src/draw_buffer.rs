@@ -65,9 +65,7 @@ pub struct DrawBuffer {
 ///   `glRenderbufferStorageMultisample` when we support antialising
 fn create_renderbuffer(format: GLenum,
                        size: &Size2D<i32>) -> GLuint {
-    let mut ret: GLuint = 0;
-
-    ret = gl::gen_renderbuffers(1)[0];
+    let ret = gl::gen_renderbuffers(1)[0];
     gl::bind_renderbuffer(gl::RENDERBUFFER, ret);
     gl::renderbuffer_storage(gl::RENDERBUFFER, format, size.width, size.height);
     gl::bind_renderbuffer(gl::RENDERBUFFER, 0);
@@ -194,10 +192,7 @@ impl DrawBufferHelpers for DrawBuffer {
 
             // TODO(ecoal95): Allow more customization of textures
             ColorAttachmentType::Texture => {
-                let mut texture = 0;
-
-                // TODO(ecoal95): Check gleam safe wrappers for these functions
-                texture = gl::gen_textures(1)[0];
+                let texture = gl::gen_textures(1)[0];
                 debug_assert!(texture != 0);
 
                 gl::bind_texture(gl::TEXTURE_2D, texture);
