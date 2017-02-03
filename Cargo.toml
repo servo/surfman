@@ -20,7 +20,7 @@ test_osmesa = []
 
 [dependencies]
 log  = "0.3"
-gleam = "0.2"
+gleam = "0.2.31"
 euclid = "0.10"
 serde = { version = "0.8", optional = true }
 osmesa-sys = { version = "0.1", optional = true }
