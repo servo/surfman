@@ -24,6 +24,10 @@ pub trait NativeGLContextMethods: Sized {
     fn is_current(&self) -> bool;
     fn make_current(&self) -> Result<(), &'static str>;
     fn unbind(&self) -> Result<(), &'static str>;
+
+    /// Just a somewhat dirty hack to special-case the handling of context
+    /// unbinding on old OSMesa versions.
+    fn is_osmesa(&self) -> bool { false }
 }
 
 #[cfg(target_os="linux")]
