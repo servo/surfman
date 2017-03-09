@@ -18,7 +18,7 @@ use std::sync::mpsc;
 #[link(name="OpenGL", kind="framework")]
 extern {}
 
-#[cfg(target_os="linux")]
+#[cfg(all(target_os="linux", feature="x11"))]
 #[link(name="GL")]
 extern {}
 
