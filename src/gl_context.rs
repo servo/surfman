@@ -42,8 +42,8 @@ impl<Native> GLContext<Native>
         -> Result<Self, &'static str> {
         let native_context = try!(Native::create_shared_with_dispatcher(shared_with, dispatcher));
         let gl_ = match api_type {
-            gl::GlType::Gl => gl::GlFns::load_with(|s| Self::get_proc_address(s) as *const _),
-            gl::GlType::Gles => gl::GlesFns::load_with(|s| Self::get_proc_address(s) as *const _),
+            gl::GlType::Gl => unsafe { gl::GlFns::load_with(|s| Self::get_proc_address(s) as *const _) },
+            gl::GlType::Gles => unsafe { gl::GlesFns::load_with(|s| Self::get_proc_address(s) as *const _) },
         };
 
         try!(native_context.make_current());
