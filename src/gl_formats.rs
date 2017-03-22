@@ -20,7 +20,7 @@ impl GLFormats {
     // FIXME: In linux with GLES2 texture attachments create INVALID_ENUM errors.
     // I suspect that it's because of texture formats, but I need time to debugit.
     #[cfg(not(target_os="android"))]
-    pub fn detect(attrs: &GLContextAttributes) -> GLFormats {
+    pub fn detect(attrs: &GLContextAttributes, _: &gl::Gl) -> GLFormats {
         if attrs.alpha {
             GLFormats {
                 color_renderbuffer: gl::RGBA8,
@@ -43,10 +43,10 @@ impl GLFormats {
     }
 
     #[cfg(target_os="android")]
-    pub fn detect(attrs: &GLContextAttributes) -> GLFormats {
+    pub fn detect(attrs: &GLContextAttributes, gl: &gl::Gl) -> GLFormats {
         // detect if the GPU supports RGB8 and RGBA8 renderbuffer/texture storage formats.
         // GL_ARM_rgba8 extension is similar to OES_rgb8_rgba8, but only exposes RGBA8.
-        let extensions = gl::get_string(gl::EXTENSIONS);
+        let extensions = gl.get_string(gl::EXTENSIONS);
         let extensions: Vec<&str> = extensions.split(&[',',' '][..]).collect();
         let has_rgb8 = extensions.contains(&"GL_OES_rgb8_rgba8");
         let has_rgba8 = has_rgb8 || extensions.contains(&"GL_ARM_rgba8");
