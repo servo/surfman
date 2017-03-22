@@ -14,14 +14,6 @@ use ColorAttachmentType;
 use std::thread;
 use std::sync::mpsc;
 
-#[cfg(target_os="macos")]
-#[link(name="OpenGL", kind="framework")]
-extern {}
-
-#[cfg(all(target_os="linux", feature="x11"))]
-#[link(name="GL")]
-extern {}
-
 fn test_gl_context<T: NativeGLContextMethods>(context: &GLContext<T>) {
     context.make_current().unwrap();
 
