@@ -48,7 +48,7 @@ impl<Native> GLContext<Native>
 
         try!(native_context.make_current());
         let attributes = GLContextAttributes::any();
-        let formats = GLFormats::detect(&attributes);
+        let formats = GLFormats::detect(&attributes, &*gl_);
         let limits = GLLimits::detect(&*gl_);
 
         Ok(GLContext {
@@ -100,7 +100,7 @@ impl<Native> GLContext<Native>
                                                      shared_with,
                                                      dispatcher));
 
-        context.formats = GLFormats::detect(&attributes);
+        context.formats = GLFormats::detect(&attributes, context.gl());
         context.attributes = attributes;
 
         try!(context.init_offscreen(size, color_attachment_type));
