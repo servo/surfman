@@ -23,9 +23,11 @@ extern crate kernel32;
 extern crate gdi32;
 #[cfg(target_os = "windows")]
 extern crate user32;
-#[cfg(any(target_os="macos", target_os="windows"))]
+#[cfg(any(target_os="macos", target_os="windows", target_os="android", feature="test_egl_in_linux"))]
 #[macro_use]
 extern crate lazy_static;
+#[cfg(any(target_os="android", feature="test_egl_in_linux"))]
+extern crate libloading;
 
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};

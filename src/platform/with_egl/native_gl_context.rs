@@ -2,9 +2,20 @@ use euclid::Size2D;
 use platform::NativeGLContextMethods;
 use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
 use std::ffi::CString;
+use std::ops::Deref;
 use egl;
 use egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
+use libloading as lib;
 
+lazy_static! {
+    static ref GL_LIB: Option<lib::Library>  = {
+        if cfg!(target_os = "android") {
+            lib::Library::new("libGLESv2.so").ok()
+        } else {
+            lib::Library::new("libGL.so").ok()
+        }
+    };
+}
 pub struct NativeGLContextHandle(pub EGLDisplay, pub EGLSurface);
 unsafe impl Send for NativeGLContextHandle {}
 
@@ -69,10 +80,21 @@ impl Drop for NativeGLContext {
 impl NativeGLContextMethods for NativeGLContext {
     type Handle = NativeGLContextHandle;
 
+    // According to the EGL spec <= 1.4, eglGetProcAddress should only be used to
+    // retrieve extension functions. Some implementatios return NULL for core OpenGL functions.
+    // Other implementations may return non-NULL values even for invalid core or extension symbols.
+    // This is very dangerous, so we use dlsym function before calling eglGetProcAddress
+    // in order to avoid possible garbage pointers.
     fn get_proc_address(addr: &str) -> *const () {
         unsafe {
-            let addr = CString::new(addr.as_bytes()).unwrap().as_ptr();
-            egl::GetProcAddress(addr as *const _) as *const ()
+            if let Some(ref lib) = *GL_LIB {
+                let symbol: lib::Symbol<unsafe extern fn()> = lib.get(addr.as_bytes()).unwrap();
+                return *symbol.deref() as *const();
+            }
+
+            let addr = CString::new(addr.as_bytes());
+            let addr = addr.unwrap().as_ptr();
+            egl::GetProcAddress(addr) as *const ()
         }
     }
 
