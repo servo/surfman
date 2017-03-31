@@ -9,11 +9,14 @@ use libloading as lib;
 
 lazy_static! {
     static ref GL_LIB: Option<lib::Library>  = {
-        if cfg!(target_os = "android") {
-            lib::Library::new("libGLESv2.so").ok()
-        } else {
-            lib::Library::new("libGL.so").ok()
-        }
+       let names = ["libGLESv2.so", "libGL.so", "libGLESv3.so"];
+       for name in &names {
+           if let Ok(lib) = Library::new(name) 
+               return Some(lib)
+           }
+       }
+
+       None
     };
 }
 pub struct NativeGLContextHandle(pub EGLDisplay, pub EGLSurface);
@@ -88,8 +91,10 @@ impl NativeGLContextMethods for NativeGLContext {
     fn get_proc_address(addr: &str) -> *const () {
         unsafe {
             if let Some(ref lib) = *GL_LIB {
-                let symbol: lib::Symbol<unsafe extern fn()> = lib.get(addr.as_bytes()).unwrap();
-                return *symbol.deref() as *const();
+                let symbol: Result<lib::Symbol<unsafe extern fn()>, _> = lib.get(addr.as_bytes());
+                if let Ok(symbol) = symbol {
+                    return *symbol.deref() as *const ();
+                }
             }
 
             let addr = CString::new(addr.as_bytes());
