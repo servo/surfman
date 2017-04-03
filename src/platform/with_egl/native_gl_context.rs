@@ -11,7 +11,7 @@ lazy_static! {
     static ref GL_LIB: Option<lib::Library>  = {
        let names = ["libGLESv2.so", "libGL.so", "libGLESv3.so"];
        for name in &names {
-           if let Ok(lib) = Library::new(name) 
+           if let Ok(lib) = lib::Library::new(name) {
                return Some(lib)
            }
        }
