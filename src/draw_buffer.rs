@@ -49,15 +49,16 @@ impl ColorAttachment {
 /// This structure represents an offscreen context
 /// draw buffer. It has a framebuffer, with at least
 /// color renderbuffer (alpha or not). It may also have
-/// a depth or stencil buffer, depending on context
-/// requirements.
+/// packed or independent depth or stencil buffers,
+/// depending on context requirements.
 pub struct DrawBuffer {
     gl_: Rc<gl::Gl>,
     size: Size2D<i32>,
     framebuffer: GLuint,
+    color_attachment: Option<ColorAttachment>,
     stencil_renderbuffer: GLuint,
     depth_renderbuffer: GLuint,
-    color_attachment: Option<ColorAttachment>
+    packed_depth_stencil_renderbuffer: GLuint,
     // samples: GLsizei,
 }
 
@@ -109,6 +110,7 @@ impl DrawBuffer {
             color_attachment: None,
             stencil_renderbuffer: 0,
             depth_renderbuffer: 0,
+            packed_depth_stencil_renderbuffer: 0,
             // samples: 0,
         };
 
@@ -204,14 +206,19 @@ impl DrawBuffer {
         };
 
         // After this we check if we need stencil and depth buffers
-        if attrs.depth {
-            self.depth_renderbuffer = create_renderbuffer(self.gl(), formats.depth, &self.size);
-            debug_assert!(self.depth_renderbuffer != 0);
-        }
+        if attrs.depth && attrs.stencil && formats.packed_depth_stencil {
+            self.packed_depth_stencil_renderbuffer = create_renderbuffer(self.gl(), gl::DEPTH24_STENCIL8, &self.size);
+            debug_assert!(self.packed_depth_stencil_renderbuffer != 0);
+        } else {
+            if attrs.depth {
+                self.depth_renderbuffer = create_renderbuffer(self.gl(), formats.depth, &self.size);
+                debug_assert!(self.depth_renderbuffer != 0);
+            }
 
-        if attrs.stencil {
-            self.stencil_renderbuffer = create_renderbuffer(self.gl(), formats.stencil, &self.size);
-            debug_assert!(self.stencil_renderbuffer != 0);
+            if attrs.stencil {
+                self.stencil_renderbuffer = create_renderbuffer(self.gl(), formats.stencil, &self.size);
+                debug_assert!(self.stencil_renderbuffer != 0);
+            }
         }
 
         self.framebuffer = self.gl().gen_framebuffers(1)[0];
@@ -240,6 +247,14 @@ impl DrawBuffer {
                                                 gl::TEXTURE_2D,
                                                 texture_id, 0);
             },
+        }
+
+        if self.packed_depth_stencil_renderbuffer != 0 {
+            self.gl().framebuffer_renderbuffer(gl::FRAMEBUFFER,
+                                               gl::DEPTH_STENCIL_ATTACHMENT,
+                                               gl::RENDERBUFFER,
+                                               self.packed_depth_stencil_renderbuffer);
+            debug_assert_eq!(self.gl().is_renderbuffer(self.packed_depth_stencil_renderbuffer), gl::TRUE);
         }
 
         if self.depth_renderbuffer != 0 {
@@ -276,6 +291,8 @@ impl Drop for DrawBuffer {
 
         // NOTE: Color renderbuffer is destroyed on drop of
         //   ColorAttachment
-        self.gl().delete_renderbuffers(&[self.stencil_renderbuffer, self.depth_renderbuffer]);
+        self.gl().delete_renderbuffers(&[self.stencil_renderbuffer,
+                                         self.depth_renderbuffer,
+                                         self.packed_depth_stencil_renderbuffer]);
     }
 }
