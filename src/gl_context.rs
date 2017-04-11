@@ -25,6 +25,7 @@ pub struct GLContext<Native> {
     capabilities: GLContextCapabilities,
     formats: GLFormats,
     limits: GLLimits,
+    extensions: Vec<String>
 }
 
 impl<Native> GLContext<Native>
@@ -47,8 +48,10 @@ impl<Native> GLContext<Native>
         };
 
         try!(native_context.make_current());
+        let extensions = gl_.get_string(gl::EXTENSIONS);
+        let extensions: Vec<String> = extensions.split(&[',',' '][..]).map(|s| s.into()).collect();
         let attributes = GLContextAttributes::any();
-        let formats = GLFormats::detect(&attributes, &*gl_);
+        let formats = GLFormats::detect(&attributes, &extensions[..]);
         let limits = GLLimits::detect(&*gl_);
 
         Ok(GLContext {
@@ -59,6 +62,7 @@ impl<Native> GLContext<Native>
             capabilities: GLContextCapabilities::detect(),
             formats: formats,
             limits: limits,
+            extensions: extensions
         })
     }
 
@@ -100,7 +104,7 @@ impl<Native> GLContext<Native>
                                                      shared_with,
                                                      dispatcher));
 
-        context.formats = GLFormats::detect(&attributes, context.gl());
+        context.formats = GLFormats::detect(&attributes, &context.extensions[..]);
         context.attributes = attributes;
 
         try!(context.init_offscreen(size, color_attachment_type));

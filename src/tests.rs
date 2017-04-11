@@ -360,3 +360,35 @@ fn test_zero_size() {
                                       gl::GlType::default(),
                                       None).unwrap();
 }
+
+#[test]
+fn test_both_depth_stencil() {
+    let attributes = GLContextAttributes {
+        depth: true,
+        stencil: true,
+        .. Default::default()
+    };
+
+    let size = Size2D::new(256, 256);
+    GLContext::<NativeGLContext>::new(size,
+                                      attributes,
+                                      ColorAttachmentType::Texture,
+                                      gl::GlType::default(),
+                                      None).unwrap();
+}
+
+#[test]
+fn test_stencil_no_depth() {
+    let attributes = GLContextAttributes {
+        depth: false,
+        stencil: true,
+        .. Default::default()
+    };
+
+    let size = Size2D::new(256, 256);
+    GLContext::<NativeGLContext>::new(size,
+                                      attributes,
+                                      ColorAttachmentType::Texture,
+                                      gl::GlType::default(),
+                                      None).unwrap();
+}
