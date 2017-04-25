@@ -91,8 +91,10 @@ impl DrawBuffer {
         debug!("Creating draw buffer {:?}, {:?}, attrs: {:?}, caps: {:?}",
                size, color_attachment_type, attrs, capabilities);
 
+        // WebGL spec: antialias attribute is a requests, not a requirement.
+        // If not supported it shall not cause a failure to create a WebGLRenderingContext.
         if attrs.antialias && capabilities.max_samples == 0 {
-            return Err("The given GLContext doesn't support requested antialising");
+            error!("The given GLContext doesn't support requested antialising");
         }
 
         if attrs.preserve_drawing_buffer {
