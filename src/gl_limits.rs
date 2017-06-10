@@ -11,9 +11,9 @@ pub struct GLLimits {
 }
 
 #[cfg(feature = "serde")]
-impl Deserialize for GLLimits {
+impl<'de> Deserialize<'de> for GLLimits {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer
+        where D: Deserializer<'de>
     {
         let values = try!(<[_; 3]>::deserialize(deserializer));
         Ok(GLLimits {
