@@ -46,7 +46,18 @@ impl NativeGLContext {
             egl::NONE as EGLint, 0, 0, 0, // see mod.rs
         ];
 
-        let ctx =  unsafe { egl::CreateContext(display, config, shared, attributes.as_ptr()) };
+        let mut ctx =  unsafe { egl::CreateContext(display, config, shared, attributes.as_ptr()) };
+
+        if share_context.is_some() && ctx == (egl::NO_CONTEXT as EGLContext) {
+            // Workaround for GPUs that don't like different CONTEXT_CLIENT_VERSION value when sharing (e.g. Mali-T880).
+            // Set CONTEXT_CLIENT_VERSION 3 to fix the shared ctx creation failure. Note that the ctx is still OpenGL ES 2.0
+            // compliant because egl::OPENGL_ES2_BIT is set for egl::RENDERABLE_TYPE. See utils.rs.
+            let attributes = [
+                egl::CONTEXT_CLIENT_VERSION as EGLint, 3,
+                egl::NONE as EGLint, 0, 0, 0, // see mod.rs
+            ];
+            ctx =  unsafe { egl::CreateContext(display, config, shared, attributes.as_ptr()) };
+        }
 
         // TODO: Check for every type of error possible, not just client error?
         // Note if we do it we must do it too on egl::CreatePBufferSurface, etc...
