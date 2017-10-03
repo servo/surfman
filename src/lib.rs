@@ -7,7 +7,7 @@ extern crate log;
 #[cfg(feature="serde")]
 extern crate serde;
 
-#[cfg(all(target_os="linux", feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
 extern crate x11;
 #[cfg(target_os="macos")]
 extern crate cgl;
@@ -56,7 +56,7 @@ pub use gl_formats::GLFormats;
 mod gl_limits;
 pub use gl_limits::GLLimits;
 
-#[cfg(all(target_os="linux", feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
 #[allow(improper_ctypes)]
 mod glx {
     include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
