@@ -30,16 +30,16 @@ pub trait NativeGLContextMethods: Sized {
     fn is_osmesa(&self) -> bool { false }
 }
 
-#[cfg(all(target_os="linux", feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
 pub mod with_glx;
-#[cfg(all(target_os="linux", feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
 pub use self::with_glx::{NativeGLContext, NativeGLContextHandle};
 
 #[cfg(feature="osmesa")]
 pub mod with_osmesa;
 #[cfg(feature="osmesa")]
 pub use self::with_osmesa::{OSMesaContext, OSMesaContextHandle};
-#[cfg(all(target_os="linux", not(feature="x11")))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), not(feature="x11")))]
 pub use self::with_osmesa::{OSMesaContext as NativeGLContext, OSMesaContextHandle as NativeGLContextHandle};
 
 
@@ -58,7 +58,7 @@ pub mod with_wgl;
 #[cfg(target_os="windows")]
 pub use self::with_wgl::{NativeGLContext, NativeGLContextHandle};
 
-#[cfg(not(any(target_os="linux", target_os="android", target_os="macos", target_os="windows")))]
+#[cfg(not(any(unix, target_os="windows")))]
 pub mod not_implemented;
-#[cfg(not(any(target_os="linux", target_os="android", target_os="macos", target_os="windows")))]
+#[cfg(not(any(unix, target_os="windows")))]
 pub use self::not_implemented::{NativeGLContext, NativeGLContextHandle};
