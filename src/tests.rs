@@ -5,7 +5,7 @@ use GLContext;
 #[cfg(all(target_os = "linux", feature = "test_egl_in_linux"))]
 use platform::with_egl::NativeGLContext;
 #[cfg(feature="test_osmesa")]
-use platform::OSMesaContext as NativeGLContext;
+use platform::with_osmesa::OSMesaContext as NativeGLContext;
 #[cfg(not(any(feature = "test_egl_in_linux", feature = "test_osmesa")))]
 use NativeGLContext;
 use NativeGLContextMethods;

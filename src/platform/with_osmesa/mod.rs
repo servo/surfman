@@ -1,7 +1,9 @@
 use std::ffi::CString;
+use std::os::raw::c_int;
 use std::ptr;
 
 use osmesa_sys;
+use gl_context::GLVersion;
 use gleam::gl;
 
 use platform::NativeGLContextMethods;
@@ -19,15 +21,36 @@ pub struct OSMesaContextHandle(osmesa_sys::OSMesaContext);
 unsafe impl Send for OSMesaContextHandle {}
 
 impl OSMesaContext {
-    pub fn new(share_with: Option<osmesa_sys::OSMesaContext>)
+    pub fn new(share_with: Option<osmesa_sys::OSMesaContext>,
+               api_type: &gl::GlType,
+               api_version: GLVersion)
         -> Result<Self, &'static str> {
         let shared = match share_with {
             Some(ctx) => ctx,
             _ => ptr::null_mut(),
         };
 
+        match *api_type {
+            gl::GlType::Gles => {
+                return Err("OpenGL ES is not supported");
+            },
+            _ => {}
+        }
+
+        let (major, minor) = match api_version {
+            GLVersion::Major(major) => (major, 1), // OpenGL 2.1, 3.1
+            GLVersion::MajorMinor(major, minor) => (major, minor)
+        };
+
+        let attributes = [
+            osmesa_sys::OSMESA_FORMAT, osmesa_sys::OSMESA_RGBA as c_int,
+            osmesa_sys::OSMESA_CONTEXT_MAJOR_VERSION, major as c_int,
+            osmesa_sys::OSMESA_CONTEXT_MINOR_VERSION, minor as c_int,
+            0
+        ];
+
         let context = unsafe {
-            osmesa_sys::OSMesaCreateContext(osmesa_sys::OSMESA_RGBA, shared)
+            osmesa_sys::OSMesaCreateContextAttribs(attributes.as_ptr(), shared)
         };
 
         if context.is_null() {
@@ -68,8 +91,10 @@ impl NativeGLContextMethods for OSMesaContext {
         None
     }
 
-    fn create_shared(with: Option<&Self::Handle>) -> Result<Self, &'static str> {
-        Self::new(with.map(|w| w.0))
+    fn create_shared(with: Option<&Self::Handle>,
+                     api_type: &gl::GlType,
+                     api_version: GLVersion) -> Result<Self, &'static str> {
+        Self::new(with.map(|w| w.0), api_type, api_version)
     }
 
     fn is_current(&self) -> bool {
