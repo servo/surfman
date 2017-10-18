@@ -1,4 +1,5 @@
-use gl_context::GLContextDispatcher;
+use gl_context::{GLContextDispatcher, GLVersion};
+use gleam::gl;
 
 pub trait NativeGLContextMethods: Sized {
     type Handle;
@@ -9,15 +10,20 @@ pub trait NativeGLContextMethods: Sized {
     fn current() -> Option<Self>;
     fn current_handle() -> Option<Self::Handle>;
 
-    fn create_shared(with: Option<&Self::Handle>) -> Result<Self, &'static str>;
+    fn create_shared(with: Option<&Self::Handle>,
+                     api_type: &gl::GlType,
+                     api_version: GLVersion) -> Result<Self, &'static str>;
 
-    fn create_shared_with_dispatcher(with: Option<&Self::Handle>, _dispatcher: Option<Box<GLContextDispatcher>>)
+    fn create_shared_with_dispatcher(with: Option<&Self::Handle>,
+                                     api_type: &gl::GlType,
+                                     api_version: GLVersion,
+                                     _dispatcher: Option<Box<GLContextDispatcher>>)
         -> Result<Self, &'static str> {
-        Self::create_shared(with)
+        Self::create_shared(with, api_type, api_version)
     }
 
-    fn create_headless() -> Result<Self, &'static str> {
-        Self::create_shared(None)
+    fn create_headless(api_type: &gl::GlType, api_version: GLVersion) -> Result<Self, &'static str> {
+        Self::create_shared(None, api_type, api_version)
     }
 
     fn handle(&self) -> Self::Handle;
