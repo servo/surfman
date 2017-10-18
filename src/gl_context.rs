@@ -32,16 +32,21 @@ impl<Native> GLContext<Native>
     where Native: NativeGLContextMethods,
 {
     pub fn create(api_type: gl::GlType,
+                  api_version: GLVersion,
                   shared_with: Option<&Native::Handle>)
                   -> Result<Self, &'static str> {
-        Self::create_shared_with_dispatcher(api_type, shared_with, None)
+        Self::create_shared_with_dispatcher(api_type, api_version, shared_with, None)
     }
 
     pub fn create_shared_with_dispatcher(api_type: gl::GlType,
+                                         api_version: GLVersion,
                                          shared_with: Option<&Native::Handle>,
                                          dispatcher: Option<Box<GLContextDispatcher>>)
         -> Result<Self, &'static str> {
-        let native_context = try!(Native::create_shared_with_dispatcher(shared_with, dispatcher));
+        let native_context = try!(Native::create_shared_with_dispatcher(shared_with,
+                                                                        &api_type,
+                                                                        api_version,
+                                                                        dispatcher));
         let gl_ = match api_type {
             gl::GlType::Gl => unsafe { gl::GlFns::load_with(|s| Self::get_proc_address(s) as *const _) },
             gl::GlType::Gles => unsafe { gl::GlesFns::load_with(|s| Self::get_proc_address(s) as *const _) },
@@ -80,12 +85,14 @@ impl<Native> GLContext<Native>
                attributes: GLContextAttributes,
                color_attachment_type: ColorAttachmentType,
                api_type: gl::GlType,
+               api_version: GLVersion,
                shared_with: Option<&Native::Handle>)
         -> Result<Self, &'static str> {
         Self::new_shared_with_dispatcher(size,
                                          attributes,
                                          color_attachment_type,
                                          api_type,
+                                         api_version,
                                          shared_with,
                                          None)
     }
@@ -94,6 +101,7 @@ impl<Native> GLContext<Native>
                                       attributes: GLContextAttributes,
                                       color_attachment_type: ColorAttachmentType,
                                       api_type: gl::GlType,
+                                      api_version: GLVersion,
                                       shared_with: Option<&Native::Handle>,
                                       dispatcher: Option<Box<GLContextDispatcher>>)
         -> Result<Self, &'static str> {
@@ -101,6 +109,7 @@ impl<Native> GLContext<Native>
         // draw_buffer's framebuffer anyways.
         let mut context =
             try!(Self::create_shared_with_dispatcher(api_type,
+                                                     api_version,
                                                      shared_with,
                                                      dispatcher));
 
@@ -116,9 +125,10 @@ impl<Native> GLContext<Native>
     pub fn with_default_color_attachment(size: Size2D<i32>,
                                          attributes: GLContextAttributes,
                                          api_type: gl::GlType,
+                                         api_version: GLVersion,
                                          shared_with: Option<&Native::Handle>)
         -> Result<Self, &'static str> {
-        Self::new(size, attributes, ColorAttachmentType::default(), api_type, shared_with)
+        Self::new(size, attributes, ColorAttachmentType::default(), api_type, api_version, shared_with)
     }
 
     #[inline(always)]
@@ -225,6 +235,17 @@ impl<Native> GLContext<Native>
         self.draw_buffer = Some(try!(DrawBuffer::new(self, size, color_attachment_type)));
         Ok(())
     }
+}
+
+/// Describes the OpenGL version that is requested when a context is created.
+#[derive(Debug, Clone, Copy)]
+pub enum GLVersion {
+    /// Request a specific major version
+    /// The minor version is automatically selected.
+    Major(u8),
+
+    /// Request a specific major and minor version version.
+    MajorMinor(u8, u8),
 }
 
 // Dispatches functions to the thread where a NativeGLContext is bound.

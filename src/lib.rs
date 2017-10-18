@@ -36,7 +36,7 @@ pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandl
 pub use platform::{OSMesaContext, OSMesaContextHandle};
 
 mod gl_context;
-pub use gl_context::{GLContext, GLContextDispatcher};
+pub use gl_context::{GLContext, GLContextDispatcher, GLVersion};
 
 mod draw_buffer;
 pub use draw_buffer::{DrawBuffer, ColorAttachmentType};
