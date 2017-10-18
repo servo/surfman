@@ -62,6 +62,12 @@ mod glx {
     include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
 }
 
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
+#[allow(improper_ctypes)]
+mod glx_extra {
+    include!(concat!(env!("OUT_DIR"), "/glx_extra_bindings.rs"));
+}
+
 #[cfg(any(target_os="android", all(target_os="linux", feature = "test_egl_in_linux")))]
 #[allow(non_camel_case_types)]
 mod egl {

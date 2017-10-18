@@ -1,9 +1,12 @@
+use gleam::gl;
 use glx;
 use x11::xlib::*;
 use glx::types::GLXDrawable;
+use std::ffi::CStr;
 use std::os::raw::*;
 use euclid::Size2D;
 
+use GLVersion;
 use NativeGLContext;
 use NativeGLContextHandle;
 
@@ -49,7 +52,17 @@ unsafe fn get_visual_and_depth(s: *mut Screen, id: VisualID) -> Result<(*mut Vis
 
 // Almost directly ported from
 // https://dxr.mozilla.org/mozilla-central/source/gfx/gl/GLContextProviderGLX.cpp
-pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Option<&NativeGLContextHandle>) -> Result<NativeGLContext, &'static str> {
+pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>,
+                                              shared_with: Option<&NativeGLContextHandle>,
+                                              api_type: &gl::GlType,
+                                              api_version: GLVersion) -> Result<NativeGLContext, &'static str> {
+    match *api_type {
+        gl::GlType::Gles => {
+            return Err("OpenGL ES is not supported");
+        },
+        _ => {}
+    }
+
     let (shared_with, dpy) = match shared_with {
         Some(handle) => (Some(&handle.0), handle.1),
         None => {
@@ -63,12 +76,12 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Op
         }
     };
 
-
     // We try to get possible framebuffer configurations which
     // can be pixmap-backed and renderable
     let mut attributes = [
         glx::DRAWABLE_TYPE as c_int, glx::PIXMAP_BIT as c_int,
         glx::X_RENDERABLE as c_int, 1,
+        glx::RENDER_TYPE as c_int, glx::RGBA_BIT as c_int,
         0 as c_int
     ];
 
@@ -123,6 +136,10 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Op
 
     unsafe {
         let screen = XDefaultScreenOfDisplay(dpy as *mut _);
+        let screen_id = XDefaultScreen(dpy as * mut _);
+
+        let extensions = CStr::from_ptr(glx::QueryExtensionsString(dpy, screen_id)).to_bytes().to_vec();
+        let extensions = String::from_utf8(extensions).unwrap();
 
         let (_, depth) = try!(get_visual_and_depth(screen, visual_id as VisualID));
 
@@ -148,6 +165,6 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>, shared_with: Op
 
         let chosen_config = *configs.as_ptr().offset(config_index);
 
-        NativeGLContext::new(shared_with, dpy, glx_pixmap as GLXDrawable, chosen_config)
+        NativeGLContext::new(shared_with, api_version, dpy, glx_pixmap as GLXDrawable, chosen_config, extensions)
     }
 }

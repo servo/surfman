@@ -1,6 +1,9 @@
 use std::ffi::CString;
 
+use gl_context::GLVersion;
+use gleam::gl;
 use glx;
+use glx_extra;
 use std::os::raw::*;
 use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use euclid::Size2D;
@@ -21,9 +24,11 @@ pub struct NativeGLContext {
 
 impl NativeGLContext {
     pub fn new(share_context: Option<&GLXContext>,
+               api_version: GLVersion,
                display: *mut glx::types::Display,
                drawable: GLXDrawable,
-               framebuffer_config: GLXFBConfig)
+               framebuffer_config: GLXFBConfig,
+               extensions: String)
         -> Result<NativeGLContext, &'static str> {
 
         let shared = match share_context {
@@ -31,7 +36,39 @@ impl NativeGLContext {
             None      => 0 as GLXContext,
         };
 
-        let native = unsafe { glx::CreateNewContext(display, framebuffer_config, glx::RGBA_TYPE as c_int, shared, 1 as glx::types::Bool) };
+        let native =  if extensions.split(' ').find(|&i| i == "GLX_ARB_create_context").is_some() {
+            let (major, minor) = match api_version {
+                GLVersion::Major(major) => { (major, 1) }, // OpenGL 2.1, 3.1
+                GLVersion::MajorMinor(major, minor) => { (major, minor) }
+            };
+
+            let attributes = [
+                glx_extra::CONTEXT_MAJOR_VERSION_ARB as c_int, major as c_int,
+                glx_extra::CONTEXT_MINOR_VERSION_ARB as c_int, minor as c_int,
+                0
+            ];
+
+            // load the extra GLX functions
+            let extra_functions = glx_extra::Glx::load_with(|s| {
+                let c_str = CString::new(s.as_bytes()).unwrap();
+                unsafe { glx::GetProcAddress(c_str.as_ptr() as *const u8) as *const _ }
+            });
+
+            unsafe {
+                extra_functions.CreateContextAttribsARB(display as *mut _,
+                                                        framebuffer_config,
+                                                        shared, 1 as glx::types::Bool,
+                                                        attributes.as_ptr())
+            }
+        } else {
+             unsafe { 
+                 glx::CreateNewContext(display,
+                                       framebuffer_config,
+                                       glx::RGBA_TYPE as c_int,
+                                       shared,
+                                       1 as glx::types::Bool)
+            }
+        };
 
         if native.is_null() {
             unsafe { glx::DestroyPixmap(display, drawable as GLXPixmap) };
@@ -102,8 +139,10 @@ impl NativeGLContextMethods for NativeGLContext {
         }
     }
 
-    fn create_shared(with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
-        create_offscreen_pixmap_backed_context(Size2D::new(16, 16), with)
+    fn create_shared(with: Option<&Self::Handle>,
+                     api_type: &gl::GlType,
+                     api_version: GLVersion) -> Result<NativeGLContext, &'static str> {
+        create_offscreen_pixmap_backed_context(Size2D::new(16, 16), with, api_type, api_version)
     }
 
     #[inline(always)]
