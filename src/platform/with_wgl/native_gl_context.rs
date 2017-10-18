@@ -1,5 +1,7 @@
 use platform::NativeGLContextMethods;
+use gleam::gl;
 use gl_context::GLContextDispatcher;
+use GLVersion;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
@@ -109,11 +111,16 @@ impl NativeGLContextMethods for NativeGLContext {
         }
     }
 
-    fn create_shared(with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
-        Self::create_shared_with_dispatcher(with, None)
+    fn create_shared(with: Option<&Self::Handle>,
+                     api_type: &gl::GlType,
+                     api_version: GLVersion) -> Result<Self, &'static str> {
+        Self::create_shared_with_dispatcher(with, api_type, api_version, None)
     }
 
-    fn create_shared_with_dispatcher(with: Option<&Self::Handle>, dispatcher: Option<Box<GLContextDispatcher>>)
+    fn create_shared_with_dispatcher(with: Option<&Self::Handle>,
+                                     api_type: &gl::GlType,
+                                     api_version: GLVersion,
+                                     dispatcher: Option<Box<GLContextDispatcher>>)
         -> Result<NativeGLContext, &'static str> {
         let (render_ctx, device_ctx) = match with {
             Some(ref handle) => (handle.0, handle.1),
@@ -142,7 +149,28 @@ impl NativeGLContextMethods for NativeGLContext {
             }
         }
 
-        let result = match unsafe { utils::create_offscreen(render_ctx, &WGLAttributes::default()) } {
+        let mut attributes = WGLAttributes::default();
+        attributes.opengl_es = match *api_type {
+            gl::GlType::Gles => true,
+            _ => false,
+        };
+
+        match api_version {
+            GLVersion::Major(major) => {
+                attributes.major_version = major as u32;
+                attributes.minor_version = if attributes.opengl_es {
+                    0
+                } else {
+                    1
+                };
+            },
+            GLVersion::MajorMinor(major, minor) => { 
+                attributes.major_version = major as u32;
+                attributes.minor_version = minor as u32;
+            }
+        }
+
+        let result = match unsafe { utils::create_offscreen(render_ctx, &attributes) } {
             Ok(ref res) => {
                 let ctx = NativeGLContext {
                     render_ctx: res.0,
