@@ -2,8 +2,10 @@ use std::mem;
 use euclid::Size2D;
 use super::{NativeGLContext, NativeGLContextHandle};
 
+use GLVersion;
 use egl;
 use egl::types::{EGLNativeDisplayType, EGLDisplay, EGLConfig, EGLSurface, EGLint};
+use gleam::gl;
 
 fn create_pbuffer_surface(display: EGLDisplay, config: EGLConfig, size: Size2D<i32>) -> Result<EGLSurface, &'static str> {
     let mut attrs = [
@@ -22,11 +24,32 @@ fn create_pbuffer_surface(display: EGLDisplay, config: EGLConfig, size: Size2D<i
 }
 
 pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>,
-                                                    shared_with: Option<&NativeGLContextHandle>)
-    -> Result<NativeGLContext, &'static str> {
+                                                    shared_with: Option<&NativeGLContextHandle>,
+                                                    api_type: &gl::GlType,
+                                                    api_version: GLVersion) -> Result<NativeGLContext, &'static str>  {
+    let client_version = match api_version {
+        GLVersion::Major(major) => major,
+        GLVersion::MajorMinor(major, _) => major,
+    };
+
+    let renderable_type = match *api_type {
+        gl::GlType::Gl => {
+            egl::OPENGL_BIT
+        },
+        gl::GlType::Gles => {
+            if client_version >= 3 {
+                egl::OPENGL_ES3_BIT
+            } else if client_version == 2 {
+                egl::OPENGL_ES2_BIT
+            } else {
+                egl::OPENGL_ES_BIT
+            }
+        },
+    };
+
     let attributes = [
         egl::SURFACE_TYPE as EGLint, egl::PBUFFER_BIT as EGLint,
-        egl::RENDERABLE_TYPE as EGLint, egl::OPENGL_ES2_BIT as EGLint,
+        egl::RENDERABLE_TYPE as EGLint, renderable_type as EGLint,
         egl::RED_SIZE as EGLint, 8,
         egl::GREEN_SIZE as EGLint, 8,
         egl::BLUE_SIZE as EGLint, 8,
@@ -81,5 +104,5 @@ pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>,
 
     let surface = try!(create_pbuffer_surface(display, config, size));
 
-    NativeGLContext::new(shared_with, display, surface, config)
+    NativeGLContext::new(shared_with, display, surface, config, client_version)
 }
