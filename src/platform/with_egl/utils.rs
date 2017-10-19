@@ -27,11 +27,7 @@ pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>,
                                                     shared_with: Option<&NativeGLContextHandle>,
                                                     api_type: &gl::GlType,
                                                     api_version: GLVersion) -> Result<NativeGLContext, &'static str>  {
-    let client_version = match api_version {
-        GLVersion::Major(major) => major,
-        GLVersion::MajorMinor(major, _) => major,
-    };
-
+    let client_version = api_version.major_version();
     let renderable_type = match *api_type {
         gl::GlType::Gl => {
             egl::OPENGL_BIT

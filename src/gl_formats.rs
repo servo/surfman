@@ -1,6 +1,7 @@
 use gleam::gl::types::GLenum;
 use gleam::gl;
 use GLContextAttributes;
+use GLVersion;
 
 /// This structure is here to allow
 /// cross-platform formatting
@@ -21,8 +22,8 @@ impl GLFormats {
     // FIXME: In linux with GLES2 texture attachments create INVALID_ENUM errors.
     // I suspect that it's because of texture formats, but I need time to debugit.
     #[cfg(not(target_os="android"))]
-    pub fn detect(attrs: &GLContextAttributes, extensions: &[String]) -> GLFormats {
-        let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions);
+    pub fn detect(attrs: &GLContextAttributes, extensions: &[String], api_version: GLVersion) -> GLFormats {
+        let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions, api_version);
 
         if attrs.alpha {
             GLFormats {
@@ -48,13 +49,13 @@ impl GLFormats {
     }
 
     #[cfg(target_os="android")]
-    pub fn detect(attrs: &GLContextAttributes, extensions: &[String]) -> GLFormats {
+    pub fn detect(attrs: &GLContextAttributes, extensions: &[String], api_version: GLVersion) -> GLFormats {
         // detect if the GPU supports RGB8 and RGBA8 renderbuffer/texture storage formats.
         // GL_ARM_rgba8 extension is similar to OES_rgb8_rgba8, but only exposes RGBA8.
         let has_rgb8 = extensions.iter().any(|s| s == "GL_OES_rgb8_rgba8");
         let has_rgba8 = has_rgb8 || extensions.iter().any(|s| s == "GL_ARM_rgba8");
 
-        let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions);
+        let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions, api_version);
 
         if attrs.alpha {
             GLFormats {
@@ -82,7 +83,12 @@ impl GLFormats {
     // Extension detection check to avoid incomplete framebuffers when using both depth and stencil buffers.
     // Some implementations don't support separated DEPTH_COMPONENT and STENCIL_INDEX8 renderbuffers.
     // Other implementations support only DEPTH24_STENCIL8 renderbuffer attachments.
-    fn supports_packed_depth_stencil(extensions: &[String]) -> bool {
+    fn supports_packed_depth_stencil(extensions: &[String], api_version: GLVersion) -> bool {
+        if api_version.major_version() >= 3 {
+            // packed depth stencil is included in OpenGL Core 3.x.
+            // It may not be available in the extension list (e.g. MacOS)
+            return true;
+        }
         extensions.iter().any(|s| s == "GL_OES_packed_depth_stencil" || s == "GL_EXT_packed_depth_stencil")
     }
 }

@@ -4,14 +4,23 @@ use std::mem;
 use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
 use core_foundation::base::TCFType;
 use core_foundation::string::CFString;
+use gleam::gl;
 use std::str::FromStr;
 use std::sync::Mutex;
 
 use platform::NativeGLContextMethods;
+use GLVersion;
 
 lazy_static! {
     static ref CHOOSE_PIXEL_FORMAT_MUTEX: Mutex<()> = Mutex::new(());
 }
+
+// CGL OpenGL Profile that chooses a Legacy/Pre-OpenGL 3.0 Implementation.
+#[allow(non_upper_case_globals)]
+const kCGLOGLPVersion_Legacy: CGLPixelFormatAttribute = 0x1000;
+// CGL OpenGL Profile that chooses a Legacy/Pre-OpenGL 3.0 Implementation.
+#[allow(non_upper_case_globals)]
+const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 
 pub struct NativeGLContextHandle(CGLContextObj);
 
@@ -98,14 +107,30 @@ impl NativeGLContextMethods for NativeGLContext {
         }
     }
 
-    fn create_shared(with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
+    fn create_shared(with: Option<&Self::Handle>,
+                     api_type: &gl::GlType,
+                     api_version: GLVersion) -> Result<Self, &'static str> {
+        match *api_type {
+            gl::GlType::Gles => {
+                return Err("OpenGL ES is not supported");
+            },
+            _ => {}
+        }
+
         // CGLChoosePixelFormat fails if multiple threads try to open a display connection
         // simultaneously. The following error is returned by CGLChoosePixelFormat: 
         // kCGLBadConnection - Invalid connection to Core Graphics.
         // We use a static mutex guard to fix this issue
         let _guard = CHOOSE_PIXEL_FORMAT_MUTEX.lock().unwrap();
 
+        let profile = if api_version.major_version() >= 3 {
+            kCGLOGLPVersion_3_2_Core
+        } else {
+            kCGLOGLPVersion_Legacy
+        };
+
         let mut attributes = [
+            kCGLPFAOpenGLProfile, profile,
             0
         ];
 
