@@ -53,10 +53,9 @@ impl<Native> GLContext<Native>
         };
 
         try!(native_context.make_current());
-        let extensions = gl_.get_string(gl::EXTENSIONS);
-        let extensions: Vec<String> = extensions.split(&[',',' '][..]).map(|s| s.into()).collect();
+        let extensions = Self::query_extensions(&gl_, api_version);
         let attributes = GLContextAttributes::any();
-        let formats = GLFormats::detect(&attributes, &extensions[..]);
+        let formats = GLFormats::detect(&attributes, &extensions[..], api_version);
         let limits = GLLimits::detect(&*gl_);
 
         Ok(GLContext {
@@ -113,7 +112,7 @@ impl<Native> GLContext<Native>
                                                      shared_with,
                                                      dispatcher));
 
-        context.formats = GLFormats::detect(&attributes, &context.extensions[..]);
+        context.formats = GLFormats::detect(&attributes, &context.extensions[..], api_version);
         context.attributes = attributes;
 
         try!(context.init_offscreen(size, color_attachment_type));
@@ -218,6 +217,10 @@ impl<Native> GLContext<Native>
         }
     }
 
+    pub fn get_extensions(&self) -> Vec<String> {
+        self.extensions.clone()
+    }
+
     fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
         try!(self.create_draw_buffer(size, color_attachment_type));
 
@@ -235,6 +238,23 @@ impl<Native> GLContext<Native>
         self.draw_buffer = Some(try!(DrawBuffer::new(self, size, color_attachment_type)));
         Ok(())
     }
+
+    fn query_extensions(gl_: &Rc<gl::Gl>, api_version: GLVersion) -> Vec<String> {
+        if api_version.major_version() >=3 {
+            // glGetString(GL_EXTENSIONS) is deprecated on OpenGL >= 3.x.
+            // Some GL backends such as CGL generate INVALID_ENUM error when used.
+            // Use the new way to query extensions on OpenGL 3.x (glStringi)
+            let n = gl_.get_integer_v(gl::NUM_EXTENSIONS) as usize;
+            let mut extensions = Vec::with_capacity(n);
+            for index in 0..n {
+                extensions.push(gl_.get_string_i(gl::EXTENSIONS, index as u32))
+            }
+            extensions
+        } else {
+            let extensions = gl_.get_string(gl::EXTENSIONS);
+            extensions.split(&[',',' '][..]).map(|s| s.into()).collect()
+        }
+    }
 }
 
 /// Describes the OpenGL version that is requested when a context is created.
@@ -246,6 +266,16 @@ pub enum GLVersion {
 
     /// Request a specific major and minor version version.
     MajorMinor(u8, u8),
+}
+
+impl GLVersion {
+    // Helper method to get the major version
+    pub fn major_version(&self) -> u8 {
+        match *self {
+            GLVersion::Major(major) => major,
+            GLVersion::MajorMinor(major, _) => major,
+        }
+    }
 }
 
 // Dispatches functions to the thread where a NativeGLContext is bound.
