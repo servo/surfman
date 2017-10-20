@@ -1,4 +1,6 @@
+use gleam::gl;
 use NativeGLContextMethods;
+use GLVersion;
 
 pub struct NativeGLContext;
 pub struct NativeGLContextHandle;
@@ -10,7 +12,9 @@ impl NativeGLContextMethods for NativeGLContext {
         0 as *const ()
     }
 
-    fn create_shared(_with: Option<&Self::Handle>) -> Result<NativeGLContext, &'static str> {
+    fn create_shared(_with: Option<&Self::Handle>,
+                     _api_type: &gl::GlType,
+                     _api_version: GLVersion) -> Result<Self, &'static str> {
         Err("Not implemented (yet)")
     }
 
