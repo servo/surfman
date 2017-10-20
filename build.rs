@@ -16,6 +16,10 @@ fn main() {
         println!("cargo:rustc-link-lib=EGL");
     }
 
+    if target.contains("apple-ios") {
+        println!("cargo:rustc-link-lib=framework=OpenGLES");
+    }
+
     if target.contains("darwin") {
         println!("cargo:rustc-link-lib=framework=OpenGL");
     } else if target.contains("windows") {
@@ -43,7 +47,7 @@ fn main() {
             .write_bindings(gl_generator::StructGenerator, &mut file).unwrap();
 
         println!("cargo:rustc-link-lib=opengl32");
-    } else if cfg!(feature = "x11") && !target.contains("android") {
+    } else if cfg!(feature = "x11") && !target.contains("android") && !target.contains("apple-ios") {
         let mut file = File::create(&dest.join("glx_bindings.rs")).unwrap();
         Registry::new(Api::Glx, (1, 4), Profile::Core, Fallbacks::All, [])
             .write_bindings(gl_generator::StaticGenerator, &mut file).unwrap();

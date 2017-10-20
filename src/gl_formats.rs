@@ -21,7 +21,7 @@ impl GLFormats {
     //
     // FIXME: In linux with GLES2 texture attachments create INVALID_ENUM errors.
     // I suspect that it's because of texture formats, but I need time to debugit.
-    #[cfg(not(target_os="android"))]
+    #[cfg(not(any(target_os="android", target_os="ios")))]
     pub fn detect(attrs: &GLContextAttributes, extensions: &[String], api_version: GLVersion) -> GLFormats {
         let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions, api_version);
 
@@ -48,11 +48,12 @@ impl GLFormats {
         }
     }
 
-    #[cfg(target_os="android")]
+    #[cfg(any(target_os="android", target_os="ios"))]
     pub fn detect(attrs: &GLContextAttributes, extensions: &[String], api_version: GLVersion) -> GLFormats {
-        // detect if the GPU supports RGB8 and RGBA8 renderbuffer/texture storage formats.
+        // RGB8 or RGBA8 is guaranteed on OpenGLES 3+.
+        // On OpenGLES 2 detect via extensions if the GPU supports RGB8 and RGBA8 renderbuffer/texture storage formats.
         // GL_ARM_rgba8 extension is similar to OES_rgb8_rgba8, but only exposes RGBA8.
-        let has_rgb8 = extensions.iter().any(|s| s == "GL_OES_rgb8_rgba8");
+        let has_rgb8 = api_version.major_version() >= 3 || extensions.iter().any(|s| s == "GL_OES_rgb8_rgba8");
         let has_rgba8 = has_rgb8 || extensions.iter().any(|s| s == "GL_ARM_rgba8");
 
         let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions, api_version);

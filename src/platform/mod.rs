@@ -36,9 +36,9 @@ pub trait NativeGLContextMethods: Sized {
     fn is_osmesa(&self) -> bool { false }
 }
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 pub mod with_glx;
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 pub use self::with_glx::{NativeGLContext, NativeGLContextHandle};
 
 #[cfg(feature="osmesa")]
@@ -63,6 +63,11 @@ pub use self::with_cgl::{NativeGLContext, NativeGLContextHandle};
 pub mod with_wgl;
 #[cfg(target_os="windows")]
 pub use self::with_wgl::{NativeGLContext, NativeGLContextHandle};
+
+#[cfg(target_os="ios")]
+pub mod with_eagl;
+#[cfg(target_os="ios")]
+pub use self::with_eagl::{NativeGLContext, NativeGLContextHandle};
 
 #[cfg(not(any(unix, target_os="windows")))]
 pub mod not_implemented;

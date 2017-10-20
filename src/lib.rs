@@ -7,7 +7,7 @@ extern crate log;
 #[cfg(feature="serde")]
 extern crate serde;
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 extern crate x11;
 #[cfg(target_os="macos")]
 extern crate cgl;
@@ -23,11 +23,14 @@ extern crate kernel32;
 extern crate gdi32;
 #[cfg(target_os = "windows")]
 extern crate user32;
-#[cfg(any(target_os="macos", target_os="windows", target_os="android", feature="test_egl_in_linux"))]
+#[cfg(any(target_os="macos", target_os="windows", target_os="android", target_os="ios", feature="test_egl_in_linux"))]
 #[macro_use]
 extern crate lazy_static;
-#[cfg(any(target_os="android", feature="test_egl_in_linux"))]
+#[cfg(any(target_os="android", target_os="ios", feature="test_egl_in_linux"))]
 extern crate libloading;
+#[cfg(target_os = "ios")]
+#[macro_use]
+extern crate objc;
 
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
@@ -56,13 +59,13 @@ pub use gl_formats::GLFormats;
 mod gl_limits;
 pub use gl_limits::GLLimits;
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 #[allow(improper_ctypes)]
 mod glx {
     include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
 }
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android")), feature="x11"))]
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 #[allow(improper_ctypes)]
 mod glx_extra {
     include!(concat!(env!("OUT_DIR"), "/glx_extra_bindings.rs"));
