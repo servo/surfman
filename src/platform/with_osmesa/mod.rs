@@ -38,7 +38,10 @@ impl OSMesaContext {
         }
 
         let (major, minor) = match api_version {
-            GLVersion::Major(major) => (major, 1), // OpenGL 2.1, 3.1
+            // OSMesa only supports compatibility (non-Core) profiles in GL versions <= 3.0.
+            // A 3.0 compatibility profile is preferred for a major 3 context version (e.g. WebGL 2).
+            // A 2.1 profile is created for a major 2 context version (e.g. WebGL 1).
+            GLVersion::Major(major) => (major, if major >= 3 { 0 } else { 1 }),
             GLVersion::MajorMinor(major, minor) => (major, minor)
         };
 
