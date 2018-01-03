@@ -7,20 +7,21 @@ use std::os::raw::c_void;
 use std::ptr;
 use std::sync::mpsc;
 
-use winapi;
-use user32;
-use kernel32;
+use winapi::shared::windef::{HDC, HGLRC};
+use winapi::shared::minwindef::HMODULE;
+use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress};
+use winapi::um::winuser::{WindowFromDC, ReleaseDC, DestroyWindow};
 use super::wgl;
 use super::wgl_attributes::*;
 use super::utils;
 
 // Wrappers to satisfy `Sync`.
-struct HMODULEWrapper(winapi::HMODULE);
+struct HMODULEWrapper(HMODULE);
 unsafe impl Sync for HMODULEWrapper {}
 
 lazy_static! {
     static ref GL_LIB: Option<HMODULEWrapper>  = {
-        let p = unsafe { kernel32::LoadLibraryA(b"opengl32.dll\0".as_ptr() as *const _) };
+        let p = unsafe { LoadLibraryA(b"opengl32.dll\0".as_ptr() as *const _) };
         if p.is_null() {
             error!("WGL: opengl32.dll not found!");
             None
@@ -49,8 +50,8 @@ lazy_static! {
 }
 
 pub struct NativeGLContext {
-    render_ctx: winapi::HGLRC,
-    device_ctx: winapi::HDC,
+    render_ctx: HGLRC,
+    device_ctx: HDC,
     weak: bool,
 }
 
@@ -61,10 +62,10 @@ impl Drop for NativeGLContext {
                 // the context to be deleted needs to be unbound
                 self.unbind().unwrap();
                 wgl::DeleteContext(self.render_ctx as *const _);
-                let window = user32::WindowFromDC(self.device_ctx);
+                let window = WindowFromDC(self.device_ctx);
                 debug_assert!(!window.is_null());
-                user32::ReleaseDC(window, self.device_ctx);
-                user32::DestroyWindow(window);
+                ReleaseDC(window, self.device_ctx);
+                DestroyWindow(window);
             }
         }
     }
@@ -73,7 +74,7 @@ impl Drop for NativeGLContext {
 unsafe impl Send for NativeGLContext {}
 unsafe impl Sync for NativeGLContext {}
 
-pub struct NativeGLContextHandle(winapi::HGLRC, winapi::HDC);
+pub struct NativeGLContextHandle(HGLRC, HDC);
 unsafe impl Send for NativeGLContextHandle {}
 unsafe impl Sync for NativeGLContextHandle {}
 
@@ -105,7 +106,7 @@ impl NativeGLContextMethods for NativeGLContext {
             // These functions are exported by the opengl32.dll itself,
             // so we have to fallback to kernel32 getProcAddress if wglGetProcAddress​ return null
             match *GL_LIB {
-                Some(ref lib) => kernel32::GetProcAddress(lib.0, addr) as *const _,
+                Some(ref lib) => GetProcAddress(lib.0, addr) as *const _,
                 None => ptr::null_mut(),
             }
         }
@@ -226,7 +227,7 @@ impl NativeGLContextMethods for NativeGLContext {
         if ctx.is_null() || hdc.is_null() {
             None
         } else {
-            Some(NativeGLContextHandle(ctx as winapi::HGLRC, hdc as winapi::HDC))
+            Some(NativeGLContextHandle(ctx as HGLRC, hdc as HDC))
         }
     }
 
