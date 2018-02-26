@@ -12,9 +12,10 @@ addons:
       - libxxf86vm-dev
       - libosmesa6-dev
       - libgles2-mesa-dev
+      - gcc-arm-linux-androideabi
 
 before_install:
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then export CXX=g++-4.8; fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then export CXX=g++-4.8; rustup target add arm-linux-androideabi; fi
 
 os:
   - linux
@@ -26,6 +27,5 @@ script:
   # - cargo test --verbose
   # - cargo test --verbose --features test_egl_in_linux
   - if [ "$TRAVIS_OS_NAME" != "linux" ]; then cargo test --verbose; fi
-  - rustup target add arm-linux-androideabi
-  - cargo build --verbose --target=arm-linux-androideabi
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then cargo build --verbose --target=arm-linux-androideabi; fi
 
