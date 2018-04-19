@@ -36,10 +36,19 @@ impl Serialize for GLLimits {
 
 impl GLLimits {
     pub fn detect(gl_: &gl::Gl) -> GLLimits {
-        GLLimits {
-            max_vertex_attribs: gl_.get_integer_v(gl::MAX_VERTEX_ATTRIBS) as u32,
-            max_tex_size: gl_.get_integer_v(gl::MAX_TEXTURE_SIZE) as u32,
-            max_cube_map_tex_size: gl_.get_integer_v(gl::MAX_CUBE_MAP_TEXTURE_SIZE) as u32
+        let mut limit = [0];
+        unsafe {
+            gl_.get_integer_v(gl::MAX_VERTEX_ATTRIBS, &mut limit);
         }
+        let max_vertex_attribs = limit[0] as u32;
+        unsafe {
+            gl_.get_integer_v(gl::MAX_TEXTURE_SIZE, &mut limit);
+        }
+        let max_tex_size = limit[0] as u32;
+        unsafe {
+            gl_.get_integer_v(gl::MAX_CUBE_MAP_TEXTURE_SIZE, &mut limit);
+        }
+        let max_cube_map_tex_size = limit[0] as u32;
+        GLLimits { max_vertex_attribs, max_tex_size, max_cube_map_tex_size }
     }
 }

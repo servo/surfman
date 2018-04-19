@@ -1,5 +1,5 @@
-extern crate gleam;
 extern crate euclid;
+extern crate gleam;
 
 #[macro_use]
 extern crate log;
