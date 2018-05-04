@@ -197,8 +197,11 @@ impl<Native> GLContext<Native>
             return db.get_framebuffer();
         }
 
-        let ret = self.gl().get_integer_v(gl::FRAMEBUFFER_BINDING);
-        ret as GLuint
+        let mut fb = [0];
+        unsafe {
+            self.gl().get_integer_v(gl::FRAMEBUFFER_BINDING, &mut fb);
+        }
+        fb[0] as GLuint
     }
 
     pub fn draw_buffer_size(&self) -> Option<Size2D<i32>> {
@@ -244,7 +247,11 @@ impl<Native> GLContext<Native>
             // glGetString(GL_EXTENSIONS) is deprecated on OpenGL >= 3.x.
             // Some GL backends such as CGL generate INVALID_ENUM error when used.
             // Use the new way to query extensions on OpenGL 3.x (glStringi)
-            let n = gl_.get_integer_v(gl::NUM_EXTENSIONS) as usize;
+            let mut n = [0];
+            unsafe {
+                gl_.get_integer_v(gl::NUM_EXTENSIONS, &mut n);
+            }
+            let n = n[0] as usize;
             let mut extensions = Vec::with_capacity(n);
             for index in 0..n {
                 extensions.push(gl_.get_string_i(gl::EXTENSIONS, index as u32))
