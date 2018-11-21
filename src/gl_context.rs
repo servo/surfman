@@ -188,6 +188,19 @@ impl<Native> GLContext<Native>
         &self.limits
     }
 
+    /// Swap the backing textures for the draw buffer, returning the id of
+    /// the texture now used for reading. Resets the new active texture to an
+    /// appropriate initial state;
+    pub fn swap_draw_buffer(&mut self, clear_color: (f32, f32, f32, f32)) -> Option<u32> {
+        let texture_id = match self.draw_buffer {
+            Some(ref mut db) => db.swap_framebuffer_texture(),
+            None => return None,
+        };
+        // TODO: support preserveDrawBuffer instead of clearing new frame
+        self.reset_draw_buffer_contents(Some(clear_color));
+        texture_id
+    }
+
     pub fn borrow_draw_buffer(&self) -> Option<&DrawBuffer> {
         self.draw_buffer.as_ref()
     }
@@ -224,13 +237,20 @@ impl<Native> GLContext<Native>
         self.extensions.clone()
     }
 
+    fn reset_draw_buffer_contents(&self, clear_color: Option<(f32, f32, f32, f32)>) {
+        match clear_color {
+            Some((r, g, b, a)) => self.gl().clear_color(r, g, b, if !self.attributes.alpha { 1.0 } else { a }),
+            None => self.gl().clear_color(0.0, 0.0, 0.0, if !self.attributes.alpha { 1.0 } else { 0.0 }),
+        }
+        self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+    }
+
     fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
         self.create_draw_buffer(size, color_attachment_type)?;
 
         debug_assert!(self.is_current());
 
-        self.gl().clear_color(0.0, 0.0, 0.0, 0.0);
-        self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+        self.reset_draw_buffer_contents(None);
         self.gl().scissor(0, 0, size.width, size.height);
         self.gl().viewport(0, 0, size.width, size.height);
 

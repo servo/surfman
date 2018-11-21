@@ -1,12 +1,13 @@
 use euclid::Size2D;
 use gleam::gl;
 use gleam::gl::types::{GLuint, GLenum, GLint};
+use std::mem;
 use std::rc::Rc;
 
 use crate::GLContext;
 use crate::NativeGLContextMethods;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum ColorAttachmentType {
     Texture,
     Renderbuffer,
@@ -27,21 +28,43 @@ impl Default for ColorAttachmentType {
 #[derive(Debug)]
 pub enum ColorAttachment {
     Renderbuffer(GLuint),
-    Texture(GLuint),
+    Texture(GLuint, GLuint),
 }
 
 impl ColorAttachment {
     pub fn color_attachment_type(&self) -> ColorAttachmentType {
         match *self {
             ColorAttachment::Renderbuffer(_) => ColorAttachmentType::Renderbuffer,
-            ColorAttachment::Texture(_) => ColorAttachmentType::Texture,
+            ColorAttachment::Texture(_, _) => ColorAttachmentType::Texture,
         }
     }
 
     fn destroy(self, gl: &dyn gl::Gl) {
         match self {
             ColorAttachment::Renderbuffer(id) => gl.delete_renderbuffers(&[id]),
-            ColorAttachment::Texture(tex_id) => gl.delete_textures(&[tex_id]),
+            ColorAttachment::Texture(tex_id1, tex_id2) => gl.delete_textures(&[tex_id1, tex_id2]),
+        }
+    }
+
+    fn active_texture(&self) -> GLuint {
+        match *self {
+            ColorAttachment::Renderbuffer(_) => panic!("no texture for renderbuffer attachment"),
+            ColorAttachment::Texture(active, _) => active,
+        }
+    }
+
+    fn complete_texture(&self) -> GLuint {
+        match *self {
+            ColorAttachment::Renderbuffer(_) => panic!("no texture for renderbuffer attachment"),
+            ColorAttachment::Texture(_, complete) => complete,
+        }
+    }
+
+    fn swap_textures(&mut self) {
+        match *self {
+            ColorAttachment::Renderbuffer(_) => (),
+            ColorAttachment::Texture(ref mut active, ref mut complete) =>
+                mem::swap(active, complete),
         }
     }
 }
@@ -152,10 +175,17 @@ impl DrawBuffer {
         }
     }
 
-    pub fn get_bound_texture_id(&self) -> Option<GLuint> {
+    pub fn get_complete_texture_id(&self) -> Option<GLuint> {
         match self.color_attachment.as_ref().unwrap() {
             &ColorAttachment::Renderbuffer(_) => None,
-            &ColorAttachment::Texture(id) => Some(id),
+            &ColorAttachment::Texture(_active, complete) => Some(complete),
+        }
+    }
+
+    pub fn get_active_texture_id(&self) -> Option<GLuint> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::Renderbuffer(_) => None,
+            &ColorAttachment::Texture(active, _complete) => Some(active),
         }
     }
 
@@ -184,26 +214,41 @@ impl DrawBuffer {
 
             // TODO(ecoal95): Allow more customization of textures
             ColorAttachmentType::Texture => {
-                let texture = self.gl().gen_textures(1)[0];
-                debug_assert!(texture != 0);
+                let create_texture = || {
+                    let texture = self.gl().gen_textures(1)[0];
+                    debug_assert!(texture != 0);
 
-                self.gl().bind_texture(gl::TEXTURE_2D, texture);
-                self.gl().tex_image_2d(gl::TEXTURE_2D, 0,
-                                 formats.texture_internal as GLint, self.size.width, self.size.height, 0, formats.texture, formats.texture_type, None);
+                    self.gl().bind_texture(gl::TEXTURE_2D, texture);
 
-                // Low filtering to allow rendering
-                self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
-                self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
+                    debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
 
-                // TODO(emilio): Check if these two are neccessary, probably not
-                self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-                self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+                    self.gl().tex_image_2d(gl::TEXTURE_2D, 0,
+                                           formats.texture_internal as GLint, self.size.width, self.size.height, 0, formats.texture, formats.texture_type, None);
 
-                self.gl().bind_texture(gl::TEXTURE_2D, 0);
+                    debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
 
-                debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
+                    // Low filtering to allow rendering
+                    self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
+                    self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
 
-                Some(ColorAttachment::Texture(texture))
+                    debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
+
+                    // TODO(emilio): Check if these two are neccessary, probably not
+                    self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+                    self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+
+                    debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
+
+                    self.gl().bind_texture(gl::TEXTURE_2D, 0);
+
+                    debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
+                    texture
+                };
+
+                let active = create_texture();
+                let complete = create_texture();
+
+                Some(ColorAttachment::Texture(active, complete))
             },
         };
 
@@ -230,7 +275,31 @@ impl DrawBuffer {
         self.attach_to_framebuffer()
     }
 
-    fn attach_to_framebuffer(&mut self) -> Result<(), &'static str> {
+    /// Swap the internal read and draw textures, returning the id of the texture
+    /// now used for reading.
+    pub fn swap_framebuffer_texture(&mut self) -> Option<u32> {
+        let (active_texture_id, complete_texture_id) = match self.color_attachment {
+            Some(ref mut attachment) => {
+                attachment.swap_textures();
+                (
+                    attachment.active_texture(),
+                    attachment.complete_texture(),
+                )
+            }
+            None => return None,
+        };
+        self.gl().bind_framebuffer(gl::FRAMEBUFFER, self.framebuffer);
+        self.gl().framebuffer_texture_2d(
+            gl::FRAMEBUFFER,
+            gl::COLOR_ATTACHMENT0,
+            gl::TEXTURE_2D,
+            active_texture_id,
+            0
+        );
+        Some(complete_texture_id)
+    }
+
+    fn attach_to_framebuffer(&self) -> Result<(), &'static str> {
         self.gl().bind_framebuffer(gl::FRAMEBUFFER, self.framebuffer);
         // NOTE: The assertion fails if the framebuffer is not bound
         debug_assert_eq!(self.gl().is_framebuffer(self.framebuffer), gl::TRUE);
@@ -243,7 +312,7 @@ impl DrawBuffer {
                                                   color_renderbuffer);
                 debug_assert_eq!(self.gl().is_renderbuffer(color_renderbuffer), gl::TRUE);
             },
-            ColorAttachment::Texture(texture_id) => {
+            ColorAttachment::Texture(texture_id, _) => {
                 self.gl().framebuffer_texture_2d(gl::FRAMEBUFFER,
                                                 gl::COLOR_ATTACHMENT0,
                                                 gl::TEXTURE_2D,

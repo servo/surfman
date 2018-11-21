@@ -98,7 +98,7 @@ fn test_texture_color_attachment(api_version: GLVersion) {
     test_gl_context(&context);
 
     // Get the bound texture and check we're painting on it
-    let texture_id = context.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+    let texture_id = context.borrow_draw_buffer().unwrap().get_active_texture_id().unwrap();
     assert!(texture_id != 0);
 
     assert!(context.gl().get_error() == gl::NO_ERROR);
@@ -132,7 +132,7 @@ fn test_sharing(api_version: GLVersion) {
                                                     api_version,
                                                     None).unwrap();
 
-    let primary_texture_id = primary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+    let primary_texture_id = primary.borrow_draw_buffer().unwrap().get_active_texture_id().unwrap();
     assert!(primary_texture_id != 0);
 
     let secondary = GLContext::<NativeGLContext>::new(size,
@@ -147,7 +147,7 @@ fn test_sharing(api_version: GLVersion) {
 
     // Now the secondary context is bound, get the texture id, switch contexts, and check the
     // texture is there.
-    let secondary_texture_id = secondary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+    let secondary_texture_id = secondary.borrow_draw_buffer().unwrap().get_active_texture_id().unwrap();
     assert!(secondary_texture_id != 0);
 
     primary.make_current().unwrap();
@@ -254,7 +254,7 @@ fn test_multithread_sharing(api_version: GLVersion) {
                                                     None).unwrap();
     primary.make_current().unwrap();
 
-    let primary_texture_id = primary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+    let primary_texture_id = primary.borrow_draw_buffer().unwrap().get_active_texture_id().unwrap();
     assert!(primary_texture_id != 0);
 
     let (tx, rx) = mpsc::channel();
@@ -277,7 +277,7 @@ fn test_multithread_sharing(api_version: GLVersion) {
         // Paint the second context red
         test_gl_context(&secondary);
         // Send texture_id to main thread
-        let texture_id = secondary.borrow_draw_buffer().unwrap().get_bound_texture_id().unwrap();
+        let texture_id = secondary.borrow_draw_buffer().unwrap().get_active_texture_id().unwrap();
         assert!(texture_id != 0);
         tx.send(SGLUint(texture_id)).unwrap();
         // Avoid drop until test ends
