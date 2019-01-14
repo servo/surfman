@@ -209,12 +209,12 @@ impl<Native> GLContext<Native>
     }
 
     // We resize just replacing the draw buffer, we don't perform size optimizations
-    // in order to keep this generic
-    pub fn resize(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
-        if self.draw_buffer.is_some() {
-            let color_attachment_type =
-                self.borrow_draw_buffer().unwrap().color_attachment_type();
-            self.init_offscreen(size, color_attachment_type)
+    // in order to keep this generic. The old buffer is returned in case its resources
+    // are still in use.
+    pub fn resize(&mut self, size: Size2D<i32>) -> Result<DrawBuffer, &'static str> {
+        if let Some(draw_buffer) = self.draw_buffer.take() {
+            let color_attachment_type = draw_buffer.color_attachment_type();
+            self.init_offscreen(size, color_attachment_type).map(|()| draw_buffer)
         } else {
             Err("No DrawBuffer found")
         }
