@@ -25,6 +25,7 @@ extern crate libloading;
 #[cfg(target_os = "ios")]
 #[macro_use]
 extern crate objc;
+extern crate io_surface;
 
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
