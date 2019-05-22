@@ -6,10 +6,25 @@ use std::rc::Rc;
 use crate::GLContext;
 use crate::NativeGLContextMethods;
 
-#[derive(Debug)]
+#[cfg(target_os="macos")]
+use io_surface::IOSurfaceID;
+#[cfg(target_os="macos")]
+use core_foundation::base::TCFType;
+#[cfg(target_os="macos")]
+use core_foundation::dictionary::CFDictionary;
+#[cfg(target_os="macos")]
+use core_foundation::string::CFString;
+#[cfg(target_os="macos")]
+use core_foundation::number::CFNumber;
+#[cfg(target_os="macos")]
+use core_foundation::boolean::CFBoolean;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ColorAttachmentType {
     Texture,
     Renderbuffer,
+    #[cfg(target_os="macos")]
+    IOSurface,
 }
 
 impl Default for ColorAttachmentType {
@@ -17,7 +32,6 @@ impl Default for ColorAttachmentType {
         ColorAttachmentType::Renderbuffer
     }
 }
-
 
 /// We either have a color renderbuffer, or a surface bound to a texture bound
 /// to a framebuffer as a color attachment.
@@ -28,6 +42,8 @@ impl Default for ColorAttachmentType {
 pub enum ColorAttachment {
     Renderbuffer(GLuint),
     Texture(GLuint),
+    #[cfg(target_os="macos")]
+    IOSurface(GLuint, IOSurfaceID),
 }
 
 impl ColorAttachment {
@@ -35,6 +51,7 @@ impl ColorAttachment {
         match *self {
             ColorAttachment::Renderbuffer(_) => ColorAttachmentType::Renderbuffer,
             ColorAttachment::Texture(_) => ColorAttachmentType::Texture,
+            ColorAttachment::IOSurface(..) => ColorAttachmentType::IOSurface,
         }
     }
 
@@ -42,6 +59,7 @@ impl ColorAttachment {
         match self {
             ColorAttachment::Renderbuffer(id) => gl.delete_renderbuffers(&[id]),
             ColorAttachment::Texture(tex_id) => gl.delete_textures(&[tex_id]),
+            ColorAttachment::IOSurface(tex_id, _) => gl.delete_textures(&[tex_id]),
         }
     }
 }
@@ -156,6 +174,15 @@ impl DrawBuffer {
         match self.color_attachment.as_ref().unwrap() {
             &ColorAttachment::Renderbuffer(_) => None,
             &ColorAttachment::Texture(id) => Some(id),
+            &ColorAttachment::IOSurface(id, _) => Some(id),
+        }
+    }
+
+    pub fn get_bound_io_surface_id(&self) -> Option<IOSurfaceID> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::Renderbuffer(_) => None,
+            &ColorAttachment::Texture(_) => None,
+            &ColorAttachment::IOSurface(_, id) => Some(id),
         }
     }
 
@@ -188,8 +215,17 @@ impl DrawBuffer {
                 debug_assert!(texture != 0);
 
                 self.gl().bind_texture(gl::TEXTURE_2D, texture);
-                self.gl().tex_image_2d(gl::TEXTURE_2D, 0,
-                                 formats.texture_internal as GLint, self.size.width, self.size.height, 0, formats.texture, formats.texture_type, None);
+                self.gl().tex_image_2d(
+                    gl::TEXTURE_2D,
+                    0,
+                    formats.texture_internal as GLint,
+                    self.size.width,
+                    self.size.height,
+                    0,
+                    formats.texture,
+                    formats.texture_type,
+                    None
+                );
 
                 // Low filtering to allow rendering
                 self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
@@ -204,6 +240,41 @@ impl DrawBuffer {
                 debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
 
                 Some(ColorAttachment::Texture(texture))
+            },
+
+            ColorAttachmentType::IOSurface => {
+                let texture = self.gl().gen_textures(1)[0];
+                debug_assert!(texture != 0);
+
+                self.gl().bind_texture(gl::TEXTURE_RECTANGLE, texture);
+                let io_surface = unsafe {
+                    let props = CFDictionary::from_CFType_pairs(
+                        &[
+                            (CFString::wrap_under_get_rule(io_surface::kIOSurfaceWidth),CFNumber::from(self.size.width).as_CFType()),
+                            (CFString::wrap_under_get_rule(io_surface::kIOSurfaceHeight),CFNumber::from(self.size.height).as_CFType()),
+                            (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement),CFNumber::from(4).as_CFType()),
+                            (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow),CFNumber::from(self.size.width * 4).as_CFType()),
+                            (CFString::wrap_under_get_rule(io_surface::kIOSurfaceIsGlobal),CFBoolean::from(true).as_CFType()),
+                        ]
+                    );
+                    io_surface::new(&props)
+                };
+
+                io_surface.bind_to_gl_texture(self.size.width, self.size.height);
+
+                // Low filtering to allow rendering
+                self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
+                self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
+
+                // TODO(emilio): Check if these two are neccessary, probably not
+                self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+                self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+
+                self.gl().bind_texture(gl::TEXTURE_2D, 0);
+
+                debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
+
+                Some(ColorAttachment::IOSurface(texture, io_surface.get_id()))
             },
         };
 
@@ -249,6 +320,12 @@ impl DrawBuffer {
                                                 gl::TEXTURE_2D,
                                                 texture_id, 0);
             },
+            ColorAttachment::IOSurface(texture_id, _) => {
+                self.gl().framebuffer_texture_2d(gl::FRAMEBUFFER,
+                                                gl::COLOR_ATTACHMENT0,
+                                                gl::TEXTURE_RECTANGLE,
+                                                texture_id, 0);
+            }
         }
 
         if self.packed_depth_stencil_renderbuffer != 0 {
