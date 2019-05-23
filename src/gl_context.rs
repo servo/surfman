@@ -188,6 +188,19 @@ impl<Native> GLContext<Native>
         &self.limits
     }
 
+    /// Swap the backing textures for the draw buffer, returning the id of
+    /// the texture now used for reading. Resets the new active texture to an
+    /// appropriate initial state;
+    pub fn swap_draw_buffer(&mut self) -> Option<u32> {
+        let texture_id = match self.draw_buffer {
+            Some(ref mut db) => db.swap_framebuffer_texture(),
+            None => return None,
+        };
+        // TODO: support preserveDrawBuffer instead of clearing new frame
+        self.reset_draw_buffer_contents();
+        texture_id
+    }
+
     pub fn borrow_draw_buffer(&self) -> Option<&DrawBuffer> {
         self.draw_buffer.as_ref()
     }
@@ -202,6 +215,17 @@ impl<Native> GLContext<Native>
             self.gl().get_integer_v(gl::FRAMEBUFFER_BINDING, &mut fb);
         }
         fb[0] as GLuint
+    }
+
+    pub fn draw_buffer_is_bound(&self) -> bool {
+        if let Some(ref db) = self.draw_buffer {
+            let mut fb = [0];
+            unsafe {
+                self.gl().get_integer_v(gl::FRAMEBUFFER_BINDING, &mut fb);
+            }
+            return fb[0] == db.get_framebuffer() as i32;
+        }
+        false
     }
 
     pub fn draw_buffer_size(&self) -> Option<Size2D<i32>> {
@@ -224,10 +248,16 @@ impl<Native> GLContext<Native>
         self.extensions.clone()
     }
 
+    fn reset_draw_buffer_contents(&self) {
+        //self.gl().clear_color(0.0, 0.0, 0.0, if !self.attributes.alpha { 1.0 } else { 0.0 });
+        //self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+    }
+
     fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
         self.create_draw_buffer(size, color_attachment_type)?;
 
         debug_assert!(self.is_current());
+        //self.reset_draw_buffer_contents();
 
         self.gl().clear_color(0.0, 0.0, 0.0, 0.0);
         self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
