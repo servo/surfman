@@ -22,7 +22,7 @@ impl<'de> Deserialize<'de> for GLLimits {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where D: Deserializer<'de>
     {
-        let values = try!(<[_; 10]>::deserialize(deserializer));
+        let values = (<[_; 10]>::deserialize(deserializer))?;
         Ok(GLLimits {
             max_vertex_attribs: values[0],
             max_tex_size: values[1],

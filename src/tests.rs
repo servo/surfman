@@ -1,17 +1,17 @@
 use gleam::gl;
 use euclid::Size2D;
 
-use GLContext;
+use crate::GLContext;
 #[cfg(all(target_os = "linux", feature = "test_egl_in_linux"))]
-use platform::with_egl::NativeGLContext;
+use crate::platform::with_egl::NativeGLContext;
 #[cfg(feature="test_osmesa")]
-use platform::with_osmesa::OSMesaContext as NativeGLContext;
+use crate::platform::with_osmesa::OSMesaContext as NativeGLContext;
 #[cfg(not(any(feature = "test_egl_in_linux", feature = "test_osmesa")))]
-use NativeGLContext;
-use NativeGLContextMethods;
-use GLContextAttributes;
-use GLVersion;
-use ColorAttachmentType;
+use crate::NativeGLContext;
+use crate::NativeGLContextMethods;
+use crate::GLContextAttributes;
+use crate::GLVersion;
+use crate::ColorAttachmentType;
 use std::thread;
 use std::sync::mpsc;
 

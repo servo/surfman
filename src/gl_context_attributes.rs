@@ -18,7 +18,7 @@ impl<'de> Deserialize<'de> for GLContextAttributes {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where D: Deserializer<'de>
     {
-        let values = try!(<[_; 6]>::deserialize(deserializer));
+        let values = (<[_; 6]>::deserialize(deserializer))?;
         Ok(GLContextAttributes {
             alpha: values[0],
             depth: values[1],

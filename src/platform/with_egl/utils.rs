@@ -2,9 +2,9 @@ use std::mem;
 use euclid::Size2D;
 use super::{NativeGLContext, NativeGLContextHandle};
 
-use GLVersion;
-use egl;
-use egl::types::{EGLNativeDisplayType, EGLDisplay, EGLConfig, EGLSurface, EGLint};
+use crate::GLVersion;
+use crate::egl;
+use crate::egl::types::{EGLNativeDisplayType, EGLDisplay, EGLConfig, EGLSurface, EGLint};
 use gleam::gl;
 
 fn create_pbuffer_surface(display: EGLDisplay, config: EGLConfig, size: Size2D<i32>) -> Result<EGLSurface, &'static str> {
@@ -98,7 +98,7 @@ pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>,
         return Err("No EGL config for pBuffer");
     }
 
-    let surface = try!(create_pbuffer_surface(display, config, size));
+    let surface = create_pbuffer_surface(display, config, size)?;
 
     NativeGLContext::new(shared_with, display, surface, config, client_version)
 }

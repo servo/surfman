@@ -8,8 +8,8 @@ use gleam::gl;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use platform::NativeGLContextMethods;
-use GLVersion;
+use crate::platform::NativeGLContextMethods;
+use crate::GLVersion;
 
 lazy_static! {
     static ref CHOOSE_PIXEL_FORMAT_MUTEX: Mutex<()> = Mutex::new(());

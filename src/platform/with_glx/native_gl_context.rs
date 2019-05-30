@@ -1,15 +1,15 @@
 use std::ffi::CString;
 
-use gl_context::GLVersion;
+use crate::gl_context::GLVersion;
 use gleam::gl;
-use glx;
-use glx_extra;
+use crate::glx;
+use crate::glx_extra;
 use std::os::raw::*;
-use glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
+use crate::glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use euclid::Size2D;
 use super::utils::{create_offscreen_pixmap_backed_context};
 
-use platform::NativeGLContextMethods;
+use crate::platform::NativeGLContextMethods;
 
 pub struct NativeGLContextHandle(pub GLXContext, pub *mut glx::types::Display);
 

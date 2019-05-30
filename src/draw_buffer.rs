@@ -3,8 +3,8 @@ use gleam::gl;
 use gleam::gl::types::{GLuint, GLenum, GLint};
 use std::rc::Rc;
 
-use GLContext;
-use NativeGLContextMethods;
+use crate::GLContext;
+use crate::NativeGLContextMethods;
 
 #[derive(Debug)]
 pub enum ColorAttachmentType {
@@ -116,9 +116,9 @@ impl DrawBuffer {
             // samples: 0,
         };
 
-        try!(context.make_current());
+        context.make_current()?;
 
-        try!(draw_buffer.init(context, color_attachment_type));
+        draw_buffer.init(context, color_attachment_type)?;
 
         debug_assert_eq!(draw_buffer.gl().check_frame_buffer_status(gl::FRAMEBUFFER),
                          gl::FRAMEBUFFER_COMPLETE);

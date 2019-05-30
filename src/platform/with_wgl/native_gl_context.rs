@@ -1,7 +1,7 @@
-use platform::NativeGLContextMethods;
+use crate::platform::NativeGLContextMethods;
 use gleam::gl;
-use gl_context::GLContextDispatcher;
-use GLVersion;
+use crate::gl_context::GLContextDispatcher;
+use crate::GLVersion;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
@@ -97,7 +97,7 @@ impl NativeGLContextMethods for NativeGLContext {
                 }
             }
 
-            let p = wgl::GetProcAddress(addr) as *const _;
+            let p = wgl::GetProcAddress(addr) as *const ();
             if !p.is_null() {
                 return p;
             }
