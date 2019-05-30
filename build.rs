@@ -9,11 +9,16 @@ fn main() {
     let target = env::var("TARGET").unwrap();
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());
 
-    if target.contains("android") || cfg!(feature = "test_egl_in_linux") {
+    if target.contains("android") ||
+        target.contains("windows") ||
+        cfg!(feature = "test_egl_in_linux")
+    {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, [])
             .write_bindings(gl_generator::StaticGenerator, &mut file).unwrap();
-        println!("cargo:rustc-link-lib=EGL");
+        if !target.contains("windows") {
+            println!("cargo:rustc-link-lib=EGL");
+        }
     }
 
     if target.contains("apple-ios") {
@@ -22,7 +27,7 @@ fn main() {
 
     if target.contains("darwin") {
         println!("cargo:rustc-link-lib=framework=OpenGL");
-    } else if target.contains("windows") {
+    } else if target.contains("windows") && env::var("CARGO_FEATURE_NO_WGL").is_err() {
         let mut file = File::create(&dest.join("wgl_bindings.rs")).unwrap();
         Registry::new(Api::Wgl, (1, 0), Profile::Core, Fallbacks::All, [])
             .write_bindings(gl_generator::StaticGenerator, &mut file)
@@ -47,7 +52,11 @@ fn main() {
             .write_bindings(gl_generator::StructGenerator, &mut file).unwrap();
 
         println!("cargo:rustc-link-lib=opengl32");
-    } else if cfg!(feature = "x11") && !target.contains("android") && !target.contains("apple-ios") {
+    } else if cfg!(feature = "x11") &&
+        !target.contains("android") &&
+        !target.contains("apple-ios") &&
+        !target.contains("windows")
+    {
         let mut file = File::create(&dest.join("glx_bindings.rs")).unwrap();
         Registry::new(Api::Glx, (1, 4), Profile::Core, Fallbacks::All, [])
             .write_bindings(gl_generator::StaticGenerator, &mut file).unwrap();
