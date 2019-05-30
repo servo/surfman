@@ -49,9 +49,9 @@ pub use self::with_osmesa::{OSMesaContext, OSMesaContextHandle};
 pub use self::with_osmesa::{OSMesaContext as NativeGLContext, OSMesaContextHandle as NativeGLContextHandle};
 
 
-#[cfg(any(target_os="android", all(target_os="linux", feature = "test_egl_in_linux")))]
+#[cfg(any(target_os="android", target_os="windows", all(target_os="linux", feature = "test_egl_in_linux")))]
 pub mod with_egl;
-#[cfg(target_os="android")]
+#[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
 pub use self::with_egl::{NativeGLContext, NativeGLContextHandle};
 
 #[cfg(target_os="macos")]
@@ -59,9 +59,9 @@ pub mod with_cgl;
 #[cfg(target_os="macos")]
 pub use self::with_cgl::{NativeGLContext, NativeGLContextHandle};
 
-#[cfg(target_os="windows")]
+#[cfg(all(target_os="windows", not(feature="no_wgl")))]
 pub mod with_wgl;
-#[cfg(target_os="windows")]
+#[cfg(all(target_os="windows", not(feature="no_wgl")))]
 pub use self::with_wgl::{NativeGLContext, NativeGLContextHandle};
 
 #[cfg(target_os="ios")]

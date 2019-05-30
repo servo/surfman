@@ -11,14 +11,18 @@ use libloading as lib;
 
 lazy_static! {
     static ref GL_LIB: Option<lib::Library>  = {
-       let names = ["libGLESv2.so", "libGL.so", "libGLESv3.so"];
-       for name in &names {
-           if let Ok(lib) = lib::Library::new(name) {
-               return Some(lib)
-           }
-       }
+        let names = if cfg!(target_os="windows") {
+            &["libEGL.dll"][..]
+        } else {
+            &["libGLESv2.so", "libGL.so", "libGLESv3.so"][..]
+        };
+        for name in names {
+            if let Ok(lib) = lib::Library::new(name) {
+                return Some(lib)
+            }
+        }
 
-       None
+        None
     };
 }
 pub struct NativeGLContextHandle(pub EGLDisplay, pub EGLSurface);
