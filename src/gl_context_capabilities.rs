@@ -2,7 +2,7 @@
 use gleam::gl::{GLint};
 
 #[allow(unused_imports)]
-use GLFeature;
+use crate::GLFeature;
 
 /// This is a cross-platform struct, that every GLContext implementation
 /// should have under the field `capabilities`, as a public field

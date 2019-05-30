@@ -1,12 +1,12 @@
 use euclid::Size2D;
-use platform::NativeGLContextMethods;
-use platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
+use crate::platform::NativeGLContextMethods;
+use crate::platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
 use std::ffi::CString;
 use std::ops::Deref;
-use egl;
-use egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
+use crate::egl;
+use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
 use gleam::gl;
-use GLVersion;
+use crate::GLVersion;
 use libloading as lib;
 
 lazy_static! {

@@ -1,5 +1,5 @@
-use platform::NativeGLContextMethods;
-use GLVersion;
+use crate::platform::NativeGLContextMethods;
+use crate::GLVersion;
 use gleam::gl;
 use objc::runtime::{BOOL, NO};
 use objc::runtime::{Class, Object};

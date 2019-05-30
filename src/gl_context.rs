@@ -3,13 +3,13 @@ use gleam::gl;
 use gleam::gl::types::{GLuint};
 use std::rc::Rc;
 
-use NativeGLContextMethods;
-use GLContextAttributes;
-use GLContextCapabilities;
-use GLFormats;
-use GLLimits;
-use DrawBuffer;
-use ColorAttachmentType;
+use crate::NativeGLContextMethods;
+use crate::GLContextAttributes;
+use crate::GLContextCapabilities;
+use crate::GLFormats;
+use crate::GLLimits;
+use crate::DrawBuffer;
+use crate::ColorAttachmentType;
 
 /// This is a wrapper over a native headless GL context
 pub struct GLContext<Native> {
@@ -43,16 +43,16 @@ impl<Native> GLContext<Native>
                                          shared_with: Option<&Native::Handle>,
                                          dispatcher: Option<Box<GLContextDispatcher>>)
         -> Result<Self, &'static str> {
-        let native_context = try!(Native::create_shared_with_dispatcher(shared_with,
-                                                                        &api_type,
-                                                                        api_version,
-                                                                        dispatcher));
+        let native_context = Native::create_shared_with_dispatcher(shared_with,
+                                                                   &api_type,
+                                                                   api_version,
+                                                                   dispatcher)?;
         let gl_ = match api_type {
             gl::GlType::Gl => unsafe { gl::GlFns::load_with(|s| Self::get_proc_address(s) as *const _) },
             gl::GlType::Gles => unsafe { gl::GlesFns::load_with(|s| Self::get_proc_address(s) as *const _) },
         };
 
-        try!(native_context.make_current());
+        native_context.make_current()?;
         let extensions = Self::query_extensions(&gl_, api_version);
         let attributes = GLContextAttributes::any();
         let formats = GLFormats::detect(&attributes, &extensions[..], api_version);
@@ -107,15 +107,15 @@ impl<Native> GLContext<Native>
         // We create a headless context with a dummy size, we're painting to the
         // draw_buffer's framebuffer anyways.
         let mut context =
-            try!(Self::create_shared_with_dispatcher(api_type,
-                                                     api_version,
-                                                     shared_with,
-                                                     dispatcher));
+            Self::create_shared_with_dispatcher(api_type,
+                                                api_version,
+                                                shared_with,
+                                                dispatcher)?;
 
         context.formats = GLFormats::detect(&attributes, &context.extensions[..], api_version);
         context.attributes = attributes;
 
-        try!(context.init_offscreen(size, color_attachment_type));
+        context.init_offscreen(size, color_attachment_type)?;
 
         Ok(context)
     }
@@ -225,7 +225,7 @@ impl<Native> GLContext<Native>
     }
 
     fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
-        try!(self.create_draw_buffer(size, color_attachment_type));
+        self.create_draw_buffer(size, color_attachment_type)?;
 
         debug_assert!(self.is_current());
 
@@ -238,7 +238,7 @@ impl<Native> GLContext<Native>
     }
 
     fn create_draw_buffer(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
-        self.draw_buffer = Some(try!(DrawBuffer::new(self, size, color_attachment_type)));
+        self.draw_buffer = Some(DrawBuffer::new(self, size, color_attachment_type)?);
         Ok(())
     }
 
@@ -289,5 +289,5 @@ impl GLVersion {
 // Right now it's used in the WGL implementation to dispatch functions to the thread
 // where the context we share from is bound. See the WGL implementation for more details.
 pub trait GLContextDispatcher {
-    fn dispatch(&self, Box<Fn() + Send>);
+    fn dispatch(&self, f: Box<Fn() + Send>);
 }

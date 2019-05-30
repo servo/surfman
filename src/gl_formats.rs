@@ -1,7 +1,7 @@
 use gleam::gl::types::GLenum;
 use gleam::gl;
-use GLContextAttributes;
-use GLVersion;
+use crate::GLContextAttributes;
+use crate::GLVersion;
 
 /// This structure is here to allow
 /// cross-platform formatting

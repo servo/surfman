@@ -1,10 +1,10 @@
-use gl_context::{GLContextDispatcher, GLVersion};
+use crate::gl_context::{GLContextDispatcher, GLVersion};
 use gleam::gl;
 
 pub trait NativeGLContextMethods: Sized {
     type Handle;
 
-    fn get_proc_address(&str) -> *const ();
+    fn get_proc_address(proc: &str) -> *const ();
 
     // These are convenient methods to manage handles
     fn current() -> Option<Self>;

@@ -38,13 +38,13 @@ pub unsafe fn create_offscreen(shared_with: HGLRC,
                                settings: &WGLAttributes)
                                -> Result<(HGLRC, HDC), String> {
     let mut ctx = WGLScopedContext::default();
-    ctx.window = try!(create_hidden_window());
+    ctx.window = create_hidden_window()?;
     ctx.device_ctx = GetDC(ctx.window);
     if ctx.device_ctx.is_null() {
         return Err("GetDC function failed".to_owned());
     }
 
-    let extra = try!(load_extra_functions(ctx.window));
+    let extra = load_extra_functions(ctx.window)?;
 
     let extensions = if extra.GetExtensionsStringARB.is_loaded() {
         let data = extra.GetExtensionsStringARB(ctx.device_ctx as *const _);
@@ -59,14 +59,14 @@ pub unsafe fn create_offscreen(shared_with: HGLRC,
     };
 
     let (id, _) = if extensions.split(' ').find(|&i| i == "WGL_ARB_pixel_format").is_some() {
-        try!(choose_arb_pixel_format(&extra, &extensions, ctx.device_ctx, &settings.pixel_format)
-            .map_err(|_| "ARB pixel format not available".to_owned()))
+        choose_arb_pixel_format(&extra, &extensions, ctx.device_ctx, &settings.pixel_format)
+            .map_err(|_| "ARB pixel format not available".to_owned())?
     } else {
-        try!(choose_native_pixel_format(ctx.device_ctx, &settings.pixel_format)
-            .map_err(|_| "Native pixel format not available".to_owned()))
+        choose_native_pixel_format(ctx.device_ctx, &settings.pixel_format)
+            .map_err(|_| "Native pixel format not available".to_owned())?
     };
 
-    try!(set_pixel_format(ctx.device_ctx, id));
+    set_pixel_format(ctx.device_ctx, id)?;
 
     let result = create_full_context(settings, &extra, &extensions, ctx.device_ctx, shared_with);
     if result.is_ok() {
@@ -657,12 +657,12 @@ unsafe fn load_extra_functions(window: HWND) -> Result<wgl_ext::Wgl, String> {
 
     // getting the pixel format that we will use and setting it
     {
-        let id = try!(choose_dummy_pixel_format(dummy_window.device_ctx));
-        try!(set_pixel_format(dummy_window.device_ctx, id));
+        let id = choose_dummy_pixel_format(dummy_window.device_ctx)?;
+        set_pixel_format(dummy_window.device_ctx, id)?;
     }
 
     // creating the dummy OpenGL context and making it current
-    dummy_window.render_ctx = try!(create_basic_context(dummy_window.device_ctx, ptr::null_mut())).0;
+    dummy_window.render_ctx = create_basic_context(dummy_window.device_ctx, ptr::null_mut())?.0;
     if wgl::MakeCurrent(dummy_window.device_ctx as *const _, dummy_window.render_ctx as *const _) == 0 {
         return Err("WGL::MakeCurrent failed before loading extra WGL functions".to_owned());
     }

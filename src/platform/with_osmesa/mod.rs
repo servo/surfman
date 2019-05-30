@@ -2,11 +2,10 @@ use std::ffi::CString;
 use std::os::raw::c_int;
 use std::ptr;
 
-use osmesa_sys;
-use gl_context::GLVersion;
+use crate::gl_context::GLVersion;
 use gleam::gl;
 
-use platform::NativeGLContextMethods;
+use crate::platform::NativeGLContextMethods;
 
 const DUMMY_BUFFER_WIDTH: usize = 16;
 const DUMMY_BUFFER_HEIGHT: usize = 16;

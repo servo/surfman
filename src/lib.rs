@@ -1,27 +1,13 @@
-extern crate euclid;
-extern crate gleam;
-
 #[macro_use]
 extern crate log;
 
 #[cfg(feature="serde")]
 extern crate serde;
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
-extern crate x11;
-#[cfg(target_os="macos")]
-extern crate cgl;
-#[cfg(target_os="macos")]
-extern crate core_foundation;
-#[cfg(feature="osmesa")]
-extern crate osmesa_sys;
-#[cfg(target_os = "windows")]
-extern crate winapi;
-#[cfg(any(target_os="macos", target_os="windows", target_os="android", target_os="ios", feature="test_egl_in_linux"))]
+#[cfg(any(not(target_os = "linux"), feature = "test_egl_in_linux"))]
 #[macro_use]
 extern crate lazy_static;
-#[cfg(any(target_os="android", target_os="ios", feature="test_egl_in_linux"))]
-extern crate libloading;
+
 #[cfg(target_os = "ios")]
 #[macro_use]
 extern crate objc;

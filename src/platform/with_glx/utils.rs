@@ -1,14 +1,14 @@
 use gleam::gl;
-use glx;
+use crate::glx;
 use x11::xlib::*;
 use glx::types::GLXDrawable;
 use std::ffi::CStr;
 use std::os::raw::*;
 use euclid::Size2D;
 
-use GLVersion;
-use NativeGLContext;
-use NativeGLContextHandle;
+use crate::GLVersion;
+use crate::NativeGLContext;
+use crate::NativeGLContextHandle;
 
 pub struct ScopedXFree<T> {
     ptr: *mut T
@@ -141,7 +141,7 @@ pub fn create_offscreen_pixmap_backed_context(size: Size2D<i32>,
         let extensions = CStr::from_ptr(glx::QueryExtensionsString(dpy, screen_id)).to_bytes().to_vec();
         let extensions = String::from_utf8(extensions).unwrap();
 
-        let (_, depth) = try!(get_visual_and_depth(screen, visual_id as VisualID));
+        let (_, depth) = get_visual_and_depth(screen, visual_id as VisualID)?;
 
         let pixmap = XCreatePixmap(dpy as *mut _,
                                    XRootWindowOfScreen(screen),
