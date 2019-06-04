@@ -263,6 +263,17 @@ impl DrawBuffer {
         }
     }
 
+    pub fn get_active_io_surface_id(&self) -> Option<IOSurfaceID> {
+        match self.color_attachment.as_ref().unwrap() {
+            &ColorAttachment::Renderbuffer(_) => None,
+            &ColorAttachment::Texture(_) => None,
+            #[cfg(target_os="macos")]
+            &ColorAttachment::IOSurface((array, _sent, _complete, active)) => {
+                Some(array[active].1)
+            }
+        }
+    }
+
     fn gl(&self) -> &dyn gl::Gl {
         &*self.gl_
     }
