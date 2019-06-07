@@ -49,7 +49,11 @@ pub use self::with_osmesa::{OSMesaContext, OSMesaContextHandle};
 pub use self::with_osmesa::{OSMesaContext as NativeGLContext, OSMesaContextHandle as NativeGLContextHandle};
 
 
-#[cfg(any(target_os="android", target_os="windows", all(target_os="linux", feature = "test_egl_in_linux")))]
+#[cfg(any(
+    target_os="android",
+    all(target_os="windows", feature="no_wgl"),
+    all(target_os="linux", feature = "test_egl_in_linux"),
+))]
 pub mod with_egl;
 #[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
 pub use self::with_egl::{NativeGLContext, NativeGLContextHandle};

@@ -40,6 +40,10 @@ optional = true
 version = "2.3.0"
 features = ["xlib"]
 
+# Ensure that we have a static libEGL.lib present for linking with EGL bindings.
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+mozangle = { version = "0.2", features = ["egl"] }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["wingdi", "winuser", "libloaderapi"] }
 
