@@ -192,13 +192,13 @@ impl<Native> GLContext<Native>
     /// the IOSurface now used for reading. Resets the new active texture to an
     /// appropriate initial state;
     #[cfg(target_os="macos")]
-    pub fn swap_draw_buffer(&mut self) -> Option<u32> {
+    pub fn swap_draw_buffer(&mut self, clear_color: (f32, f32, f32, f32)) -> Option<u32> {
         let surface_id = match self.draw_buffer {
             Some(ref mut db) => db.swap_framebuffer_texture(),
             None => return None,
         };
         // TODO: support preserveDrawBuffer instead of clearing new frame
-        //self.reset_draw_buffer_contents();
+        self.reset_draw_buffer_contents(Some(clear_color));
         surface_id
     }
 
@@ -260,8 +260,11 @@ impl<Native> GLContext<Native>
         self.extensions.clone()
     }
 
-    fn reset_draw_buffer_contents(&self) {
-        self.gl().clear_color(0.0, 0.0, 0.0, if !self.attributes.alpha { 1.0 } else { 0.0 });
+    fn reset_draw_buffer_contents(&self, clear_color: Option<(f32, f32, f32, f32)>) {
+        match clear_color {
+            Some((r, g, b, a)) => self.gl().clear_color(r, g, b, a),
+            None => self.gl().clear_color(0.0, 0.0, 0.0, if !self.attributes.alpha { 1.0 } else { 0.0 }),
+        }
         self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
     }
 
@@ -269,10 +272,7 @@ impl<Native> GLContext<Native>
         self.create_draw_buffer(size, color_attachment_type)?;
 
         debug_assert!(self.is_current());
-        //self.reset_draw_buffer_contents();
-
-        self.gl().clear_color(0.0, 0.0, 0.0, 0.0);
-        self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+        self.reset_draw_buffer_contents(None);
         self.gl().scissor(0, 0, size.width, size.height);
         self.gl().viewport(0, 0, size.width, size.height);
 

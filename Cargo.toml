@@ -32,7 +32,6 @@ core-foundation = "0.6"
 cgl = "0.2.3"
 io-surface = "0.11.1"
 
-
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2"
 libloading = { version = "0.5", default-features = false }
