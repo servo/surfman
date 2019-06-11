@@ -8,6 +8,7 @@ extern crate lazy_static;
 #[cfg(target_os = "ios")]
 #[macro_use]
 extern crate objc;
+#[cfg(target_os="macos")]
 extern crate io_surface;
 
 mod platform;

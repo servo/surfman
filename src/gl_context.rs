@@ -197,7 +197,7 @@ impl<Native> GLContext<Native>
             None => return None,
         };
         // TODO: support preserveDrawBuffer instead of clearing new frame
-        self.reset_draw_buffer_contents();
+        //self.reset_draw_buffer_contents();
         texture_id
     }
 
@@ -249,8 +249,8 @@ impl<Native> GLContext<Native>
     }
 
     fn reset_draw_buffer_contents(&self) {
-        //self.gl().clear_color(0.0, 0.0, 0.0, if !self.attributes.alpha { 1.0 } else { 0.0 });
-        //self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+        self.gl().clear_color(0.0, 0.0, 0.0, if !self.attributes.alpha { 1.0 } else { 0.0 });
+        self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
     }
 
     fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
