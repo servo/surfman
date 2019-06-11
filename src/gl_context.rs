@@ -189,16 +189,28 @@ impl<Native> GLContext<Native>
     }
 
     /// Swap the backing textures for the draw buffer, returning the id of
-    /// the texture now used for reading. Resets the new active texture to an
+    /// the IOSurface now used for reading. Resets the new active texture to an
     /// appropriate initial state;
+    #[cfg(target_os="macos")]
     pub fn swap_draw_buffer(&mut self) -> Option<u32> {
-        let texture_id = match self.draw_buffer {
+        let surface_id = match self.draw_buffer {
             Some(ref mut db) => db.swap_framebuffer_texture(),
             None => return None,
         };
         // TODO: support preserveDrawBuffer instead of clearing new frame
         //self.reset_draw_buffer_contents();
-        texture_id
+        surface_id
+    }
+
+    /// Swap the WR visible and complete texture, returning the id of
+    /// the IOSurface which we will send to the WR thread
+    #[cfg(target_os="macos")]
+    pub fn handle_lock(&mut self) -> Option<u32> {
+        let surface_id = match self.draw_buffer {
+            Some(ref mut db) => db.swap_wr_visible_texture(),
+            None => return None,
+        };
+        surface_id
     }
 
     pub fn borrow_draw_buffer(&self) -> Option<&DrawBuffer> {
