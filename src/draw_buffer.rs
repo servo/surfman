@@ -331,7 +331,7 @@ impl DrawBuffer {
                     let texture = self.gl().gen_textures(1)[0];
                     debug_assert!(texture != 0);
 
-                    self.gl().bind_texture(gl::TEXTURE_RECTANGLE, texture);
+                    self.gl().bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
                     let io_surface = unsafe {
                         let props = CFDictionary::from_CFType_pairs(
                             &[
@@ -348,14 +348,14 @@ impl DrawBuffer {
                     io_surface.bind_to_gl_texture(self.size.width, self.size.height);
 
                     // Low filtering to allow rendering
-                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
-                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
+                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
+                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
 
                     // TODO(emilio): Check if these two are neccessary, probably not
-                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
 
-                    self.gl().bind_texture(gl::TEXTURE_RECTANGLE, 0);
+                    self.gl().bind_texture(gl::TEXTURE_RECTANGLE_ARB, 0);
 
                     debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
 
@@ -421,7 +421,7 @@ impl DrawBuffer {
         self.gl().framebuffer_texture_2d(
             gl::FRAMEBUFFER,
             gl::COLOR_ATTACHMENT0,
-            gl::TEXTURE_RECTANGLE,
+            gl::TEXTURE_RECTANGLE_ARB,
             active_texture_id,
             0
         );
@@ -464,7 +464,7 @@ impl DrawBuffer {
             ColorAttachment::IOSurface{ surfaces, wr_visible: _, complete: _, active } => {
                 self.gl().framebuffer_texture_2d(gl::FRAMEBUFFER,
                                 gl::COLOR_ATTACHMENT0,
-                                gl::TEXTURE_RECTANGLE,
+                                gl::TEXTURE_RECTANGLE_ARB,
                                 surfaces[active].0, 0);
             }
         }
