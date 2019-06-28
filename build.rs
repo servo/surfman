@@ -16,7 +16,16 @@ fn main() {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, [])
             .write_bindings(gl_generator::StaticGenerator, &mut file).unwrap();
-        println!("cargo:rustc-link-lib=EGL");
+
+        // Historically, Android builds have succeeded with rust-link-lib=EGL.
+        // On Windows when relying on %LIBS% to contain libEGL.lib, however,
+        // we must explicitly use rustc-link-lib=libEGL or rustc will attempt
+        // to link EGL.lib instead.
+        if target.contains("windows") {
+            println!("cargo:rustc-link-lib=libEGL");
+        } else {
+            println!("cargo:rust-link-lib=EGL");
+        }
     }
 
     if target.contains("apple-ios") {
