@@ -243,17 +243,6 @@ impl DrawBuffer {
     }
 
     #[cfg(target_os="macos")]
-    pub fn get_complete_io_surface_id(&self) -> Option<IOSurfaceID> {
-        match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::Renderbuffer(_) => None,
-            &ColorAttachment::Texture(_) => None,
-            &ColorAttachment::IOSurface{ surfaces, wr_visible: _, complete, active: _ } => {
-                Some(surfaces[complete].1)
-            }
-        }
-    }
-
-    #[cfg(target_os="macos")]
     pub fn get_active_io_surface_id(&self) -> Option<IOSurfaceID> {
         match self.color_attachment.as_ref().unwrap() {
             &ColorAttachment::Renderbuffer(_) => None,

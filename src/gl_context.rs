@@ -229,17 +229,6 @@ impl<Native> GLContext<Native>
         fb[0] as GLuint
     }
 
-    pub fn draw_buffer_is_bound(&self) -> bool {
-        if let Some(ref db) = self.draw_buffer {
-            let mut fb = [0];
-            unsafe {
-                self.gl().get_integer_v(gl::FRAMEBUFFER_BINDING, &mut fb);
-            }
-            return fb[0] == db.get_framebuffer() as i32;
-        }
-        false
-    }
-
     pub fn draw_buffer_size(&self) -> Option<Size2D<i32>> {
         self.draw_buffer.as_ref().map(|db| db.size())
     }
