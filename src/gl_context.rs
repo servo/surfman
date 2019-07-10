@@ -35,16 +35,16 @@ impl<Native> GLContext<Native>
                   api_version: GLVersion,
                   shared_with: Option<&Native::Handle>)
                   -> Result<Self, &'static str> {
-        Self::create_shared_with_dispatcher(api_type, api_version, shared_with, None)
+        Self::create_shared_with_dispatcher(&api_type, api_version, shared_with, None)
     }
 
-    pub fn create_shared_with_dispatcher(api_type: gl::GlType,
+    pub fn create_shared_with_dispatcher(api_type: &gl::GlType,
                                          api_version: GLVersion,
                                          shared_with: Option<&Native::Handle>,
                                          dispatcher: Option<Box<GLContextDispatcher>>)
         -> Result<Self, &'static str> {
         let native_context = Native::create_shared_with_dispatcher(shared_with,
-                                                                   &api_type,
+                                                                   api_type,
                                                                    api_version,
                                                                    dispatcher)?;
         let gl_ = match api_type {
@@ -55,7 +55,7 @@ impl<Native> GLContext<Native>
         native_context.make_current()?;
         let extensions = Self::query_extensions(&gl_, api_version);
         let attributes = GLContextAttributes::any();
-        let formats = GLFormats::detect(&attributes, &extensions[..], api_version);
+        let formats = GLFormats::detect(&attributes, &extensions[..], api_type, api_version);
         let limits = GLLimits::detect(&*gl_);
 
         Ok(GLContext {
@@ -107,12 +107,12 @@ impl<Native> GLContext<Native>
         // We create a headless context with a dummy size, we're painting to the
         // draw_buffer's framebuffer anyways.
         let mut context =
-            Self::create_shared_with_dispatcher(api_type,
+            Self::create_shared_with_dispatcher(&api_type,
                                                 api_version,
                                                 shared_with,
                                                 dispatcher)?;
 
-        context.formats = GLFormats::detect(&attributes, &context.extensions[..], api_version);
+        context.formats = GLFormats::detect(&attributes, &context.extensions[..], &api_type, api_version);
         context.attributes = attributes;
 
         context.init_offscreen(size, color_attachment_type)?;

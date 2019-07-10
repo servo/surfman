@@ -21,62 +21,60 @@ impl GLFormats {
     //
     // FIXME: In linux with GLES2 texture attachments create INVALID_ENUM errors.
     // I suspect that it's because of texture formats, but I need time to debugit.
-    #[cfg(not(any(target_os="android", target_os="ios")))]
-    pub fn detect(attrs: &GLContextAttributes, extensions: &[String], api_version: GLVersion) -> GLFormats {
+    pub fn detect(attrs: &GLContextAttributes, extensions: &[String], api_type: &gl::GlType, api_version: GLVersion) -> GLFormats {
         let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions, api_version);
 
-        if attrs.alpha {
-            GLFormats {
-                color_renderbuffer: gl::RGBA8,
-                texture_internal: gl::RGBA,
-                texture: gl::RGBA,
-                texture_type: gl::UNSIGNED_BYTE,
-                depth: gl::DEPTH_COMPONENT24,
-                stencil: gl::STENCIL_INDEX8,
-                packed_depth_stencil: packed_depth_stencil,
-            }
-        } else {
-            GLFormats {
-                color_renderbuffer: gl::RGB8,
-                texture_internal: gl::RGB8,
-                texture: gl::RGB,
-                texture_type: gl::UNSIGNED_BYTE,
-                depth: gl::DEPTH_COMPONENT24,
-                stencil: gl::STENCIL_INDEX8,
-                packed_depth_stencil: packed_depth_stencil,
-            }
-        }
-    }
+        match *api_type {
+            gl::GlType::Gl => {
+                let (color_renderbuffer, texture_internal, texture) = if attrs.alpha {
+                    (gl::RGBA8, gl::RGBA, gl::RGBA)
+                } else {
+                    (gl::RGB8, gl::RGB8, gl::RGB)
+                };
 
-    #[cfg(any(target_os="android", target_os="ios"))]
-    pub fn detect(attrs: &GLContextAttributes, extensions: &[String], api_version: GLVersion) -> GLFormats {
-        // RGB8 or RGBA8 is guaranteed on OpenGLES 3+.
-        // On OpenGLES 2 detect via extensions if the GPU supports RGB8 and RGBA8 renderbuffer/texture storage formats.
-        // GL_ARM_rgba8 extension is similar to OES_rgb8_rgba8, but only exposes RGBA8.
-        let has_rgb8 = api_version.major_version() >= 3 || extensions.iter().any(|s| s == "GL_OES_rgb8_rgba8");
-        let has_rgba8 = has_rgb8 || extensions.iter().any(|s| s == "GL_ARM_rgba8");
-
-        let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions, api_version);
-
-        if attrs.alpha {
-            GLFormats {
-                color_renderbuffer: if has_rgba8 { gl::RGBA8 } else { gl::RGBA4 },
-                texture_internal: gl::RGBA,
-                texture: gl::RGBA,
-                texture_type: if has_rgba8 { gl::UNSIGNED_BYTE } else { gl::UNSIGNED_SHORT_4_4_4_4 },
-                depth: gl::DEPTH_COMPONENT16,
-                stencil: gl::STENCIL_INDEX8,
-                packed_depth_stencil: packed_depth_stencil,
+                GLFormats {
+                    color_renderbuffer,
+                    texture_internal,
+                    texture,
+                    texture_type: gl::UNSIGNED_BYTE,
+                    depth: gl::DEPTH_COMPONENT24,
+                    stencil: gl::STENCIL_INDEX8,
+                    packed_depth_stencil: packed_depth_stencil,
+                }
             }
-        } else {
-            GLFormats {
-                color_renderbuffer: if has_rgb8 { gl::RGB8 } else { gl::RGB565 },
-                texture_internal: gl::RGB,
-                texture: gl::RGB,
-                texture_type: if has_rgb8 { gl::UNSIGNED_BYTE } else { gl::UNSIGNED_SHORT_4_4_4_4 },
-                depth: gl::DEPTH_COMPONENT16,
-                stencil: gl::STENCIL_INDEX8,
-                packed_depth_stencil: packed_depth_stencil,
+
+            gl::GlType::Gles => {
+                // RGB8 or RGBA8 is guaranteed on OpenGLES 3+.
+                // On OpenGLES 2 detect via extensions if the GPU supports RGB8 and RGBA8 renderbuffer/texture storage formats.
+                // GL_ARM_rgba8 extension is similar to OES_rgb8_rgba8, but only exposes RGBA8.
+                let has_rgb8 = api_version.major_version() >= 3 || extensions.iter().any(|s| s == "GL_OES_rgb8_rgba8");
+                let has_rgba8 = has_rgb8 || extensions.iter().any(|s| s == "GL_ARM_rgba8");
+
+                let (color_renderbuffer, texture_internal, texture, texture_type) = if attrs.alpha {
+                    (
+                        if has_rgba8 { gl::RGBA8 } else { gl::RGBA4 },
+                        gl::RGBA,
+                        gl::RGBA,
+                        if has_rgba8 { gl::UNSIGNED_BYTE } else { gl::UNSIGNED_SHORT_4_4_4_4 },
+                    )
+                } else {
+                    (
+                        if has_rgb8 { gl::RGB8 } else { gl::RGB565 },
+                        gl::RGB,
+                        gl::RGB,
+                        if has_rgb8 { gl::UNSIGNED_BYTE } else { gl::UNSIGNED_SHORT_4_4_4_4 },
+                    )
+                };
+
+                GLFormats {
+                    color_renderbuffer,
+                    texture_internal,
+                    texture,
+                    texture_type,
+                    depth: gl::DEPTH_COMPONENT16,
+                    stencil: gl::STENCIL_INDEX8,
+                    packed_depth_stencil: packed_depth_stencil,
+                }
             }
         }
     }
