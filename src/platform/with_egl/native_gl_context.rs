@@ -12,7 +12,7 @@ use libloading as lib;
 lazy_static! {
     static ref GL_LIB: Option<lib::Library>  = {
         let names = if cfg!(target_os="windows") {
-            &["libEGL.dll"][..]
+            &["libGLESv2.dll"][..]
         } else {
             &["libGLESv2.so", "libGL.so", "libGLESv3.so"][..]
         };
