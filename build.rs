@@ -24,7 +24,7 @@ fn main() {
         if target.contains("windows") {
             println!("cargo:rustc-link-lib=libEGL");
         } else {
-            println!("cargo:rust-link-lib=EGL");
+            println!("cargo:rustc-link-lib=EGL");
         }
     }
 
