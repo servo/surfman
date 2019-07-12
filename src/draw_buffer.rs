@@ -38,7 +38,7 @@ impl ColorAttachment {
         }
     }
 
-    fn destroy(self, gl: &gl::Gl) {
+    fn destroy(self, gl: &dyn gl::Gl) {
         match self {
             ColorAttachment::Renderbuffer(id) => gl.delete_renderbuffers(&[id]),
             ColorAttachment::Texture(tex_id) => gl.delete_textures(&[tex_id]),
@@ -52,7 +52,7 @@ impl ColorAttachment {
 /// packed or independent depth or stencil buffers,
 /// depending on context requirements.
 pub struct DrawBuffer {
-    gl_: Rc<gl::Gl>,
+    gl_: Rc<dyn gl::Gl>,
     size: Size2D<i32>,
     framebuffer: GLuint,
     color_attachment: Option<ColorAttachment>,
@@ -65,7 +65,7 @@ pub struct DrawBuffer {
 /// Helper function to create a render buffer
 /// TODO(emilio): We'll need to switch between `glRenderbufferStorage` and
 /// `glRenderbufferStorageMultisample` when we support antialising
-fn create_renderbuffer(gl_: &gl::Gl,
+fn create_renderbuffer(gl_: &dyn gl::Gl,
                        format: GLenum,
                        size: &Size2D<i32>) -> GLuint {
     let ret = gl_.gen_renderbuffers(1)[0];
@@ -159,7 +159,7 @@ impl DrawBuffer {
         }
     }
 
-    fn gl(&self) -> &gl::Gl {
+    fn gl(&self) -> &dyn gl::Gl {
         &*self.gl_
     }
 

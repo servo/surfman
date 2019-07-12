@@ -17,7 +17,7 @@ pub trait NativeGLContextMethods: Sized {
     fn create_shared_with_dispatcher(with: Option<&Self::Handle>,
                                      api_type: &gl::GlType,
                                      api_version: GLVersion,
-                                     _dispatcher: Option<Box<GLContextDispatcher>>)
+                                     _dispatcher: Option<Box<dyn GLContextDispatcher>>)
         -> Result<Self, &'static str> {
         Self::create_shared(with, api_type, api_version)
     }

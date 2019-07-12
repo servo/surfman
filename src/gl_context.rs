@@ -13,7 +13,7 @@ use crate::ColorAttachmentType;
 
 /// This is a wrapper over a native headless GL context
 pub struct GLContext<Native> {
-    gl_: Rc<gl::Gl>,
+    gl_: Rc<dyn gl::Gl>,
     native_context: Native,
     /// This an abstraction over a custom framebuffer
     /// with attachments according to WebGLContextAttributes
@@ -41,7 +41,7 @@ impl<Native> GLContext<Native>
     pub fn create_shared_with_dispatcher(api_type: &gl::GlType,
                                          api_version: GLVersion,
                                          shared_with: Option<&Native::Handle>,
-                                         dispatcher: Option<Box<GLContextDispatcher>>)
+                                         dispatcher: Option<Box<dyn GLContextDispatcher>>)
         -> Result<Self, &'static str> {
         let native_context = Native::create_shared_with_dispatcher(shared_with,
                                                                    api_type,
@@ -102,7 +102,7 @@ impl<Native> GLContext<Native>
                                       api_type: gl::GlType,
                                       api_version: GLVersion,
                                       shared_with: Option<&Native::Handle>,
-                                      dispatcher: Option<Box<GLContextDispatcher>>)
+                                      dispatcher: Option<Box<dyn GLContextDispatcher>>)
         -> Result<Self, &'static str> {
         // We create a headless context with a dummy size, we're painting to the
         // draw_buffer's framebuffer anyways.
@@ -163,11 +163,11 @@ impl<Native> GLContext<Native>
         self.native_context.handle()
     }
 
-    pub fn gl(&self) -> &gl::Gl {
+    pub fn gl(&self) -> &dyn gl::Gl {
         &*self.gl_
     }
 
-    pub fn clone_gl(&self) -> Rc<gl::Gl> {
+    pub fn clone_gl(&self) -> Rc<dyn gl::Gl> {
         self.gl_.clone()
     }
 
@@ -242,7 +242,7 @@ impl<Native> GLContext<Native>
         Ok(())
     }
 
-    fn query_extensions(gl_: &Rc<gl::Gl>, api_version: GLVersion) -> Vec<String> {
+    fn query_extensions(gl_: &Rc<dyn gl::Gl>, api_version: GLVersion) -> Vec<String> {
         if api_version.major_version() >=3 {
             // glGetString(GL_EXTENSIONS) is deprecated on OpenGL >= 3.x.
             // Some GL backends such as CGL generate INVALID_ENUM error when used.
@@ -289,5 +289,5 @@ impl GLVersion {
 // Right now it's used in the WGL implementation to dispatch functions to the thread
 // where the context we share from is bound. See the WGL implementation for more details.
 pub trait GLContextDispatcher {
-    fn dispatch(&self, f: Box<Fn() + Send>);
+    fn dispatch(&self, f: Box<dyn Fn() + Send>);
 }

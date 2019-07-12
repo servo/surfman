@@ -1,9 +1,6 @@
 #[macro_use]
 extern crate log;
 
-#[cfg(feature="serde")]
-extern crate serde;
-
 #[cfg(any(not(target_os = "linux"), feature = "test_egl_in_linux"))]
 #[macro_use]
 extern crate lazy_static;
