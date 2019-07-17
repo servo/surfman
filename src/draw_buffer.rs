@@ -26,6 +26,8 @@ impl Default for ColorAttachmentType {
 
 #[cfg(target_os="macos")]
 const SURFACE_COUNT: usize = 3;
+#[cfg(target_os="macos")]
+const BYTES_PER_PIXEL: i32 = 4;
 
 /// We either have a color renderbuffer, or a surface bound to a texture bound
 /// to a framebuffer as a color attachment.
@@ -321,20 +323,25 @@ impl DrawBuffer {
                     debug_assert!(texture != 0);
 
                     self.gl().bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
+                    let has_alpha = match formats.texture {
+                        gl::RGB => false,
+                        gl::RGBA => true,
+                        _ => unimplemented!(),
+                    };
                     let io_surface = unsafe {
                         let props = CFDictionary::from_CFType_pairs(
                             &[
                                 (CFString::wrap_under_get_rule(io_surface::kIOSurfaceWidth),CFNumber::from(self.size.width).as_CFType()),
                                 (CFString::wrap_under_get_rule(io_surface::kIOSurfaceHeight),CFNumber::from(self.size.height).as_CFType()),
-                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement),CFNumber::from(4).as_CFType()),
-                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow),CFNumber::from(self.size.width * 4).as_CFType()),
+                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement),CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
+                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow),CFNumber::from(self.size.width * BYTES_PER_PIXEL).as_CFType()),
                                 (CFString::wrap_under_get_rule(io_surface::kIOSurfaceIsGlobal),CFBoolean::from(true).as_CFType()),
                             ]
                         );
                         io_surface::new(&props)
                     };
 
-                    io_surface.bind_to_gl_texture(self.size.width, self.size.height);
+                    io_surface.bind_to_gl_texture(self.size.width, self.size.height, has_alpha);
 
                     // Low filtering to allow rendering
                     self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);

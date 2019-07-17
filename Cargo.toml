@@ -28,9 +28,9 @@ osmesa-sys = { version = "0.1", optional = true }
 serde = { version = "1.0", optional = true }
 
 [target.x86_64-apple-darwin.dependencies]
-core-foundation = "0.6"
+core-foundation = { git = "https://github.com/zakorgy/core-foundation-rs", branch = "io-surface-alpha" }
 cgl = "0.2.3"
-io-surface = "0.11.1"
+io-surface = { git = "https://github.com/zakorgy/core-foundation-rs", branch = "io-surface-alpha" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2"
