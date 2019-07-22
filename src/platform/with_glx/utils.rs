@@ -4,7 +4,7 @@ use x11::xlib::*;
 use glx::types::GLXDrawable;
 use std::ffi::CStr;
 use std::os::raw::*;
-use euclid::Size2D;
+use euclid::default::Size2D;
 
 use crate::GLVersion;
 use crate::NativeGLContext;
