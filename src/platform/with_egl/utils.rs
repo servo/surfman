@@ -1,5 +1,5 @@
 use std::mem;
-use euclid::Size2D;
+use euclid::default::Size2D;
 use super::{NativeGLContext, NativeGLContextHandle};
 
 use crate::GLVersion;

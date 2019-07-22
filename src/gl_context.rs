@@ -1,4 +1,4 @@
-use euclid::Size2D;
+use euclid::default::Size2D;
 use gleam::gl;
 use gleam::gl::types::{GLuint};
 use std::rc::Rc;
