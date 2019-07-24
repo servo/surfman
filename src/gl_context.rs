@@ -188,35 +188,6 @@ impl<Native> GLContext<Native>
         &self.limits
     }
 
-    /// Swap the backing textures for the draw buffer, returning the id of
-    /// the IOSurface now used for reading. Resets the new active texture to an
-    /// appropriate initial state;
-    #[cfg(target_os="macos")]
-    pub fn swap_draw_buffer(
-        &mut self,
-        clear_color: (f32, f32, f32, f32),
-        mask: u32,
-    ) -> Option<u32> {
-        let surface_id = match self.draw_buffer {
-            Some(ref mut db) => db.swap_framebuffer_texture(),
-            None => return None,
-        };
-        // TODO: support preserveDrawBuffer instead of clearing new frame
-        self.reset_draw_buffer_contents(Some(clear_color), Some(mask));
-        surface_id
-    }
-
-    /// Swap the WR visible and complete texture, returning the id of
-    /// the IOSurface which we will send to the WR thread
-    #[cfg(target_os="macos")]
-    pub fn handle_lock(&mut self) -> Option<u32> {
-        let surface_id = match self.draw_buffer {
-            Some(ref mut db) => db.swap_wr_visible_texture(),
-            None => return None,
-        };
-        surface_id
-    }
-
     pub fn borrow_draw_buffer(&self) -> Option<&DrawBuffer> {
         self.draw_buffer.as_ref()
     }
@@ -253,21 +224,13 @@ impl<Native> GLContext<Native>
         self.extensions.clone()
     }
 
-    fn reset_draw_buffer_contents(
-        &self,
-        clear_color: Option<(f32, f32, f32, f32)>,
-        mask: Option<u32>,
-    ) {
-        let cc = clear_color.unwrap_or((0., 0., 0., 0.));
-        self.gl().clear_color(cc.0, cc.1, cc.2, if !self.attributes.alpha { 1.0 } else { cc.3 });
-        self.gl().clear(mask.unwrap_or(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT));
-    }
-
     fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
         self.create_draw_buffer(size, color_attachment_type)?;
 
         debug_assert!(self.is_current());
-        self.reset_draw_buffer_contents(None, None);
+
+        self.gl().clear_color(0.0, 0.0, 0.0, 0.0);
+        self.gl().clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
         self.gl().scissor(0, 0, size.width, size.height);
         self.gl().viewport(0, 0, size.width, size.height);
 
