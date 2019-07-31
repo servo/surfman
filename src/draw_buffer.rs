@@ -8,14 +8,12 @@ use std::mem;
 
 use crate::GLContext;
 use crate::NativeGLContextMethods;
-
+use crate::platform::NativeSurface;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ColorAttachmentType {
-    Texture,
+    NativeSurface,
     Renderbuffer,
-    #[cfg(target_os="macos")]
-    IOSurface,
 }
 
 impl Default for ColorAttachmentType {
@@ -26,8 +24,6 @@ impl Default for ColorAttachmentType {
 
 #[cfg(target_os="macos")]
 const SURFACE_COUNT: usize = 3;
-#[cfg(target_os="macos")]
-const BYTES_PER_PIXEL: i32 = 4;
 
 /// We either have a color renderbuffer, or a surface bound to a texture bound
 /// to a framebuffer as a color attachment.
@@ -36,89 +32,29 @@ const BYTES_PER_PIXEL: i32 = 4;
 /// is just to avoid propagating the GL functions pointer further down.
 #[derive(Debug)]
 pub enum ColorAttachment {
+    NativeSurface(NativeSurface),
     Renderbuffer(GLuint),
-    Texture(GLuint),
-    #[cfg(target_os="macos")]
-    IOSurface {
-        surfaces: [(GLuint, IOSurfaceID); SURFACE_COUNT],
-        wr_visible: usize,
-        complete: usize,
-        active: usize,
-    },
 }
 
 impl ColorAttachment {
     pub fn color_attachment_type(&self) -> ColorAttachmentType {
         match *self {
             ColorAttachment::Renderbuffer(_) => ColorAttachmentType::Renderbuffer,
-            ColorAttachment::Texture(_) => ColorAttachmentType::Texture,
-            #[cfg(target_os="macos")]
-            ColorAttachment::IOSurface{..} => ColorAttachmentType::IOSurface,
+            ColorAttachment::NativeSurface(_) => ColorAttachmentType::NativeSurface,
         }
     }
 
     fn destroy(self, gl: &dyn gl::Gl) {
         match self {
             ColorAttachment::Renderbuffer(id) => gl.delete_renderbuffers(&[id]),
-            ColorAttachment::Texture(tex_id) => gl.delete_textures(&[tex_id]),
-            #[cfg(target_os="macos")]
-            ColorAttachment::IOSurface{ surfaces, .. } => {
-                for (text, _) in surfaces.iter() {
-                    gl.delete_textures(&[*text]);
-                }
-            }
-
+            ColorAttachment::NativeSurface(mut native_surface) => native_surface.destroy(gl),
         }
     }
 
-    #[cfg(target_os="macos")]
-    fn active_texture(&self) -> GLuint {
+    fn texture(&self) -> GLuint {
         match *self {
             ColorAttachment::Renderbuffer(_) => panic!("no texture for renderbuffer attachment"),
-            ColorAttachment::Texture(active) => active,
-            ColorAttachment::IOSurface{ surfaces, wr_visible: _, complete: _, active } => {
-                surfaces[active].0
-            }
-        }
-    }
-
-    #[cfg(target_os="macos")]
-    fn complete_surface(&self) -> Option<IOSurfaceID> {
-        match *self {
-            ColorAttachment::IOSurface{ surfaces, wr_visible: _, complete, active: _ } => {
-                Some(surfaces[complete].1)
-            }
-            _ => None,
-        }
-    }
-
-    #[cfg(target_os="macos")]
-    fn wr_visible_surface(&self) -> Option<IOSurfaceID> {
-        match *self {
-            ColorAttachment::IOSurface{ surfaces, wr_visible, complete: _, active: _ } => {
-                Some(surfaces[wr_visible].1)
-            }
-            _ => None,
-        }
-    }
-
-    #[cfg(target_os="macos")]
-    fn swap_active_texture(&mut self) {
-        match *self {
-            ColorAttachment::IOSurface{ surfaces: _, wr_visible: _, ref mut complete, ref mut active } => {
-                mem::swap(complete, active);
-            }
-            _ => (),
-        }
-    }
-
-    #[cfg(target_os="macos")]
-    fn swap_wr_visible_texture(&mut self) {
-        match *self {
-            ColorAttachment::IOSurface{ surfaces: _, ref mut wr_visible, ref mut complete, active: _ } => {
-                mem::swap(complete, wr_visible);
-            }
-            _ => (),
+            ColorAttachment::NativeSurface(ref native_surface) => native_surface.gl_texture(),
         }
     }
 }
@@ -137,8 +73,6 @@ pub struct DrawBuffer {
     depth_renderbuffer: GLuint,
     packed_depth_stencil_renderbuffer: GLuint,
     // samples: GLsizei,
-    #[cfg(target_os="macos")]
-    io_surfaces: Vec<IOSurface>,
 }
 
 /// Helper function to create a render buffer
@@ -193,8 +127,6 @@ impl DrawBuffer {
             depth_renderbuffer: 0,
             packed_depth_stencil_renderbuffer: 0,
             // samples: 0,
-            #[cfg(target_os="macos")]
-            io_surfaces: vec![],
         };
 
         context.make_current()?;
@@ -236,21 +168,8 @@ impl DrawBuffer {
     pub fn get_bound_texture_id(&self) -> Option<GLuint> {
         match self.color_attachment.as_ref().unwrap() {
             &ColorAttachment::Renderbuffer(_) => None,
-            &ColorAttachment::Texture(id) => Some(id),
-            #[cfg(target_os="macos")]
-            &ColorAttachment::IOSurface{ surfaces, wr_visible: _, complete: _, active } => {
-                Some(surfaces[active].0)
-            }
-        }
-    }
-
-    #[cfg(target_os="macos")]
-    pub fn get_active_io_surface_id(&self) -> Option<IOSurfaceID> {
-        match self.color_attachment.as_ref().unwrap() {
-            &ColorAttachment::Renderbuffer(_) => None,
-            &ColorAttachment::Texture(_) => None,
-            &ColorAttachment::IOSurface{ surfaces, wr_visible: _, complete: _, active } => {
-                Some(surfaces[active].1)
+            &ColorAttachment::NativeSurface(ref surface_texture) => {
+                Some(surface_texture.gl_texture())
             }
         }
     }
@@ -258,7 +177,6 @@ impl DrawBuffer {
     fn gl(&self) -> &dyn gl::Gl {
         &*self.gl_
     }
-
 
     fn init<T: NativeGLContextMethods>(&mut self,
                                        context: &GLContext<T>,
@@ -279,100 +197,11 @@ impl DrawBuffer {
             },
 
             // TODO(ecoal95): Allow more customization of textures
-            ColorAttachmentType::Texture => {
-                let texture = self.gl().gen_textures(1)[0];
-                debug_assert!(texture != 0);
-
-                self.gl().bind_texture(gl::TEXTURE_2D, texture);
-                self.gl().tex_image_2d(
-                    gl::TEXTURE_2D,
-                    0,
-                    formats.texture_internal as GLint,
-                    self.size.width,
-                    self.size.height,
-                    0,
-                    formats.texture,
-                    formats.texture_type,
-                    None
-                );
-
-                // Low filtering to allow rendering
-                self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
-                self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
-
-                // TODO(emilio): Check if these two are neccessary, probably not
-                self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-                self.gl().tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-
-                self.gl().bind_texture(gl::TEXTURE_2D, 0);
-
-                debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
-
-                Some(ColorAttachment::Texture(texture))
-            },
-            #[cfg(target_os="macos")]
-            ColorAttachmentType::IOSurface => {
-                use core_foundation::base::TCFType;
-                use core_foundation::dictionary::CFDictionary;
-                use core_foundation::string::CFString;
-                use core_foundation::number::CFNumber;
-                use core_foundation::boolean::CFBoolean;
-
-                let mut create_texture = || {
-                    let texture = self.gl().gen_textures(1)[0];
-                    debug_assert!(texture != 0);
-
-                    self.gl().bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
-                    let has_alpha = match formats.texture {
-                        gl::RGB => false,
-                        gl::RGBA => true,
-                        _ => unimplemented!(),
-                    };
-                    let io_surface = unsafe {
-                        let props = CFDictionary::from_CFType_pairs(
-                            &[
-                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceWidth),CFNumber::from(self.size.width).as_CFType()),
-                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceHeight),CFNumber::from(self.size.height).as_CFType()),
-                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerElement),CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
-                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceBytesPerRow),CFNumber::from(self.size.width * BYTES_PER_PIXEL).as_CFType()),
-                                (CFString::wrap_under_get_rule(io_surface::kIOSurfaceIsGlobal),CFBoolean::from(true).as_CFType()),
-                            ]
-                        );
-                        io_surface::new(&props)
-                    };
-
-                    io_surface.bind_to_gl_texture(self.size.width, self.size.height, has_alpha);
-
-                    // Low filtering to allow rendering
-                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
-                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
-
-                    // TODO(emilio): Check if these two are neccessary, probably not
-                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-                    self.gl().tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-
-                    self.gl().bind_texture(gl::TEXTURE_RECTANGLE_ARB, 0);
-
-                    debug_assert_eq!(self.gl().get_error(), gl::NO_ERROR);
-
-                    let surface_id = io_surface.get_id();
-
-                    self.io_surfaces.push(io_surface);
-
-                    (texture, surface_id)
-                };
-
-                let wr_visible = create_texture();
-                let complete = create_texture();
-                let active = create_texture();
-
-                Some(ColorAttachment::IOSurface {
-                    surfaces: [wr_visible, complete, active],
-                    wr_visible: 0,
-                    complete: 1,
-                    active: 2,
-                })
-            },
+            ColorAttachmentType::NativeSurface => {
+                Some(ColorAttachment::NativeSurface(NativeSurface::new(self.gl(),
+                                                                       &self.size,
+                                                                       formats)))
+            }
         };
 
         // After this we check if we need stencil and depth buffers
@@ -398,45 +227,6 @@ impl DrawBuffer {
         self.attach_to_framebuffer()
     }
 
-    /// Swap the internal read and draw textures, returning the id of the texture
-    /// now used for reading.
-    #[cfg(target_os="macos")]
-    pub fn swap_framebuffer_texture(&mut self) -> Option<IOSurfaceID> {
-        self.gl().finish();
-        let (active_texture_id, complete_surface_id) = match self.color_attachment {
-            Some(ref mut attachment) => {
-                attachment.swap_active_texture();
-                (
-                    attachment.active_texture(),
-                    attachment.complete_surface(),
-                )
-            }
-            None => return None,
-        };
-        self.gl().bind_framebuffer(gl::FRAMEBUFFER, self.framebuffer);
-        self.gl().framebuffer_texture_2d(
-            gl::FRAMEBUFFER,
-            gl::COLOR_ATTACHMENT0,
-            gl::TEXTURE_RECTANGLE_ARB,
-            active_texture_id,
-            0
-        );
-        complete_surface_id
-    }
-
-    /// Swap the WR visible and complete texture, returning the id of
-    /// the IOSurface which we will send to the WR thread
-    #[cfg(target_os="macos")]
-    pub fn swap_wr_visible_texture(&mut self) -> Option<IOSurfaceID> {
-        match self.color_attachment {
-            Some(ref mut attachment) => {
-                attachment.swap_wr_visible_texture();
-                attachment.wr_visible_surface()
-            }
-            None => None,
-        }
-    }
-
     fn attach_to_framebuffer(&mut self) -> Result<(), &'static str> {
         self.gl().bind_framebuffer(gl::FRAMEBUFFER, self.framebuffer);
         // NOTE: The assertion fails if the framebuffer is not bound
@@ -449,19 +239,13 @@ impl DrawBuffer {
                                                   gl::RENDERBUFFER,
                                                   color_renderbuffer);
                 debug_assert_eq!(self.gl().is_renderbuffer(color_renderbuffer), gl::TRUE);
-            },
-            ColorAttachment::Texture(texture_id) => {
+            }
+            ColorAttachment::NativeSurface(ref native_surface) => {
                 self.gl().framebuffer_texture_2d(gl::FRAMEBUFFER,
-                                                gl::COLOR_ATTACHMENT0,
-                                                gl::TEXTURE_2D,
-                                                texture_id, 0);
-            },
-            #[cfg(target_os="macos")]
-            ColorAttachment::IOSurface{ surfaces, wr_visible: _, complete: _, active } => {
-                self.gl().framebuffer_texture_2d(gl::FRAMEBUFFER,
-                                gl::COLOR_ATTACHMENT0,
-                                gl::TEXTURE_RECTANGLE_ARB,
-                                surfaces[active].0, 0);
+                                                 gl::COLOR_ATTACHMENT0,
+                                                 native_surface.gl_texture_type(),
+                                                 native_surface.gl_texture(),
+                                                 0);
             }
         }
 

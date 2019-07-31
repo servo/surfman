@@ -90,5 +90,10 @@ impl GLFormats {
         }
         extensions.iter().any(|s| s == "GL_OES_packed_depth_stencil" || s == "GL_EXT_packed_depth_stencil")
     }
+
+    #[inline]
+    pub(crate) fn has_alpha(&self) -> bool {
+        self.texture == gl::RGBA
+    }
 }
 

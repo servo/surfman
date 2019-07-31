@@ -19,13 +19,13 @@ no_wgl = []
 test_egl_in_linux = ["libloading", "lazy_static"]
 
 [dependencies]
-euclid = "0.20"
+euclid = { version = "0.20", features = ["serde"] }
 gleam = "0.6"
 lazy_static = { version = "1", optional = true }
 libloading = { version = "0.5", optional = true, default-features = false }
 log = "0.4"
 osmesa-sys = { version = "0.1", optional = true }
-serde = { version = "1.0", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
 
 [target.x86_64-apple-darwin.dependencies]
 core-foundation = { git = "https://github.com/zakorgy/core-foundation-rs", branch = "io-surface-alpha" }

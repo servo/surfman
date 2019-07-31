@@ -12,7 +12,7 @@ extern crate objc;
 extern crate io_surface;
 
 mod platform;
-pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
+pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle, NativeSurface};
 
 #[cfg(feature="osmesa")]
 pub use platform::{OSMesaContext, OSMesaContextHandle};
