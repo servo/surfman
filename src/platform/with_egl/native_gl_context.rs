@@ -42,7 +42,6 @@ pub struct NativeGLContext {
 impl NativeGLContext {
     pub fn new(surface: NativeSurface,
                share_context: Option<&EGLContext>,
-               config: EGLConfig,
                client_version: u8)
                -> Result<NativeGLContext, &'static str> {
         let shared = match share_context {

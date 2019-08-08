@@ -36,6 +36,7 @@ pub struct EGLSurfaceWrapper(pub EGLSurface);
 #[derive(Clone)]
 pub struct NativeSurface {
     wrapper: Arc<EGLSurfaceWrapper>,
+    config: EGLConfig,
     size: Size2D<i32>,
     formats: GLFormats,
 }
@@ -116,6 +117,7 @@ impl NativeSurface {
 
             NativeSurface {
                 wrapper: Arc::new(EGLSurfaceWrapper(egl_surface)),
+                config,
                 size: *size,
                 formats: *formats,
             }
