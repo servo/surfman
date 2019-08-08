@@ -1,13 +1,16 @@
-use euclid::Size2D;
+use crate::GLVersion;
+use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
+use crate::egl;
 use crate::platform::NativeGLContextMethods;
+use crate::platform::with_egl::surface::{DISPLAY, NativeSurface};
 use crate::platform::with_egl::utils::{create_pixel_buffer_backed_offscreen_context};
+use euclid::Size2D;
+use gleam::gl;
+use libloading as lib;
 use std::ffi::CString;
 use std::ops::Deref;
-use crate::egl;
-use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
-use gleam::gl;
-use crate::GLVersion;
-use libloading as lib;
+
+const DUMMY_FRAMEBUFFER_SIZE: u32 = 16;
 
 lazy_static! {
     static ref GL_LIB: Option<lib::Library>  = {
@@ -25,7 +28,9 @@ lazy_static! {
         None
     };
 }
-pub struct NativeGLContextHandle(pub EGLDisplay, pub EGLSurface);
+
+pub struct NativeGLContextHandle(pub NativeSurface);
+
 unsafe impl Send for NativeGLContextHandle {}
 
 pub struct NativeGLContext {
@@ -35,13 +40,11 @@ pub struct NativeGLContext {
 }
 
 impl NativeGLContext {
-    pub fn new(share_context: Option<&EGLContext>,
-               display: EGLDisplay,
-               surface: EGLSurface,
+    pub fn new(surface: NativeSurface,
+               share_context: Option<&EGLContext>,
                config: EGLConfig,
                client_version: u8)
-        -> Result<NativeGLContext, &'static str> {
-
+               -> Result<NativeGLContext, &'static str> {
         let shared = match share_context {
             Some(ctx) => *ctx,
             None => egl::NO_CONTEXT as EGLContext,
@@ -52,7 +55,9 @@ impl NativeGLContext {
             egl::NONE as EGLint, 0, 0, 0, // see mod.rs
         ];
 
-        let mut ctx =  unsafe { egl::CreateContext(display, config, shared, attributes.as_ptr()) };
+        let mut ctx = unsafe {
+            egl::CreateContext(display, config, shared, attributes.as_ptr())
+        };
 
         if share_context.is_some() && ctx == (egl::NO_CONTEXT as EGLContext) && client_version != 3 {
             // Workaround for GPUs that don't like different CONTEXT_CLIENT_VERSION value when sharing (e.g. Mali-T880).
@@ -120,7 +125,9 @@ impl NativeGLContextMethods for NativeGLContext {
         }
     }
 
-    fn create_headless(api_type: &gl::GlType, api_version: GLVersion) -> Result<NativeGLContext, &'static str> {
+    fn create_headless(api_type: &gl::GlType, api_version: GLVersion)
+                       -> Result<NativeGLContext, &'static str> {
+        
         // We create a context with a dummy size, we can't rely on a
         // default framebuffer
         create_pixel_buffer_backed_offscreen_context(Size2D::new(16, 16), None, api_type, api_version)
@@ -128,7 +135,8 @@ impl NativeGLContextMethods for NativeGLContext {
 
     fn create_shared(with: Option<&Self::Handle>,
                      api_type: &gl::GlType,
-                     api_version: GLVersion) -> Result<NativeGLContext, &'static str> {
+                     api_version: GLVersion)
+                     -> Result<NativeGLContext, &'static str> {
         create_pixel_buffer_backed_offscreen_context(Size2D::new(16, 16), with, api_type, api_version)
     }
 
