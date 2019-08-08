@@ -10,9 +10,8 @@ use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use euclid::default::Size2D;
 use gleam::gl::{self, GLenum, GLint, GLuint, Gl};
-use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
-use io_surface::{kIOSurfaceHeight, kIOSurfaceIsGlobal, kIOSurfaceWidth};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement};
+use io_surface::{kIOSurfaceBytesPerRow, kIOSurfaceHeight, kIOSurfaceWidth};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::thread;
@@ -20,25 +19,8 @@ use std::thread;
 const BYTES_PER_PIXEL: i32 = 4;
 
 #[derive(Clone)]
-pub struct SerializableIOSurface(IOSurface);
-
-// FIXME(pcwalton): We should turn the IOSurface into a Mach port instead of using global IDs.
-impl Serialize for SerializableIOSurface {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        serializer.serialize_u32(self.0.get_id())
-    }
-}
-
-// FIXME(pcwalton): We should turn the IOSurface into a Mach port instead of using global IDs.
-impl<'de> Deserialize<'de> for SerializableIOSurface {
-    fn deserialize<D>(d: D) -> Result<SerializableIOSurface, D::Error> where D: Deserializer<'de> {
-        Ok(SerializableIOSurface(io_surface::lookup(Deserialize::deserialize(d)?)))
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
 pub struct NativeSurface {
-    io_surface: SerializableIOSurface,
+    io_surface: IOSurface,
     size: Size2D<i32>,
     formats: GLFormats,
 }
@@ -70,17 +52,11 @@ impl NativeSurface {
                  CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
                 (CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
                  CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceIsGlobal),
-                 CFBoolean::from(true).as_CFType()),
             ]);
             io_surface::new(&props)
         };
 
-        NativeSurface {
-            io_surface: SerializableIOSurface(io_surface),
-            size: *size,
-            formats: *formats,
-        }
+        NativeSurface { io_surface, size: *size, formats: *formats }
     }
 
     #[inline]
@@ -95,7 +71,7 @@ impl NativeSurface {
 
     #[inline]
     pub fn id(&self) -> u32 {
-        self.io_surface.0.get_id()
+        self.io_surface.get_id()
     }
 }
 
@@ -107,7 +83,7 @@ impl NativeSurfaceTexture {
         gl.bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
 
         let (size, alpha) = (native_surface.size(), native_surface.formats().has_alpha());
-        native_surface.io_surface.0.bind_to_gl_texture(size.width, size.height, alpha);
+        native_surface.io_surface.bind_to_gl_texture(size.width, size.height, alpha);
 
         // Low filtering to allow rendering
         gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,

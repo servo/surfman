@@ -57,6 +57,8 @@ pub use self::with_osmesa::{OSMesaContext as NativeGLContext, OSMesaContextHandl
 pub mod with_egl;
 #[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
 pub use self::with_egl::{NativeGLContext, NativeGLContextHandle};
+#[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
+pub use self::with_egl::{NativeSurface, NativeSurfaceTexture};
 
 #[cfg(target_os="macos")]
 pub mod with_cgl;
@@ -78,5 +80,7 @@ pub use self::with_eagl::{NativeGLContext, NativeGLContextHandle};
 pub mod not_implemented;
 #[cfg(not(any(unix, target_os="windows")))]
 pub use self::not_implemented::{NativeGLContext, NativeGLContextHandle};
-#[cfg(not(target_os="macos"))]
+#[cfg(not(any(target_os="macos",
+              target_os="android",
+              all(target_os="windows", feature="no_wgl"))))]
 pub use self::not_implemented::{NativeSurface, NativeSurfaceTexture};

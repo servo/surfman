@@ -53,29 +53,10 @@ pub fn create_pixel_buffer_backed_offscreen_context(size: Size2D<i32>,
         egl::NONE as EGLint, 0, 0, 0, // see mod.rs
     ];
 
-    let (shared_with, display) = match shared_with {
-        Some(handle) => (Some(&handle.0), handle.1),
-        None => {
-            unsafe {
-                let display = egl::GetDisplay(egl::DEFAULT_DISPLAY as EGLNativeDisplayType);
-
-                if display == (egl::NO_DISPLAY as EGLDisplay) {
-                    return Err("egl::GetDisplay");
-                }
-
-                // TODO: Ensure this is correct. It seems it's refcounted, but not atomically, so
-                // we can't `Terminate` it on drop.
-                //
-                // It's the default display anyways so it is not a big problem.
-                if egl::Initialize(display, 0 as *mut _, 0 as *mut _) == 0 {
-                    return Err("egl::Initialize");
-                }
-
-                (None, display)
-            }
-        }
+    let shared_with = match shared_with {
+        Some(handle) => Some(&handle.0),
+        None => None,
     };
-
 
     if display == (egl::NO_DISPLAY as EGLDisplay) {
         return Err("egl::GetDisplay");

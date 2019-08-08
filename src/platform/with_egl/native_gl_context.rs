@@ -29,8 +29,7 @@ pub struct NativeGLContextHandle(pub EGLDisplay, pub EGLSurface);
 unsafe impl Send for NativeGLContextHandle {}
 
 pub struct NativeGLContext {
-    native_display: EGLDisplay,
-    native_surface: EGLSurface,
+    surface: NativeSurface,
     native_context: EGLContext,
     weak: bool,
 }

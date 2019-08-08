@@ -1,12 +1,11 @@
 use gleam::gl::types::GLenum;
 use gleam::gl;
-use serde::{Deserialize, Serialize};
 use crate::GLContextAttributes;
 use crate::GLVersion;
 
 /// This structure is here to allow
 /// cross-platform formatting
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug)]
 pub struct GLFormats {
     pub color_renderbuffer: GLenum,
     pub texture_internal: GLenum,
