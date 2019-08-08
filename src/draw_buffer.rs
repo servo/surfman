@@ -8,7 +8,7 @@ use std::mem;
 
 use crate::GLContext;
 use crate::NativeGLContextMethods;
-use crate::platform::NativeSurface;
+use crate::platform::{NativeSurface, NativeSurfaceTexture};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ColorAttachmentType {
@@ -22,9 +22,6 @@ impl Default for ColorAttachmentType {
     }
 }
 
-#[cfg(target_os="macos")]
-const SURFACE_COUNT: usize = 3;
-
 /// We either have a color renderbuffer, or a surface bound to a texture bound
 /// to a framebuffer as a color attachment.
 ///
@@ -32,7 +29,7 @@ const SURFACE_COUNT: usize = 3;
 /// is just to avoid propagating the GL functions pointer further down.
 #[derive(Debug)]
 pub enum ColorAttachment {
-    NativeSurface(NativeSurface),
+    NativeSurface(NativeSurfaceTexture),
     Renderbuffer(GLuint),
 }
 
@@ -141,21 +138,53 @@ impl DrawBuffer {
         Ok(draw_buffer)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn get_framebuffer(&self) -> GLuint {
         self.framebuffer
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn size(&self) -> Size2D<i32> {
         self.size
     }
 
-    #[inline(always)]
+    #[inline]
     // NOTE: We unwrap here because after creation the draw buffer
     // always have a color attachment
     pub fn color_attachment_type(&self) -> ColorAttachmentType {
         self.color_attachment.as_ref().unwrap().color_attachment_type()
+    }
+
+    #[inline]
+    pub fn native_surface_texture(&self) -> Option<&NativeSurfaceTexture> {
+        match self.color_attachment {
+            Some(ColorAttachment::NativeSurface(ref surface_texture)) => Some(surface_texture),
+            Some(ColorAttachment::Renderbuffer(_)) | None => None,
+        }
+    }
+
+    pub fn swap_native_surface(&mut self, new_surface: Option<NativeSurface>)       
+                               -> NativeSurfaceTexture {
+        let old_surface_texture = match self.color_attachment {
+            Some(ColorAttachment::NativeSurface(ref mut old_surface)) => old_surface,
+            Some(ColorAttachment::Renderbuffer(_)) | None => panic!("No native surface attached!"),
+        };
+
+        let new_surface = match new_surface {
+            Some(new_surface) => new_surface,
+            None => {
+                let old_surface = old_surface_texture.surface();
+                NativeSurface::new(&*self.gl_, &old_surface.size(), old_surface.formats())
+            }
+        };
+
+        let new_surface_texture = NativeSurfaceTexture::new(&*self.gl_, new_surface);
+        let old_surface_texture = mem::replace(old_surface_texture, new_surface_texture);
+        if let Err(err) = self.attach_to_framebuffer() {
+            error!("Failed to reattach framebuffer: {:?}", err);
+        }
+
+        old_surface_texture
     }
 
     pub fn get_bound_color_renderbuffer_id(&self) -> Option<GLuint> {
@@ -198,9 +227,8 @@ impl DrawBuffer {
 
             // TODO(ecoal95): Allow more customization of textures
             ColorAttachmentType::NativeSurface => {
-                Some(ColorAttachment::NativeSurface(NativeSurface::new(self.gl(),
-                                                                       &self.size,
-                                                                       formats)))
+                let surface = NativeSurface::new(self.gl(), &self.size, formats);
+                Some(ColorAttachment::NativeSurface(NativeSurfaceTexture::new(self.gl(), surface)))
             }
         };
 
@@ -229,6 +257,7 @@ impl DrawBuffer {
 
     fn attach_to_framebuffer(&mut self) -> Result<(), &'static str> {
         self.gl().bind_framebuffer(gl::FRAMEBUFFER, self.framebuffer);
+
         // NOTE: The assertion fails if the framebuffer is not bound
         debug_assert_eq!(self.gl().is_framebuffer(self.framebuffer), gl::TRUE);
 
@@ -243,7 +272,7 @@ impl DrawBuffer {
             ColorAttachment::NativeSurface(ref native_surface) => {
                 self.gl().framebuffer_texture_2d(gl::FRAMEBUFFER,
                                                  gl::COLOR_ATTACHMENT0,
-                                                 native_surface.gl_texture_type(),
+                                                 native_surface.gl_texture_target(),
                                                  native_surface.gl_texture(),
                                                  0);
             }
@@ -272,6 +301,9 @@ impl DrawBuffer {
                                               self.stencil_renderbuffer);
             debug_assert_eq!(self.gl().is_renderbuffer(self.stencil_renderbuffer), gl::TRUE);
         }
+
+        debug_assert_eq!(self.gl().check_frame_buffer_status(gl::FRAMEBUFFER),
+                         gl::FRAMEBUFFER_COMPLETE);
 
         Ok(())
     }

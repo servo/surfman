@@ -3,7 +3,7 @@ use gleam::gl;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct GLLimits {
     pub max_vertex_attribs: u32,
     pub max_tex_size: u32,

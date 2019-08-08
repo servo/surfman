@@ -1,6 +1,7 @@
 use euclid::default::Size2D;
 use gleam::gl;
 use gleam::gl::types::{GLuint};
+use std::mem;
 use std::rc::Rc;
 
 use crate::NativeGLContextMethods;
@@ -10,6 +11,7 @@ use crate::GLFormats;
 use crate::GLLimits;
 use crate::DrawBuffer;
 use crate::ColorAttachmentType;
+use crate::platform::{NativeSurface, NativeSurfaceTexture};
 
 /// This is a wrapper over a native headless GL context
 pub struct GLContext<Native> {
@@ -188,43 +190,48 @@ impl<Native> GLContext<Native>
         &self.limits
     }
 
-    pub fn borrow_draw_buffer(&self) -> Option<&DrawBuffer> {
+    #[inline]
+    pub fn draw_buffer(&self) -> Option<&DrawBuffer> {
         self.draw_buffer.as_ref()
     }
 
-    pub fn get_framebuffer(&self) -> GLuint {
-        if let Some(ref db) = self.draw_buffer {
-            return db.get_framebuffer();
+    #[inline]
+    pub fn swap_native_surface(&mut self, new_surface: Option<NativeSurface>)   
+                               -> Option<NativeSurfaceTexture> {
+        match self.draw_buffer {
+            None => None,
+            Some(ref mut draw_buffer) => Some(draw_buffer.swap_native_surface(new_surface)),
         }
+    }
 
-        let mut fb = [0];
-        unsafe {
-            self.gl().get_integer_v(gl::FRAMEBUFFER_BINDING, &mut fb);
-        }
-        fb[0] as GLuint
+    /*
+    pub fn back_framebuffer(&self) -> Option<GLuint> {
+        self.back_buffer().map(|back_buffer| back_buffer.get_framebuffer())
     }
 
     pub fn draw_buffer_size(&self) -> Option<Size2D<i32>> {
-        self.draw_buffer.as_ref().map(|db| db.size())
+        self.front_buffer().map(|buffer| buffer.size())
     }
+    */
 
     // We resize just replacing the draw buffer, we don't perform size optimizations
     // in order to keep this generic. The old buffer is returned in case its resources
     // are still in use.
     pub fn resize(&mut self, size: Size2D<i32>) -> Result<DrawBuffer, &'static str> {
-        if let Some(draw_buffer) = self.draw_buffer.take() {
-            let color_attachment_type = draw_buffer.color_attachment_type();
-            self.init_offscreen(size, color_attachment_type).map(|()| draw_buffer)
-        } else {
-            Err("No DrawBuffer found")
-        }
+        let old_buffer = match self.draw_buffer.take() {
+            None => return Err("No draw buffer available"),
+            Some(old_buffer) => old_buffer,
+        };
+
+        self.draw_buffer = Some(DrawBuffer::new(self, size, old_buffer.color_attachment_type())?);
+        Ok(old_buffer)
     }
 
     pub fn get_extensions(&self) -> Vec<String> {
         self.extensions.clone()
     }
 
-    fn reset_draw_buffer_contents(
+    fn clear_framebuffer(
         &self,
         clear_color: Option<(f32, f32, f32, f32)>,
         mask: Option<u32>,
@@ -234,19 +241,23 @@ impl<Native> GLContext<Native>
         self.gl().clear(mask.unwrap_or(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT));
     }
 
-    fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
-        self.create_draw_buffer(size, color_attachment_type)?;
+    pub fn create_compatible_draw_buffer(&self,
+                                         size: &Size2D<i32>,
+                                         color_attachment_type: ColorAttachmentType)
+                                         -> Result<DrawBuffer, &'static str> {
+        let draw_buffer = self.draw_buffer.as_ref().expect("Where's the draw buffer?");
+        DrawBuffer::new(self, draw_buffer.size(), draw_buffer.color_attachment_type())
+    }
+
+    fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType)
+                      -> Result<(), &'static str> {
+        self.draw_buffer = Some(DrawBuffer::new(self, size, color_attachment_type)?);
 
         debug_assert!(self.is_current());
-        self.reset_draw_buffer_contents(None, None);
+        self.clear_framebuffer(None, None);
         self.gl().scissor(0, 0, size.width, size.height);
         self.gl().viewport(0, 0, size.width, size.height);
 
-        Ok(())
-    }
-
-    fn create_draw_buffer(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType) -> Result<(), &'static str> {
-        self.draw_buffer = Some(DrawBuffer::new(self, size, color_attachment_type)?);
         Ok(())
     }
 

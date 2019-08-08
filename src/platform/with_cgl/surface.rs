@@ -14,6 +14,7 @@ use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerR
 use io_surface::{kIOSurfaceHeight, kIOSurfaceIsGlobal, kIOSurfaceWidth};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{self, Debug, Formatter};
+use std::marker::PhantomData;
 use std::thread;
 
 const BYTES_PER_PIXEL: i32 = 4;
@@ -35,53 +36,30 @@ impl<'de> Deserialize<'de> for SerializableIOSurface {
     }
 }
 
-pub struct TransientGLTexture(GLuint);
-
-impl Serialize for TransientGLTexture {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-        serializer.serialize_unit()
-    }
-}
-
-impl<'de> Deserialize<'de> for TransientGLTexture {
-    fn deserialize<D>(d: D) -> Result<TransientGLTexture, D::Error> where D: Deserializer<'de> {
-        let () = Deserialize::deserialize(d)?;
-        Ok(TransientGLTexture(0))
-    }
-}
-
-#[allow(unsafe_code)]
-unsafe impl Send for SerializableIOSurface {}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct NativeSurface {
     io_surface: SerializableIOSurface,
     size: Size2D<i32>,
-    alpha: bool,
-    gl_texture: TransientGLTexture,
+    formats: GLFormats,
 }
+
+#[derive(Debug)]
+pub struct NativeSurfaceTexture {
+    surface: NativeSurface,
+    gl_texture: GLuint,
+    phantom: PhantomData<*const ()>,
+}
+
+unsafe impl Send for NativeSurface {}
 
 impl Debug for NativeSurface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{:?}, {:?}", self.size, self.alpha)
-    }
-}
-
-impl Drop for NativeSurface {
-    fn drop(&mut self) {
-        debug_assert!(self.gl_texture.0 == 0 || thread::panicking(),    
-                      "Must destroy the native surface manually!");
+        write!(f, "{:?}, {:?}", self.size, self.formats)
     }
 }
 
 impl NativeSurface {
     pub fn new(gl: &dyn Gl, size: &Size2D<i32>, formats: &GLFormats) -> NativeSurface {
-        let texture = gl.gen_textures(1)[0];
-        debug_assert!(texture != 0);
-
-        gl.bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
-        let has_alpha = formats.has_alpha();
-
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),
@@ -98,7 +76,38 @@ impl NativeSurface {
             io_surface::new(&props)
         };
 
-        io_surface.bind_to_gl_texture(size.width, size.height, has_alpha);
+        NativeSurface {
+            io_surface: SerializableIOSurface(io_surface),
+            size: *size,
+            formats: *formats,
+        }
+    }
+
+    #[inline]
+    pub fn size(&self) -> Size2D<i32> {
+        self.size
+    }
+
+    #[inline]
+    pub fn formats(&self) -> &GLFormats {
+        &self.formats
+    }
+
+    #[inline]
+    pub fn id(&self) -> u32 {
+        self.io_surface.0.get_id()
+    }
+}
+
+impl NativeSurfaceTexture {
+    pub fn new(gl: &dyn Gl, native_surface: NativeSurface) -> NativeSurfaceTexture {
+        let texture = gl.gen_textures(1)[0];
+        debug_assert!(texture != 0);
+
+        gl.bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
+
+        let (size, alpha) = (native_surface.size(), native_surface.formats().has_alpha());
+        native_surface.io_surface.0.bind_to_gl_texture(size.width, size.height, alpha);
 
         // Low filtering to allow rendering
         gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
@@ -120,37 +129,33 @@ impl NativeSurface {
 
         debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
 
-        NativeSurface {
-            io_surface: SerializableIOSurface(io_surface),
-            size: *size,
-            alpha: has_alpha,
-            gl_texture: TransientGLTexture(texture),
-        }
+        NativeSurfaceTexture { surface: native_surface, gl_texture: texture, phantom: PhantomData }
     }
 
     #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
+    pub fn surface(&self) -> &NativeSurface {
+        &self.surface
     }
 
     #[inline]
-    pub fn alpha(&self) -> bool {
-        self.alpha
+    pub fn into_surface(mut self, gl: &dyn Gl) -> NativeSurface {
+        self.destroy(gl);
+        self.surface
     }
 
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
-        self.gl_texture.0
+        self.gl_texture
     }
 
     #[inline]
-    pub fn gl_texture_type(&self) -> GLenum {
+    pub fn gl_texture_target(&self) -> GLenum {
         gl::TEXTURE_RECTANGLE_ARB
     }
 
     #[inline]
     pub fn destroy(&mut self, gl: &dyn Gl) {
-        gl.delete_textures(&[self.gl_texture.0]);
-        self.gl_texture.0 = 0;
+        gl.delete_textures(&[self.gl_texture]);
+        self.gl_texture = 0;
     }
 }

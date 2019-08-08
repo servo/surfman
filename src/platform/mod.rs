@@ -61,7 +61,9 @@ pub use self::with_egl::{NativeGLContext, NativeGLContextHandle};
 #[cfg(target_os="macos")]
 pub mod with_cgl;
 #[cfg(target_os="macos")]
-pub use self::with_cgl::{NativeGLContext, NativeGLContextHandle, NativeSurface};
+pub use self::with_cgl::{NativeGLContext, NativeGLContextHandle};
+#[cfg(target_os="macos")]
+pub use self::with_cgl::{NativeSurface, NativeSurfaceTexture};
 
 #[cfg(all(target_os="windows", not(feature="no_wgl")))]
 pub mod with_wgl;
@@ -77,4 +79,4 @@ pub mod not_implemented;
 #[cfg(not(any(unix, target_os="windows")))]
 pub use self::not_implemented::{NativeGLContext, NativeGLContextHandle};
 #[cfg(not(target_os="macos"))]
-pub use self::not_implemented::NativeSurface;
+pub use self::not_implemented::{NativeSurface, NativeSurfaceTexture};

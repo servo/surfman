@@ -1,10 +1,12 @@
 use gleam::gl::types::GLenum;
 use gleam::gl;
+use serde::{Deserialize, Serialize};
 use crate::GLContextAttributes;
 use crate::GLVersion;
 
 /// This structure is here to allow
 /// cross-platform formatting
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct GLFormats {
     pub color_renderbuffer: GLenum,
     pub texture_internal: GLenum,
@@ -92,7 +94,7 @@ impl GLFormats {
     }
 
     #[inline]
-    pub(crate) fn has_alpha(&self) -> bool {
+    pub fn has_alpha(&self) -> bool {
         self.texture == gl::RGBA
     }
 }
