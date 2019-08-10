@@ -29,36 +29,52 @@ lazy_static! {
     };
 }
 
-pub struct NativeGLContextHandle(pub NativeSurface);
+thread_local! {
+    static CURRENT_CONTEXT: RefCell<Option<GLContext>> = RefCell::new(None);
+}
+
+struct GLContext {
+    egl_context: EGLContext,
+    default_surface: NativeSurface,
+}
+
+impl Drop for GLContext {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = self.unbind();
+            if egl::DestroyContext(*DISPLAY, self.egl_context) == 0 {
+                debug!("egl::DestroyContext failed");
+            }
+        }
+    }
+}
 
 unsafe impl Send for NativeGLContextHandle {}
 
-pub struct NativeGLContext {
-    surface: NativeSurface,
-    native_context: EGLContext,
-    weak: bool,
-}
+#[derive(Clone)]
+pub struct NativeGLContext(Arc<GLContext>);
 
-impl NativeGLContext {
-    pub fn new(surface: NativeSurface,
-               share_context: Option<&EGLContext>,
-               client_version: u8)
-               -> Result<NativeGLContext, &'static str> {
+impl GLContext {
+    fn new(default_surface: NativeSurface, share_context: Option<&EGLContext>)
+           -> Result<GLContext, &'static str> {
         let shared = match share_context {
             Some(ctx) => *ctx,
             None => egl::NO_CONTEXT as EGLContext,
         };
 
+        let client_version = surface.api_version.major_version() as EGLint;
+
         let attributes = [
-            egl::CONTEXT_CLIENT_VERSION as EGLint, client_version as EGLint,
-            egl::NONE as EGLint, 0, 0, 0, // see mod.rs
+            egl::CONTEXT_CLIENT_VERSION as EGLint, client_version,
+            egl::NONE as EGLint, 0,
+            0, 0, // see mod.rs
         ];
 
         let mut ctx = unsafe {
-            egl::CreateContext(display, config, shared, attributes.as_ptr())
+            egl::CreateContext(*DISPLAY, config, shared, attributes.as_ptr())
         };
 
-        if share_context.is_some() && ctx == (egl::NO_CONTEXT as EGLContext) && client_version != 3 {
+        if share_context.is_some() && ctx == egl::NO_CONTEXT as EGLContext && client_version != 3 {
             // Workaround for GPUs that don't like different CONTEXT_CLIENT_VERSION value when sharing (e.g. Mali-T880).
             // Set CONTEXT_CLIENT_VERSION 3 to fix the shared ctx creation failure. Note that the ctx is still OpenGL ES 2.0
             // compliant because egl::OPENGL_ES2_BIT is set for egl::RENDERABLE_TYPE. See utils.rs.
@@ -66,46 +82,35 @@ impl NativeGLContext {
                 egl::CONTEXT_CLIENT_VERSION as EGLint, 3,
                 egl::NONE as EGLint, 0, 0, 0, // see mod.rs
             ];
-            ctx =  unsafe { egl::CreateContext(display, config, shared, attributes.as_ptr()) };
+            ctx =  unsafe { egl::CreateContext(*DISPLAY, config, shared, attributes.as_ptr()) };
         }
 
         // TODO: Check for every type of error possible, not just client error?
         // Note if we do it we must do it too on egl::CreatePBufferSurface, etc...
-        if ctx == (egl::NO_CONTEXT as EGLContext) {
-            unsafe { egl::DestroySurface(display, surface) };
+        if ctx == egl::NO_CONTEXT as EGLContext {
             return Err("Error creating an EGL context");
         }
 
-        Ok(NativeGLContext {
-            native_display: display,
-            native_surface: surface,
-            native_context: ctx,
-            weak: false,
+        Ok(NativeGLContext { egl_context: ctx, default_surface })
+    }
+
+}
+
+impl NativeGLContext {
+    #[inline]
+    pub fn new(default_surface: NativeSurface, share_context: Option<&EGLContext>)
+               -> Result<NativeGLContext, &'static str> {
+        GLContext::new(default_surface, share_context).map(|context| {
+            NativeGLContext(Arc::new(context))
         })
     }
 }
 
-impl Drop for NativeGLContext {
-    fn drop(&mut self) {
-        let _ = self.unbind();
-        if !self.weak {
-            unsafe {
-                if egl::DestroySurface(self.native_display, self.native_surface) == 0 {
-                    debug!("egl::DestroySurface failed");
-                }
-                if egl::DestroyContext(self.native_display, self.native_context) == 0 {
-                    debug!("egl::DestroyContext failed");
-                }
-            }
-        }
-    }
-}
-
 impl NativeGLContextMethods for NativeGLContext {
-    type Handle = NativeGLContextHandle;
+    type Handle = NativeGLContext;
 
     // According to the EGL spec <= 1.4, eglGetProcAddress should only be used to
-    // retrieve extension functions. Some implementatios return NULL for core OpenGL functions.
+    // retrieve extension functions. Some implementations return NULL for core OpenGL functions.
     // Other implementations may return non-NULL values even for invalid core or extension symbols.
     // This is very dangerous, so we use dlsym function before calling eglGetProcAddress
     // in order to avoid possible garbage pointers.
@@ -126,67 +131,58 @@ impl NativeGLContextMethods for NativeGLContext {
 
     fn create_headless(api_type: &gl::GlType, api_version: GLVersion)
                        -> Result<NativeGLContext, &'static str> {
-        
-        // We create a context with a dummy size, we can't rely on a
-        // default framebuffer
-        create_pixel_buffer_backed_offscreen_context(Size2D::new(16, 16), None, api_type, api_version)
+        NativeGLContext::create_shared(None, api_type, api_version)
     }
 
     fn create_shared(with: Option<&Self::Handle>,
                      api_type: &gl::GlType,
                      api_version: GLVersion)
                      -> Result<NativeGLContext, &'static str> {
-        create_pixel_buffer_backed_offscreen_context(Size2D::new(16, 16), with, api_type, api_version)
+        let size = Size2D::new(DUMMY_FRAMEBUFFER_SIZE, DUMMY_FRAMEBUFFER_SIZE);
+        let format = Format::RGBA;
+        let surface = NativeSurface::from_api_size_format(api_type, api_version, size, format);
+        NativeGLContext::new(surface, with)
     }
 
+    #[inline]
     fn current_handle() -> Option<Self::Handle> {
-        let native_context = unsafe { egl::GetCurrentContext() };
-        let native_display = unsafe { egl::GetCurrentDisplay() };
-
-        if native_context != egl::NO_CONTEXT && native_display != egl::NO_DISPLAY {
-            Some(NativeGLContextHandle(native_context, native_display))
-        } else {
-            None
-        }
+        self.current()
     }
 
-
-    fn current() -> Option<Self> {
-        if let Some(handle) = Self::current_handle() {
-            let surface = unsafe { egl::GetCurrentSurface(egl::DRAW as EGLint) };
-
-            debug_assert!(surface != egl::NO_SURFACE);
-
-            Some(NativeGLContext {
-                native_context: handle.0,
-                native_display: handle.1,
-                native_surface: surface,
-                weak: true,
-            })
-        } else {
-            None
-        }
-    }
-
-    #[inline(always)]
+    #[inline]
     fn is_current(&self) -> bool {
-        unsafe {
-            egl::GetCurrentContext() == self.native_context
+        match *CURRENT_CONTEXT.borrow() {
+            None => false,
+            Some(ref context) => context.egl_context == self.egl_context,
         }
+    }
+
+    #[inline]
+    fn current() -> Option<Self> {
+        CURRENT_CONTEXT.borrow().cloned()
     }
 
     fn make_current(&self) -> Result<(), &'static str> {
+        if self.is_current() {
+            return Ok(())
+        }
+
+        if let Some(old_context) = Self::current() {
+            old_context.unbind();
+        }
+
         unsafe {
-            if !self.is_current() &&
-                egl::MakeCurrent(self.native_display,
-                                 self.native_surface,
-                                 self.native_surface,
-                                 self.native_context) == (egl::FALSE as EGLBoolean) {
-                Err("egl::MakeCurrent")
-            } else {
-                Ok(())
+            if egl::MakeCurrent(*DISPLAY,
+                                self.0.default_surface.0,
+                                self.0.default_surface.0,
+                                self.0.egl_context) == egl::FALSE as EGLBoolean {
+                return Err("egl::MakeCurrent")
             }
         }
+
+        *CURRENT_CONTEXT.borrow_mut() = Some((*self).clone());
+
+        Ok(())
     }
 
     fn handle(&self) -> Self::Handle {
@@ -194,16 +190,21 @@ impl NativeGLContextMethods for NativeGLContext {
     }
 
     fn unbind(&self) -> Result<(), &'static str> {
-        unsafe {
-            if self.is_current() &&
-               egl::MakeCurrent(self.native_display,
-                                egl::NO_SURFACE as EGLSurface,
-                                egl::NO_SURFACE as EGLSurface,
-                                egl::NO_CONTEXT as EGLContext) == (egl::FALSE as EGLBoolean) {
-                Err("egl::MakeCurrent (on unbind)")
-            } else {
-                Ok(())
-            }
+        if !self.is_current() {
+            return Ok(())
         }
+
+        *CURRENT_CONTEXT.borrow_mut() = None;
+
+        unsafe {
+           if egl::MakeCurrent(*DISPLAY,
+                               egl::NO_SURFACE as EGLSurface,
+                               egl::NO_SURFACE as EGLSurface,
+                               egl::NO_CONTEXT as EGLContext) == egl::FALSE as EGLBoolean {
+                return Err("egl::MakeCurrent (on unbind)")
+           }
+        }
+
+        Ok(())
     }
 }

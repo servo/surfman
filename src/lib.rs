@@ -34,7 +34,7 @@ mod gl_feature;
 pub use gl_feature::GLFeature;
 
 mod gl_formats;
-pub use gl_formats::GLFormats;
+pub use gl_formats::{Format, GLFormats};
 
 mod gl_limits;
 pub use gl_limits::GLLimits;

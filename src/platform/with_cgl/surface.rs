@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::gl_formats::GLFormats;
+use crate::gl_formats::Format;
 use core_foundation::base::TCFType;
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::CFDictionary;
@@ -22,7 +22,7 @@ const BYTES_PER_PIXEL: i32 = 4;
 pub struct NativeSurface {
     io_surface: IOSurface,
     size: Size2D<i32>,
-    formats: GLFormats,
+    format: Format,
 }
 
 #[derive(Debug)]
@@ -36,12 +36,12 @@ unsafe impl Send for NativeSurface {}
 
 impl Debug for NativeSurface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{:?}, {:?}", self.size, self.formats)
+        write!(f, "{:?}, {:?}", self.size, self.format)
     }
 }
 
 impl NativeSurface {
-    pub fn new(gl: &dyn Gl, size: &Size2D<i32>, formats: &GLFormats) -> NativeSurface {
+    pub fn new(gl: &dyn Gl, size: &Size2D<i32>, format: Format) -> NativeSurface {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),
@@ -56,7 +56,7 @@ impl NativeSurface {
             io_surface::new(&props)
         };
 
-        NativeSurface { io_surface, size: *size, formats: *formats }
+        NativeSurface { io_surface, size: *size, format }
     }
 
     #[inline]
@@ -65,8 +65,8 @@ impl NativeSurface {
     }
 
     #[inline]
-    pub fn formats(&self) -> &GLFormats {
-        &self.formats
+    pub fn format(&self) -> Format {
+        self.format
     }
 
     #[inline]
@@ -82,7 +82,7 @@ impl NativeSurfaceTexture {
 
         gl.bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
 
-        let (size, alpha) = (native_surface.size(), native_surface.formats().has_alpha());
+        let (size, alpha) = (native_surface.size(), native_surface.format().has_alpha());
         native_surface.io_surface.bind_to_gl_texture(size.width, size.height, alpha);
 
         // Low filtering to allow rendering

@@ -4,7 +4,7 @@
 
 use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
 use crate::egl;
-use crate::gl_formats::GLFormats;
+use crate::gl_formats::Format;
 use euclid::default::Size2D;
 use gleam::gl::{self, GLenum, GLint, GLuint, Gl};
 use std::fmt::{self, Debug, Formatter};
@@ -37,8 +37,9 @@ pub struct EGLSurfaceWrapper(pub EGLSurface);
 pub struct NativeSurface {
     wrapper: Arc<EGLSurfaceWrapper>,
     config: EGLConfig,
+    api_version: GLVersion,
     size: Size2D<i32>,
-    formats: GLFormats,
+    format: Format,
 }
 
 #[derive(Debug)]
@@ -67,12 +68,11 @@ impl Debug for NativeSurface {
 }
 
 impl NativeSurface {
-    pub fn new(gl: &dyn Gl,
-               api_type: GlType,
-               api_version: GLVersion,
-               size: &Size2D<i32>,
-               formats: &GLFormats)
-               -> NativeSurface {
+    pub(crate) fn from_version_size_format(api_type: GlType,
+                                           api_version: GLVersion,
+                                           size: &Size2D<i32>,
+                                           format: Format)
+                                           -> NativeSurface {
         let renderable_type = get_pbuffer_renderable_type(api_type, api_version);
 
         // FIXME(pcwalton): Convert the formats to an appropriate set of EGL attributes!
@@ -118,10 +118,20 @@ impl NativeSurface {
             NativeSurface {
                 wrapper: Arc::new(EGLSurfaceWrapper(egl_surface)),
                 config,
+                api_version,
                 size: *size,
-                formats: *formats,
+                format,
             }
         }
+    }
+
+    pub fn new(_: &dyn Gl,
+               api_type: GlType,
+               api_version: GLVersion,
+               size: &Size2D<i32>,
+               formats: Format)
+               -> NativeSurface {
+        NativeSurface::from_version_size_formats(api_type, api_version, size, formats)
     }
 
     #[inline]
@@ -130,13 +140,18 @@ impl NativeSurface {
     }
 
     #[inline]
-    pub fn formats(&self) -> &GLFormats {
-        &self.formats
+    pub fn format(&self) -> Format {
+        self.format
     }
 
     #[inline]
     pub fn id(&self) -> u32 {
         self.wrapper.0 as usize as u32
+    }
+
+    #[inline]
+    pub(crate) fn api_version(&self) -> GLVersion {
+        self.api_version
     }
 }
 

@@ -8,6 +8,7 @@ use std::mem;
 
 use crate::GLContext;
 use crate::NativeGLContextMethods;
+use crate::gl_formats::Format;
 use crate::platform::{NativeSurface, NativeSurfaceTexture};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -174,7 +175,7 @@ impl DrawBuffer {
             Some(new_surface) => new_surface,
             None => {
                 let old_surface = old_surface_texture.surface();
-                NativeSurface::new(&*self.gl_, &old_surface.size(), old_surface.formats())
+                NativeSurface::new(&*self.gl_, &old_surface.size(), old_surface.format())
             }
         };
 
@@ -227,7 +228,8 @@ impl DrawBuffer {
 
             // TODO(ecoal95): Allow more customization of textures
             ColorAttachmentType::NativeSurface => {
-                let surface = NativeSurface::new(self.gl(), &self.size, formats);
+                let format = formats.to_format().unwrap_or(Format::RGBA);
+                let surface = NativeSurface::new(self.gl(), &self.size, format);
                 Some(ColorAttachment::NativeSurface(NativeSurfaceTexture::new(self.gl(), surface)))
             }
         };

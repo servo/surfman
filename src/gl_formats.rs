@@ -93,8 +93,25 @@ impl GLFormats {
     }
 
     #[inline]
-    pub fn has_alpha(&self) -> bool {
-        self.texture == gl::RGBA
+    pub fn to_format(&self) -> Option<Format> {
+        match self.texture {
+            gl::RGBA => Some(Format::RGBA),
+            gl::RGB => Some(Format::RGB),
+            _ => None,
+        }
     }
 }
 
+// All supported color formats for offscreen rendering.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Format {
+    RGBA,
+    RGB,
+}
+
+impl Format {
+    #[inline]
+    pub fn has_alpha(self) -> bool {
+        self == Format::RGBA
+    }
+}
