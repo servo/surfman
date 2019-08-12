@@ -2,20 +2,28 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
-use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
+use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig};
+use crate::egl::types::{EGLContext, EGLNativeDisplayType};
 use crate::egl;
+use crate::gl_context::GLVersion;
 use crate::gl_formats::Format;
 use euclid::default::Size2D;
-use gleam::gl::{self, GLenum, GLint, GLuint, Gl};
+use gleam::gl::{self, GLenum, GLint, GLuint, Gl, GlType};
+use std::borrow::BorrowMut;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
+use std::ptr;
 use std::sync::Arc;
 use std::thread;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
+pub struct EGLDisplayWrapper(pub EGLDisplay);
+
+unsafe impl Sync for EGLDisplayWrapper {}
+
 lazy_static! {
-    pub static ref DISPLAY: EGLDisplay = {
+    pub static ref DISPLAY: EGLDisplayWrapper = {
         unsafe {
             let display = egl::GetDisplay(egl::DEFAULT_DISPLAY as EGLNativeDisplayType);
             if display == egl::NO_DISPLAY as EGLDisplay {
@@ -26,7 +34,7 @@ lazy_static! {
                 panic!("Failed to initialize the EGL display!");
             }
 
-            display
+            EGLDisplayWrapper(display)
         }
     };
 }
@@ -37,6 +45,7 @@ pub struct EGLSurfaceWrapper(pub EGLSurface);
 pub struct NativeSurface {
     wrapper: Arc<EGLSurfaceWrapper>,
     config: EGLConfig,
+    api_type: GlType,
     api_version: GLVersion,
     size: Size2D<i32>,
     format: Format,
@@ -56,14 +65,14 @@ unsafe impl Send for NativeSurface {}
 impl Drop for EGLSurfaceWrapper {
     fn drop(&mut self) {
         unsafe {
-            egl::DestroySurface(*DISPLAY, self.surface)
+            egl::DestroySurface(DISPLAY.0, self.0);
         }
     }
 }
 
 impl Debug for NativeSurface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{:?}, {:?}", self.size, self.formats)
+        write!(f, "{:?}, {:?}", self.size, self.format)
     }
 }
 
@@ -90,12 +99,12 @@ impl NativeSurface {
         ];
 
         unsafe {
-            let (mut config, mut configs_found) = (0, 0);
-            if egl::ChooseConfig(*DISPLAY,
-                                pbuffer_attributes.as_ptr(),
-                                &mut config,
-                                1,
-                                &mut found_configs) != egl::TRUE as u32 {
+            let (mut config, mut configs_found) = (ptr::null(), 0);
+            if egl::ChooseConfig(DISPLAY.0,
+                                 pbuffer_attributes.as_ptr(),
+                                 &mut config,
+                                 1,
+                                 &mut configs_found) != egl::TRUE as u32 {
                 panic!("Failed to choose an EGL configuration!")
             }
 
@@ -110,7 +119,7 @@ impl NativeSurface {
                 0, 0, // see mod.rs
             ];
 
-            let egl_surface = egl::CreatePbufferSurface(*DISPLAY, config, attrs.as_ptr()) };
+            let egl_surface = egl::CreatePbufferSurface(DISPLAY.0, config, attrs.as_ptr());
             if egl_surface == egl::NO_SURFACE as EGLSurface {
                 panic!("Failed to create EGL surface!");
             }
@@ -118,6 +127,7 @@ impl NativeSurface {
             NativeSurface {
                 wrapper: Arc::new(EGLSurfaceWrapper(egl_surface)),
                 config,
+                api_type,
                 api_version,
                 size: *size,
                 format,
@@ -129,9 +139,14 @@ impl NativeSurface {
                api_type: GlType,
                api_version: GLVersion,
                size: &Size2D<i32>,
-               formats: Format)
+               format: Format)
                -> NativeSurface {
-        NativeSurface::from_version_size_formats(api_type, api_version, size, formats)
+        NativeSurface::from_version_size_format(api_type, api_version, size, format)
+    }
+
+    #[inline]
+    pub(crate) fn egl_surface(&self) -> EGLSurface {
+        self.wrapper.0
     }
 
     #[inline]
@@ -145,8 +160,18 @@ impl NativeSurface {
     }
 
     #[inline]
+    pub(crate) fn config(&self) -> &EGLConfig {
+        &self.config
+    }
+
+    #[inline]
     pub fn id(&self) -> u32 {
-        self.wrapper.0 as usize as u32
+        self.egl_surface() as usize as u32
+    }
+
+    #[inline]
+    pub(crate) fn api_type(&self) -> GlType {
+        self.api_type
     }
 
     #[inline]
@@ -162,12 +187,13 @@ impl NativeSurfaceTexture {
 
         gl.bind_texture(gl::TEXTURE_2D, texture);
 
-        if egl::BindTexImage(*DISPLAY, native_surface.wrapper.0, texture) == egl::FALSE {
-            panic!("Failed to bind EGL texture surface!")
+        unsafe {
+            if egl::BindTexImage(DISPLAY.0,
+                                 native_surface.wrapper.0,
+                                 texture as GLint) == egl::FALSE {
+                panic!("Failed to bind EGL texture surface!")
+            }
         }
-
-        let (size, alpha) = (native_surface.size(), native_surface.formats().has_alpha());
-        native_surface.io_surface.0.bind_to_gl_texture(size.width, size.height, alpha);
 
         // Low filtering to allow rendering
         gl.tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
@@ -208,7 +234,7 @@ impl NativeSurfaceTexture {
     #[inline]
     pub fn destroy(&mut self, gl: &dyn Gl) {
         unsafe {
-            egl::ReleaseTexImage(*DISPLAY, self.surface.wrapper.0, self.gl_texture);
+            egl::ReleaseTexImage(DISPLAY.0, self.surface.wrapper.0, self.gl_texture as GLint);
         }
 
         gl.delete_textures(&[self.gl_texture]);
@@ -218,9 +244,9 @@ impl NativeSurfaceTexture {
 
 fn get_pbuffer_renderable_type(api_type: GlType, api_version: GLVersion) -> EGLint {
     match (api_type, api_version.major_version()) {
-        (GlType::Gl, _) => egl::OPENGL_BIT,
-        (GlType::Gles, version) if version < 2 => egl::OPENGL_ES_BIT,
-        (GlType::Gles, 2) => egl::OPENGL_ES2_BIT,
-        (GlType::Gles, _) => egl::OPENGL_ES3_BIT,
+        (GlType::Gl, _) => egl::OPENGL_BIT as EGLint,
+        (GlType::Gles, version) if version < 2 => egl::OPENGL_ES_BIT as EGLint,
+        (GlType::Gles, 2) => egl::OPENGL_ES2_BIT as EGLint,
+        (GlType::Gles, _) => egl::OPENGL_ES3_BIT as EGLint,
     }
 }
