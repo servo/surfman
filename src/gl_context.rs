@@ -16,6 +16,8 @@ use crate::platform::{NativeSurface, NativeSurfaceTexture};
 /// This is a wrapper over a native headless GL context
 pub struct GLContext<Native> {
     gl_: Rc<dyn gl::Gl>,
+    api_type: gl::GlType,
+    api_version: GLVersion,
     native_context: Native,
     /// This an abstraction over a custom framebuffer
     /// with attachments according to WebGLContextAttributes
@@ -62,6 +64,8 @@ impl<Native> GLContext<Native>
 
         Ok(GLContext {
             gl_: gl_,
+            api_type: *api_type,
+            api_version,
             native_context: native_context,
             draw_buffer: None,
             attributes: attributes,
@@ -171,6 +175,16 @@ impl<Native> GLContext<Native>
 
     pub fn clone_gl(&self) -> Rc<dyn gl::Gl> {
         self.gl_.clone()
+    }
+
+    #[inline]
+    pub fn api_type(&self) -> gl::GlType {
+        self.api_type
+    }
+
+    #[inline]
+    pub fn api_version(&self) -> GLVersion {
+        self.api_version
     }
 
     // Allow borrowing these unmutably

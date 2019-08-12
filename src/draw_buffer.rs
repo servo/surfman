@@ -175,7 +175,11 @@ impl DrawBuffer {
             Some(new_surface) => new_surface,
             None => {
                 let old_surface = old_surface_texture.surface();
-                NativeSurface::new(&*self.gl_, &old_surface.size(), old_surface.format())
+                NativeSurface::new(&*self.gl_,
+                                   old_surface.api_type(),
+                                   old_surface.api_version(),
+                                   &old_surface.size(),
+                                   old_surface.format())
             }
         };
 
@@ -229,7 +233,11 @@ impl DrawBuffer {
             // TODO(ecoal95): Allow more customization of textures
             ColorAttachmentType::NativeSurface => {
                 let format = formats.to_format().unwrap_or(Format::RGBA);
-                let surface = NativeSurface::new(self.gl(), &self.size, format);
+                let surface = NativeSurface::new(self.gl(),
+                                                 context.api_type(),
+                                                 context.api_version(),
+                                                 &self.size,
+                                                 format);
                 Some(ColorAttachment::NativeSurface(NativeSurfaceTexture::new(self.gl(), surface)))
             }
         };
