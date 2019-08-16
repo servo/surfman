@@ -280,6 +280,7 @@ impl DrawBuffer {
                 debug_assert_eq!(self.gl().is_renderbuffer(color_renderbuffer), gl::TRUE);
             }
             ColorAttachment::NativeSurface(ref native_surface) => {
+                println!("native surface gl texture={:?}", native_surface.gl_texture());
                 self.gl().framebuffer_texture_2d(gl::FRAMEBUFFER,
                                                  gl::COLOR_ATTACHMENT0,
                                                  native_surface.gl_texture_target(),

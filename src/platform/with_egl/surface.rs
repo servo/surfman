@@ -89,7 +89,6 @@ impl NativeSurface {
             egl::SURFACE_TYPE as EGLint, egl::PBUFFER_BIT as EGLint,
             egl::RENDERABLE_TYPE as EGLint, renderable_type as EGLint,
             egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint,
-            egl::TEXTURE_TARGET as EGLint, gl::TEXTURE_2D as EGLint,
             egl::RED_SIZE as EGLint, 8,
             egl::GREEN_SIZE as EGLint, 8,
             egl::BLUE_SIZE as EGLint, 8,
@@ -105,7 +104,7 @@ impl NativeSurface {
                                  &mut config,
                                  1,
                                  &mut configs_found) != egl::TRUE as u32 {
-                panic!("Failed to choose an EGL configuration!")
+                panic!("Failed to choose an EGL configuration: {}!", egl::GetError())
             }
 
             if configs_found == 0 {
@@ -115,6 +114,8 @@ impl NativeSurface {
             let attrs = [
                 egl::WIDTH as EGLint, size.width as EGLint,
                 egl::HEIGHT as EGLint, size.height as EGLint,
+                egl::TEXTURE_FORMAT as EGLint, egl::TEXTURE_RGBA as EGLint,
+                egl::TEXTURE_TARGET as EGLint, egl::TEXTURE_2D as EGLint,
                 egl::NONE as EGLint, 0,
                 0, 0, // see mod.rs
             ];
@@ -190,8 +191,8 @@ impl NativeSurfaceTexture {
         unsafe {
             if egl::BindTexImage(DISPLAY.0,
                                  native_surface.wrapper.0,
-                                 texture as GLint) == egl::FALSE {
-                panic!("Failed to bind EGL texture surface!")
+                                 egl::BACK_BUFFER as EGLint) == egl::FALSE {
+                panic!("Failed to bind EGL texture surface: {}!", egl::GetError())
             }
         }
 
