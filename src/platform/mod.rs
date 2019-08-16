@@ -31,9 +31,18 @@ pub trait NativeGLContextMethods: Sized {
     fn make_current(&self) -> Result<(), &'static str>;
     fn unbind(&self) -> Result<(), &'static str>;
 
+    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult;
+    fn uses_default_framebuffer(&self) -> bool;
+
     /// Just a somewhat dirty hack to special-case the handling of context
     /// unbinding on old OSMesa versions.
     fn is_osmesa(&self) -> bool { false }
+}
+
+pub enum DefaultSurfaceSwapResult {
+    Swapped { old_surface: NativeSurface },
+    NotSupported { new_surface: NativeSurface },
+    Failed { message: &'static str, new_surface: NativeSurface },
 }
 
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]

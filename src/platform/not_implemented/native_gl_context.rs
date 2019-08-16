@@ -1,6 +1,6 @@
 use gleam::gl;
-use crate::NativeGLContextMethods;
-use crate::GLVersion;
+use crate::platform::DefaultSurfaceSwapResult;
+use crate::{GLVersion, NativeGLContextMethods, NativeSurface};
 
 pub struct NativeGLContext;
 pub struct NativeGLContextHandle;
@@ -40,5 +40,14 @@ impl NativeGLContextMethods for NativeGLContext {
 
     fn handle(&self) -> Self::Handle {
         unimplemented!()
+    }
+
+    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult {
+        DefaultSurfaceSwapResult::NotSupported { new_surface }
+    }
+
+    #[inline]
+    fn uses_default_framebuffer(&self) -> bool {
+        false
     }
 }

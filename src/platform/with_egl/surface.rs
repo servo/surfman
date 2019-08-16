@@ -227,7 +227,7 @@ impl NativeSurfaceTexture {
     }
 
     #[inline]
-    pub fn gl_texture_target(&self) -> GLenum {
+    pub fn gl_texture_target() -> GLenum {
         gl::TEXTURE_2D
     }
 

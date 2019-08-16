@@ -230,4 +230,20 @@ impl NativeGLContextMethods for NativeGLContext {
 
         Ok(())
     }
+
+    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult {
+        match self.unbind() {
+            Ok(()) => {
+                DefaultSurfaceSwapResult::Swapped {
+                    old_surface: mem::replace(&mut self.default_surface, new_surface),
+                }
+            }
+            Err(message) => DefaultSurfaceSwapResult::Failed { message, new_surface },
+        }
+    }
+
+    #[inline]
+    fn uses_default_framebuffer(&self) -> bool {
+        true
+    }
 }
