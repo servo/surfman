@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+use crate::gl_context::GLVersion;
 use crate::gl_formats::Format;
 use core_foundation::base::TCFType;
 use core_foundation::boolean::CFBoolean;
@@ -9,7 +10,7 @@ use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use euclid::default::Size2D;
-use gleam::gl::{self, GLenum, GLint, GLuint, Gl};
+use gleam::gl::{self, GLenum, GLint, GLuint, Gl, GlType};
 use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement};
 use io_surface::{kIOSurfaceBytesPerRow, kIOSurfaceHeight, kIOSurfaceWidth};
 use std::fmt::{self, Debug, Formatter};
@@ -23,6 +24,8 @@ pub struct NativeSurface {
     io_surface: IOSurface,
     size: Size2D<i32>,
     format: Format,
+    api_type: GlType,
+    api_version: GLVersion,
 }
 
 #[derive(Debug)]
@@ -41,7 +44,12 @@ impl Debug for NativeSurface {
 }
 
 impl NativeSurface {
-    pub fn new(gl: &dyn Gl, size: &Size2D<i32>, format: Format) -> NativeSurface {
+    pub fn new(gl: &dyn Gl,
+               api_type: GlType,
+               api_version: GLVersion,
+               size: &Size2D<i32>,
+               format: Format)
+               -> NativeSurface {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),
@@ -56,7 +64,7 @@ impl NativeSurface {
             io_surface::new(&props)
         };
 
-        NativeSurface { io_surface, size: *size, format }
+        NativeSurface { io_surface, size: *size, format, api_type, api_version }
     }
 
     #[inline]
@@ -72,6 +80,16 @@ impl NativeSurface {
     #[inline]
     pub fn id(&self) -> u32 {
         self.io_surface.get_id()
+    }
+
+    #[inline]
+    pub(crate) fn api_type(&self) -> GlType {
+        self.api_type
+    }
+
+    #[inline]
+    pub(crate) fn api_version(&self) -> GLVersion {
+        self.api_version
     }
 }
 
@@ -125,7 +143,7 @@ impl NativeSurfaceTexture {
     }
 
     #[inline]
-    pub fn gl_texture_target(&self) -> GLenum {
+    pub fn gl_texture_target() -> GLenum {
         gl::TEXTURE_RECTANGLE_ARB
     }
 

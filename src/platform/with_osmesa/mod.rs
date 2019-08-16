@@ -3,9 +3,8 @@ use std::os::raw::c_int;
 use std::ptr;
 
 use crate::gl_context::GLVersion;
+use crate::platform::{DefaultSurfaceSwapResult, NativeGLContextMethods, NativeSurface};
 use gleam::gl;
-
-use crate::platform::NativeGLContextMethods;
 
 const DUMMY_BUFFER_WIDTH: usize = 16;
 const DUMMY_BUFFER_HEIGHT: usize = 16;
@@ -137,6 +136,13 @@ impl NativeGLContextMethods for OSMesaContext {
 
         Ok(())
     }
+
+    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult {
+        DefaultSurfaceSwapResult::Failed { message: "TODO", new_surface }
+    }
+
+    #[inline]
+    fn uses_default_framebuffer(&self) -> bool { true }
 
     fn is_osmesa(&self) -> bool { true }
 }

@@ -1,17 +1,14 @@
 use euclid::default::Size2D;
 use gleam::gl;
 use gleam::gl::types::{GLuint};
+use std::marker::PhantomData;
 use std::mem;
 use std::rc::Rc;
 
-use crate::NativeGLContextMethods;
-use crate::GLContextAttributes;
-use crate::GLContextCapabilities;
-use crate::GLFormats;
-use crate::GLLimits;
-use crate::DrawBuffer;
-use crate::ColorAttachmentType;
-use crate::platform::{NativeSurface, NativeSurfaceTexture};
+use crate::{GLContextAttributes, GLContextCapabilities, GLFormats};
+use crate::{GLLimits, NativeGLContextMethods};
+use crate::platform::{DefaultSurfaceSwapResult, NativeSurface, NativeSurfaceTexture};
+use crate::render_target::RenderTarget;
 
 /// This is a wrapper over a native headless GL context
 pub struct GLContext<Native> {
@@ -19,17 +16,12 @@ pub struct GLContext<Native> {
     api_type: gl::GlType,
     api_version: GLVersion,
     native_context: Native,
-    /// This an abstraction over a custom framebuffer
-    /// with attachments according to WebGLContextAttributes
-    // TODO(ecoal95): Ideally we may want a read and a draw
-    // framebuffer, but this is not supported in GLES2, review
-    // when we have better support
-    draw_buffer: Option<DrawBuffer>,
+    render_target: RenderTarget,
     attributes: GLContextAttributes,
     capabilities: GLContextCapabilities,
     formats: GLFormats,
     limits: GLLimits,
-    extensions: Vec<String>
+    extensions: Vec<String>,
 }
 
 impl<Native> GLContext<Native>
@@ -67,7 +59,7 @@ impl<Native> GLContext<Native>
             api_type: *api_type,
             api_version,
             native_context: native_context,
-            draw_buffer: None,
+            render_target: RenderTarget::Unallocated,
             attributes: attributes,
             capabilities: GLContextCapabilities::detect(),
             formats: formats,
@@ -88,14 +80,12 @@ impl<Native> GLContext<Native>
 
     pub fn new(size: Size2D<i32>,
                attributes: GLContextAttributes,
-               color_attachment_type: ColorAttachmentType,
                api_type: gl::GlType,
                api_version: GLVersion,
                shared_with: Option<&Native::Handle>)
         -> Result<Self, &'static str> {
         Self::new_shared_with_dispatcher(size,
                                          attributes,
-                                         color_attachment_type,
                                          api_type,
                                          api_version,
                                          shared_with,
@@ -104,24 +94,23 @@ impl<Native> GLContext<Native>
 
     pub fn new_shared_with_dispatcher(size: Size2D<i32>,
                                       attributes: GLContextAttributes,
-                                      color_attachment_type: ColorAttachmentType,
                                       api_type: gl::GlType,
                                       api_version: GLVersion,
                                       shared_with: Option<&Native::Handle>,
                                       dispatcher: Option<Box<dyn GLContextDispatcher>>)
         -> Result<Self, &'static str> {
-        // We create a headless context with a dummy size, we're painting to the
-        // draw_buffer's framebuffer anyways.
-        let mut context =
-            Self::create_shared_with_dispatcher(&api_type,
-                                                api_version,
-                                                shared_with,
-                                                dispatcher)?;
+        let mut context = Self::create_shared_with_dispatcher(&api_type,
+                                                              api_version,
+                                                              shared_with,
+                                                              dispatcher)?;
 
-        context.formats = GLFormats::detect(&attributes, &context.extensions[..], &api_type, api_version);
+        context.formats = GLFormats::detect(&attributes,
+                                            &context.extensions[..],
+                                            &api_type,
+                                            api_version);
+
         context.attributes = attributes;
-
-        context.init_offscreen(size, color_attachment_type)?;
+        context.init_offscreen(size)?;
 
         Ok(context)
     }
@@ -133,7 +122,7 @@ impl<Native> GLContext<Native>
                                          api_version: GLVersion,
                                          shared_with: Option<&Native::Handle>)
         -> Result<Self, &'static str> {
-        Self::new(size, attributes, ColorAttachmentType::default(), api_type, api_version, shared_with)
+        Self::new(size, attributes, api_type, api_version, shared_with)
     }
 
     #[inline(always)]
@@ -205,17 +194,27 @@ impl<Native> GLContext<Native>
     }
 
     #[inline]
-    pub fn draw_buffer(&self) -> Option<&DrawBuffer> {
-        self.draw_buffer.as_ref()
+    pub fn render_target(&self) -> &RenderTarget {
+        &self.render_target
     }
 
     #[inline]
-    pub fn swap_native_surface(&mut self, new_surface: Option<NativeSurface>)   
-                               -> Option<NativeSurfaceTexture> {
-        match self.draw_buffer {
-            None => None,
-            Some(ref mut draw_buffer) => Some(draw_buffer.swap_native_surface(new_surface)),
+    pub fn swap_color_surface(&mut self, new_surface: NativeSurface)
+                              -> Result<NativeSurface, &'static str> {
+        match self.native_context.swap_default_surface(new_surface) {
+            DefaultSurfaceSwapResult::Failed { new_surface: _, message } => Err(message),
+            DefaultSurfaceSwapResult::Swapped { old_surface } => Ok(old_surface),
+            DefaultSurfaceSwapResult::NotSupported { new_surface } => {
+                self.render_target
+                    .swap_color_surface(&*self.gl_, new_surface)
+                    .map_err(|()| "Surface swap unsupported")
+            }
         }
+    }
+
+    #[inline]
+    pub fn size(&self) -> Option<Size2D<i32>> {
+        self.render_target.size()
     }
 
     /*
@@ -228,17 +227,21 @@ impl<Native> GLContext<Native>
     }
     */
 
-    // We resize just replacing the draw buffer, we don't perform size optimizations
-    // in order to keep this generic. The old buffer is returned in case its resources
+    // We resize just replacing the render target, we don't perform size optimizations
+    // in order to keep this generic. The old target is returned in case its resources
     // are still in use.
-    pub fn resize(&mut self, size: Size2D<i32>) -> Result<DrawBuffer, &'static str> {
-        let old_buffer = match self.draw_buffer.take() {
-            None => return Err("No draw buffer available"),
-            Some(old_buffer) => old_buffer,
-        };
+    pub fn resize(&mut self, size: Size2D<i32>) -> Result<RenderTarget, &'static str> {
+        let old_render_target = self.render_target.take();
 
-        self.draw_buffer = Some(DrawBuffer::new(self, size, old_buffer.color_attachment_type())?);
-        Ok(old_buffer)
+        self.render_target = RenderTarget::new(&*self.gl_,
+                                               &mut self.native_context,
+                                               self.api_type,
+                                               self.api_version,
+                                               &size,
+                                               &self.attributes,
+                                               &self.formats)?;
+
+        Ok(old_render_target)
     }
 
     pub fn get_extensions(&self) -> Vec<String> {
@@ -255,6 +258,7 @@ impl<Native> GLContext<Native>
         self.gl().clear(mask.unwrap_or(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT));
     }
 
+    /*
     pub fn create_compatible_draw_buffer(&self,
                                          size: &Size2D<i32>,
                                          color_attachment_type: ColorAttachmentType)
@@ -262,10 +266,16 @@ impl<Native> GLContext<Native>
         let draw_buffer = self.draw_buffer.as_ref().expect("Where's the draw buffer?");
         DrawBuffer::new(self, draw_buffer.size(), draw_buffer.color_attachment_type())
     }
+    */
 
-    fn init_offscreen(&mut self, size: Size2D<i32>, color_attachment_type: ColorAttachmentType)
-                      -> Result<(), &'static str> {
-        self.draw_buffer = Some(DrawBuffer::new(self, size, color_attachment_type)?);
+    fn init_offscreen(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
+        self.render_target = RenderTarget::new(&*self.gl_,
+                                               &mut self.native_context,
+                                               self.api_type,
+                                               self.api_version,
+                                               &size,
+                                               &self.attributes,
+                                               &self.formats)?;
 
         debug_assert!(self.is_current());
         self.clear_framebuffer(None, None);
