@@ -9,7 +9,6 @@ pub mod wgl_ext {
 }
 
 mod wgl_attributes;
-mod native_gl_context;
+mod gl_context;
 mod utils;
-pub use self::native_gl_context::NativeGLContext;
-pub use self::native_gl_context::NativeGLContextHandle;
+pub use self::gl_context::{NativeGLContext, NativeGLContextHandle};

@@ -21,11 +21,6 @@ pub use platform::{OSMesaContext, OSMesaContextHandle};
 mod gl_context;
 pub use gl_context::{GLContext, GLContextDispatcher, GLVersion};
 
-/*
-mod draw_buffer;
-pub use draw_buffer::{DrawBuffer, ColorAttachmentType};
-*/
-
 mod render_target;
 pub use render_target::RenderTarget;
 

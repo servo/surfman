@@ -1,4 +1,4 @@
-mod native_gl_context;
+mod gl_context;
 mod surface;
-pub use self::native_gl_context::{NativeGLContext, NativeGLContextHandle};
+pub use self::gl_context::{NativeGLContext, NativeGLContextHandle};
 pub use self::surface::{NativeSurface, NativeSurfaceTexture};
