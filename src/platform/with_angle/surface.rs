@@ -14,6 +14,9 @@ use std::thread;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
+thread_local! {
+}
+
 pub struct EGLDisplayWrapper(pub EGLDisplay);
 
 unsafe impl Sync for EGLDisplayWrapper {}
