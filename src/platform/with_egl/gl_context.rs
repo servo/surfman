@@ -2,16 +2,17 @@ use crate::GLVersion;
 use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
 use crate::egl;
 use crate::gl_formats::Format;
-use crate::platform::NativeGLContextMethods;
-use crate::platform::{DISPLAY, NativeSurface};
+use crate::platform::with_egl::surface::Display;
+use crate::platform::{DefaultSurfaceSwapResult, NativeGLContextMethods, NativeSurface};
 use euclid::Size2D;
 use gleam::gl;
 use libloading as lib;
 use std::borrow::{Borrow, BorrowMut};
 use std::cell::RefCell;
 use std::ffi::CString;
+use std::mem;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const DUMMY_FRAMEBUFFER_SIZE: i32 = 16;
 
@@ -38,16 +39,16 @@ thread_local! {
 
 struct GLContext {
     egl_context: EGLContext,
-    default_surface: NativeSurface,
+    default_surface: Mutex<NativeSurface>,
 }
 
 impl Drop for GLContext {
     fn drop(&mut self) {
-        DISPLAY.with(|display| {
+        Display::with(|display| {
             unsafe {
                 // Unbind if necessary.
                 if egl::GetCurrentContext() == self.egl_context {
-                    egl::MakeCurrent(DISPLAY.egl_display,
+                    egl::MakeCurrent(display.egl_display,
                                      egl::NO_SURFACE as EGLSurface,
                                      egl::NO_SURFACE as EGLSurface,
                                      egl::NO_CONTEXT as EGLContext);
@@ -80,9 +81,9 @@ impl GLContext {
             0, 0, // see mod.rs
         ];
 
-        let config = *default_surface.config();
+        let config = default_surface.config();
 
-        DISPLAY.with(|display| {
+        Display::with(|display| {
             let mut ctx = unsafe {
                 egl::CreateContext(display.egl_display, config, shared, attributes.as_ptr())
             };
@@ -107,8 +108,8 @@ impl GLContext {
                 return Err("Error creating an EGL context");
             }
 
-            Ok(GLContext { egl_context: ctx, default_surface })
-        }
+            Ok(GLContext { egl_context: ctx, default_surface: Mutex::new(default_surface) })
+        })
     }
 
 }
@@ -163,11 +164,11 @@ impl NativeGLContextMethods for NativeGLContext {
                                                               api_version,
                                                               &size,
                                                               format);
-        let native_share_context = with.map(|with| {
-            &with.0.egl_context
-        });
 
-        NativeGLContext::new(surface, native_share_context)
+        match with {
+            None => NativeGLContext::new(surface, None),
+            Some(with) => NativeGLContext::new(surface, Some(&with.0.egl_context)),
+        }
     }
 
     #[inline]
@@ -199,16 +200,18 @@ impl NativeGLContextMethods for NativeGLContext {
             old_context.unbind();
         }
 
-        DISPLAY.with(|display| {
+        let result = Display::with(|display| {
+            let default_surface = self.0.default_surface.lock().unwrap();
             unsafe {
-                if egl::MakeCurrent(display.egl_display,
-                                    self.0.default_surface.egl_surface(),
-                                    self.0.default_surface.egl_surface(),
-                                    self.0.egl_context) == egl::FALSE as EGLBoolean {
-                    return Err("egl::MakeCurrent")
-                }
+                egl::MakeCurrent(display.egl_display,
+                                 default_surface.egl_surface(),
+                                 default_surface.egl_surface(),
+                                 self.0.egl_context)
             }
         });
+        if result == egl::FALSE as EGLBoolean {
+            return Err("eglMakeCurrent() failed");
+        }
 
         CURRENT_CONTEXT.with(|current_context| {
             *current_context.borrow_mut() = Some((*self).clone())
@@ -228,29 +231,40 @@ impl NativeGLContextMethods for NativeGLContext {
 
         CURRENT_CONTEXT.with(|current_context| *current_context.borrow_mut() = None);
 
-        DISPLAY.with(|display| {
+        let result = Display::with(|display| {
             unsafe {
-                if egl::MakeCurrent(display.egl_display,
-                                    egl::NO_SURFACE as EGLSurface,
-                                    egl::NO_SURFACE as EGLSurface,
-                                    egl::NO_CONTEXT as EGLContext) == egl::FALSE as EGLBoolean {
-                        return Err("egl::MakeCurrent (on unbind)")
-                }
+                egl::MakeCurrent(display.egl_display,
+                                 egl::NO_SURFACE as EGLSurface,
+                                 egl::NO_SURFACE as EGLSurface,
+                                 egl::NO_CONTEXT as EGLContext)
             }
         });
+        if result == egl::FALSE as EGLBoolean {
+            return Err("eglMakeCurrent() failed on unbind");
+        }
 
         Ok(())
     }
 
     fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult {
-        match self.unbind() {
-            Ok(()) => {
-                DefaultSurfaceSwapResult::Swapped {
-                    old_surface: mem::replace(&mut self.default_surface, new_surface),
-                }
+        let was_current = self.is_current();
+        if was_current {
+            if let Err(message) = self.unbind() {
+                return DefaultSurfaceSwapResult::Failed { message, new_surface };
             }
-            Err(message) => DefaultSurfaceSwapResult::Failed { message, new_surface },
         }
+
+        let old_surface = {
+            let mut surface_slot = self.0.default_surface.lock().unwrap();
+            mem::replace(&mut *surface_slot, new_surface)
+        };
+
+        if was_current {
+            // Best effort.
+            drop(self.make_current());
+        }
+
+        DefaultSurfaceSwapResult::Swapped { old_surface }
     }
 
     #[inline]

@@ -1,5 +1,5 @@
 mod gl_context;
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "windows")]
 #[path = "surface_angle.rs"]
 mod surface;
 #[cfg(not(target_os = "windows"))]

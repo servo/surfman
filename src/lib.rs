@@ -12,8 +12,6 @@ extern crate objc;
 extern crate io_surface;
 
 #[cfg(target_os = "windows")]
-extern crate weak_table;
-#[cfg(target_os = "windows")]
 extern crate wio;
 
 mod platform;

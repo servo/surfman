@@ -1,5 +1,5 @@
-use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig};
-use crate::egl::types::{EGLContext, EGLNativeDisplayType};
+use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
+use crate::egl::types::{EGLSurface, EGLenum, EGLint};
 use crate::egl;
 use crate::gl_context::GLVersion;
 use crate::gl_formats::Format;
@@ -9,12 +9,25 @@ use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
+use std::mem;
+use std::os::raw::{c_char, c_void};
 use std::ptr;
 use std::sync::{Arc, Weak};
 use std::thread;
-use weak_table::PtrWeakKeyHashMap;
+use winapi::shared::winerror;
+use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION};
+use winapi::um::d3d11::{ID3D11Device, ID3D11DeviceContext};
+use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_9_3};
+use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use winapi::um::winnt::HANDLE;
+use wio::com::ComPtr;
 
 const BYTES_PER_PIXEL: i32 = 4;
+
+const EGL_NO_DEVICE_EXT: EGLDeviceEXT = 0 as EGLDeviceEXT;
+const EGL_PLATFORM_DEVICE_EXT: EGLenum = 0x313f;
+const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
+const EGL_D3D11_DEVICE_ANGLE: EGLint = 0x33a1;
 
 pub struct Display {
     d3d11_device: ComPtr<ID3D11Device>,
@@ -24,12 +37,38 @@ pub struct Display {
     surfaces: Vec<SurfaceEntry>,
 }
 
+lazy_static! {
+    static ref eglCreateDeviceANGLE: extern "C" fn(device_type: EGLint,
+                                                   native_device: *mut c_void,
+                                                   attrib_list: *const EGLAttrib)
+                                                   -> EGLDeviceEXT = {
+        unsafe {
+            static NAME: &'static [u8] = b"eglCreateDeviceANGLE\0";
+            let f = egl::GetProcAddress(&NAME[0] as *const u8 as *const c_char);
+            assert_ne!(f as usize, 0);
+            mem::transmute(f)
+        }
+    };
+    static ref eglQuerySurfacePointerANGLE: extern "C" fn(dpy: EGLDisplay,
+                                                          surface: EGLSurface,
+                                                          attribute: EGLint,
+                                                          value: *mut *mut c_void)
+                                                          -> EGLBoolean = {
+        unsafe {
+            static NAME: &'static [u8] = b"eglQuerySurfacePointerANGLE\0";
+            let f = egl::GetProcAddress(&NAME[0] as *const u8 as *const c_char);
+            assert_ne!(f as usize, 0);
+            mem::transmute(f)
+        }
+    };
+}
+
 thread_local! {
-    static DISPLAY: RefCell<Option<Display>> = RefCell::new(None);
+    pub static DISPLAY: RefCell<Option<Display>> = RefCell::new(None);
 }
 
 impl Display {
-    fn with<F, R>(&'static self, callback: F) -> R where F: FnOnce(&mut Display) -> R {
+    pub(crate) fn with<F, R>(callback: F) -> R where F: FnOnce(&mut Display) -> R {
         DISPLAY.with(|display| {
             let mut display = display.borrow_mut();
             if display.is_none() {
@@ -39,7 +78,7 @@ impl Display {
                     let mut d3d11_device_context = ptr::null_mut();
                     let result = D3D11CreateDevice(ptr::null_mut(),
                                                    D3D_DRIVER_TYPE_HARDWARE,
-                                                   0,
+                                                   ptr::null_mut(),
                                                    0,
                                                    ptr::null_mut(),
                                                    0,
@@ -47,20 +86,20 @@ impl Display {
                                                    &mut d3d11_device,
                                                    &mut d3d11_feature_level,
                                                    &mut d3d11_device_context);
-                    assert!(SUCCEEDED(result));
+                    assert!(winerror::SUCCEEDED(result));
                     debug_assert!(d3d11_feature_level >= D3D_FEATURE_LEVEL_9_3);
-                    let d3d11_device = ComPtr::new(d3d11_device);
-                    let d3d11_device_context = ComPtr::new(d3d11_device_context);
+                    let d3d11_device = ComPtr::from_raw(d3d11_device);
+                    let d3d11_device_context = ComPtr::from_raw(d3d11_device_context);
 
-                    let egl_device = eglCreateDeviceANGLE(egl::D3D11_DEVICE_ANGLE,
-                                                          d3d11_device.as_raw()
-                                                          ptr::null_mut());
-                    assert_ne!(egl_device, egl::NO_DEVICE_EXT);
+                    let egl_device = (*eglCreateDeviceANGLE)(EGL_D3D11_DEVICE_ANGLE,
+                                                             d3d11_device.as_raw() as *mut c_void,
+                                                             ptr::null_mut());
+                    assert_ne!(egl_device, EGL_NO_DEVICE_EXT);
 
-                    let attribs = [egl::NONE, egl::NONE, 0, 0];
-                    let egl_display = eglGetPlatformDisplay(egl::PLATFORM_DEVICE_EXT,
-                                                            egl_device,
-                                                            &attribs[0]);
+                    let attribs = [egl::NONE as EGLAttrib, egl::NONE as EGLAttrib, 0, 0];
+                    let egl_display = egl::GetPlatformDisplay(EGL_PLATFORM_DEVICE_EXT,
+                                                              egl_device as *mut c_void,
+                                                              &attribs[0]);
                     assert_ne!(egl_display, egl::NO_DISPLAY);
 
                     *display = Some(Display {
@@ -78,11 +117,14 @@ impl Display {
     }
 
     fn sweep_dead_surfaces(&mut self) {
+        let egl_display = self.egl_display;
         self.surfaces.retain(|surface| {
             let dead = surface.handle.upgrade().is_none();
             if dead {
-                let ok = egl::DestroySurface(self.egl_display, surface.angle_surface);
-                debug_assert_ne!(ok, egl::FALSE);
+                unsafe {
+                    let ok = egl::DestroySurface(egl_display, surface.angle_surface.egl_surface);
+                    debug_assert_ne!(ok, egl::FALSE);
+                }
             }
             dead
         })
@@ -107,7 +149,7 @@ impl Display {
 
         unsafe {
             let (mut config, mut configs_found) = (ptr::null(), 0);
-            if egl::ChooseConfig(DISPLAY.0,
+            if egl::ChooseConfig(self.egl_display,
                                  pbuffer_attributes.as_ptr(),
                                  &mut config,
                                  1,
@@ -125,40 +167,37 @@ impl Display {
 
     // TODO(pcwalton): This is O(n) in the number of surfaces. Might be a problem with many
     // surfaces.
-    fn get_surface(&mut self, query: &Arc<SurfaceHandle>) -> EGLSurface {
+    fn get_angle_surface(&mut self, query: &Arc<SurfaceHandle>) -> AngleSurface {
         // Find an existing surface if we have one.
         for surface in &self.surfaces {
             if let Some(handle) = surface.handle.upgrade() {
-                if (&**query).ptr_eq(&*handle) {
-                    return surface.angle_surface
+                if ptr::eq(&**query, &*handle) {
+                    return surface.angle_surface.clone();
                 }
             }
         }
 
         // We don't have an EGL surface yet. Create one from the D3D handle.
-        let angle_config = self.api_to_config(query.api_type, query.api_version);
+        let egl_config = self.api_to_config(query.api_type, query.api_version);
         let attributes = [
-            egl::TEXTURE_FORMAT, egl::TEXTURE_RGBA,
-            egl::TEXTURE_TARGET, egl::TEXTURE_2D,
-            egl::NONE,           0,
-            0,                   0,
+            egl::TEXTURE_FORMAT as EGLint, egl::TEXTURE_RGBA as EGLint,
+            egl::TEXTURE_TARGET as EGLint, egl::TEXTURE_2D as EGLint,
+            egl::NONE as EGLint,           egl::NONE as EGLint,
+            0,                             0,
         ];
-        let angle_surface =
-            egl::CreatePBufferFromClientBuffer(self.egl_display,
-                                               egl::D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                                               query.0,
-                                               angle_config,
-                                               attributes.as_ptr());
-        assert_ne!(angle_surface, egl::NO_SURFACE);
+        let egl_surface = unsafe {
+            egl::CreatePbufferFromClientBuffer(self.egl_display,
+                                               EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
+                                               query.share_handle,
+                                               egl_config,
+                                               attributes.as_ptr())
+        };
+        assert_ne!(egl_surface, egl::NO_SURFACE);
 
         // Cache our new surface and return it.
-        self.surfaces.push(SurfaceEntry {
-            handle: (*query).clone().downgrade(),
-            angle_surface,
-            angle_config,
-        });
-
-        angle_surface
+        let angle_surface = AngleSurface { egl_surface, egl_config };
+        self.surfaces.push(SurfaceEntry { handle: Arc::downgrade(query), angle_surface });
+        self.surfaces.last().unwrap().angle_surface.clone()
     }
 }
 
@@ -168,10 +207,17 @@ struct SurfaceHandle {
     api_version: GLVersion,
 }
 
+// NB: Be careful cloning this; the `egl_surface` and `egl_config` members are equivalent to
+// unsafe pointers.
+#[derive(Clone)]
+struct AngleSurface {
+    egl_surface: EGLSurface,
+    egl_config: EGLConfig,
+}
+
 struct SurfaceEntry {
     handle: Weak<SurfaceHandle>,
-    angle_surface: EGLSurface,
-    angle_config: EGLConfig,
+    angle_surface: AngleSurface,
 }
 
 #[derive(Clone)]
@@ -202,38 +248,39 @@ impl NativeSurface {
                                            size: &Size2D<i32>,
                                            format: Format)
                                            -> NativeSurface {
-        DISPLAY.with(|display| {
-            let angle_config = display.api_to_config(api_type, api_version);
+        Display::with(|display| {
+            unsafe {
+                let egl_config = display.api_to_config(api_type, api_version);
 
-            let attributes = [
-                egl::WIDTH as EGLint,  size.width as EGLint,
-                egl::HEIGHT as EGLint, size.height as EGLint,
-                egl::NONE as EGLint,   0,
-                0,                     0,
-            ];
+                let attributes = [
+                    egl::WIDTH as EGLint,  size.width as EGLint,
+                    egl::HEIGHT as EGLint, size.height as EGLint,
+                    egl::NONE as EGLint,   0,
+                    0,                     0,
+                ];
 
-            let angle_surface = egl::CreatePbufferSurface(display.egl_display,
-                                                          angle_config,
-                                                          attributes.as_ptr());
-            debug_assert_ne!(angle_surface, egl::NO_SURFACE)
+                let egl_surface = egl::CreatePbufferSurface(display.egl_display,
+                                                            egl_config,
+                                                            attributes.as_ptr());
+                debug_assert_ne!(egl_surface, egl::NO_SURFACE);
 
-            let mut share_handle = INVALID_HANDLE_VALUE;
-            let result =
-                egl::QuerySurfaceAttribPointerANGLE(display.egl_display,
-                                                    angle_surface,
-                                                    egl::D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                                                    &mut share_handle);
-            debug_assert_ne!(result, egl::FALSE);
-            debug_assert_ne!(share_handle, INVALID_HANDLE_VALUE);
+                let mut share_handle = INVALID_HANDLE_VALUE;
+                let result =
+                    eglQuerySurfacePointerANGLE(display.egl_display,
+                                                egl_surface,
+                                                EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
+                                                &mut share_handle);
+                debug_assert_ne!(result, egl::FALSE);
+                debug_assert_ne!(share_handle, INVALID_HANDLE_VALUE);
 
-            let handle = Arc::new(SurfaceHandle { share_handle, api_type, api_version });
-            display.surfaces.push(SurfaceEntry {
-                handle: handle.clone().downgrade(),
-                angle_surface,
-                angle_config,
-            });
+                let handle = Arc::new(SurfaceHandle { share_handle, api_type, api_version });
+                display.surfaces.push(SurfaceEntry {
+                    handle: Arc::downgrade(&handle),
+                    angle_surface: AngleSurface { egl_surface, egl_config },
+                });
 
-            NativeSurface { handle, size: *size, format }
+                NativeSurface { handle, size: *size, format }
+            }
         })
     }
 
@@ -248,7 +295,7 @@ impl NativeSurface {
 
     #[inline]
     pub(crate) fn egl_surface(&self) -> EGLSurface {
-        self.wrapper.0
+        Display::with(|display| display.get_angle_surface(&self.handle).egl_surface)
     }
 
     #[inline]
@@ -262,8 +309,8 @@ impl NativeSurface {
     }
 
     #[inline]
-    pub(crate) fn config(&self) -> &EGLConfig {
-        &self.handle.config
+    pub(crate) fn config(&self) -> EGLConfig {
+        Display::with(|display| display.get_angle_surface(&self.handle).egl_config)
     }
 
     #[inline]
@@ -289,11 +336,11 @@ impl NativeSurfaceTexture {
 
         gl.bind_texture(gl::TEXTURE_2D, texture);
 
-        DISPLAY.with(|display| {
+        Display::with(|display| {
             unsafe {
-                if egl::BindTexImage(display.egl_display,
-                                     native_surface.wrapper.0,
-                                     texture as GLint) == egl::FALSE {
+                let egl_surface = display.get_angle_surface(&native_surface.handle).egl_surface;
+                if egl::BindTexImage(display.egl_display, egl_surface, texture as GLint) ==
+                        egl::FALSE {
                     panic!("Failed to bind EGL texture surface!")
                 }
             }
@@ -337,9 +384,13 @@ impl NativeSurfaceTexture {
 
     #[inline]
     pub fn destroy(&mut self, gl: &dyn Gl) {
-        unsafe {
-            egl::ReleaseTexImage(DISPLAY.0, self.surface.wrapper.0, self.gl_texture as GLint);
-        }
+        Display::with(|display| {
+            unsafe {
+                egl::ReleaseTexImage(display.egl_display,
+                                     display.get_angle_surface(&self.surface.handle).egl_surface,
+                                     self.gl_texture as GLint);
+            }
+        });
 
         gl.delete_textures(&[self.gl_texture]);
         self.gl_texture = 0;
