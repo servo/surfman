@@ -52,16 +52,16 @@ impl Display {
                     let d3d11_device = ComPtr::new(d3d11_device);
                     let d3d11_device_context = ComPtr::new(d3d11_device_context);
 
-                    let egl_device = eglCreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE,
+                    let egl_device = eglCreateDeviceANGLE(egl::D3D11_DEVICE_ANGLE,
                                                           d3d11_device.as_raw()
                                                           ptr::null_mut());
-                    assert_ne!(egl_device, EGL_NO_DEVICE_EXT);
+                    assert_ne!(egl_device, egl::NO_DEVICE_EXT);
 
-                    let attribs = [EGL_NONE, EGL_NONE];
-                    let egl_display = eglGetPlatformDisplay(EGL_PLATFORM_DEVICE_EXT,
+                    let attribs = [egl::NONE, egl::NONE, 0, 0];
+                    let egl_display = eglGetPlatformDisplay(egl::PLATFORM_DEVICE_EXT,
                                                             egl_device,
                                                             &attribs[0]);
-                    assert_ne!(egl_display, EGL_NO_DISPLAY);
+                    assert_ne!(egl_display, egl::NO_DISPLAY);
 
                     *display = Some(Display {
                         d3d11_device,
@@ -82,7 +82,7 @@ impl Display {
             let dead = surface.handle.upgrade().is_none();
             if dead {
                 let ok = egl::DestroySurface(self.egl_display, surface.angle_surface);
-                debug_assert_ne!(ok, EGL_FALSE);
+                debug_assert_ne!(ok, egl::FALSE);
             }
             dead
         })
