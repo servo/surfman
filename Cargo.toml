@@ -46,6 +46,7 @@ features = ["xlib"]
 mozangle = { version = "0.2", features = ["egl"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
+wio = "0.2"
 winapi = { version = "0.3", features = ["wingdi", "winuser", "libloaderapi"] }
 
 [target.'cfg(any(target_os="macos", target_os="windows", target_os="android", target_os="ios"))'.dependencies]

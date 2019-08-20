@@ -11,6 +11,11 @@ extern crate objc;
 #[cfg(target_os="macos")]
 extern crate io_surface;
 
+#[cfg(target_os = "windows")]
+extern crate weak_table;
+#[cfg(target_os = "windows")]
+extern crate wio;
+
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
 pub use platform::{NativeSurface, NativeSurfaceTexture};
@@ -20,11 +25,6 @@ pub use platform::{OSMesaContext, OSMesaContextHandle};
 
 mod gl_context;
 pub use gl_context::{GLContext, GLContextDispatcher, GLVersion};
-
-/*
-mod draw_buffer;
-pub use draw_buffer::{DrawBuffer, ColorAttachmentType};
-*/
 
 mod render_target;
 pub use render_target::RenderTarget;

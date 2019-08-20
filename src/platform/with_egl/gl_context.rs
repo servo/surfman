@@ -3,7 +3,7 @@ use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, E
 use crate::egl;
 use crate::gl_formats::Format;
 use crate::platform::NativeGLContextMethods;
-use crate::platform::with_egl::surface::{DISPLAY, NativeSurface};
+use crate::platform::{DISPLAY, NativeSurface};
 use euclid::Size2D;
 use gleam::gl;
 use libloading as lib;
@@ -43,19 +43,21 @@ struct GLContext {
 
 impl Drop for GLContext {
     fn drop(&mut self) {
-        unsafe {
-            // Unbind if necessary.
-            if egl::GetCurrentContext() == self.egl_context {
-                egl::MakeCurrent(DISPLAY.0,
-                                 egl::NO_SURFACE as EGLSurface,
-                                 egl::NO_SURFACE as EGLSurface,
-                                 egl::NO_CONTEXT as EGLContext);
-            }
+        DISPLAY.with(|display| {
+            unsafe {
+                // Unbind if necessary.
+                if egl::GetCurrentContext() == self.egl_context {
+                    egl::MakeCurrent(DISPLAY.egl_display,
+                                     egl::NO_SURFACE as EGLSurface,
+                                     egl::NO_SURFACE as EGLSurface,
+                                     egl::NO_CONTEXT as EGLContext);
+                }
 
-            if egl::DestroyContext(DISPLAY.0, self.egl_context) == 0 {
-                debug!("egl::DestroyContext failed");
+                if egl::DestroyContext(display.egl_display, self.egl_context) == 0 {
+                    debug!("egl::DestroyContext failed");
+                }
             }
-        }
+        })
     }
 }
 
@@ -80,28 +82,33 @@ impl GLContext {
 
         let config = *default_surface.config();
 
-        let mut ctx = unsafe {
-            egl::CreateContext(DISPLAY.0, config, shared, attributes.as_ptr())
-        };
+        DISPLAY.with(|display| {
+            let mut ctx = unsafe {
+                egl::CreateContext(display.egl_display, config, shared, attributes.as_ptr())
+            };
 
-        if share_context.is_some() && ctx == egl::NO_CONTEXT as EGLContext && client_version != 3 {
-            // Workaround for GPUs that don't like different CONTEXT_CLIENT_VERSION value when sharing (e.g. Mali-T880).
-            // Set CONTEXT_CLIENT_VERSION 3 to fix the shared ctx creation failure. Note that the ctx is still OpenGL ES 2.0
-            // compliant because egl::OPENGL_ES2_BIT is set for egl::RENDERABLE_TYPE. See utils.rs.
-            let attributes = [
-                egl::CONTEXT_CLIENT_VERSION as EGLint, 3,
-                egl::NONE as EGLint, 0, 0, 0, // see mod.rs
-            ];
-            ctx =  unsafe { egl::CreateContext(DISPLAY.0, config, shared, attributes.as_ptr()) };
+            if share_context.is_some() && ctx == egl::NO_CONTEXT as EGLContext && client_version != 3 {
+                // Workaround for GPUs that don't like different CONTEXT_CLIENT_VERSION value when
+                // sharing (e.g. Mali-T880). Set CONTEXT_CLIENT_VERSION 3 to fix the shared ctx
+                // creation failure. Note that the ctx is still OpenGL ES 2.0 compliant because
+                // egl::OPENGL_ES2_BIT is set for egl::RENDERABLE_TYPE. See utils.rs.
+                let attributes = [
+                    egl::CONTEXT_CLIENT_VERSION as EGLint, 3,
+                    egl::NONE as EGLint, 0, 0, 0, // see mod.rs
+                ];
+                ctx = unsafe {
+                    egl::CreateContext(display.egl_display, config, shared, attributes.as_ptr())
+                };
+            }
+
+            // TODO: Check for every type of error possible, not just client error?
+            // Note if we do it we must do it too on egl::CreatePBufferSurface, etc...
+            if ctx == egl::NO_CONTEXT as EGLContext {
+                return Err("Error creating an EGL context");
+            }
+
+            Ok(GLContext { egl_context: ctx, default_surface })
         }
-
-        // TODO: Check for every type of error possible, not just client error?
-        // Note if we do it we must do it too on egl::CreatePBufferSurface, etc...
-        if ctx == egl::NO_CONTEXT as EGLContext {
-            return Err("Error creating an EGL context");
-        }
-
-        Ok(GLContext { egl_context: ctx, default_surface })
     }
 
 }
@@ -192,14 +199,16 @@ impl NativeGLContextMethods for NativeGLContext {
             old_context.unbind();
         }
 
-        unsafe {
-            if egl::MakeCurrent(DISPLAY.0,
-                                self.0.default_surface.egl_surface(),
-                                self.0.default_surface.egl_surface(),
-                                self.0.egl_context) == egl::FALSE as EGLBoolean {
-                return Err("egl::MakeCurrent")
+        DISPLAY.with(|display| {
+            unsafe {
+                if egl::MakeCurrent(display.egl_display,
+                                    self.0.default_surface.egl_surface(),
+                                    self.0.default_surface.egl_surface(),
+                                    self.0.egl_context) == egl::FALSE as EGLBoolean {
+                    return Err("egl::MakeCurrent")
+                }
             }
-        }
+        });
 
         CURRENT_CONTEXT.with(|current_context| {
             *current_context.borrow_mut() = Some((*self).clone())
@@ -219,14 +228,16 @@ impl NativeGLContextMethods for NativeGLContext {
 
         CURRENT_CONTEXT.with(|current_context| *current_context.borrow_mut() = None);
 
-        unsafe {
-           if egl::MakeCurrent(DISPLAY.0,
-                               egl::NO_SURFACE as EGLSurface,
-                               egl::NO_SURFACE as EGLSurface,
-                               egl::NO_CONTEXT as EGLContext) == egl::FALSE as EGLBoolean {
-                return Err("egl::MakeCurrent (on unbind)")
-           }
-        }
+        DISPLAY.with(|display| {
+            unsafe {
+                if egl::MakeCurrent(display.egl_display,
+                                    egl::NO_SURFACE as EGLSurface,
+                                    egl::NO_SURFACE as EGLSurface,
+                                    egl::NO_CONTEXT as EGLContext) == egl::FALSE as EGLBoolean {
+                        return Err("egl::MakeCurrent (on unbind)")
+                }
+            }
+        });
 
         Ok(())
     }
