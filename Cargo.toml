@@ -46,7 +46,6 @@ features = ["xlib"]
 mozangle = { version = "0.2", features = ["egl"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-weak_table = "0.2"
 wio = "0.2"
 winapi = { version = "0.3", features = ["wingdi", "winuser", "libloaderapi"] }
 

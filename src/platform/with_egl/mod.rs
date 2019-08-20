@@ -1,4 +1,9 @@
 mod gl_context;
+#[cfg(not(target_os = "windows"))]
+#[path = "surface_angle.rs"]
+mod surface;
+#[cfg(not(target_os = "windows"))]
+#[path = "surface_native.rs"]
 mod surface;
 pub use self::gl_context::{NativeGLContext, NativeGLContextHandle};
 pub use self::surface::{NativeSurface, NativeSurfaceTexture};
