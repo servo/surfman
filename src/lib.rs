@@ -11,6 +11,11 @@ extern crate objc;
 #[cfg(target_os="macos")]
 extern crate io_surface;
 
+#[cfg(target_os = "windows")]
+extern crate weak_table;
+#[cfg(target_os = "windows")]
+extern crate wio;
+
 mod platform;
 pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
 pub use platform::{NativeSurface, NativeSurfaceTexture};
