@@ -200,12 +200,13 @@ impl NativeGLContextMethods for NativeGLContext {
             old_context.unbind();
         }
 
+        let egl_surface = self.0.default_surface.lock().unwrap().egl_surface();
+
         let result = Display::with(|display| {
-            let default_surface = self.0.default_surface.lock().unwrap();
             unsafe {
                 egl::MakeCurrent(display.egl_display,
-                                 default_surface.egl_surface(),
-                                 default_surface.egl_surface(),
+                                 egl_surface,
+                                 egl_surface,
                                  self.0.egl_context)
             }
         });

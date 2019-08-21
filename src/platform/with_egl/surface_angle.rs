@@ -102,6 +102,12 @@ impl Display {
                                                               &attribs[0]);
                     assert_ne!(egl_display, egl::NO_DISPLAY);
 
+                    let (mut major_version, mut minor_version) = (0, 0);
+                    let result = egl::Initialize(egl_display,
+                                                 &mut major_version,
+                                                 &mut minor_version);
+                    assert_ne!(result, egl::FALSE);
+
                     *display = Some(Display {
                         d3d11_device,
                         d3d11_device_context,
@@ -138,7 +144,6 @@ impl Display {
             egl::SURFACE_TYPE as EGLint,         egl::PBUFFER_BIT as EGLint,
             egl::RENDERABLE_TYPE as EGLint,      renderable_type as EGLint,
             egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint,
-            egl::TEXTURE_TARGET as EGLint,       gl::TEXTURE_2D as EGLint,
             egl::RED_SIZE as EGLint,             8,
             egl::GREEN_SIZE as EGLint,           8,
             egl::BLUE_SIZE as EGLint,            8,
@@ -154,7 +159,8 @@ impl Display {
                                  &mut config,
                                  1,
                                  &mut configs_found) != egl::TRUE as u32 {
-                panic!("Failed to choose an EGL configuration!")
+                panic!("Failed to choose an EGL configuration: {:x}!",
+                       egl::GetError())
             }
 
             if configs_found == 0 {
@@ -180,6 +186,8 @@ impl Display {
         // We don't have an EGL surface yet. Create one from the D3D handle.
         let egl_config = self.api_to_config(query.api_type, query.api_version);
         let attributes = [
+            egl::WIDTH as EGLint,          query.size.width,
+            egl::HEIGHT as EGLint,         query.size.height,
             egl::TEXTURE_FORMAT as EGLint, egl::TEXTURE_RGBA as EGLint,
             egl::TEXTURE_TARGET as EGLint, egl::TEXTURE_2D as EGLint,
             egl::NONE as EGLint,           egl::NONE as EGLint,
@@ -192,7 +200,11 @@ impl Display {
                                                egl_config,
                                                attributes.as_ptr())
         };
-        assert_ne!(egl_surface, egl::NO_SURFACE);
+        if egl_surface == egl::NO_SURFACE {
+            unsafe {
+                panic!("eglCreatePbufferFromClientBuffer failed: {:x}", egl::GetError());
+            }
+        }
 
         // Cache our new surface and return it.
         let angle_surface = AngleSurface { egl_surface, egl_config };
@@ -203,6 +215,7 @@ impl Display {
 
 struct SurfaceHandle {
     share_handle: HANDLE,
+    size: Size2D<i32>,
     api_type: GlType,
     api_version: GLVersion,
 }
@@ -223,7 +236,6 @@ struct SurfaceEntry {
 #[derive(Clone)]
 pub struct NativeSurface {
     handle: Arc<SurfaceHandle>,
-    size: Size2D<i32>,
     format: Format,
 }
 
@@ -238,7 +250,7 @@ unsafe impl Send for NativeSurface {}
 
 impl Debug for NativeSurface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{:?}, {:?}", self.size, self.format)
+        write!(f, "Surface({:?})", self.id())
     }
 }
 
@@ -273,13 +285,19 @@ impl NativeSurface {
                 debug_assert_ne!(result, egl::FALSE);
                 debug_assert_ne!(share_handle, INVALID_HANDLE_VALUE);
 
-                let handle = Arc::new(SurfaceHandle { share_handle, api_type, api_version });
+                let handle = Arc::new(SurfaceHandle {
+                    share_handle,
+                    api_type,
+                    api_version,
+                    size: *size,
+                });
+
                 display.surfaces.push(SurfaceEntry {
                     handle: Arc::downgrade(&handle),
                     angle_surface: AngleSurface { egl_surface, egl_config },
                 });
 
-                NativeSurface { handle, size: *size, format }
+                NativeSurface { handle, format }
             }
         })
     }
@@ -300,7 +318,7 @@ impl NativeSurface {
 
     #[inline]
     pub fn size(&self) -> Size2D<i32> {
-        self.size
+        self.handle.size
     }
 
     #[inline]
@@ -339,9 +357,10 @@ impl NativeSurfaceTexture {
         Display::with(|display| {
             unsafe {
                 let egl_surface = display.get_angle_surface(&native_surface.handle).egl_surface;
-                if egl::BindTexImage(display.egl_display, egl_surface, texture as GLint) ==
-                        egl::FALSE {
-                    panic!("Failed to bind EGL texture surface!")
+                if egl::BindTexImage(display.egl_display,
+                                     egl_surface,
+                                     egl::BACK_BUFFER as GLint) == egl::FALSE {
+                    panic!("Failed to bind EGL texture surface: {:x}!", egl::GetError())
                 }
             }
         });
