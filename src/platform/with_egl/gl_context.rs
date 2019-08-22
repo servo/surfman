@@ -200,7 +200,12 @@ impl NativeGLContextMethods for NativeGLContext {
             old_context.unbind();
         }
 
-        let egl_surface = self.0.default_surface.lock().unwrap().egl_surface();
+        let egl_surface;
+        {
+            let default_surface = self.0.default_surface.lock().unwrap();
+            default_surface.lock_surface();
+            egl_surface = default_surface.egl_surface();
+        }
 
         let result = Display::with(|display| {
             unsafe {
@@ -243,6 +248,8 @@ impl NativeGLContextMethods for NativeGLContext {
         if result == egl::FALSE as EGLBoolean {
             return Err("eglMakeCurrent() failed on unbind");
         }
+
+        self.0.default_surface.lock().unwrap().unlock_surface();
 
         Ok(())
     }

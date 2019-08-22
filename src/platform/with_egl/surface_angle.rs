@@ -12,12 +12,15 @@ use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 use std::thread;
+use winapi::Interface;
+use winapi::shared::dxgi::{IDXGIAdapter, IDXGIDevice};
 use winapi::shared::winerror;
 use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION};
 use winapi::um::d3d11::{ID3D11Device, ID3D11DeviceContext};
-use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_HARDWARE, D3D_FEATURE_LEVEL_9_3};
+use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_REFERENCE, D3D_DRIVER_TYPE_WARP, D3D_FEATURE_LEVEL_9_3};
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winnt::HANDLE;
 use wio::com::ComPtr;
@@ -90,6 +93,24 @@ impl Display {
                     debug_assert!(d3d11_feature_level >= D3D_FEATURE_LEVEL_9_3);
                     let d3d11_device = ComPtr::from_raw(d3d11_device);
                     let d3d11_device_context = ComPtr::from_raw(d3d11_device_context);
+
+                    let mut dxgi_device: *mut IDXGIDevice = ptr::null_mut();
+                    let result = (*d3d11_device).QueryInterface(
+                        &IDXGIDevice::uuidof(),
+                        &mut dxgi_device as *mut *mut IDXGIDevice as *mut *mut c_void);
+                    assert!(winerror::SUCCEEDED(result));
+                    let dxgi_device = ComPtr::from_raw(dxgi_device);
+
+                    let mut dxgi_adapter = ptr::null_mut();
+                    let result = (*dxgi_device).GetAdapter(&mut dxgi_adapter);
+                    assert!(winerror::SUCCEEDED(result));
+                    let dxgi_adapter = ComPtr::from_raw(dxgi_adapter);
+
+                    let mut desc = mem::zeroed();
+                    let result = (*dxgi_adapter).GetDesc(&mut desc);
+                    assert!(winerror::SUCCEEDED(result));
+
+                    println!("Adapter name: {}", String::from_utf16_lossy(&desc.Description));
 
                     let egl_device = (*eglCreateDeviceANGLE)(EGL_D3D11_DEVICE_ANGLE,
                                                              d3d11_device.as_raw() as *mut c_void,
@@ -218,6 +239,7 @@ struct SurfaceHandle {
     size: Size2D<i32>,
     api_type: GlType,
     api_version: GLVersion,
+    locked: AtomicBool,
 }
 
 // NB: Be careful cloning this; the `egl_surface` and `egl_config` members are equivalent to
@@ -290,6 +312,7 @@ impl NativeSurface {
                     api_type,
                     api_version,
                     size: *size,
+                    locked: AtomicBool::new(false),
                 });
 
                 display.surfaces.push(SurfaceEntry {
@@ -345,10 +368,26 @@ impl NativeSurface {
     pub(crate) fn api_version(&self) -> GLVersion {
         self.handle.api_version
     }
+
+    #[inline]
+    pub(crate) fn lock_surface(&self) {
+        if self.handle.locked.swap(true, Ordering::SeqCst) {
+            panic!("Attempted to lock an already-locked surface!")
+        }
+    }
+
+    #[inline]
+    pub(crate) fn unlock_surface(&self) {
+        if !self.handle.locked.swap(false, Ordering::SeqCst) {
+            panic!("Attempted to unlock an unlocked surface!")
+        }
+    }
 }
 
 impl NativeSurfaceTexture {
     pub fn new(gl: &dyn Gl, native_surface: NativeSurface) -> NativeSurfaceTexture {
+        native_surface.lock_surface();
+
         let texture = gl.gen_textures(1)[0];
         debug_assert!(texture != 0);
 
@@ -413,6 +452,8 @@ impl NativeSurfaceTexture {
 
         gl.delete_textures(&[self.gl_texture]);
         self.gl_texture = 0;
+
+        self.surface.unlock_surface();
     }
 }
 
