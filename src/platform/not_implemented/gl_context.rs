@@ -1,13 +1,10 @@
 use gleam::gl;
 use crate::platform::DefaultSurfaceSwapResult;
-use crate::{GLVersion, NativeGLContextMethods, NativeSurface};
+use crate::{GLVersion, NativeSurface};
 
 pub struct NativeGLContext;
-pub struct NativeGLContextHandle;
 
-impl NativeGLContextMethods for NativeGLContext {
-    type Handle = NativeGLContextHandle;
-
+impl NativeGLContext {
     fn get_proc_address(_addr: &str) -> *const () {
         0 as *const ()
     }

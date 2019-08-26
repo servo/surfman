@@ -1,44 +1,6 @@
 use crate::gl_context::{GLContextDispatcher, GLVersion};
 use gleam::gl;
 
-pub trait NativeGLContextMethods: Sized {
-    type Handle;
-
-    fn get_proc_address(proc: &str) -> *const ();
-
-    // These are convenient methods to manage handles
-    fn current() -> Option<Self>;
-    fn current_handle() -> Option<Self::Handle>;
-
-    fn create_shared(with: Option<&Self::Handle>,
-                     api_type: &gl::GlType,
-                     api_version: GLVersion) -> Result<Self, &'static str>;
-
-    fn create_shared_with_dispatcher(with: Option<&Self::Handle>,
-                                     api_type: &gl::GlType,
-                                     api_version: GLVersion,
-                                     _dispatcher: Option<Box<dyn GLContextDispatcher>>)
-        -> Result<Self, &'static str> {
-        Self::create_shared(with, api_type, api_version)
-    }
-
-    fn create_headless(api_type: &gl::GlType, api_version: GLVersion) -> Result<Self, &'static str> {
-        Self::create_shared(None, api_type, api_version)
-    }
-
-    fn handle(&self) -> Self::Handle;
-    fn is_current(&self) -> bool;
-    fn make_current(&self) -> Result<(), &'static str>;
-    fn unbind(&self) -> Result<(), &'static str>;
-
-    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult;
-    fn uses_default_framebuffer(&self) -> bool;
-
-    /// Just a somewhat dirty hack to special-case the handling of context
-    /// unbinding on old OSMesa versions.
-    fn is_osmesa(&self) -> bool { false }
-}
-
 pub enum DefaultSurfaceSwapResult {
     Swapped { old_surface: NativeSurface },
     NotSupported { new_surface: NativeSurface },
@@ -65,30 +27,30 @@ pub use self::with_osmesa::{OSMesaContext as NativeGLContext, OSMesaContextHandl
 ))]
 pub mod with_egl;
 #[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
-pub use self::with_egl::{NativeGLContext, NativeGLContextHandle};
+pub use self::with_egl::{Display, NativeGLContext, NativeGLContextHandle};
 #[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
 pub use self::with_egl::{NativeSurface, NativeSurfaceTexture};
 
 #[cfg(target_os="macos")]
 pub mod with_cgl;
 #[cfg(target_os="macos")]
-pub use self::with_cgl::{NativeGLContext, NativeGLContextHandle};
+pub use self::with_cgl::{Display, NativeDisplay, NativeGLContext};
 #[cfg(target_os="macos")]
 pub use self::with_cgl::{NativeSurface, NativeSurfaceTexture};
 
 #[cfg(all(target_os="windows", not(feature="no_wgl")))]
 pub mod with_wgl;
 #[cfg(all(target_os="windows", not(feature="no_wgl")))]
-pub use self::with_wgl::{NativeGLContext, NativeGLContextHandle};
+pub use self::with_wgl::NativeGLContext;
 
 #[cfg(target_os="ios")]
 pub mod with_eagl;
 #[cfg(target_os="ios")]
-pub use self::with_eagl::{NativeGLContext, NativeGLContextHandle};
+pub use self::with_eagl::NativeGLContext;
 
 pub mod not_implemented;
 #[cfg(not(any(unix, target_os="windows")))]
-pub use self::not_implemented::{NativeGLContext, NativeGLContextHandle};
+pub use self::not_implemented::NativeGLContext;
 #[cfg(not(any(target_os="macos",
               target_os="android",
               all(target_os="windows", feature="no_wgl"))))]

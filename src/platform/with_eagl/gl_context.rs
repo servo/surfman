@@ -1,4 +1,3 @@
-use crate::platform::NativeGLContextMethods;
 use crate::GLVersion;
 use gleam::gl;
 use objc::runtime::{BOOL, NO};
@@ -21,7 +20,7 @@ lazy_static! {
 }
 
 pub struct NativeGLContext(EAGLContext);
-pub type NativeGLContextHandle = NativeGLContext;
+
 unsafe impl Send for NativeGLContext {}
 
 impl NativeGLContext {
@@ -39,9 +38,7 @@ impl Drop for NativeGLContext {
     }
 }
 
-impl NativeGLContextMethods for NativeGLContext {
-    type Handle = Self;
-
+impl NativeGLContext {
     fn get_proc_address(addr: &str) -> *const () {
         let framework = match *OPENGLES_FRAMEWORK {
             Some(ref lib) => lib,

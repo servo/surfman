@@ -1,14 +1,16 @@
-use cgl::*;
-use std::mem;
+//! Wrapper for Core OpenGL contexts.
 
-use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
+use cgl::{CGLCreateContext, CGLPixelFormatAttribute};
 use core_foundation::base::TCFType;
+use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
 use core_foundation::string::CFString;
 use gleam::gl;
+use std::mem;
+use std::ptr;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use crate::platform::{DefaultSurfaceSwapResult, NativeGLContextMethods, NativeSurface};
+use crate::platform::{DefaultSurfaceSwapResult, NativeSurface};
 use crate::GLVersion;
 
 lazy_static! {
@@ -22,39 +24,23 @@ const kCGLOGLPVersion_Legacy: CGLPixelFormatAttribute = 0x1000;
 #[allow(non_upper_case_globals)]
 const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 
-pub struct NativeGLContextHandle(CGLContextObj);
-
 unsafe impl Send for NativeGLContextHandle {}
 
 pub struct NativeGLContext {
-    native_context: CGLContextObj,
-    weak: bool,
+    cgl_context: CGLContextObj,
 }
 
 impl NativeGLContext {
-    pub fn new(share_context: Option<&CGLContextObj>,
-               pixel_format: &CGLPixelFormatObj)
-        -> Result<NativeGLContext, &'static str> {
-
-        let shared = match share_context {
-            Some(ctx) => *ctx,
-            None => 0 as CGLContextObj
-        };
-
-        let mut native: CGLContextObj = unsafe { mem::uninitialized() };
-
+    pub fn new(pixel_format: &CGLPixelFormatObj) -> Result<NativeGLContext, &'static str> {
+        let mut cgl_context: CGLContextObj = ptr::null_mut();
         unsafe {
-            if CGLCreateContext(*pixel_format, shared, &mut native) != 0 {
-                return Err("CGLCreateContext");
+            if CGLCreateContext(*pixel_format, ptr::null_mut(), &mut cgl_context) != 0 {
+                return Err("CGLCreateContext failed!");
             }
         }
 
-        debug_assert!(native != 0 as CGLContextObj);
-
-        Ok(NativeGLContext {
-            native_context: native,
-            weak: false,
-        })
+        debug_assert_ne!(native, ptr::null_mut());
+        Ok(NativeGLContext { cgl_context })
     }
 }
 
@@ -71,9 +57,7 @@ impl Drop for NativeGLContext {
     }
 }
 
-impl NativeGLContextMethods for NativeGLContext {
-    type Handle = NativeGLContextHandle;
-
+impl NativeGLContext {
     fn get_proc_address(addr: &str) -> *const () {
         let symbol_name: CFString = FromStr::from_str(addr).unwrap();
         let framework_name: CFString = FromStr::from_str("com.apple.opengl").unwrap();

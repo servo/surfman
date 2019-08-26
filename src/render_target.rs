@@ -1,5 +1,10 @@
-use crate::platform::{NativeSurface, NativeSurfaceTexture};
-use crate::{GLContextAttributes, GLFormats, GLVersion, NativeGLContextMethods};
+//! Encapsulates any OpenGL resources needed for the target framebuffer.
+//!
+//! Some backends, such as iOS and macOS, don't have a default framebuffer and therefore need some
+//! OpenGL objects to be kept around. This object encapsulates them.
+
+use crate::platform::{Display, NativeGLContext, NativeSurface, NativeSurfaceTexture};
+use crate::{GLContextAttributes, GLFormats, GLVersion};
 use euclid::default::Size2D;
 use gleam::gl::{self, GLuint, Gl, GlType};
 use std::mem;
@@ -28,15 +33,13 @@ impl Drop for RenderTarget {
 }
 
 impl RenderTarget {
-    pub(crate) fn new<N>(gl: &dyn Gl,
-                         native_context: &mut N,
-                         api_type: GlType,
-                         api_version: GLVersion,
-                         size: &Size2D<i32>,
-                         attributes: &GLContextAttributes,
-                         formats: &GLFormats)
-                         -> Result<RenderTarget, &'static str>
-                         where N: NativeGLContextMethods {
+    pub(crate) fn new(display: Display,
+                      gl: &dyn Gl,
+                      native_context: &mut NativeGLContext,
+                      descriptor: &SurfaceDescriptor,
+                      attributes: &GLContextAttributes,
+                      formats: &GLFormats)
+                      -> Result<RenderTarget, &'static str> {
         if native_context.uses_default_framebuffer() {
             return Ok(RenderTarget::Allocated {
                 size: *size,
@@ -47,8 +50,8 @@ impl RenderTarget {
         native_context.make_current()?;
 
         let format = formats.to_format().expect("Unexpected format!");
-        let surface = NativeSurface::new(gl, api_type, api_version, size, format);
-        let color_buffer = NativeSurfaceTexture::new(gl, surface);
+        let surface = display.create_surface_from_descriptor(gl, descriptor);
+        let color_buffer = display.create_native_surface_texture(gl, surface);
 
         unsafe {
             let framebuffer = gl.gen_framebuffers(1)[0];

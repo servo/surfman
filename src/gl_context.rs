@@ -1,3 +1,5 @@
+//! Wraps a native graphics context and manages its render target.
+
 use euclid::default::Size2D;
 use gleam::gl;
 use gleam::gl::types::{GLuint};
@@ -5,17 +7,17 @@ use std::marker::PhantomData;
 use std::mem;
 use std::rc::Rc;
 
-use crate::{GLContextAttributes, GLContextCapabilities, GLFormats};
-use crate::{GLLimits, NativeGLContextMethods};
-use crate::platform::{DefaultSurfaceSwapResult, NativeSurface, NativeSurfaceTexture};
+use crate::{Display, GLContextAttributes, GLContextCapabilities, GLFormats, GLLimits};
+use crate::platform::{DefaultSurfaceSwapResult, NativeGLContext};
+use crate::platform::{NativeSurface, NativeSurfaceTexture};
 use crate::render_target::RenderTarget;
 
 /// This is a wrapper over a native headless GL context
-pub struct GLContext<Native> {
-    gl_: Rc<dyn gl::Gl>,
-    api_type: gl::GlType,
-    api_version: GLVersion,
-    native_context: Native,
+pub struct GLContext {
+    display: Display,
+    gl: Rc<dyn gl::Gl>,
+    flavor: GLFlavor,
+    native_context: NativeGLContext,
     render_target: RenderTarget,
     attributes: GLContextAttributes,
     capabilities: GLContextCapabilities,
@@ -24,105 +26,51 @@ pub struct GLContext<Native> {
     extensions: Vec<String>,
 }
 
-impl<Native> GLContext<Native>
-    where Native: NativeGLContextMethods,
-{
-    pub fn create(api_type: gl::GlType,
-                  api_version: GLVersion,
-                  shared_with: Option<&Native::Handle>)
-                  -> Result<Self, &'static str> {
-        Self::create_shared_with_dispatcher(&api_type, api_version, shared_with, None)
-    }
+impl GLContext {
+    pub fn new(display: Display,
+               flavor: &GLFlavor,
+               dispatcher: Option<Box<dyn GLContextDispatcher>>)
+               -> Result<Self, &'static str> {
+        let native_context = NativeGLContext::new(api_type, api_version, dispatcher)?;
 
-    pub fn create_shared_with_dispatcher(api_type: &gl::GlType,
-                                         api_version: GLVersion,
-                                         shared_with: Option<&Native::Handle>,
-                                         dispatcher: Option<Box<dyn GLContextDispatcher>>)
-        -> Result<Self, &'static str> {
-        let native_context = Native::create_shared_with_dispatcher(shared_with,
-                                                                   api_type,
-                                                                   api_version,
-                                                                   dispatcher)?;
-        let gl_ = match api_type {
-            gl::GlType::Gl => unsafe { gl::GlFns::load_with(|s| Self::get_proc_address(s) as *const _) },
-            gl::GlType::Gles => unsafe { gl::GlesFns::load_with(|s| Self::get_proc_address(s) as *const _) },
+        let gl = unsafe {
+            match flavor.api_type {
+                gl::GlType::Gl => gl::GlFns::load_with(|s| Self::get_proc_address(s) as *const _),
+                gl::GlType::Gles => {
+                    gl::GlesFns::load_with(|s| Self::get_proc_address(s) as *const _)
+                }
+            }
         };
 
         native_context.make_current()?;
-        let extensions = Self::query_extensions(&gl_, api_version);
+
+        let extensions = Self::query_extensions(&gl, api_version);
         let attributes = GLContextAttributes::any();
-        let formats = GLFormats::detect(&attributes, &extensions[..], api_type, api_version);
-        let limits = GLLimits::detect(&*gl_);
+        let formats = GLFormats::detect(&attributes, &extensions[..], flavor);
+        let limits = GLLimits::detect(&*gl);
 
         Ok(GLContext {
-            gl_: gl_,
-            api_type: *api_type,
-            api_version,
-            native_context: native_context,
+            display,
+            gl,
+            flavor: *flavor,
+            native_context,
             render_target: RenderTarget::Unallocated,
-            attributes: attributes,
+            attributes,
             capabilities: GLContextCapabilities::detect(),
-            formats: formats,
-            limits: limits,
-            extensions: extensions
+            formats,
+            limits,
+            extensions,
         })
     }
 
     #[inline(always)]
     pub fn get_proc_address(addr: &str) -> *const () {
-        Native::get_proc_address(addr)
+        NativeGLContext::get_proc_address(addr)
     }
 
     #[inline(always)]
     pub fn current_handle() -> Option<Native::Handle> {
         Native::current_handle()
-    }
-
-    pub fn new(size: Size2D<i32>,
-               attributes: GLContextAttributes,
-               api_type: gl::GlType,
-               api_version: GLVersion,
-               shared_with: Option<&Native::Handle>)
-        -> Result<Self, &'static str> {
-        Self::new_shared_with_dispatcher(size,
-                                         attributes,
-                                         api_type,
-                                         api_version,
-                                         shared_with,
-                                         None)
-    }
-
-    pub fn new_shared_with_dispatcher(size: Size2D<i32>,
-                                      attributes: GLContextAttributes,
-                                      api_type: gl::GlType,
-                                      api_version: GLVersion,
-                                      shared_with: Option<&Native::Handle>,
-                                      dispatcher: Option<Box<dyn GLContextDispatcher>>)
-        -> Result<Self, &'static str> {
-        let mut context = Self::create_shared_with_dispatcher(&api_type,
-                                                              api_version,
-                                                              shared_with,
-                                                              dispatcher)?;
-
-        context.formats = GLFormats::detect(&attributes,
-                                            &context.extensions[..],
-                                            &api_type,
-                                            api_version);
-
-        context.attributes = attributes;
-        context.init_offscreen(size)?;
-
-        Ok(context)
-    }
-
-    #[inline(always)]
-    pub fn with_default_color_attachment(size: Size2D<i32>,
-                                         attributes: GLContextAttributes,
-                                         api_type: gl::GlType,
-                                         api_version: GLVersion,
-                                         shared_with: Option<&Native::Handle>)
-        -> Result<Self, &'static str> {
-        Self::new(size, attributes, api_type, api_version, shared_with)
     }
 
     #[inline(always)]
@@ -233,7 +181,8 @@ impl<Native> GLContext<Native>
     pub fn resize(&mut self, size: Size2D<i32>) -> Result<RenderTarget, &'static str> {
         let old_render_target = self.render_target.take();
 
-        self.render_target = RenderTarget::new(&*self.gl_,
+        self.render_target = RenderTarget::new(self.display.clone(),
+                                               &*self.gl_,
                                                &mut self.native_context,
                                                self.api_type,
                                                self.api_version,
@@ -268,11 +217,11 @@ impl<Native> GLContext<Native>
     }
     */
 
-    fn init_offscreen(&mut self, size: Size2D<i32>) -> Result<(), &'static str> {
-        self.render_target = RenderTarget::new(&*self.gl_,
+    fn allocate_render_target(&mut self, size: &Size2D<i32>) -> Result<(), &'static str> {
+        self.render_target = RenderTarget::new(self.display.clone(),
+                                               &*self.gl_,
                                                &mut self.native_context,
-                                               self.api_type,
-                                               self.api_version,
+                                               &self.flavor,
                                                &size,
                                                &self.attributes,
                                                &self.formats)?;
@@ -333,4 +282,10 @@ impl GLVersion {
 // where the context we share from is bound. See the WGL implementation for more details.
 pub trait GLContextDispatcher {
     fn dispatch(&self, f: Box<dyn Fn() + Send>);
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GLFlavor {
+    pub api_type: gl::GlType,
+    pub api_version: GLVersion,
 }

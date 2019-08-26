@@ -1,4 +1,3 @@
-use crate::platform::NativeGLContextMethods;
 use gleam::gl;
 use crate::gl_context::GLContextDispatcher;
 use crate::GLVersion;
@@ -78,9 +77,7 @@ pub struct NativeGLContextHandle(HGLRC, HDC);
 unsafe impl Send for NativeGLContextHandle {}
 unsafe impl Sync for NativeGLContextHandle {}
 
-impl NativeGLContextMethods for NativeGLContext {
-    type Handle = NativeGLContextHandle;
-
+impl NativeGLContext {
     fn get_proc_address(addr: &str) -> *const () {
         let addr = CString::new(addr.as_bytes()).unwrap();
         let addr = addr.as_ptr();

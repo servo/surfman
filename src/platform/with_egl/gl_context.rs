@@ -3,7 +3,7 @@ use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, E
 use crate::egl;
 use crate::gl_formats::Format;
 use crate::platform::with_egl::surface::Display;
-use crate::platform::{DefaultSurfaceSwapResult, NativeGLContextMethods, NativeSurface};
+use crate::platform::{DefaultSurfaceSwapResult, NativeSurface};
 use euclid::Size2D;
 use gleam::gl;
 use libloading as lib;
@@ -122,12 +122,6 @@ impl NativeGLContext {
             NativeGLContext(Arc::new(context))
         })
     }
-}
-
-pub type NativeGLContextHandle = NativeGLContext;
-
-impl NativeGLContextMethods for NativeGLContext {
-    type Handle = NativeGLContext;
 
     // According to the EGL spec <= 1.4, eglGetProcAddress should only be used to
     // retrieve extension functions. Some implementations return NULL for core OpenGL functions.

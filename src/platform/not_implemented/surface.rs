@@ -43,88 +43,51 @@ impl Debug for NativeSurface {
 
 impl NativeSurface {
     pub fn new(gl: &dyn Gl, size: &Size2D<i32>, formats: &GLFormats) -> NativeSurface {
-        let texture = gl.gen_textures(1)[0];
-        debug_assert_ne!(texture, 0);
-
-        gl.bind_texture(gl::TEXTURE_2D, texture);
-        gl.tex_image_2d(gl::TEXTURE_2D,
-                        0,
-                        formats.texture_internal as GLint,
-                        size.width,
-                        size.height,
-                        0,
-                        formats.texture,
-                        formats.texture_type,
-                        None);
-
-        // Low filtering to allow rendering
-        gl.tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
-        gl.tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
-
-        // TODO(emilio): Check if these two are neccessary, probably not
-        gl.tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-        gl.tex_parameter_i(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-
-        gl.bind_texture(gl::TEXTURE_2D, 0);
-
-        debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
-
-        NativeSurface {
-            texture: Some(Arc::new(GLTexture(texture))),
-            size: *size,
-            formats: *formats,
-        }
+        panic("NativeSurface::new(): unsupported platform!")
     }
 
     #[inline]
     pub fn size(&self) -> Size2D<i32> {
-        self.size
+        unreachable!()
     }
 
     #[inline]
     pub fn formats(&self) -> &GLFormats {
-        &self.formats
+        unreachable!()
     }
 
     #[inline]
-    pub fn destroy(&mut self, gl: &Gl) {
-        self.texture = None;
-        TEXTURE_TO_DESTROY.with(|texture| {
-            gl.delete_textures(&[texture.get()]);
-            texture.set(0);
-        });
+    pub fn destroy(&mut self, _: &Gl) {
     }
 }
 
 impl NativeSurfaceTexture {
     #[inline]
     pub fn new(gl: &dyn Gl, native_surface: NativeSurface) -> NativeSurfaceTexture {
-        NativeSurfaceTexture { surface: native_surface, phantom: PhantomData }
+        unreachable!()
     }
 
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
-        self.surface.texture.as_ref().unwrap().0
+        unreachable!()
     }
 
     #[inline]
     pub fn gl_texture_target() -> GLenum {
-        gl::TEXTURE_2D
+        unreachable!()
     }
 
     #[inline]
-    pub fn destroy(&mut self, gl: &Gl) {
-        self.surface.destroy(gl);
+    pub fn destroy(&mut self, _: &Gl) {
     }
 
     #[inline]
     pub fn surface(&self) -> &NativeSurface {
-        &self.surface
+        unreachable!()
     }
 
     #[inline]
-    pub fn into_surface(mut self, gl: &dyn Gl) -> NativeSurface {
-        self.destroy(gl);
-        self.surface
+    pub fn into_surface(mut self, _: &dyn Gl) -> NativeSurface {
+        unreachable!()
     }
 }

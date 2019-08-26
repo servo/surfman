@@ -3,7 +3,7 @@ use std::os::raw::c_int;
 use std::ptr;
 
 use crate::gl_context::GLVersion;
-use crate::platform::{DefaultSurfaceSwapResult, NativeGLContextMethods, NativeSurface};
+use crate::platform::{DefaultSurfaceSwapResult, NativeSurface};
 use gleam::gl;
 
 const DUMMY_BUFFER_WIDTH: usize = 16;
@@ -64,10 +64,6 @@ impl OSMesaContext {
             context: context,
         })
     }
-}
-
-impl NativeGLContextMethods for OSMesaContext {
-    type Handle = OSMesaContextHandle;
 
     fn get_proc_address(addr: &str) -> *const () {
         let addr = CString::new(addr.as_bytes()).unwrap();

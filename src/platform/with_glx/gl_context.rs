@@ -9,12 +9,6 @@ use crate::glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use euclid::Size2D;
 use super::utils::{create_offscreen_pixmap_backed_context};
 
-use crate::platform::NativeGLContextMethods;
-
-pub struct NativeGLContextHandle(pub GLXContext, pub *mut glx::types::Display);
-
-unsafe impl Send for NativeGLContextHandle {}
-
 pub struct NativeGLContext {
     native_context: GLXContext,
     native_display: *mut glx::types::Display,
@@ -100,10 +94,6 @@ impl Drop for NativeGLContext {
             }
         }
     }
-}
-
-impl NativeGLContextMethods for NativeGLContext {
-    type Handle = NativeGLContextHandle;
 
     fn get_proc_address(addr: &str) -> *const () {
         let addr = CString::new(addr.as_bytes()).unwrap();

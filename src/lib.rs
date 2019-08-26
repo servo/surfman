@@ -15,7 +15,7 @@ extern crate io_surface;
 extern crate wio;
 
 mod platform;
-pub use platform::{NativeGLContext, NativeGLContextMethods, NativeGLContextHandle};
+pub use platform::{Display, NativeDisplay, NativeGLContext};
 pub use platform::{NativeSurface, NativeSurfaceTexture};
 
 #[cfg(feature="osmesa")]
@@ -41,6 +41,9 @@ pub use gl_formats::{Format, GLFormats};
 
 mod gl_limits;
 pub use gl_limits::GLLimits;
+
+mod surface;
+pub use surface::SurfaceDescriptor;
 
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 #[allow(improper_ctypes)]

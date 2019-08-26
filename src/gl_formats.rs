@@ -22,7 +22,8 @@ impl GLFormats {
     //
     // FIXME: In linux with GLES2 texture attachments create INVALID_ENUM errors.
     // I suspect that it's because of texture formats, but I need time to debugit.
-    pub fn detect(attrs: &GLContextAttributes, extensions: &[String], api_type: &gl::GlType, api_version: GLVersion) -> GLFormats {
+    pub fn detect(attrs: &GLContextAttributes, extensions: &[String], flavor: &GLFlavor)
+                  -> GLFormats {
         let packed_depth_stencil = GLFormats::supports_packed_depth_stencil(&extensions, api_version);
 
         match *api_type {
