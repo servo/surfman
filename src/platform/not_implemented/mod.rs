@@ -6,4 +6,4 @@ mod gl_context;
 mod surface;
 
 pub use self::gl_context::NativeGLContext;
-pub use self::surface::{NativeSurface, NativeSurfaceTexture};
+pub use self::surface::{Surface, SurfaceTexture};

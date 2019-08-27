@@ -1,6 +1,8 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+
+
 /// This structure represents the attributes the context must support
 /// It's almost (if not) identical to WebGLGLContextAttributes
 #[derive(Clone, Debug, Copy)]

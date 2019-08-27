@@ -6,7 +6,7 @@ mod surface;
 #[path = "surface_native.rs"]
 mod surface;
 pub use self::gl_context::{NativeGLContext, NativeGLContextHandle};
-pub use self::surface::{Display, NativeDisplay, NativeSurface, NativeSurfaceTexture};
+pub use self::surface::{Display, NativeDisplay, Surface, SurfaceTexture};
 
 // NB: The last three zeros in egl attributes after the egl::EGL_NONE
 // are a workaround for workaround buggy implementations.

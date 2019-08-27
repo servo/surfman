@@ -3,39 +3,28 @@
 //! Some backends, such as iOS and macOS, don't have a default framebuffer and therefore need some
 //! OpenGL objects to be kept around. This object encapsulates them.
 
-use crate::platform::{Display, NativeGLContext, NativeSurface, NativeSurfaceTexture};
+use crate::platform::{Display, NativeGLContext, Surface, SurfaceTexture};
 use crate::{GLContextAttributes, GLFormats, GLVersion};
 use euclid::default::Size2D;
 use gleam::gl::{self, GLuint, Gl, GlType};
 use std::mem;
 
-pub enum RenderTarget {
-    Unallocated,
-    Allocated { size: Size2D<i32>, framebuffer: Framebuffer },
+pub(crate) struct Framebuffer {
+    framebuffer_name: GLuint,
+    color_surface: SurfaceTexture,
+    fbo_renderbuffers: FboRenderbuffers,
 }
 
-pub enum Framebuffer {
-    DefaultFramebuffer,
-    FramebufferObject {
-        framebuffer_name: GLuint,
-        color_buffer: NativeSurfaceTexture,
-        fbo_renderbuffers: FboRenderbuffers,
-    }
-}
-
-impl Drop for RenderTarget {
+impl Drop for Framebuffer {
     fn drop(&mut self) {
-        match *self {
-            RenderTarget::Unallocated => {}
-            _ => panic!("Should have destroyed the render target with `destroy()`!"),
+        if self.framebuffer_name != 0 {
+            panic!("Should have destroyed the framebuffers with `destroy()`!");
         }
     }
 }
 
-impl RenderTarget {
-    pub(crate) fn new(display: Display,
-                      gl: &dyn Gl,
-                      native_context: &mut NativeGLContext,
+impl Framebuffer {
+    pub(crate) fn new(gl: &dyn Gl,
                       descriptor: &SurfaceDescriptor,
                       attributes: &GLContextAttributes,
                       formats: &GLFormats)
@@ -59,7 +48,7 @@ impl RenderTarget {
 
             gl.framebuffer_texture_2d(gl::FRAMEBUFFER,
                                       gl::COLOR_ATTACHMENT0,
-                                      NativeSurfaceTexture::gl_texture_target(),
+                                      SurfaceTexture::gl_texture_target(),
                                       color_buffer.gl_texture(),
                                       0);
 
@@ -82,7 +71,7 @@ impl RenderTarget {
 
     /*
     #[inline]
-    pub fn color_surface(&self) -> Option<&NativeSurfaceTexture> {
+    pub fn color_surface(&self) -> Option<&SurfaceTexture> {
         match *self {
             RenderTarget::Allocated {
                 framebuffer: Framebuffer::FramebufferObject { ref color_buffer, .. },
@@ -93,8 +82,8 @@ impl RenderTarget {
     }
     */
 
-    pub(crate) fn swap_color_surface(&mut self, gl: &dyn Gl, surface: NativeSurface)
-                                     -> Result<NativeSurface, ()> {
+    pub(crate) fn swap_color_surface(&mut self, gl: &dyn Gl, surface: Surface)
+                                     -> Result<Surface, ()> {
         let (framebuffer, old_color_buffer) = match *self {
             RenderTarget::Allocated {
                 framebuffer: Framebuffer::FramebufferObject {
@@ -108,12 +97,12 @@ impl RenderTarget {
             RenderTarget::Unallocated => return Err(()),
         };
 
-        let new_color_buffer = NativeSurfaceTexture::new(gl, surface);
+        let new_color_buffer = SurfaceTexture::new(gl, surface);
         unsafe {
             gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer);
             gl.framebuffer_texture_2d(gl::FRAMEBUFFER,
                                       gl::COLOR_ATTACHMENT0,
-                                      NativeSurfaceTexture::gl_texture_target(),
+                                      SurfaceTexture::gl_texture_target(),
                                       new_color_buffer.gl_texture(),
                                       0);
         }
@@ -149,29 +138,12 @@ impl RenderTarget {
     }
 
     #[inline]
-    pub fn framebuffer_object(&self) -> Option<GLuint> {
-        match *self {
-            RenderTarget::Unallocated => None,
-            RenderTarget::Allocated { framebuffer: Framebuffer::DefaultFramebuffer, .. } => {
-                Some(0)
-            }
-            RenderTarget::Allocated {
-                framebuffer: Framebuffer::FramebufferObject { framebuffer_name, .. },
-                ..
-            } => Some(framebuffer_name),
-        }
-    }
-
-    #[inline]
-    pub fn size(&self) -> Option<Size2D<i32>> {
-        match *self {
-            RenderTarget::Allocated { size, .. } => Some(size),
-            RenderTarget::Unallocated => None,
-        }
+    pub fn framebuffer_name(&self) -> GLuint {
+        self.framebuffer_name
     }
 }
 
-pub enum FboRenderbuffers {
+pub(crate) enum FboRenderbuffers {
     IndividualDepthStencil {
         depth: GLuint,
         stencil: GLuint,
@@ -190,10 +162,10 @@ impl Drop for FboRenderbuffers {
 }
 
 impl FboRenderbuffers {
-    fn new(gl: &dyn Gl, size: &Size2D<i32>, attributes: &GLContextAttributes, formats: &GLFormats)
-           -> FboRenderbuffers {
+    fn new(gl: &dyn Gl, size: &Size2D<i32>, info: &GLInfo) -> FboRenderbuffers {
         unsafe {
-            if attributes.depth && attributes.stencil && formats.packed_depth_stencil {
+            if info.attributes.contains(ContextAttributes::DEPTH | ContextAttributes::STENCIL) &&
+                    info.features.contains(FeatureFlags::SUPPORTS_DEPTH24_STENCIL8) {
                 let renderbuffer = gl.gen_renderbuffers(1)[0];
                 gl.bind_renderbuffer(gl::RENDERBUFFER, renderbuffer);
                 gl.renderbuffer_storage(gl::RENDERBUFFER,
@@ -205,12 +177,12 @@ impl FboRenderbuffers {
             }
 
             let (mut depth_renderbuffer, mut stencil_renderbuffer) = (0, 0);
-            if attributes.depth {
+            if info.attributes.contains(ContextAttributes::DEPTH) {
                 depth_renderbuffer = gl.gen_renderbuffers(1)[0];
                 gl.bind_renderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
                 gl.renderbuffer_storage(gl::RENDERBUFFER, formats.depth, size.width, size.height);
             }
-            if attributes.stencil {
+            if info.attributes.contains(ContextAttributes::STENCIL) {
                 stencil_renderbuffer = gl.gen_renderbuffers(1)[0];
                 gl.bind_renderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
                 gl.renderbuffer_storage(gl::RENDERBUFFER,

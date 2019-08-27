@@ -1,9 +1,9 @@
 //! Bindings to Apple's OpenGL implementation on macOS.
 
-mod display;
-mod gl_context;
+mod context;
+mod device;
 mod surface;
 
-pub use self::display::{Display, NativeDisplay};
-pub use self::gl_context::NativeGLContext;
-pub use self::surface::{NativeSurface, NativeSurfaceTexture};
+pub use self::context::Context;
+pub use self::device::Device;
+pub use self::surface::{Surface, SurfaceTexture};

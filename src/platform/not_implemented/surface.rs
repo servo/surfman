@@ -14,20 +14,20 @@ thread_local! {
 struct GLTexture(GLuint);
 
 #[derive(Clone)]
-pub struct NativeSurface {
+pub struct Surface {
     texture: Option<Arc<GLTexture>>,
     size: Size2D<i32>,
     formats: GLFormats,
 }
 
 #[derive(Debug)]
-pub struct NativeSurfaceTexture {
-    surface: NativeSurface,
+pub struct SurfaceTexture {
+    surface: Surface,
     #[allow(dead_code)]
     phantom: PhantomData<*const ()>,
 }
 
-unsafe impl Send for NativeSurface {}
+unsafe impl Send for Surface {}
 
 impl Drop for GLTexture {
     fn drop(&mut self) {
@@ -35,15 +35,15 @@ impl Drop for GLTexture {
     }
 }
 
-impl Debug for NativeSurface {
+impl Debug for Surface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "{:?} {:?}, {:?}", self.texture, self.size, self.formats)
     }
 }
 
-impl NativeSurface {
-    pub fn new(gl: &dyn Gl, size: &Size2D<i32>, formats: &GLFormats) -> NativeSurface {
-        panic("NativeSurface::new(): unsupported platform!")
+impl Surface {
+    pub fn new(gl: &dyn Gl, size: &Size2D<i32>, formats: &GLFormats) -> Surface {
+        panic("Surface::new(): unsupported platform!")
     }
 
     #[inline]
@@ -61,9 +61,9 @@ impl NativeSurface {
     }
 }
 
-impl NativeSurfaceTexture {
+impl SurfaceTexture {
     #[inline]
-    pub fn new(gl: &dyn Gl, native_surface: NativeSurface) -> NativeSurfaceTexture {
+    pub fn new(gl: &dyn Gl, native_surface: Surface) -> SurfaceTexture {
         unreachable!()
     }
 
@@ -82,12 +82,12 @@ impl NativeSurfaceTexture {
     }
 
     #[inline]
-    pub fn surface(&self) -> &NativeSurface {
+    pub fn surface(&self) -> &Surface {
         unreachable!()
     }
 
     #[inline]
-    pub fn into_surface(mut self, _: &dyn Gl) -> NativeSurface {
+    pub fn into_surface(mut self, _: &dyn Gl) -> Surface {
         unreachable!()
     }
 }

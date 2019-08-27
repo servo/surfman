@@ -38,7 +38,7 @@ lazy_static! {
 pub struct EGLSurfaceWrapper(pub EGLSurface);
 
 #[derive(Clone)]
-pub struct NativeSurface {
+pub struct Surface {
     wrapper: Arc<EGLSurfaceWrapper>,
     config: EGLConfig,
     api_type: GlType,
@@ -48,15 +48,15 @@ pub struct NativeSurface {
 }
 
 #[derive(Debug)]
-pub struct NativeSurfaceTexture {
-    surface: NativeSurface,
+pub struct SurfaceTexture {
+    surface: Surface,
     gl_texture: GLuint,
     phantom: PhantomData<*const ()>,
 }
 
 unsafe impl Send for EGLSurfaceWrapper {}
 
-unsafe impl Send for NativeSurface {}
+unsafe impl Send for Surface {}
 
 impl Drop for EGLSurfaceWrapper {
     fn drop(&mut self) {
@@ -66,18 +66,18 @@ impl Drop for EGLSurfaceWrapper {
     }
 }
 
-impl Debug for NativeSurface {
+impl Debug for Surface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "{:?}, {:?}", self.size, self.format)
     }
 }
 
-impl NativeSurface {
+impl Surface {
     pub(crate) fn from_version_size_format(api_type: GlType,
                                            api_version: GLVersion,
                                            size: &Size2D<i32>,
                                            format: Format)
-                                           -> NativeSurface {
+                                           -> Surface {
         let renderable_type = get_pbuffer_renderable_type(api_type, api_version);
 
         // FIXME(pcwalton): Convert the formats to an appropriate set of EGL attributes!
@@ -121,7 +121,7 @@ impl NativeSurface {
                 panic!("Failed to create EGL surface!");
             }
 
-            NativeSurface {
+            Surface {
                 wrapper: Arc::new(EGLSurfaceWrapper(egl_surface)),
                 config,
                 api_type,
@@ -137,8 +137,8 @@ impl NativeSurface {
                api_version: GLVersion,
                size: &Size2D<i32>,
                format: Format)
-               -> NativeSurface {
-        NativeSurface::from_version_size_format(api_type, api_version, size, format)
+               -> Surface {
+        Surface::from_version_size_format(api_type, api_version, size, format)
     }
 
     #[inline]
@@ -177,8 +177,8 @@ impl NativeSurface {
     }
 }
 
-impl NativeSurfaceTexture {
-    pub fn new(gl: &dyn Gl, native_surface: NativeSurface) -> NativeSurfaceTexture {
+impl SurfaceTexture {
+    pub fn new(gl: &dyn Gl, native_surface: Surface) -> SurfaceTexture {
         let texture = gl.gen_textures(1)[0];
         debug_assert!(texture != 0);
 
@@ -204,16 +204,16 @@ impl NativeSurfaceTexture {
 
         debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
 
-        NativeSurfaceTexture { surface: native_surface, gl_texture: texture, phantom: PhantomData }
+        SurfaceTexture { surface: native_surface, gl_texture: texture, phantom: PhantomData }
     }
 
     #[inline]
-    pub fn surface(&self) -> &NativeSurface {
+    pub fn surface(&self) -> &Surface {
         &self.surface
     }
 
     #[inline]
-    pub fn into_surface(mut self, gl: &dyn Gl) -> NativeSurface {
+    pub fn into_surface(mut self, gl: &dyn Gl) -> Surface {
         self.destroy(gl);
         self.surface
     }

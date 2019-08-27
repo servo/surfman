@@ -14,7 +14,8 @@ pub struct GLLimits {
     pub max_texture_image_units: u32,
     pub max_varying_vectors: u32,
     pub max_vertex_texture_image_units: u32,
-    pub max_vertex_uniform_vectors: u32
+    pub max_vertex_uniform_vectors: u32,
+    pub max_samples: u32,
 }
 
 #[cfg(feature = "serde")]

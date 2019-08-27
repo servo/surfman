@@ -1,7 +1,8 @@
-use crate::gl_context::GLVersion;
-use crate::gl_formats::Format;
-use crate::platform::with_cgl::{NativeSurface, NativeSurfaceTexture};
-use crate::surface::SurfaceDescriptor;
+//! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
+
+use crate::gl_info::GLVersion;
+use crate::platform::with_cgl::{Surface, SurfaceTexture};
+use crate::surface::{SurfaceDescriptor, SurfaceFormat};
 use core_foundation::base::TCFType;
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::CFDictionary;
@@ -19,13 +20,13 @@ use std::thread;
 const BYTES_PER_PIXEL: i32 = 4;
 
 #[derive(Clone)]
-pub struct Display {
+pub struct Device {
     phantom: PhantomData<*mut ()>,
 }
 
 pub type NativeDisplay = ();
 
-impl Display {
+impl Device {
     #[inline]
     pub fn new() -> Display {
         Display { phantom: PhantomData }
@@ -37,7 +38,7 @@ impl Display {
     }
 
     pub fn create_surface_from_descriptor(&self, gl: &dyn Gl, descriptor: &SurfaceDescriptor)
-                                          -> NativeSurface {
+                                          -> Surface {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),
@@ -52,11 +53,11 @@ impl Display {
             io_surface::new(&props)
         };
 
-        NativeSurface { io_surface, descriptor: Arc::new(*descriptor) }
+        Surface { io_surface, descriptor: Arc::new(*descriptor) }
     }
 
-    pub fn create_surface_texture(&self, gl: &dyn Gl, native_surface: NativeSurface)
-                                  -> NativeSurfaceTexture {
+    pub fn create_surface_texture(&self, gl: &dyn Gl, native_surface: Surface)
+                                  -> SurfaceTexture {
         let texture = gl.gen_textures(1)[0];
         debug_assert!(texture != 0);
 
@@ -86,13 +87,13 @@ impl Display {
 
         debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
 
-        NativeSurfaceTexture { surface: native_surface, gl_texture: texture, phantom: PhantomData }
+        SurfaceTexture { surface: native_surface, gl_texture: texture, phantom: PhantomData }
     }
 
     pub fn destroy_surface_texture(&self,
                                    gl: &dyn Gl,
-                                   mut surface_texture: NativeSurfaceTexture)
-                                   -> NativeSurface {
+                                   mut surface_texture: SurfaceTexture)
+                                   -> Surface {
         gl.delete_textures(&[surface_texture.gl_texture]);
         surface_texture.gl_texture = 0;
         surface_texture.surface

@@ -3,7 +3,7 @@ use std::os::raw::c_int;
 use std::ptr;
 
 use crate::gl_context::GLVersion;
-use crate::platform::{DefaultSurfaceSwapResult, NativeSurface};
+use crate::platform::{DefaultSurfaceSwapResult, Surface};
 use gleam::gl;
 
 const DUMMY_BUFFER_WIDTH: usize = 16;
@@ -133,7 +133,7 @@ impl OSMesaContext {
         Ok(())
     }
 
-    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult {
+    fn swap_default_surface(&mut self, new_surface: Surface) -> DefaultSurfaceSwapResult {
         DefaultSurfaceSwapResult::Failed { message: "TODO", new_surface }
     }
 

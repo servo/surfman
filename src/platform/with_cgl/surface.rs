@@ -19,36 +19,36 @@ use std::sync::Arc;
 use std::thread;
 
 #[derive(Clone)]
-pub struct NativeSurface {
+pub struct Surface {
     pub(crate) io_surface: IOSurface,
     pub(crate) descriptor: Arc<SurfaceDescriptor>,
 }
 
 #[derive(Debug)]
-pub struct NativeSurfaceTexture {
-    pub(crate) surface: NativeSurface,
+pub struct SurfaceTexture {
+    pub(crate) surface: Surface,
     pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
-unsafe impl Send for NativeSurface {}
+unsafe impl Send for Surface {}
 
-impl Debug for NativeSurface {
+impl Debug for Surface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "Surface({:?})", self.descriptor)
     }
 }
 
-impl NativeSurface {
+impl Surface {
     #[inline]
     pub fn descriptor(&self) -> &SurfaceDescriptor {
         &self.descriptor
     }
 }
 
-impl NativeSurfaceTexture {
+impl SurfaceTexture {
     #[inline]
-    pub fn surface(&self) -> &NativeSurface {
+    pub fn surface(&self) -> &Surface {
         &self.surface
     }
 

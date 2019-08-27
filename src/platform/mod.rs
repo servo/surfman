@@ -1,11 +1,4 @@
-use crate::gl_context::{GLContextDispatcher, GLVersion};
 use gleam::gl;
-
-pub enum DefaultSurfaceSwapResult {
-    Swapped { old_surface: NativeSurface },
-    NotSupported { new_surface: NativeSurface },
-    Failed { message: &'static str, new_surface: NativeSurface },
-}
 
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 pub mod with_glx;
@@ -29,14 +22,14 @@ pub mod with_egl;
 #[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
 pub use self::with_egl::{Display, NativeGLContext, NativeGLContextHandle};
 #[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
-pub use self::with_egl::{NativeSurface, NativeSurfaceTexture};
+pub use self::with_egl::{Surface, SurfaceTexture};
 
 #[cfg(target_os="macos")]
 pub mod with_cgl;
 #[cfg(target_os="macos")]
 pub use self::with_cgl::{Display, NativeDisplay, NativeGLContext};
 #[cfg(target_os="macos")]
-pub use self::with_cgl::{NativeSurface, NativeSurfaceTexture};
+pub use self::with_cgl::{Surface, SurfaceTexture};
 
 #[cfg(all(target_os="windows", not(feature="no_wgl")))]
 pub mod with_wgl;
@@ -54,4 +47,4 @@ pub use self::not_implemented::NativeGLContext;
 #[cfg(not(any(target_os="macos",
               target_os="android",
               all(target_os="windows", feature="no_wgl"))))]
-pub use self::not_implemented::{NativeSurface, NativeSurfaceTexture};
+pub use self::not_implemented::{Surface, SurfaceTexture};

@@ -10,7 +10,7 @@ use std::ptr;
 use std::str::FromStr;
 use std::sync::Mutex;
 
-use crate::platform::{DefaultSurfaceSwapResult, NativeSurface};
+use crate::platform::{DefaultSurfaceSwapResult, Surface};
 use crate::GLVersion;
 
 lazy_static! {
@@ -24,14 +24,12 @@ const kCGLOGLPVersion_Legacy: CGLPixelFormatAttribute = 0x1000;
 #[allow(non_upper_case_globals)]
 const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 
-unsafe impl Send for NativeGLContextHandle {}
-
-pub struct NativeGLContext {
+pub struct Context {
     cgl_context: CGLContextObj,
 }
 
-impl NativeGLContext {
-    pub fn new(pixel_format: &CGLPixelFormatObj) -> Result<NativeGLContext, &'static str> {
+impl Context {
+    pub fn new(pixel_format: &CGLPixelFormatObj) -> Result<Context, &'static str> {
         let mut cgl_context: CGLContextObj = ptr::null_mut();
         unsafe {
             if CGLCreateContext(*pixel_format, ptr::null_mut(), &mut cgl_context) != 0 {
@@ -40,11 +38,11 @@ impl NativeGLContext {
         }
 
         debug_assert_ne!(native, ptr::null_mut());
-        Ok(NativeGLContext { cgl_context })
+        Ok(Context { cgl_context })
     }
 }
 
-impl Drop for NativeGLContext {
+impl Drop for Context {
     fn drop(&mut self) {
         let _ = self.unbind();
         if !self.weak {
@@ -57,7 +55,7 @@ impl Drop for NativeGLContext {
     }
 }
 
-impl NativeGLContext {
+impl Context {
     fn get_proc_address(addr: &str) -> *const () {
         let symbol_name: CFString = FromStr::from_str(addr).unwrap();
         let framework_name: CFString = FromStr::from_str("com.apple.opengl").unwrap();
@@ -72,7 +70,7 @@ impl NativeGLContext {
 
     fn current() -> Option<Self> {
         if let Some(handle) = Self::current_handle() {
-            Some(NativeGLContext {
+            Some(Context {
                 native_context: handle.0,
                 weak: true,
             })
@@ -85,7 +83,7 @@ impl NativeGLContext {
     fn current_handle() -> Option<Self::Handle> {
         let current = unsafe { CGLGetCurrentContext() };
         if current != 0 as CGLContextObj {
-            Some(NativeGLContextHandle(current))
+            Some(Context(current))
         } else {
             None
         }
@@ -118,7 +116,7 @@ impl NativeGLContext {
             0
         ];
 
-        let mut pixel_format : CGLPixelFormatObj = unsafe { mem::uninitialized() };
+        let mut pixel_format: CGLPixelFormatObj = unsafe { mem::uninitialized() };
         let mut pix_count = 0;
 
         unsafe {
@@ -131,7 +129,7 @@ impl NativeGLContext {
             }
         }
 
-        let result = NativeGLContext::new(with.map(|handle| &handle.0), &pixel_format);
+        let result = Context::new(with.map(|handle| &handle.0), &pixel_format);
 
         unsafe {
             if CGLDestroyPixelFormat(pixel_format) != 0 {
@@ -143,7 +141,7 @@ impl NativeGLContext {
     }
 
     fn handle(&self) -> Self::Handle {
-        NativeGLContextHandle(self.native_context)
+        Context(self.native_context)
     }
 
     #[inline(always)]
@@ -175,7 +173,7 @@ impl NativeGLContext {
         }
     }
 
-    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult {
+    fn swap_default_surface(&mut self, new_surface: Surface) -> DefaultSurfaceSwapResult {
         DefaultSurfaceSwapResult::NotSupported { new_surface }
     }
 

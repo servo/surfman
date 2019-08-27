@@ -3,7 +3,7 @@ use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, E
 use crate::egl;
 use crate::gl_formats::Format;
 use crate::platform::with_egl::surface::Display;
-use crate::platform::{DefaultSurfaceSwapResult, NativeSurface};
+use crate::platform::{DefaultSurfaceSwapResult, Surface};
 use euclid::Size2D;
 use gleam::gl;
 use libloading as lib;
@@ -38,8 +38,9 @@ thread_local! {
 }
 
 struct GLContext {
+    d3d11_device: ComPtr<ID3D11Device>,
     egl_context: EGLContext,
-    default_surface: Mutex<NativeSurface>,
+    default_surface: Mutex<Surface>,
 }
 
 impl Drop for GLContext {
@@ -66,7 +67,7 @@ impl Drop for GLContext {
 pub struct NativeGLContext(Arc<GLContext>);
 
 impl GLContext {
-    fn new(default_surface: NativeSurface, share_context: Option<&EGLContext>)
+    fn new(default_surface: Surface, share_context: Option<&EGLContext>)
            -> Result<GLContext, &'static str> {
         let shared = match share_context {
             Some(ctx) => *ctx,
@@ -116,7 +117,7 @@ impl GLContext {
 
 impl NativeGLContext {
     #[inline]
-    pub fn new(default_surface: NativeSurface, share_context: Option<&EGLContext>)
+    pub fn new(default_surface: Surface, share_context: Option<&EGLContext>)
                -> Result<NativeGLContext, &'static str> {
         GLContext::new(default_surface, share_context).map(|context| {
             NativeGLContext(Arc::new(context))
@@ -154,7 +155,7 @@ impl NativeGLContext {
                      -> Result<NativeGLContext, &'static str> {
         let size = Size2D::new(DUMMY_FRAMEBUFFER_SIZE, DUMMY_FRAMEBUFFER_SIZE);
         let format = Format::RGBA;
-        let surface = NativeSurface::from_version_size_format(*api_type,
+        let surface = Surface::from_version_size_format(*api_type,
                                                               api_version,
                                                               &size,
                                                               format);
@@ -248,7 +249,7 @@ impl NativeGLContext {
         Ok(())
     }
 
-    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult {
+    fn swap_default_surface(&mut self, new_surface: Surface) -> DefaultSurfaceSwapResult {
         let was_current = self.is_current();
         if was_current {
             if let Err(message) = self.unbind() {

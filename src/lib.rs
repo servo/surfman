@@ -16,16 +16,16 @@ extern crate wio;
 
 mod platform;
 pub use platform::{Display, NativeDisplay, NativeGLContext};
-pub use platform::{NativeSurface, NativeSurfaceTexture};
+pub use platform::{Surface, SurfaceTexture};
 
 #[cfg(feature="osmesa")]
 pub use platform::{OSMesaContext, OSMesaContextHandle};
 
+mod framebuffer;
+
+/*
 mod gl_context;
 pub use gl_context::{GLContext, GLContextDispatcher, GLVersion};
-
-mod render_target;
-pub use render_target::RenderTarget;
 
 mod gl_context_attributes;
 pub use gl_context_attributes::GLContextAttributes;
@@ -38,12 +38,16 @@ pub use gl_feature::GLFeature;
 
 mod gl_formats;
 pub use gl_formats::{Format, GLFormats};
+*/
 
 mod gl_limits;
 pub use gl_limits::GLLimits;
 
+mod gl_info;
+pub use gl_info::{ContextAttributes, FeatureFlags, GLInfo};
+
 mod surface;
-pub use surface::SurfaceDescriptor;
+pub use surface::{SurfaceDescriptor, SurfaceFormat};
 
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 #[allow(improper_ctypes)]

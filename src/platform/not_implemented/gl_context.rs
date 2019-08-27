@@ -1,6 +1,6 @@
 use gleam::gl;
 use crate::platform::DefaultSurfaceSwapResult;
-use crate::{GLVersion, NativeSurface};
+use crate::{GLVersion, Surface};
 
 pub struct NativeGLContext;
 
@@ -39,7 +39,7 @@ impl NativeGLContext {
         unimplemented!()
     }
 
-    fn swap_default_surface(&mut self, new_surface: NativeSurface) -> DefaultSurfaceSwapResult {
+    fn swap_default_surface(&mut self, new_surface: Surface) -> DefaultSurfaceSwapResult {
         DefaultSurfaceSwapResult::NotSupported { new_surface }
     }
 
