@@ -1,101 +1,27 @@
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
-use crate::gl_info::GLVersion;
-use crate::platform::with_cgl::{Surface, SurfaceTexture};
-use crate::surface::{SurfaceDescriptor, SurfaceFormat};
-use core_foundation::base::TCFType;
-use core_foundation::boolean::CFBoolean;
-use core_foundation::dictionary::CFDictionary;
-use core_foundation::number::CFNumber;
-use core_foundation::string::CFString;
-use euclid::default::Size2D;
-use gleam::gl::{self, GLenum, GLint, GLuint, Gl, GlType};
-use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement};
-use io_surface::{kIOSurfaceBytesPerRow, kIOSurfaceHeight, kIOSurfaceWidth};
-use std::fmt::{self, Debug, Formatter};
+use crate::Error;
 use std::marker::PhantomData;
-use std::sync::Arc;
-use std::thread;
 
-const BYTES_PER_PIXEL: i32 = 4;
+#[cfg(feature = "sm-glutin")]
+use glutin::Window;
 
 #[derive(Clone)]
 pub struct Device {
     phantom: PhantomData<*mut ()>,
 }
 
-pub type NativeDisplay = ();
-
 impl Device {
     #[inline]
-    pub fn new() -> Display {
-        Display { phantom: PhantomData }
+    pub fn new() -> Result<Device, Error> {
+        Ok(Device { phantom: PhantomData })
     }
 
+    #[cfg(feature = "sm-glutin")]
     #[inline]
-    pub fn from_native_display(_: ()) -> Display {
-        Display::new()
-    }
-
-    pub fn create_surface_from_descriptor(&self, gl: &dyn Gl, descriptor: &SurfaceDescriptor)
-                                          -> Surface {
-        let io_surface = unsafe {
-            let props = CFDictionary::from_CFType_pairs(&[
-                (CFString::wrap_under_get_rule(kIOSurfaceWidth),
-                 CFNumber::from(descriptor.size.width).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceHeight),
-                 CFNumber::from(descriptor.size.height).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceBytesPerElement),
-                 CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
-                 CFNumber::from(descriptor.size.width * BYTES_PER_PIXEL).as_CFType()),
-            ]);
-            io_surface::new(&props)
-        };
-
-        Surface { io_surface, descriptor: Arc::new(*descriptor) }
-    }
-
-    pub fn create_surface_texture(&self, gl: &dyn Gl, native_surface: Surface)
-                                  -> SurfaceTexture {
-        let texture = gl.gen_textures(1)[0];
-        debug_assert!(texture != 0);
-
-        gl.bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
-
-        let descriptor = native_surface.descriptor();
-        let (size, alpha) = (descriptor.size, descriptor.format.has_alpha());
-        native_surface.io_surface.bind_to_gl_texture(size.width, size.height, alpha);
-
-        // Low filtering to allow rendering
-        gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
-                           gl::TEXTURE_MAG_FILTER,
-                           gl::NEAREST as GLint);
-        gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
-                           gl::TEXTURE_MIN_FILTER,
-                           gl::NEAREST as GLint);
-
-        // TODO(emilio): Check if these two are neccessary, probably not
-        gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
-                           gl::TEXTURE_WRAP_S,
-                           gl::CLAMP_TO_EDGE as GLint);
-        gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
-                           gl::TEXTURE_WRAP_T,
-                           gl::CLAMP_TO_EDGE as GLint);
-
-        gl.bind_texture(gl::TEXTURE_RECTANGLE_ARB, 0);
-
-        debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
-
-        SurfaceTexture { surface: native_surface, gl_texture: texture, phantom: PhantomData }
-    }
-
-    pub fn destroy_surface_texture(&self,
-                                   gl: &dyn Gl,
-                                   mut surface_texture: SurfaceTexture)
-                                   -> Surface {
-        gl.delete_textures(&[surface_texture.gl_texture]);
-        surface_texture.gl_texture = 0;
-        surface_texture.surface
+    pub fn from_glutin_window(_: &Window) -> Result<Device, Error> {
+        // Core OpenGL automatically manages connections to the window server, so there's nothing
+        // to do here.
+        Device::new()
     }
 }

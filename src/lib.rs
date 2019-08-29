@@ -1,29 +1,35 @@
-#[macro_use]
-extern crate log;
+//! Cross-platform GPU device and surface management.
+//!
+//! You can use this crate to multithread a graphics application so that rendering happens on
+//! multiple threads, sharing textures among them in the most efficient manner. It may also be
+//! useful as a lightweight framework for *just* initializing rendering in native applications.
+//! This is in contrast to crates like SDL, GLFW, winit, and Glutin, all of which have a broader
+//! focus in that they manage windowing and the event loop as well.
 
-#[cfg(any(not(target_os = "linux"), feature = "test_egl_in_linux"))]
+#[macro_use]
+extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
 
 #[cfg(target_os = "ios")]
 #[macro_use]
 extern crate objc;
-#[cfg(target_os="macos")]
+#[cfg(target_os = "macos")]
 extern crate io_surface;
-
 #[cfg(target_os = "windows")]
 extern crate wio;
 
-mod platform;
-pub use platform::{Display, NativeDisplay, NativeGLContext};
-pub use platform::{Surface, SurfaceTexture};
+pub mod platform;
+pub use platform::default::context::Context;
+pub use platform::default::device::Device;
+pub use platform::default::surface::{Surface, SurfaceTexture};
 
-#[cfg(feature="osmesa")]
-pub use platform::{OSMesaContext, OSMesaContextHandle};
-
-mod framebuffer;
+pub mod error;
+pub use crate::error::{Error, WindowingApiError};
 
 /*
+mod framebuffer;
+
 mod gl_context;
 pub use gl_context::{GLContext, GLContextDispatcher, GLVersion};
 
@@ -41,13 +47,13 @@ pub use gl_formats::{Format, GLFormats};
 */
 
 mod gl_limits;
-pub use gl_limits::GLLimits;
+pub use crate::gl_limits::GLLimits;
 
 mod gl_info;
-pub use gl_info::{ContextAttributes, FeatureFlags, GLInfo};
+pub use crate::gl_info::{ContextAttributes, FeatureFlags, GLFlavor, GLInfo, GLVersion};
 
 mod surface;
-pub use surface::{SurfaceDescriptor, SurfaceFormat};
+pub use crate::surface::{SurfaceDescriptor, SurfaceFormat};
 
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 #[allow(improper_ctypes)]
@@ -61,11 +67,7 @@ mod glx_extra {
     include!(concat!(env!("OUT_DIR"), "/glx_extra_bindings.rs"));
 }
 
-#[cfg(any(
-    target_os="android",
-    all(target_os="windows", feature = "no_wgl"),
-    all(target_os="linux", feature = "test_egl_in_linux")
-))]
+#[cfg(any(target_os="android", all(target_os="windows", feature = "sm-no-wgl")))]
 #[allow(non_camel_case_types)]
 mod egl {
     use std::os::raw::{c_long, c_void};

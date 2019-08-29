@@ -1,6 +1,7 @@
 //! Cached OpenGL information.
 
 use crate::gl_limits::GLLimits;
+use gleam::gl::GlType;
 
 bitflags! {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
@@ -9,22 +10,26 @@ bitflags! {
         const DEPTH   = 0x02;
         const STENCIL = 0x04;
     }
+}
 
+bitflags! {
     pub struct FeatureFlags: u8 {
         const SUPPORTS_DEPTH24_STENCIL8 = 0x01;
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct GLInfo {
-    limits: GLLimits,
-    attributes: ContextAttributes,
-    features: FeatureFlags,
+    pub flavor: GLFlavor,
+    pub limits: GLLimits,
+    pub attributes: ContextAttributes,
+    pub features: FeatureFlags,
 }
 
 /// The OpenGL API and its associated version.
 #[derive(Clone, Copy, Debug)]
 pub struct GLFlavor {
-    pub api_type: gl::GlType,
+    pub api_type: GlType,
     pub api_version: GLVersion,
 }
 

@@ -8,7 +8,7 @@ use std::mem;
 use std::rc::Rc;
 
 use crate::{Display, GLContextAttributes, GLContextCapabilities, GLFormats, GLLimits};
-use crate::platform::{Context, DefaultSurfaceSwapResult, Surface, SurfaceTexture};
+use crate::platform::{Context, Surface, SurfaceTexture};
 use crate::render_target::RenderTarget;
 
 /// This is a wrapper over a native headless GL context

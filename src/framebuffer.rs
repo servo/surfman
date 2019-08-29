@@ -3,8 +3,7 @@
 //! Some backends, such as iOS and macOS, don't have a default framebuffer and therefore need some
 //! OpenGL objects to be kept around. This object encapsulates them.
 
-use crate::platform::{Display, NativeGLContext, Surface, SurfaceTexture};
-use crate::{GLContextAttributes, GLFormats, GLVersion};
+use crate::{ContextAttributes, GLVersion, Surface, SurfaceFormat, SurfaceTexture};
 use euclid::default::Size2D;
 use gleam::gl::{self, GLuint, Gl, GlType};
 use std::mem;
@@ -24,10 +23,7 @@ impl Drop for Framebuffer {
 }
 
 impl Framebuffer {
-    pub(crate) fn new(gl: &dyn Gl,
-                      descriptor: &SurfaceDescriptor,
-                      attributes: &GLContextAttributes,
-                      formats: &GLFormats)
+    pub(crate) fn new(gl: &dyn Gl, descriptor: &SurfaceDescriptor, info: &GLInfo)
                       -> Result<RenderTarget, &'static str> {
         if native_context.uses_default_framebuffer() {
             return Ok(RenderTarget::Allocated {
@@ -38,7 +34,6 @@ impl Framebuffer {
 
         native_context.make_current()?;
 
-        let format = formats.to_format().expect("Unexpected format!");
         let surface = display.create_surface_from_descriptor(gl, descriptor);
         let color_buffer = display.create_native_surface_texture(gl, surface);
 
@@ -52,7 +47,7 @@ impl Framebuffer {
                                       color_buffer.gl_texture(),
                                       0);
 
-            let fbo_renderbuffers = FboRenderbuffers::new(gl, size, attributes, formats);
+            let fbo_renderbuffers = FboRenderbuffers::new(gl, size, attributes);
             fbo_renderbuffers.bind_to_current_framebuffer(gl);
 
             debug_assert_eq!(gl.check_frame_buffer_status(gl::FRAMEBUFFER),
@@ -116,25 +111,15 @@ impl Framebuffer {
     }
 
     pub(crate) fn destroy(&mut self, gl: &dyn Gl) {
-        let mut this = self.take();
-        match this {
-            RenderTarget::Allocated {
-                framebuffer: Framebuffer::FramebufferObject {
-                    ref mut framebuffer_name,
-                    ref mut color_buffer,
-                    ref mut fbo_renderbuffers,
-                },
-                ..
-            } => {
-                fbo_renderbuffers.destroy(gl);
-                color_buffer.destroy(gl);
-                gl.delete_framebuffers(&[*framebuffer_name]);
-                *framebuffer_name = 0;
-            }
-            RenderTarget::Allocated { framebuffer: Framebuffer::DefaultFramebuffer, .. } |
-            RenderTarget::Unallocated => {}
+        if self.framebuffer_name == 0 {
+            return;
         }
-        mem::forget(this);
+
+        self.fbo_renderbuffers.destroy(gl);
+        self.color_surface.destroy(gl);
+
+        gl.delete_framebuffers(&[*self.framebuffer_name]);
+        self.framebuffer_name = 0;
     }
 
     #[inline]

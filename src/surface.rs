@@ -1,7 +1,7 @@
-use crate::gl_context::GLFlavor;
-use crate::gl_formats::Format;
+//! Information related to hardware surfaces.
+
+use crate::GLFlavor;
 use euclid::default::Size2D;
-use gleam::gl::GlType;
 
 #[derive(Clone, Copy, Debug)]
 pub struct SurfaceDescriptor {
@@ -20,6 +20,9 @@ pub enum SurfaceFormat {
 impl SurfaceFormat {
     #[inline]
     pub fn has_alpha(self) -> bool {
-        self == SurfaceFormat::RGBA
+        match self {
+            SurfaceFormat::RGBA8 => true,
+            SurfaceFormat::RGB8 => false,
+        }
     }
 }

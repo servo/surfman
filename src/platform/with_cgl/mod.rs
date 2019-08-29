@@ -1,9 +1,7 @@
 //! Bindings to Apple's OpenGL implementation on macOS.
 
-mod context;
-mod device;
-mod surface;
+pub mod context;
+pub mod device;
+pub mod surface;
 
-pub use self::context::Context;
-pub use self::device::Device;
-pub use self::surface::{Surface, SurfaceTexture};
+mod error;

@@ -1,9 +1,7 @@
 //! A stub implementation to allow this crate to compile on headless or unsupported platforms.
 //!
-//! Calling any methods on these objects will fail at runtime.
+//! Calling any methods on these objects will return errors.
 
-mod gl_context;
-mod surface;
-
-pub use self::gl_context::NativeGLContext;
-pub use self::surface::{Surface, SurfaceTexture};
+pub mod context;
+pub mod device;
+pub mod surface;
