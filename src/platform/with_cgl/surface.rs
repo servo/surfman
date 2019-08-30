@@ -8,9 +8,10 @@ use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use euclid::default::Size2D;
-use gleam::gl::{self, GLenum, GLint, GLuint, Gl};
-use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement};
-use io_surface::{kIOSurfaceBytesPerRow, kIOSurfaceHeight, kIOSurfaceWidth};
+use gl;
+use gl::types::{GLenum, GLint, GLuint};
+use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
+use io_surface::{kIOSurfaceHeight, kIOSurfaceWidth};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -49,10 +50,7 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface_from_descriptor(&self,
-                                          _: &dyn Gl,
-                                          _: &mut Context,
-                                          descriptor: &SurfaceDescriptor)
+    pub fn create_surface_from_descriptor(&self, _: &mut Context, descriptor: &SurfaceDescriptor)
                                           -> Surface {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
@@ -71,54 +69,56 @@ impl Device {
         Surface { io_surface, descriptor: Arc::new(*descriptor), destroyed: false }
     }
 
-    pub fn create_surface_texture(&self, gl: &dyn Gl, _: &mut Context, native_surface: Surface)
+    pub fn create_surface_texture(&self, _: &mut Context, native_surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
-        let texture = gl.gen_textures(1)[0];
-        debug_assert!(texture != 0);
+        unsafe {
+            let mut texture = 0;
+            gl::GenTextures(1, &mut texture);
+            debug_assert_ne!(texture, 0);
 
-        gl.bind_texture(gl::TEXTURE_RECTANGLE_ARB, texture);
+            gl::BindTexture(gl::TEXTURE_RECTANGLE, texture);
 
-        let descriptor = native_surface.descriptor();
-        let (size, alpha) = (descriptor.size, descriptor.format.has_alpha());
-        native_surface.io_surface.bind_to_gl_texture(size.width, size.height, alpha);
+            let descriptor = native_surface.descriptor();
+            let (size, alpha) = (descriptor.size, descriptor.format.has_alpha());
+            native_surface.io_surface.bind_to_gl_texture(size.width, size.height, alpha);
 
-        // Low filtering to allow rendering
-        gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
-                           gl::TEXTURE_MAG_FILTER,
-                           gl::NEAREST as GLint);
-        gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
-                           gl::TEXTURE_MIN_FILTER,
-                           gl::NEAREST as GLint);
+            // Low filtering to allow rendering
+            gl::TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
+            gl::TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
 
-        // TODO(emilio): Check if these two are neccessary, probably not
-        gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
-                           gl::TEXTURE_WRAP_S,
-                           gl::CLAMP_TO_EDGE as GLint);
-        gl.tex_parameter_i(gl::TEXTURE_RECTANGLE_ARB,
-                           gl::TEXTURE_WRAP_T,
-                           gl::CLAMP_TO_EDGE as GLint);
+            // TODO(emilio): Check if these two are neccessary, probably not
+            gl::TexParameteri(gl::TEXTURE_RECTANGLE,
+                              gl::TEXTURE_WRAP_S,
+                              gl::CLAMP_TO_EDGE as GLint);
+            gl::TexParameteri(gl::TEXTURE_RECTANGLE,
+                              gl::TEXTURE_WRAP_T,
+                              gl::CLAMP_TO_EDGE as GLint);
 
-        gl.bind_texture(gl::TEXTURE_RECTANGLE_ARB, 0);
+            gl::BindTexture(gl::TEXTURE_RECTANGLE, 0);
 
-        debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
+            debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
 
-        Ok(SurfaceTexture { surface: native_surface, gl_texture: texture, phantom: PhantomData })
+            Ok(SurfaceTexture {
+                surface: native_surface,
+                gl_texture: texture,
+                phantom: PhantomData,
+            })
+        }
     }
 
-    pub fn destroy_surface(&self, _: &dyn Gl, _: &mut Context, mut surface: Surface)
-                           -> Result<(), Error> {
+    pub fn destroy_surface(&self, _: &mut Context, mut surface: Surface) -> Result<(), Error> {
         // Nothing to do here.
         surface.destroyed = true;
         Ok(())
     }
 
-    pub fn destroy_surface_texture(&self,
-                                   gl: &dyn Gl,
-                                   _: &mut Context,
-                                   mut surface_texture: SurfaceTexture)
+    pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
                                    -> Result<Surface, Error> {
-        gl.delete_textures(&[surface_texture.gl_texture]);
-        surface_texture.gl_texture = 0;
+        unsafe {
+            gl::DeleteTextures(1, &surface_texture.gl_texture);
+            surface_texture.gl_texture = 0;
+        }
+
         Ok(surface_texture.surface)
     }
 }
@@ -143,7 +143,7 @@ impl SurfaceTexture {
 
     #[inline]
     pub fn gl_texture_target() -> GLenum {
-        gl::TEXTURE_RECTANGLE_ARB
+        gl::TEXTURE_RECTANGLE
     }
 }
 
@@ -172,91 +172,101 @@ impl Drop for Renderbuffers {
 }
 
 impl Renderbuffers {
-    pub(crate) fn new(gl: &dyn Gl, size: &Size2D<i32>, info: &GLInfo) -> Renderbuffers {
-        if info.attributes.contains(ContextAttributes::DEPTH | ContextAttributes::STENCIL) &&
-                info.features.contains(FeatureFlags::SUPPORTS_DEPTH24_STENCIL8) {
-            let renderbuffer = gl.gen_renderbuffers(1)[0];
-            gl.bind_renderbuffer(gl::RENDERBUFFER, renderbuffer);
-            gl.renderbuffer_storage(gl::RENDERBUFFER,
-                                    gl::DEPTH24_STENCIL8,
-                                    size.width,
-                                    size.height);
-            gl.bind_renderbuffer(gl::RENDERBUFFER, 0);
-            return Renderbuffers::CombinedDepthStencil(renderbuffer);
-        }
-
-        let (mut depth_renderbuffer, mut stencil_renderbuffer) = (0, 0);
-        if info.attributes.contains(ContextAttributes::DEPTH) {
-            depth_renderbuffer = gl.gen_renderbuffers(1)[0];
-            gl.bind_renderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
-            gl.renderbuffer_storage(gl::RENDERBUFFER,
-                                    gl::DEPTH_COMPONENT24,
-                                    size.width,
-                                    size.height);
-        }
-        if info.attributes.contains(ContextAttributes::STENCIL) {
-            stencil_renderbuffer = gl.gen_renderbuffers(1)[0];
-            gl.bind_renderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
-            gl.renderbuffer_storage(gl::RENDERBUFFER, gl::STENCIL_INDEX8, size.width, size.height);
-        }
-        gl.bind_renderbuffer(gl::RENDERBUFFER, 0);
-
-        Renderbuffers::IndividualDepthStencil {
-            depth: depth_renderbuffer,
-            stencil: stencil_renderbuffer,
-        }
-    }
-
-    pub(crate) fn bind_to_current_framebuffer(&self, gl: &dyn Gl) {
-        match *self {
-            Renderbuffers::CombinedDepthStencil(renderbuffer) => {
-                if renderbuffer != 0 {
-                    gl.framebuffer_renderbuffer(gl::FRAMEBUFFER,
-                                                gl::DEPTH_STENCIL_ATTACHMENT,
-                                                gl::RENDERBUFFER,
-                                                renderbuffer);
-                }
+    pub(crate) fn new(size: &Size2D<i32>, info: &GLInfo) -> Renderbuffers {
+        unsafe {
+            if info.attributes.contains(ContextAttributes::DEPTH | ContextAttributes::STENCIL) &&
+                    info.features.contains(FeatureFlags::SUPPORTS_DEPTH24_STENCIL8) {
+                let mut renderbuffer = 0;
+                gl::GenRenderbuffers(1, &mut renderbuffer);
+                gl::BindRenderbuffer(gl::RENDERBUFFER, renderbuffer);
+                gl::RenderbufferStorage(gl::RENDERBUFFER,
+                                        gl::DEPTH24_STENCIL8,
+                                        size.width,
+                                        size.height);
+                gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
+                return Renderbuffers::CombinedDepthStencil(renderbuffer);
             }
+
+            let (mut depth_renderbuffer, mut stencil_renderbuffer) = (0, 0);
+            if info.attributes.contains(ContextAttributes::DEPTH) {
+                gl::GenRenderbuffers(1, &mut depth_renderbuffer);
+                gl::BindRenderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
+                gl::RenderbufferStorage(gl::RENDERBUFFER,
+                                        gl::DEPTH_COMPONENT24,
+                                        size.width,
+                                        size.height);
+            }
+            if info.attributes.contains(ContextAttributes::STENCIL) {
+                gl::GenRenderbuffers(1, &mut stencil_renderbuffer);
+                gl::BindRenderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
+                gl::RenderbufferStorage(gl::RENDERBUFFER,
+                                        gl::STENCIL_INDEX8,
+                                        size.width,
+                                        size.height);
+            }
+            gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
+
             Renderbuffers::IndividualDepthStencil {
                 depth: depth_renderbuffer,
                 stencil: stencil_renderbuffer,
-            } => {
-                if depth_renderbuffer != 0 {
-                    gl.framebuffer_renderbuffer(gl::FRAMEBUFFER,
-                                                gl::DEPTH_ATTACHMENT,
-                                                gl::RENDERBUFFER,
-                                                depth_renderbuffer);
+            }
+        }
+    }
+
+    pub(crate) fn bind_to_current_framebuffer(&self) {
+        unsafe {
+            match *self {
+                Renderbuffers::CombinedDepthStencil(renderbuffer) => {
+                    if renderbuffer != 0 {
+                        gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
+                                                    gl::DEPTH_STENCIL_ATTACHMENT,
+                                                    gl::RENDERBUFFER,
+                                                    renderbuffer);
+                    }
                 }
-                if stencil_renderbuffer != 0 {
-                    gl.framebuffer_renderbuffer(gl::FRAMEBUFFER,
-                                                gl::STENCIL_ATTACHMENT,
-                                                gl::RENDERBUFFER,
-                                                stencil_renderbuffer);
+                Renderbuffers::IndividualDepthStencil {
+                    depth: depth_renderbuffer,
+                    stencil: stencil_renderbuffer,
+                } => {
+                    if depth_renderbuffer != 0 {
+                        gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
+                                                    gl::DEPTH_ATTACHMENT,
+                                                    gl::RENDERBUFFER,
+                                                    depth_renderbuffer);
+                    }
+                    if stencil_renderbuffer != 0 {
+                        gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
+                                                    gl::STENCIL_ATTACHMENT,
+                                                    gl::RENDERBUFFER,
+                                                    stencil_renderbuffer);
+                    }
                 }
             }
         }
     }
 
-    pub(crate) fn destroy(&mut self, gl: &dyn Gl) {
-        gl.bind_renderbuffer(gl::RENDERBUFFER, 0);
-        match *self {
-            Renderbuffers::CombinedDepthStencil(ref mut renderbuffer) => {
-                if *renderbuffer != 0 {
-                    gl.delete_renderbuffers(&[*renderbuffer]);
-                    *renderbuffer = 0;
+    pub(crate) fn destroy(&mut self) {
+        unsafe {
+            gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
+            match *self {
+                Renderbuffers::CombinedDepthStencil(ref mut renderbuffer) => {
+                    if *renderbuffer != 0 {
+                        gl::DeleteRenderbuffers(1, renderbuffer);
+                        *renderbuffer = 0;
+                    }
                 }
-            }
-            Renderbuffers::IndividualDepthStencil {
-                depth: ref mut depth_renderbuffer,
-                stencil: ref mut stencil_renderbuffer,
-            } => {
-                if *stencil_renderbuffer != 0 {
-                    gl.delete_renderbuffers(&[*stencil_renderbuffer]);
-                    *stencil_renderbuffer = 0;
-                }
-                if *depth_renderbuffer != 0 {
-                    gl.delete_renderbuffers(&[*depth_renderbuffer]);
-                    *depth_renderbuffer = 0;
+                Renderbuffers::IndividualDepthStencil {
+                    depth: ref mut depth_renderbuffer,
+                    stencil: ref mut stencil_renderbuffer,
+                } => {
+                    if *stencil_renderbuffer != 0 {
+                        gl::DeleteRenderbuffers(1, stencil_renderbuffer);
+                        *stencil_renderbuffer = 0;
+                    }
+                    if *depth_renderbuffer != 0 {
+                        gl::DeleteRenderbuffers(1, depth_renderbuffer);
+                        *depth_renderbuffer = 0;
+                    }
                 }
             }
         }

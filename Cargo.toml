@@ -19,7 +19,7 @@ sm-no-wgl = []
 
 [dependencies]
 bitflags = "1.1"
-gleam = "0.6"
+gl = "0.13"
 lazy_static = "1"
 
 [dependencies.euclid]

@@ -1,8 +1,7 @@
 //! Wraps a native graphics context and manages its render target.
 
 use euclid::default::Size2D;
-use gleam::gl;
-use gleam::gl::types::{GLuint};
+use gl::{self, GLuint};
 use std::marker::PhantomData;
 use std::mem;
 use std::rc::Rc;
@@ -14,7 +13,6 @@ use crate::render_target::RenderTarget;
 /// This is a wrapper over a native headless GL context
 pub struct GLContext {
     device: Device,
-    gl: Rc<dyn gl::Gl>,
     context: Context,
     render_target: RenderTarget,
     flavor: GLFlavor,

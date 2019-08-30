@@ -50,7 +50,7 @@ mod gl_limits;
 pub use crate::gl_limits::GLLimits;
 
 mod gl_info;
-pub use crate::gl_info::{ContextAttributes, FeatureFlags, GLFlavor, GLInfo, GLVersion};
+pub use crate::gl_info::{ContextAttributes, FeatureFlags, GLApi, GLFlavor, GLInfo, GLVersion};
 
 mod surface;
 pub use crate::surface::{SurfaceDescriptor, SurfaceFormat};

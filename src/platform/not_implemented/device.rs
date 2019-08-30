@@ -3,6 +3,9 @@
 use crate::Error;
 use std::marker::PhantomData;
 
+#[cfg(feature = "sm-glutin")]
+use glutin::Window;
+
 #[derive(Clone)]
 pub struct Device {
     phantom: PhantomData<*mut ()>,

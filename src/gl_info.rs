@@ -1,7 +1,6 @@
 //! Cached OpenGL information.
 
 use crate::gl_limits::GLLimits;
-use gleam::gl::GlType;
 
 bitflags! {
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
@@ -18,6 +17,9 @@ bitflags! {
     }
 }
 
+/// Information about the OpenGL implementation and context in use.
+///
+/// This data is cached.
 #[derive(Clone, Copy)]
 pub struct GLInfo {
     pub flavor: GLFlavor,
@@ -27,14 +29,21 @@ pub struct GLInfo {
 }
 
 /// The OpenGL API and its associated version.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GLFlavor {
-    pub api_type: GlType,
+    pub api_type: GLApi,
     pub api_version: GLVersion,
 }
 
+/// The API (OpenGL or OpenGL ES).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GLApi {
+    GL,
+    GLES,
+}
+
 /// Describes the OpenGL version that is requested when a context is created.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GLVersion {
     /// Request a specific major version
     /// The minor version is automatically selected.
