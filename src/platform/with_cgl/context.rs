@@ -1,5 +1,6 @@
 //! Wrapper for Core OpenGL contexts.
 
+use crate::gl_info::ContextAttributes;
 use crate::platform::with_cgl::error::ToWindowingApiError;
 use crate::{Error, GLApi, GLInfo};
 use super::device::Device;
@@ -48,8 +49,8 @@ impl Drop for Context {
 }
 
 impl Device {
-    pub fn create_context(&self, gl_info: &GLInfo) -> Result<Context, Error> {
-        if gl_info.flavor.api_type == GLApi::GLES {
+    pub fn create_context(&self, attributes: &ContextAttributes) -> Result<Context, Error> {
+        if attributes.flavor.api == GLApi::GLES {
             return Err(Error::UnsupportedGLType);
         }
 
@@ -60,20 +61,20 @@ impl Device {
         // 2. The first thread to create a context needs to load the GL function pointers.
         let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        let profile = if gl_info.flavor.api_version.major_version() >= 3 {
+        let profile = if attributes.flavor.version.major() >= 3 {
             kCGLOGLPVersion_3_2_Core
         } else {
             kCGLOGLPVersion_Legacy
         };
 
-        let attributes = [
+        let pixel_format_attributes = [
             kCGLPFAOpenGLProfile, profile,
             0, 0,
         ];
 
         unsafe {
             let (mut pixel_format, mut pixel_format_count) = (ptr::null_mut(), 0);
-            let mut err = CGLChoosePixelFormat(attributes.as_ptr(),
+            let mut err = CGLChoosePixelFormat(pixel_format_attributes.as_ptr(),
                                                &mut pixel_format,
                                                &mut pixel_format_count);
             if err != kCGLNoError {
@@ -91,7 +92,16 @@ impl Device {
 
             debug_assert_ne!(cgl_context, ptr::null_mut());
 
-            let mut context = Context { cgl_context, framebuffer: None, gl_info: *gl_info };
+            // Detect GL info.
+            let err = CGLSetCurrentContext(cgl_context);
+            if err != kCGLNoError {
+                return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
+            }
+
+            let gl_info = GLInfo::detect(attributes);
+
+            let mut context = Context { cgl_context, framebuffer: None, gl_info };
+
             if !*previous_context_created {
                 gl::load_with(|symbol| {
                     self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())

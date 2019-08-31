@@ -1,6 +1,6 @@
 //! Surface management for macOS.
 
-use crate::{ContextAttributes, Error, FeatureFlags, GLInfo, SurfaceDescriptor};
+use crate::{ContextAttributeFlags, Error, FeatureFlags, GLInfo, SurfaceDescriptor, SurfaceId};
 use super::context::Context;
 use super::device::Device;
 use core_foundation::base::TCFType;
@@ -128,6 +128,11 @@ impl Surface {
     pub fn descriptor(&self) -> &SurfaceDescriptor {
         &self.descriptor
     }
+
+    #[inline]
+    pub fn id(&self) -> SurfaceId {
+        SurfaceId(self.io_surface.as_concrete_TypeRef() as usize)
+    }
 }
 
 impl SurfaceTexture {
@@ -174,7 +179,8 @@ impl Drop for Renderbuffers {
 impl Renderbuffers {
     pub(crate) fn new(size: &Size2D<i32>, info: &GLInfo) -> Renderbuffers {
         unsafe {
-            if info.attributes.contains(ContextAttributes::DEPTH | ContextAttributes::STENCIL) &&
+            if info.attributes.flags.contains(ContextAttributeFlags::DEPTH |
+                                              ContextAttributeFlags::STENCIL) &&
                     info.features.contains(FeatureFlags::SUPPORTS_DEPTH24_STENCIL8) {
                 let mut renderbuffer = 0;
                 gl::GenRenderbuffers(1, &mut renderbuffer);
@@ -188,7 +194,7 @@ impl Renderbuffers {
             }
 
             let (mut depth_renderbuffer, mut stencil_renderbuffer) = (0, 0);
-            if info.attributes.contains(ContextAttributes::DEPTH) {
+            if info.attributes.flags.contains(ContextAttributeFlags::DEPTH) {
                 gl::GenRenderbuffers(1, &mut depth_renderbuffer);
                 gl::BindRenderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
                 gl::RenderbufferStorage(gl::RENDERBUFFER,
@@ -196,7 +202,7 @@ impl Renderbuffers {
                                         size.width,
                                         size.height);
             }
-            if info.attributes.contains(ContextAttributes::STENCIL) {
+            if info.attributes.flags.contains(ContextAttributeFlags::STENCIL) {
                 gl::GenRenderbuffers(1, &mut stencil_renderbuffer);
                 gl::BindRenderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
                 gl::RenderbufferStorage(gl::RENDERBUFFER,

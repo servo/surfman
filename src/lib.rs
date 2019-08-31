@@ -50,10 +50,11 @@ mod gl_limits;
 pub use crate::gl_limits::GLLimits;
 
 mod gl_info;
-pub use crate::gl_info::{ContextAttributes, FeatureFlags, GLApi, GLFlavor, GLInfo, GLVersion};
+pub use crate::gl_info::{ContextAttributes, ContextAttributeFlags, FeatureFlags, GLApi, GLFlavor};
+pub use crate::gl_info::{GLInfo, GLVersion};
 
 mod surface;
-pub use crate::surface::{SurfaceDescriptor, SurfaceFormat};
+pub use crate::surface::{SurfaceDescriptor, SurfaceFormat, SurfaceId};
 
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 #[allow(improper_ctypes)]

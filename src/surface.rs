@@ -1,7 +1,17 @@
 //! Information related to hardware surfaces.
 
-use crate::{ContextAttributes, GLFlavor, GLInfo};
+use crate::{ContextAttributeFlags, GLFlavor, GLInfo};
 use euclid::default::Size2D;
+use std::fmt::{self, Display, Formatter};
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SurfaceId(pub usize);
+
+impl Display for SurfaceId {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", *self)
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct SurfaceDescriptor {
@@ -15,12 +25,12 @@ impl SurfaceDescriptor {
     pub fn from_gl_info_and_size(info: &GLInfo, size: &Size2D<i32>) -> SurfaceDescriptor {
         SurfaceDescriptor {
             size: *size,
-            format: if info.attributes.contains(ContextAttributes::ALPHA) {
+            format: if info.attributes.flags.contains(ContextAttributeFlags::ALPHA) {
                 SurfaceFormat::RGBA8
             } else {
                 SurfaceFormat::RGB8
             },
-            flavor: info.flavor,
+            flavor: info.attributes.flavor,
         }
     }
 }
