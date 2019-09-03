@@ -1,6 +1,6 @@
 //! Various errors that methods can produce.
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub enum Error {
     /// The method failed for a miscellaneous reason.
     Failed,
@@ -22,6 +22,10 @@ pub enum Error {
     NoGLLibraryFound,
     /// Looking up an OpenGL function address failed.
     GLFunctionNotFound,
+    /// No surface was attached to this context.
+    NoSurfaceAttached,
+    /// This context renders to a window (not a surface).
+    WindowAttached,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.

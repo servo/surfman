@@ -63,7 +63,7 @@ impl FeatureFlags {
 
         // Packed depth/stencil is included in OpenGL Core 3.x.
         // It may not be available in the extension list (e.g. on macOS).
-        if attributes.flavor.version.major() >= 3 ||
+        if attributes.flavor.version.major >= 3 ||
                 extensions.0.iter().any(|name| {
                     name == "GL_OES_packed_depth_stencil" || name == "GL_EXT_packed_depth_stencil"
                 }) {
@@ -83,22 +83,15 @@ pub enum GLApi {
 
 /// Describes the OpenGL version that is requested when a context is created.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum GLVersion {
-    /// Request a specific major version
-    /// The minor version is automatically selected.
-    Major(u8),
-
-    /// Request a specific major and minor version version.
-    MajorMinor(u8, u8),
+pub struct GLVersion {
+    pub major: u8,
+    pub minor: u8,
 }
 
 impl GLVersion {
-    /// Retrieves the major version.
-    pub fn major(&self) -> u8 {
-        match *self {
-            GLVersion::Major(major) => major,
-            GLVersion::MajorMinor(major, _) => major,
-        }
+    #[inline]
+    pub fn new(major: u8, minor: u8) -> GLVersion {
+        GLVersion { major, minor }
     }
 }
 
@@ -109,7 +102,7 @@ impl GLExtensions {
     // Assumes that the context with the given attributes is current.
     fn detect(attributes: &ContextAttributes) -> GLExtensions {
         unsafe {
-            if attributes.flavor.version.major() < 3 {
+            if attributes.flavor.version.major < 3 {
                 let extensions = gl::GetString(gl::EXTENSIONS) as *const c_char;
                 let extensions = CStr::from_ptr(extensions).to_string_lossy();
                 let extensions = extensions.split(&[',', ' '][..]);

@@ -1,22 +1,26 @@
 //! Wrapper for Core OpenGL contexts.
 
-use crate::gl_info::ContextAttributes;
 use crate::platform::with_cgl::error::ToWindowingApiError;
-use crate::{Error, GLApi, GLInfo};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo, GLVersion};
 use super::device::Device;
 use super::surface::{Framebuffer, Renderbuffers, Surface, SurfaceTexture};
-use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDestroyContext, CGLError};
-use cgl::{CGLPixelFormatAttribute, CGLSetCurrentContext, kCGLPFAOpenGLProfile};
+use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
+use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
+use cgl::{CGLPixelFormatAttribute, CGLPixelFormatObj, CGLSetCurrentContext, kCGLPFAAlphaSize};
+use cgl::{kCGLPFADepthSize, kCGLPFAStencilSize, kCGLPFAOpenGLProfile};
 use core_foundation::base::TCFType;
 use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
 use core_foundation::string::CFString;
 use gl;
+use gl::types::GLuint;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::thread;
+
+#[cfg(feature = "sm-glutin")]
 
 // No CGL error occurred.
 #[allow(non_upper_case_globals)]
@@ -36,7 +40,7 @@ const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 pub struct Context {
     pub(crate) cgl_context: CGLContextObj,
     gl_info: GLInfo,
-    framebuffer: Option<Framebuffer>,
+    framebuffer: Framebuffer,
 }
 
 impl Drop for Context {
@@ -61,7 +65,7 @@ impl Device {
         // 2. The first thread to create a context needs to load the GL function pointers.
         let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        let profile = if attributes.flavor.version.major() >= 3 {
+        let profile = if attributes.flavor.version.major >= 3 {
             kCGLOGLPVersion_3_2_Core
         } else {
             kCGLOGLPVersion_Legacy
@@ -97,10 +101,9 @@ impl Device {
             if err != kCGLNoError {
                 return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
             }
-
             let gl_info = GLInfo::detect(attributes);
 
-            let mut context = Context { cgl_context, framebuffer: None, gl_info };
+            let mut context = Context { cgl_context, framebuffer: Framebuffer::None, gl_info };
 
             if !*previous_context_created {
                 gl::load_with(|symbol| {
@@ -113,23 +116,73 @@ impl Device {
         }
     }
 
+    pub fn create_context_from_current_window_context(&self) -> Result<Context, Error> {
+        unsafe {
+            let cgl_context = CGLGetCurrentContext();
+            debug_assert_ne!(cgl_context, ptr::null_mut());
+
+            // Detect context attributes.
+            let pixel_format = CGLGetPixelFormat(cgl_context);
+            debug_assert_ne!(pixel_format, ptr::null_mut());
+
+            let alpha_size = get_pixel_format_attribute(pixel_format, kCGLPFAAlphaSize);
+            let depth_size = get_pixel_format_attribute(pixel_format, kCGLPFADepthSize);
+            let stencil_size = get_pixel_format_attribute(pixel_format, kCGLPFAStencilSize);
+            let gl_profile = get_pixel_format_attribute(pixel_format, kCGLPFAOpenGLProfile);
+
+            let mut attribute_flags = ContextAttributeFlags::empty();
+            attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
+            attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
+            attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
+
+            let version = if gl_profile == kCGLOGLPVersion_Legacy {
+                GLVersion::new(2, 0)
+            } else {
+                GLVersion::new(4, 2)
+            };
+
+            let attributes = ContextAttributes {
+                flags: attribute_flags,
+                flavor: GLFlavor { api: GLApi::GL, version },
+            };
+
+            let gl_info = GLInfo::detect(&attributes);
+
+            return Ok(Context { cgl_context, gl_info, framebuffer: Framebuffer::Window });
+        }
+
+        fn get_pixel_format_attribute(pixel_format: CGLPixelFormatObj,
+                                      attribute: CGLPixelFormatAttribute)
+                                      -> i32 {
+            unsafe {
+                let mut value = 0;
+                let err = CGLDescribePixelFormat(pixel_format, 0, attribute, &mut value);
+                debug_assert_eq!(err, kCGLNoError);
+                value
+            }
+        }
+    }
+
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
         let mut result = Ok(());
         if context.cgl_context.is_null() {
             return result;
         }
 
-        if let Some(mut framebuffer) = context.framebuffer.take() {
-            framebuffer.renderbuffers.destroy();
+        if let Framebuffer::Object {
+            framebuffer_object,
+            mut renderbuffers,
+            color_surface_texture,
+        } = mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            renderbuffers.destroy();
 
-            if framebuffer.framebuffer_object != 0 {
+            if framebuffer_object != 0 {
                 unsafe {
-                    gl::DeleteFramebuffers(1, &framebuffer.framebuffer_object);
-                    framebuffer.framebuffer_object = 0;
+                    gl::DeleteFramebuffers(1, &framebuffer_object);
                 }
             }
 
-            match self.destroy_surface_texture(context, framebuffer.color_surface_texture) {
+            match self.destroy_surface_texture(context, color_surface_texture) {
                 Err(err) => result = Err(err),
                 Ok(surface) => {
                     if let Err(err) = self.destroy_surface(context, surface) {
@@ -159,7 +212,7 @@ impl Device {
         &context.gl_info
     }
 
-    pub fn make_context_current(&self, context: &mut Context) -> Result<(), Error> {
+    pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
             let err = CGLSetCurrentContext(context.cgl_context);
             if err != kCGLNoError {
@@ -169,7 +222,7 @@ impl Device {
         }
     }
 
-    pub fn make_context_not_current(&self, _: &mut Context) -> Result<(), Error> {
+    pub fn make_context_not_current(&self, _: &Context) -> Result<(), Error> {
         unsafe {
             let err = CGLSetCurrentContext(ptr::null_mut());
             if err != kCGLNoError {
@@ -179,7 +232,7 @@ impl Device {
         }
     }
 
-    pub fn get_proc_address(&self, _: &mut Context, symbol_name: &str)
+    pub fn get_proc_address(&self, _: &Context, symbol_name: &str)
                             -> Result<*const c_void, Error> {
         unsafe {
             let framework_identifier: CFString =
@@ -206,25 +259,31 @@ impl Device {
     #[inline]
     pub fn context_color_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
         match context.framebuffer {
-            None => None,
-            Some(ref framebuffer) => Some(&framebuffer.color_surface_texture.surface),
+            Framebuffer::None | Framebuffer::Window => None,
+            Framebuffer::Object { ref color_surface_texture, .. } => {
+                Some(&color_surface_texture.surface)
+            }
         }
     }
 
     pub fn replace_context_color_surface(&self, context: &mut Context, new_color_surface: Surface)
                                          -> Result<Option<Surface>, Error> {
+        if let Framebuffer::Window = context.framebuffer {
+            return Err(Error::WindowAttached)
+        }
+
         self.make_context_current(context)?;
 
         // Fast path: we have a FBO set up already and the sizes are the same. In this case, we can
         // just switch the backing texture.
         let can_modify_existing_framebuffer = match context.framebuffer {
-            Some(ref framebuffer) => {
+            Framebuffer::Object { ref color_surface_texture, .. } => {
                 // FIXME(pcwalton): Should we check parts of the descriptor other than size as
                 // well?
-                framebuffer.color_surface_texture.surface().descriptor().size ==
+                color_surface_texture.surface().descriptor().size ==
                     new_color_surface.descriptor().size
             }
-            None => false,
+            Framebuffer::None | Framebuffer::Window => false,
         };
         if can_modify_existing_framebuffer {
             return self.replace_color_surface_in_existing_framebuffer(context, new_color_surface)
@@ -246,6 +305,15 @@ impl Device {
         }
 
         Ok(old_surface)
+    }
+
+    #[inline]
+    pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
+        match context.framebuffer {
+            Framebuffer::None => Err(Error::NoSurfaceAttached),
+            Framebuffer::Window => Err(Error::WindowAttached),
+            Framebuffer::Object { framebuffer_object, .. } => Ok(framebuffer_object),
+        }
     }
 
     // Assumes that the context is current.
@@ -271,32 +339,36 @@ impl Device {
             debug_assert_eq!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER),
                              gl::FRAMEBUFFER_COMPLETE);
 
-            context.framebuffer = Some(Framebuffer {
+            context.framebuffer = Framebuffer::Object {
                 framebuffer_object,
                 color_surface_texture,
                 renderbuffers,
-            });
+            };
         }
 
         Ok(())
     }
 
     fn destroy_framebuffer(&self, context: &mut Context) -> (Option<Surface>, Result<(), Error>) {
-        let mut framebuffer = match context.framebuffer.take() {
-            None => return (None, Ok(())),
-            Some(framebuffer) => framebuffer,
+        let (framebuffer_object,
+             color_surface_texture,
+             mut renderbuffers) = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            Framebuffer::Window => unreachable!(),
+            Framebuffer::None => return (None, Ok(())),
+            Framebuffer::Object { framebuffer_object, color_surface_texture, renderbuffers } => {
+                (framebuffer_object, color_surface_texture, renderbuffers)
+            }
         };
 
-        let old_surface = match self.destroy_surface_texture(context,
-                                                             framebuffer.color_surface_texture) {
+        let old_surface = match self.destroy_surface_texture(context, color_surface_texture) {
             Ok(old_surface) => old_surface,
             Err(err) => return (None, Err(err)),
         };
 
-        framebuffer.renderbuffers.destroy();
+        renderbuffers.destroy();
 
         unsafe {
-            gl::DeleteFramebuffers(1, &framebuffer.framebuffer_object);
+            gl::DeleteFramebuffers(1, &framebuffer_object);
         }
 
         (Some(old_surface), Ok(()))
@@ -308,9 +380,15 @@ impl Device {
                                                      -> Result<Surface, Error> {
         let new_color_surface_texture = self.create_surface_texture(context, new_color_surface)?;
 
-        let framebuffer = context.framebuffer.as_mut().unwrap();
+        let (framebuffer_object, framebuffer_color_surface_texture) = match context.framebuffer {
+            Framebuffer::Object { framebuffer_object, ref mut color_surface_texture, .. } => {
+                (framebuffer_object, color_surface_texture)
+            }
+            _ => unreachable!(),
+        };
+
         unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer.framebuffer_object);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::FramebufferTexture2D(gl::FRAMEBUFFER,
                                     gl::COLOR_ATTACHMENT0,
                                     SurfaceTexture::gl_texture_target(),
@@ -318,7 +396,7 @@ impl Device {
                                     0);
         }
 
-        let old_color_surface_texture = mem::replace(&mut framebuffer.color_surface_texture,
+        let old_color_surface_texture = mem::replace(framebuffer_color_surface_texture,
                                                      new_color_surface_texture);
         self.destroy_surface_texture(context, old_color_surface_texture)
     }

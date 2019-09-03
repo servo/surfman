@@ -51,7 +51,7 @@ impl Drop for Surface {
 
 impl Device {
     pub fn create_surface_from_descriptor(&self, _: &mut Context, descriptor: &SurfaceDescriptor)
-                                          -> Surface {
+                                          -> Result<Surface, Error> {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),
@@ -66,7 +66,7 @@ impl Device {
             io_surface::new(&props)
         };
 
-        Surface { io_surface, descriptor: Arc::new(*descriptor), destroyed: false }
+        Ok(Surface { io_surface, descriptor: Arc::new(*descriptor), destroyed: false })
     }
 
     pub fn create_surface_texture(&self, _: &mut Context, native_surface: Surface)
@@ -152,10 +152,17 @@ impl SurfaceTexture {
     }
 }
 
-pub(crate) struct Framebuffer {
-    pub(crate) framebuffer_object: GLuint,
-    pub(crate) color_surface_texture: SurfaceTexture,
-    pub(crate) renderbuffers: Renderbuffers,
+pub(crate) enum Framebuffer {
+    // No framebuffer has been attached to the context.
+    None,
+    // The context renders to a native window.
+    Window,
+    // The context renders to an OpenGL framebuffer object backed by an `IOSurface`.
+    Object {
+        framebuffer_object: GLuint,
+        color_surface_texture: SurfaceTexture,
+        renderbuffers: Renderbuffers,
+    },
 }
 
 pub(crate) enum Renderbuffers {
