@@ -1,8 +1,8 @@
 //! Wrapper for Core OpenGL contexts.
 
-use crate::platform::with_cgl::error::ToWindowingApiError;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo, GLVersion};
 use super::device::Device;
+use super::error::ToWindowingApiError;
 use super::surface::{Framebuffer, Renderbuffers, Surface, SurfaceTexture};
 use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
 use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
@@ -96,14 +96,18 @@ impl Device {
 
             debug_assert_ne!(cgl_context, ptr::null_mut());
 
-            // Detect GL info.
             let err = CGLSetCurrentContext(cgl_context);
             if err != kCGLNoError {
                 return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
             }
-            let gl_info = GLInfo::detect(attributes);
 
-            let mut context = Context { cgl_context, framebuffer: Framebuffer::None, gl_info };
+            println!("Device::create_context() = {:x}", cgl_context as usize);
+
+            let mut context = Context {
+                cgl_context,
+                framebuffer: Framebuffer::None,
+                gl_info: GLInfo::new(attributes),
+            };
 
             if !*previous_context_created {
                 gl::load_with(|symbol| {
@@ -112,14 +116,20 @@ impl Device {
                 *previous_context_created = true;
             }
 
+            context.gl_info.populate();
             Ok(context)
         }
     }
 
     pub fn create_context_from_current_window_context(&self) -> Result<Context, Error> {
         unsafe {
+            let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
+
             let cgl_context = CGLGetCurrentContext();
             debug_assert_ne!(cgl_context, ptr::null_mut());
+
+            println!("Device::create_context_from_current_window_context() = {:x}",
+                     cgl_context as usize);
 
             // Detect context attributes.
             let pixel_format = CGLGetPixelFormat(cgl_context);
@@ -146,9 +156,21 @@ impl Device {
                 flavor: GLFlavor { api: GLApi::GL, version },
             };
 
-            let gl_info = GLInfo::detect(&attributes);
+            let mut context = Context {
+                cgl_context,
+                gl_info: GLInfo::new(&attributes),
+                framebuffer: Framebuffer::Window,
+            };
 
-            return Ok(Context { cgl_context, gl_info, framebuffer: Framebuffer::Window });
+            if !*previous_context_created {
+                gl::load_with(|symbol| {
+                    self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
+                });
+                *previous_context_created = true;
+            }
+
+            context.gl_info.populate();
+            return Ok(context);
         }
 
         fn get_pixel_format_attribute(pixel_format: CGLPixelFormatObj,
@@ -192,18 +214,30 @@ impl Device {
             }
         }
 
-        if let Err(err) = self.make_context_not_current(context) {
-            result = Err(err);
-        }
-
         unsafe {
-            let err = CGLDestroyContext(context.cgl_context);
-            context.cgl_context = ptr::null_mut();
-            if err != kCGLNoError {
-                result = Err(Error::ContextDestructionFailed(err.to_windowing_api_error()));
+            match context.framebuffer {
+                Framebuffer::Window => {
+                    // We're attached to a window, so don't destroy the context. The window or
+                    // application is assumed to manage the context's lifecycle.
+                    //
+                    // These weak reference semantics are somewhat ugly, but that's the price we
+                    // pay for not deeply integrating with a windowing system (such as `glutin`).
+                }
+                _ => {
+                    if let Err(err) = self.make_context_not_current(context) {
+                        result = Err(err);
+                    }
+
+                    let err = CGLDestroyContext(context.cgl_context);
+                    if err != kCGLNoError {
+                        let err = err.to_windowing_api_error();
+                        result = Err(Error::ContextDestructionFailed(err));
+                    }
+                }
             }
         }
 
+        context.cgl_context = ptr::null_mut();
         result
     }
 
@@ -274,6 +308,11 @@ impl Device {
 
         self.make_context_current(context)?;
 
+        // Make sure all changes are synchronized. Apple requires this.
+        unsafe {
+            gl::Flush();
+        }
+
         // Fast path: we have a FBO set up already and the sizes are the same. In this case, we can
         // just switch the backing texture.
         let can_modify_existing_framebuffer = match context.framebuffer {
@@ -328,16 +367,19 @@ impl Device {
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
 
             gl::FramebufferTexture2D(gl::FRAMEBUFFER,
-                                    gl::COLOR_ATTACHMENT0,
-                                    SurfaceTexture::gl_texture_target(),
-                                    color_surface_texture.gl_texture(),
-                                    0);
+                                     gl::COLOR_ATTACHMENT0,
+                                     SurfaceTexture::gl_texture_target(),
+                                     color_surface_texture.gl_texture(),
+                                     0);
 
             let renderbuffers = Renderbuffers::new(&descriptor.size, &context.gl_info);
             renderbuffers.bind_to_current_framebuffer();
 
             debug_assert_eq!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER),
                              gl::FRAMEBUFFER_COMPLETE);
+
+            // Set the viewport so that the application doesn't have to do so explicitly.
+            gl::Viewport(0, 0, descriptor.size.width, descriptor.size.height);
 
             context.framebuffer = Framebuffer::Object {
                 framebuffer_object,
@@ -378,6 +420,7 @@ impl Device {
                                                      context: &mut Context,
                                                      new_color_surface: Surface)
                                                      -> Result<Surface, Error> {
+        println!("replace_color_surface_in_existing_framebuffer()");
         let new_color_surface_texture = self.create_surface_texture(context, new_color_surface)?;
 
         let (framebuffer_object, framebuffer_color_surface_texture) = match context.framebuffer {
@@ -390,10 +433,10 @@ impl Device {
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::FramebufferTexture2D(gl::FRAMEBUFFER,
-                                    gl::COLOR_ATTACHMENT0,
-                                    SurfaceTexture::gl_texture_target(),
-                                    new_color_surface_texture.gl_texture(),
-                                    0);
+                                     gl::COLOR_ATTACHMENT0,
+                                     SurfaceTexture::gl_texture_target(),
+                                     new_color_surface_texture.gl_texture(),
+                                     0);
         }
 
         let old_color_surface_texture = mem::replace(framebuffer_color_surface_texture,

@@ -1,6 +1,7 @@
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
 use crate::Error;
+use super::adapter::Adapter;
 use std::marker::PhantomData;
 
 #[cfg(feature = "sm-glutin")]
@@ -13,7 +14,7 @@ pub struct Device {
 
 impl Device {
     #[inline]
-    pub fn new() -> Result<Device, Error> {
+    pub fn new(_: &Adapter) -> Result<Device, Error> {
         Ok(Device { phantom: PhantomData })
     }
 
@@ -22,6 +23,11 @@ impl Device {
     pub fn from_glutin_window(_: &Window) -> Result<Device, Error> {
         // Core OpenGL automatically manages connections to the window server, so there's nothing
         // to do here.
-        Device::new()
+        Device::new(&Adapter)
+    }
+
+    #[inline]
+    pub fn adapter(&self) -> Adapter {
+        Adapter
     }
 }

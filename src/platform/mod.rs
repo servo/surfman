@@ -19,10 +19,10 @@ pub mod with_egl;
 #[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
 pub use with_egl as default;
 
-#[cfg(target_os="macos")]
-pub mod with_cgl;
-#[cfg(target_os="macos")]
-pub use with_cgl as default;
+#[cfg(target_os = "macos")]
+pub mod macos;
+#[cfg(target_os = "macos")]
+pub use macos as default;
 
 #[cfg(all(target_os="windows", not(feature="no_wgl")))]
 pub mod with_wgl;

@@ -20,6 +20,7 @@ extern crate io_surface;
 extern crate wio;
 
 pub mod platform;
+pub use platform::default::adapter::Adapter;
 pub use platform::default::context::Context;
 pub use platform::default::device::Device;
 pub use platform::default::surface::{Surface, SurfaceTexture};

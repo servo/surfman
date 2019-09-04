@@ -235,6 +235,7 @@ impl Renderbuffers {
                                                     gl::DEPTH_STENCIL_ATTACHMENT,
                                                     gl::RENDERBUFFER,
                                                     renderbuffer);
+                        println!("binding depth/stencil renderbuffer: {}", renderbuffer);
                     }
                 }
                 Renderbuffers::IndividualDepthStencil {
@@ -246,6 +247,7 @@ impl Renderbuffers {
                                                     gl::DEPTH_ATTACHMENT,
                                                     gl::RENDERBUFFER,
                                                     depth_renderbuffer);
+                        println!("binding depth renderbuffer: {}", depth_renderbuffer);
                     }
                     if stencil_renderbuffer != 0 {
                         gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,

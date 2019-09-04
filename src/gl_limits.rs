@@ -3,7 +3,7 @@
 use gl;
 use gl::types::GLenum;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct GLLimits {
     pub max_vertex_attribs: u32,
     pub max_tex_size: u32,

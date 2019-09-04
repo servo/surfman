@@ -45,13 +45,19 @@ pub struct GLInfo {
 }
 
 impl GLInfo {
-    // Assumes that the context with the given attributes is current.
-    pub(crate) fn detect(attributes: &ContextAttributes) -> GLInfo {
+    // Creates a placeholder `GLInfo`. It must be populated afterward with the `populate()` method.
+    pub(crate) fn new(attributes: &ContextAttributes) -> GLInfo {
         GLInfo {
             attributes: *attributes,
-            limits: GLLimits::detect(),
-            features: FeatureFlags::detect(attributes),
+            limits: GLLimits::default(),
+            features: FeatureFlags::empty(),
         }
+    }
+
+    // Assumes that the context with the given attributes is current.
+    pub(crate) fn populate(&mut self) {
+        self.limits = GLLimits::detect();
+        self.features = FeatureFlags::detect(&self.attributes);
     }
 }
 
