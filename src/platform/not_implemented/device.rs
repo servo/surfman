@@ -3,9 +3,6 @@
 use crate::Error;
 use std::marker::PhantomData;
 
-#[cfg(feature = "sm-glutin")]
-use glutin::Window;
-
 #[derive(Clone)]
 pub struct Device {
     phantom: PhantomData<*mut ()>,
@@ -14,12 +11,6 @@ pub struct Device {
 impl Device {
     #[inline]
     pub fn new() -> Result<Device, Error> {
-        Err(Error::UnsupportedOnThisPlatform)
-    }
-
-    #[cfg(feature = "sm-glutin")]
-    #[inline]
-    pub fn from_glutin_window(_: &Window) -> Result<Device, Error> {
         Err(Error::UnsupportedOnThisPlatform)
     }
 }

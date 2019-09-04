@@ -1,6 +1,7 @@
 //! Wrapper for Core OpenGL contexts.
 
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo, GLVersion};
+use super::adapter::Adapter;
 use super::device::Device;
 use super::error::ToWindowingApiError;
 use super::surface::{Framebuffer, Renderbuffers, Surface, SurfaceTexture};
@@ -19,8 +20,6 @@ use std::ptr;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::thread;
-
-#[cfg(feature = "sm-glutin")]
 
 // No CGL error occurred.
 #[allow(non_upper_case_globals)]
@@ -53,6 +52,72 @@ impl Drop for Context {
 }
 
 impl Device {
+    pub fn from_current_window_context() -> Result<(Device, Context), Error> {
+        unsafe {
+            let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
+
+            let cgl_context = CGLGetCurrentContext();
+            debug_assert_ne!(cgl_context, ptr::null_mut());
+
+            println!("Device::create_context_from_current_window_context() = {:x}",
+                     cgl_context as usize);
+
+            // Detect context attributes.
+            let pixel_format = CGLGetPixelFormat(cgl_context);
+            debug_assert_ne!(pixel_format, ptr::null_mut());
+
+            let alpha_size = get_pixel_format_attribute(pixel_format, kCGLPFAAlphaSize);
+            let depth_size = get_pixel_format_attribute(pixel_format, kCGLPFADepthSize);
+            let stencil_size = get_pixel_format_attribute(pixel_format, kCGLPFAStencilSize);
+            let gl_profile = get_pixel_format_attribute(pixel_format, kCGLPFAOpenGLProfile);
+
+            let mut attribute_flags = ContextAttributeFlags::empty();
+            attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
+            attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
+            attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
+
+            let version = if gl_profile == kCGLOGLPVersion_Legacy {
+                GLVersion::new(2, 0)
+            } else {
+                GLVersion::new(4, 2)
+            };
+
+            let attributes = ContextAttributes {
+                flags: attribute_flags,
+                flavor: GLFlavor { api: GLApi::GL, version },
+            };
+
+            let mut context = Context {
+                cgl_context,
+                gl_info: GLInfo::new(&attributes),
+                framebuffer: Framebuffer::Window,
+            };
+
+            let device = Device::new(&Adapter)?;
+
+            if !*previous_context_created {
+                gl::load_with(|symbol| {
+                    device.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
+                });
+                *previous_context_created = true;
+            }
+
+            context.gl_info.populate();
+            return Ok((device, context));
+        }
+
+        fn get_pixel_format_attribute(pixel_format: CGLPixelFormatObj,
+                                      attribute: CGLPixelFormatAttribute)
+                                      -> i32 {
+            unsafe {
+                let mut value = 0;
+                let err = CGLDescribePixelFormat(pixel_format, 0, attribute, &mut value);
+                debug_assert_eq!(err, kCGLNoError);
+                value
+            }
+        }
+    }
+
     pub fn create_context(&self, attributes: &ContextAttributes) -> Result<Context, Error> {
         if attributes.flavor.api == GLApi::GLES {
             return Err(Error::UnsupportedGLType);
@@ -121,97 +186,45 @@ impl Device {
         }
     }
 
-    pub fn create_context_from_current_window_context(&self) -> Result<Context, Error> {
-        unsafe {
-            let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
-
-            let cgl_context = CGLGetCurrentContext();
-            debug_assert_ne!(cgl_context, ptr::null_mut());
-
-            println!("Device::create_context_from_current_window_context() = {:x}",
-                     cgl_context as usize);
-
-            // Detect context attributes.
-            let pixel_format = CGLGetPixelFormat(cgl_context);
-            debug_assert_ne!(pixel_format, ptr::null_mut());
-
-            let alpha_size = get_pixel_format_attribute(pixel_format, kCGLPFAAlphaSize);
-            let depth_size = get_pixel_format_attribute(pixel_format, kCGLPFADepthSize);
-            let stencil_size = get_pixel_format_attribute(pixel_format, kCGLPFAStencilSize);
-            let gl_profile = get_pixel_format_attribute(pixel_format, kCGLPFAOpenGLProfile);
-
-            let mut attribute_flags = ContextAttributeFlags::empty();
-            attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
-            attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
-            attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
-
-            let version = if gl_profile == kCGLOGLPVersion_Legacy {
-                GLVersion::new(2, 0)
-            } else {
-                GLVersion::new(4, 2)
-            };
-
-            let attributes = ContextAttributes {
-                flags: attribute_flags,
-                flavor: GLFlavor { api: GLApi::GL, version },
-            };
-
-            let mut context = Context {
-                cgl_context,
-                gl_info: GLInfo::new(&attributes),
-                framebuffer: Framebuffer::Window,
-            };
-
-            if !*previous_context_created {
-                gl::load_with(|symbol| {
-                    self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-                });
-                *previous_context_created = true;
-            }
-
-            context.gl_info.populate();
-            return Ok(context);
-        }
-
-        fn get_pixel_format_attribute(pixel_format: CGLPixelFormatObj,
-                                      attribute: CGLPixelFormatAttribute)
-                                      -> i32 {
-            unsafe {
-                let mut value = 0;
-                let err = CGLDescribePixelFormat(pixel_format, 0, attribute, &mut value);
-                debug_assert_eq!(err, kCGLNoError);
-                value
-            }
-        }
-    }
-
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
         let mut result = Ok(());
         if context.cgl_context.is_null() {
             return result;
         }
 
-        if let Framebuffer::Object {
-            framebuffer_object,
-            mut renderbuffers,
-            color_surface_texture,
-        } = mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            renderbuffers.destroy();
+        match context.framebuffer {
+            Framebuffer::Object { .. } => {
+                let old_framebuffer = mem::replace(&mut context.framebuffer, Framebuffer::None);
+                let (framebuffer_object, mut renderbuffers, color_surface_texture) =
+                        match old_framebuffer {
+                    Framebuffer::Object {
+                        framebuffer_object,
+                        renderbuffers,
+                        color_surface_texture
+                    } => {
+                        (framebuffer_object, renderbuffers, color_surface_texture)
+                    }
+                    _ => unreachable!(),
+                };
 
-            if framebuffer_object != 0 {
-                unsafe {
-                    gl::DeleteFramebuffers(1, &framebuffer_object);
+                renderbuffers.destroy();
+
+                if framebuffer_object != 0 {
+                    unsafe {
+                        gl::DeleteFramebuffers(1, &framebuffer_object);
+                    }
                 }
-            }
 
-            match self.destroy_surface_texture(context, color_surface_texture) {
-                Err(err) => result = Err(err),
-                Ok(surface) => {
-                    if let Err(err) = self.destroy_surface(context, surface) {
-                        result = Err(err);
+                match self.destroy_surface_texture(context, color_surface_texture) {
+                    Err(err) => result = Err(err),
+                    Ok(surface) => {
+                        if let Err(err) = self.destroy_surface(context, surface) {
+                            result = Err(err);
+                        }
                     }
                 }
             }
+            Framebuffer::Window | Framebuffer::None => {}
         }
 
         unsafe {

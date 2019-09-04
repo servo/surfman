@@ -13,7 +13,6 @@ gl_generator = "0.11"
 
 [features]
 sm-default = ["x11"]
-sm-glutin = ["glutin"]
 sm-osmesa = ["osmesa-sys"]
 sm-no-wgl = []
 
