@@ -1,6 +1,7 @@
 //! Wrapper for Core OpenGL contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo, GLVersion};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo};
+use crate::{GLVersion, ReleaseContext};
 use super::adapter::Adapter;
 use super::device::Device;
 use super::error::ToWindowingApiError;
@@ -40,7 +41,12 @@ pub struct Context {
     pub(crate) cgl_context: CGLContextObj,
     gl_info: GLInfo,
     framebuffer: Framebuffer,
+    releaser: Releaser,
 }
+
+pub type NativeContext = CGLContextObj;
+
+type Releaser = Box<dyn ReleaseContext<Context = NativeContext>>;
 
 impl Drop for Context {
     #[inline]
@@ -52,69 +58,75 @@ impl Drop for Context {
 }
 
 impl Device {
-    pub fn from_current_window_context() -> Result<(Device, Context), Error> {
-        unsafe {
-            let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
+    /// Opens the device and context corresponding to the current CGL context.
+    ///
+    /// The `Releaser` callback will be called when the context is destroyed.
+    ///
+    /// This method is designed to allow `surfman` to deal with contexts created outside the
+    /// library; for example, by Glutin. It's legal to use this method to wrap a context rendering
+    /// to any target: either a window or a pbuffer. The target is opaque to `surfman`; the library
+    /// will not modify or try to detect the render target. This means that any of the methods that
+    /// query or replace the surface—e.g. `replace_context_color_surface`—will fail if called with
+    /// a context object created via this method.
+    pub unsafe fn from_current_context(releaser: Releaser) -> Result<(Device, Context), Error> {
+        let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-            let cgl_context = CGLGetCurrentContext();
-            debug_assert_ne!(cgl_context, ptr::null_mut());
+        let cgl_context = CGLGetCurrentContext();
+        debug_assert_ne!(cgl_context, ptr::null_mut());
 
-            println!("Device::create_context_from_current_window_context() = {:x}",
-                     cgl_context as usize);
+        println!("Device::create_context_from_current_context() = {:x}", cgl_context as usize);
 
-            // Detect context attributes.
-            let pixel_format = CGLGetPixelFormat(cgl_context);
-            debug_assert_ne!(pixel_format, ptr::null_mut());
+        // Detect context attributes.
+        let pixel_format = CGLGetPixelFormat(cgl_context);
+        debug_assert_ne!(pixel_format, ptr::null_mut());
 
-            let alpha_size = get_pixel_format_attribute(pixel_format, kCGLPFAAlphaSize);
-            let depth_size = get_pixel_format_attribute(pixel_format, kCGLPFADepthSize);
-            let stencil_size = get_pixel_format_attribute(pixel_format, kCGLPFAStencilSize);
-            let gl_profile = get_pixel_format_attribute(pixel_format, kCGLPFAOpenGLProfile);
+        let alpha_size = get_pixel_format_attribute(pixel_format, kCGLPFAAlphaSize);
+        let depth_size = get_pixel_format_attribute(pixel_format, kCGLPFADepthSize);
+        let stencil_size = get_pixel_format_attribute(pixel_format, kCGLPFAStencilSize);
+        let gl_profile = get_pixel_format_attribute(pixel_format, kCGLPFAOpenGLProfile);
 
-            let mut attribute_flags = ContextAttributeFlags::empty();
-            attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
-            attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
-            attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
+        let mut attribute_flags = ContextAttributeFlags::empty();
+        attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
+        attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
+        attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
 
-            let version = if gl_profile == kCGLOGLPVersion_Legacy {
-                GLVersion::new(2, 0)
-            } else {
-                GLVersion::new(4, 2)
-            };
+        let version = if gl_profile == kCGLOGLPVersion_Legacy {
+            GLVersion::new(2, 0)
+        } else {
+            GLVersion::new(4, 2)
+        };
 
-            let attributes = ContextAttributes {
-                flags: attribute_flags,
-                flavor: GLFlavor { api: GLApi::GL, version },
-            };
+        let attributes = ContextAttributes {
+            flags: attribute_flags,
+            flavor: GLFlavor { api: GLApi::GL, version },
+        };
 
-            let mut context = Context {
-                cgl_context,
-                gl_info: GLInfo::new(&attributes),
-                framebuffer: Framebuffer::Window,
-            };
+        let mut context = Context {
+            cgl_context,
+            gl_info: GLInfo::new(&attributes),
+            framebuffer: Framebuffer::Window,
+            releaser,
+        };
 
-            let device = Device::new(&Adapter)?;
+        let device = Device::new(&Adapter)?;
 
-            if !*previous_context_created {
-                gl::load_with(|symbol| {
-                    device.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-                });
-                *previous_context_created = true;
-            }
-
-            context.gl_info.populate();
-            return Ok((device, context));
+        if !*previous_context_created {
+            gl::load_with(|symbol| {
+                device.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
+            });
+            *previous_context_created = true;
         }
 
-        fn get_pixel_format_attribute(pixel_format: CGLPixelFormatObj,
-                                      attribute: CGLPixelFormatAttribute)
-                                      -> i32 {
-            unsafe {
-                let mut value = 0;
-                let err = CGLDescribePixelFormat(pixel_format, 0, attribute, &mut value);
-                debug_assert_eq!(err, kCGLNoError);
-                value
-            }
+        context.gl_info.populate();
+        return Ok((device, context));
+
+        unsafe fn get_pixel_format_attribute(pixel_format: CGLPixelFormatObj,
+                                             attribute: CGLPixelFormatAttribute)
+                                             -> i32 {
+            let mut value = 0;
+            let err = CGLDescribePixelFormat(pixel_format, 0, attribute, &mut value);
+            debug_assert_eq!(err, kCGLNoError);
+            value
         }
     }
 
@@ -172,6 +184,7 @@ impl Device {
                 cgl_context,
                 framebuffer: Framebuffer::None,
                 gl_info: GLInfo::new(attributes),
+                releaser: Box::new(OwnedCGLContext),
             };
 
             if !*previous_context_created {
@@ -192,65 +205,34 @@ impl Device {
             return result;
         }
 
-        match context.framebuffer {
-            Framebuffer::Object { .. } => {
-                let old_framebuffer = mem::replace(&mut context.framebuffer, Framebuffer::None);
-                let (framebuffer_object, mut renderbuffers, color_surface_texture) =
-                        match old_framebuffer {
-                    Framebuffer::Object {
-                        framebuffer_object,
-                        renderbuffers,
-                        color_surface_texture
-                    } => {
-                        (framebuffer_object, renderbuffers, color_surface_texture)
-                    }
-                    _ => unreachable!(),
-                };
+        if let Framebuffer::Object {
+            framebuffer_object,
+            mut renderbuffers,
+            color_surface_texture,
+        } = mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            renderbuffers.destroy();
 
-                renderbuffers.destroy();
-
-                if framebuffer_object != 0 {
-                    unsafe {
-                        gl::DeleteFramebuffers(1, &framebuffer_object);
-                    }
+            if framebuffer_object != 0 {
+                unsafe {
+                    gl::DeleteFramebuffers(1, &framebuffer_object);
                 }
+            }
 
-                match self.destroy_surface_texture(context, color_surface_texture) {
-                    Err(err) => result = Err(err),
-                    Ok(surface) => {
-                        if let Err(err) = self.destroy_surface(context, surface) {
-                            result = Err(err);
-                        }
+            match self.destroy_surface_texture(context, color_surface_texture) {
+                Err(err) => result = Err(err),
+                Ok(surface) => {
+                    if let Err(err) = self.destroy_surface(context, surface) {
+                        result = Err(err);
                     }
                 }
             }
-            Framebuffer::Window | Framebuffer::None => {}
         }
 
         unsafe {
-            match context.framebuffer {
-                Framebuffer::Window => {
-                    // We're attached to a window, so don't destroy the context. The window or
-                    // application is assumed to manage the context's lifecycle.
-                    //
-                    // These weak reference semantics are somewhat ugly, but that's the price we
-                    // pay for not deeply integrating with a windowing system (such as `glutin`).
-                }
-                _ => {
-                    if let Err(err) = self.make_context_not_current(context) {
-                        result = Err(err);
-                    }
-
-                    let err = CGLDestroyContext(context.cgl_context);
-                    if err != kCGLNoError {
-                        let err = err.to_windowing_api_error();
-                        result = Err(Error::ContextDestructionFailed(err));
-                    }
-                }
-            }
+            context.releaser.release(context.cgl_context);
+            context.cgl_context = ptr::null_mut();
         }
 
-        context.cgl_context = ptr::null_mut();
         result
     }
 
@@ -455,5 +437,16 @@ impl Device {
         let old_color_surface_texture = mem::replace(framebuffer_color_surface_texture,
                                                      new_color_surface_texture);
         self.destroy_surface_texture(context, old_color_surface_texture)
+    }
+}
+
+struct OwnedCGLContext;
+
+impl ReleaseContext for OwnedCGLContext {
+    type Context = CGLContextObj;
+
+    unsafe fn release(&mut self, cgl_context: CGLContextObj) {
+        CGLSetCurrentContext(ptr::null_mut());
+        CGLDestroyContext(cgl_context);
     }
 }

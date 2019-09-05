@@ -26,6 +26,10 @@ pub enum Error {
     NoSurfaceAttached,
     /// This context renders to a window (not a surface).
     WindowAttached,
+    /// No suitable adapter could be found.
+    NoAdapterFound,
+    /// The device couldn't be opened.
+    DeviceOpenFailed,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
