@@ -3,7 +3,10 @@
 use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLSurface, EGLenum, EGLint};
 use crate::egl;
+use super::surface::SurfaceBinding;
 use std::os::raw::c_void;
+use std::ptr;
+use wio::ComPtr;
 
 struct EGLExtensionFunctions {
     CreateDeviceANGLE: extern "C" fn(device_type: EGLint,
@@ -29,21 +32,23 @@ lazy_static! {
 }
 
 pub struct Device {
-    egl_device: EGLDeviceEXT,
-    egl_display: EGLDisplay,
-    surfaces: Vec<Surface>,
-    owned_by_us: bool,
+    pub(crate) egl_device: EGLDeviceEXT,
+    pub(crate) egl_display: EGLDisplay,
+    pub(crate) surface_bindings: Vec<SurfaceBinding>,
+    pub(crate) d3d11_device: ComPtr<ID3D11Device>,
+    pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
 }
 
 impl Device {
     #[inline]
     pub fn new(adapter: &Adapter) -> Result<Device, Error> {
+        let d3d_driver_type = adapter.d3d_driver_type;
         unsafe {
             let mut d3d11_device = ptr::null_mut();
             let mut d3d11_feature_level = 0;
             let mut d3d11_device_context = ptr::null_mut();
             let result = D3D11CreateDevice(adapter.dxgi_adapter.as_ptr(),
-                                           adapter.driver_type,
+                                           d3d_driver_type,
                                            ptr::null_mut(),
                                            0,
                                            ptr::null_mut(),
@@ -70,17 +75,32 @@ impl Device {
                                                       &attribs[0]);
             assert_ne!(egl_display, egl::NO_DISPLAY);
 
+            // I don't think this should ever fail.
             let (mut major_version, mut minor_version) = (0, 0);
             let result = egl::Initialize(egl_display, &mut major_version, &mut minor_version);
             assert_ne!(result, egl::FALSE);
 
-            Ok(Device {
+            Ok(Device { egl_device, egl_display, surfaces: vec![], d3d11_device, d3d_driver_type })
         }
     }
 
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        Adapter
+        unsafe {
+            let mut dxgi_device: *mut IDXGIDevice = ptr::null_mut();
+            let result = (*d3d11_device).QueryInterface(
+                &IDXGIDevice::uuidof(),
+                &mut self.dxgi_device as *mut *mut IDXGIDevice as *mut *mut c_void);
+            assert!(winerror::SUCCEEDED(result));
+            let dxgi_device = ComPtr::from_raw(dxgi_device);
+
+            let mut dxgi_adapter = ptr::null_mut();
+            let result = (*dxgi_device).GetAdapter(&mut dxgi_adapter);
+            assert!(winerror::SUCCEEDED(result));
+            let dxgi_adapter = ComPtr::from_raw(dxgi_adapter);
+
+            Adapter { dxgi_adapter, d3d_driver_type: self.d3d_driver_type }
+        }
     }
 }
 

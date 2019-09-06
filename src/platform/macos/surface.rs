@@ -50,7 +50,9 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface_from_descriptor(&self, _: &mut Context, descriptor: &SurfaceDescriptor)
+    pub fn create_surface_from_descriptor(&mut self,
+                                          _: &mut Context,
+                                          descriptor: &SurfaceDescriptor)
                                           -> Result<Surface, Error> {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
@@ -155,8 +157,8 @@ impl SurfaceTexture {
 pub(crate) enum Framebuffer {
     // No framebuffer has been attached to the context.
     None,
-    // The context renders to a native window.
-    Window,
+    // The context is externally-managed.
+    External,
     // The context renders to an OpenGL framebuffer object backed by an `IOSurface`.
     Object {
         framebuffer_object: GLuint,

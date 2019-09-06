@@ -12,7 +12,7 @@ thread_local! {
 #[derive(Clone)]
 pub struct Adapter {
     pub(crate) dxgi_adapter: ComPtr<IDXGIDevice>,
-    pub(crate) driver_type: D3D_DRIVER_TYPE,
+    pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
 }
 
 impl Adapter {
@@ -43,7 +43,7 @@ impl Adapter {
 
             Ok(Adapter {
                 dxgi_adapter,
-                driver_type: D3D_DRIVER_TYPE_HARDWARE,
+                d3d_driver_type: D3D_DRIVER_TYPE_HARDWARE,
             })
         }
     }
