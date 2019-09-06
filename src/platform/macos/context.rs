@@ -1,7 +1,6 @@
 //! Wrapper for Core OpenGL contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo};
-use crate::{GLVersion, ReleaseContext};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo, GLVersion};
 use super::adapter::Adapter;
 use super::device::Device;
 use super::error::ToWindowingApiError;
@@ -38,20 +37,21 @@ const kCGLOGLPVersion_Legacy: CGLPixelFormatAttribute = 0x1000;
 const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 
 pub struct Context {
-    pub(crate) cgl_context: CGLContextObj,
+    pub(crate) native_context: Box<dyn NativeContext>,
     gl_info: GLInfo,
     framebuffer: Framebuffer,
-    releaser: Releaser,
 }
 
-pub type NativeContext = CGLContextObj;
-
-type Releaser = Box<dyn ReleaseContext<Context = NativeContext>>;
+pub(crate) trait NativeContext {
+    fn cgl_context(&self) -> CGLContextObj;
+    fn is_destroyed(&self) -> bool;
+    unsafe fn destroy(&mut self);
+}
 
 impl Drop for Context {
     #[inline]
     fn drop(&mut self) {
-        if !self.cgl_context.is_null() && !thread::panicking() {
+        if !self.native_context.is_destroyed() && !thread::panicking() {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
@@ -60,7 +60,9 @@ impl Drop for Context {
 impl Device {
     /// Opens the device and context corresponding to the current CGL context.
     ///
-    /// The `Releaser` callback will be called when the context is destroyed.
+    /// The native context is not retained, as there is no way to do this in the CGL API. It is the
+    /// caller's responsibility to keep it alive for the duration of this context. Be careful when
+    /// using this method; it's essentially a last resort.
     ///
     /// This method is designed to allow `surfman` to deal with contexts created outside the
     /// library; for example, by Glutin. It's legal to use this method to wrap a context rendering
@@ -68,16 +70,15 @@ impl Device {
     /// will not modify or try to detect the render target. This means that any of the methods that
     /// query or replace the surface—e.g. `replace_context_color_surface`—will fail if called with
     /// a context object created via this method.
-    pub unsafe fn from_current_context(releaser: Releaser) -> Result<(Device, Context), Error> {
+    pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        let cgl_context = CGLGetCurrentContext();
-        debug_assert_ne!(cgl_context, ptr::null_mut());
-
-        println!("Device::create_context_from_current_context() = {:x}", cgl_context as usize);
+        // Grab the current context.
+        let native_context = Box::new(UnsafeCGLContextRef::current());
+        println!("Device::from_current_context() = {:x}", native_context.cgl_context() as usize);
 
         // Detect context attributes.
-        let pixel_format = CGLGetPixelFormat(cgl_context);
+        let pixel_format = CGLGetPixelFormat(native_context.cgl_context());
         debug_assert_ne!(pixel_format, ptr::null_mut());
 
         let alpha_size = get_pixel_format_attribute(pixel_format, kCGLPFAAlphaSize);
@@ -102,10 +103,9 @@ impl Device {
         };
 
         let mut context = Context {
-            cgl_context,
+            native_context,
             gl_info: GLInfo::new(&attributes),
-            framebuffer: Framebuffer::Window,
-            releaser,
+            framebuffer: Framebuffer::External,
         };
 
         let device = Device::new(&Adapter)?;
@@ -172,19 +172,19 @@ impl Device {
             }
 
             debug_assert_ne!(cgl_context, ptr::null_mut());
+            let native_context = Box::new(OwnedCGLContext { cgl_context });
 
-            let err = CGLSetCurrentContext(cgl_context);
+            let err = CGLSetCurrentContext(native_context.cgl_context());
             if err != kCGLNoError {
                 return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
             }
 
-            println!("Device::create_context() = {:x}", cgl_context as usize);
+            println!("Device::create_context() = {:x}", native_context.cgl_context() as usize);
 
             let mut context = Context {
-                cgl_context,
+                native_context,
                 framebuffer: Framebuffer::None,
                 gl_info: GLInfo::new(attributes),
-                releaser: Box::new(OwnedCGLContext),
             };
 
             if !*previous_context_created {
@@ -201,7 +201,7 @@ impl Device {
 
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
         let mut result = Ok(());
-        if context.cgl_context.is_null() {
+        if context.native_context.is_destroyed() {
             return result;
         }
 
@@ -229,8 +229,7 @@ impl Device {
         }
 
         unsafe {
-            context.releaser.release(context.cgl_context);
-            context.cgl_context = ptr::null_mut();
+            context.native_context.destroy();
         }
 
         result
@@ -243,7 +242,7 @@ impl Device {
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let err = CGLSetCurrentContext(context.cgl_context);
+            let err = CGLSetCurrentContext(context.native_context.cgl_context());
             if err != kCGLNoError {
                 return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
             }
@@ -288,7 +287,7 @@ impl Device {
     #[inline]
     pub fn context_color_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
         match context.framebuffer {
-            Framebuffer::None | Framebuffer::Window => None,
+            Framebuffer::None | Framebuffer::External => None,
             Framebuffer::Object { ref color_surface_texture, .. } => {
                 Some(&color_surface_texture.surface)
             }
@@ -297,8 +296,8 @@ impl Device {
 
     pub fn replace_context_color_surface(&self, context: &mut Context, new_color_surface: Surface)
                                          -> Result<Option<Surface>, Error> {
-        if let Framebuffer::Window = context.framebuffer {
-            return Err(Error::WindowAttached)
+        if let Framebuffer::External = context.framebuffer {
+            return Err(Error::ExternalRenderTarget)
         }
 
         self.make_context_current(context)?;
@@ -317,7 +316,7 @@ impl Device {
                 color_surface_texture.surface().descriptor().size ==
                     new_color_surface.descriptor().size
             }
-            Framebuffer::None | Framebuffer::Window => false,
+            Framebuffer::None | Framebuffer::External => false,
         };
         if can_modify_existing_framebuffer {
             return self.replace_color_surface_in_existing_framebuffer(context, new_color_surface)
@@ -345,7 +344,7 @@ impl Device {
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
         match context.framebuffer {
             Framebuffer::None => Err(Error::NoSurfaceAttached),
-            Framebuffer::Window => Err(Error::WindowAttached),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
             Framebuffer::Object { framebuffer_object, .. } => Ok(framebuffer_object),
         }
     }
@@ -390,7 +389,7 @@ impl Device {
         let (framebuffer_object,
              color_surface_texture,
              mut renderbuffers) = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Window => unreachable!(),
+            Framebuffer::External => unreachable!(),
             Framebuffer::None => return (None, Ok(())),
             Framebuffer::Object { framebuffer_object, color_surface_texture, renderbuffers } => {
                 (framebuffer_object, color_surface_texture, renderbuffers)
@@ -440,13 +439,56 @@ impl Device {
     }
 }
 
-struct OwnedCGLContext;
+struct OwnedCGLContext {
+    cgl_context: CGLContextObj,
+}
 
-impl ReleaseContext for OwnedCGLContext {
-    type Context = CGLContextObj;
+impl NativeContext for OwnedCGLContext {
+    #[inline]
+    fn cgl_context(&self) -> CGLContextObj {
+        debug_assert!(!self.is_destroyed());
+        self.cgl_context
+    }
 
-    unsafe fn release(&mut self, cgl_context: CGLContextObj) {
+    #[inline]
+    fn is_destroyed(&self) -> bool {
+        self.cgl_context.is_null()
+    }
+
+    unsafe fn destroy(&mut self) {
+        assert!(!self.is_destroyed());
         CGLSetCurrentContext(ptr::null_mut());
-        CGLDestroyContext(cgl_context);
+        CGLDestroyContext(self.cgl_context);
+        self.cgl_context = ptr::null_mut();
+    }
+}
+
+struct UnsafeCGLContextRef {
+    cgl_context: CGLContextObj,
+}
+
+impl UnsafeCGLContextRef {
+    #[inline]
+    unsafe fn current() -> UnsafeCGLContextRef {
+        let cgl_context = CGLGetCurrentContext();
+        assert!(!cgl_context.is_null());
+        UnsafeCGLContextRef { cgl_context }
+    }
+}
+
+impl NativeContext for UnsafeCGLContextRef {
+    #[inline]
+    fn cgl_context(&self) -> CGLContextObj {
+        self.cgl_context
+    }
+
+    #[inline]
+    fn is_destroyed(&self) -> bool {
+        self.cgl_context.is_null()
+    }
+
+    unsafe fn destroy(&mut self) {
+        assert!(!self.is_destroyed());
+        self.cgl_context = ptr::null_mut();
     }
 }

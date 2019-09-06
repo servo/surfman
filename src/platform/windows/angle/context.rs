@@ -22,34 +22,37 @@ use std::str::FromStr;
 use std::sync::Mutex;
 use std::thread;
 
-pub struct Context {
-    pub(crate) egl_context: EGLContext,
-    gl_info: GLInfo,
-    color_surface: ColorSurface,
-    releaser: Releaser,
+lazy_static! {
+    static ref CREATE_CONTEXT_MUTEX: Mutex<bool> = Mutex::new(false);
 }
 
-pub type NativeContext = EGLContext;
+pub struct Context {
+    pub(crate) native_context: Box<dyn NativeContext>,
+    gl_info: GLInfo,
+    color_surface: ColorSurface,
+}
 
-type Releaser = Box<dyn ReleaseContext<Context = NativeContext>>;
+pub(crate) trait NativeContext {
+    fn egl_context(&self) -> EGLContext;
+    fn is_destroyed(&self) -> bool;
+    unsafe fn destroy(&mut self);
+}
 
 impl Drop for Context {
     #[inline]
     fn drop(&mut self) {
-        if !self.cgl_context.is_null() && !thread::panicking() {
+        if !self.native_context.is_destroyed() && !thread::panicking() {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
 }
 
-lazy_static! {
-    static ref CREATE_CONTEXT_MUTEX: Mutex<bool> = Mutex::new(false);
-}
-
 impl Device {
     /// Opens the device and context corresponding to the current EGL context.
     ///
-    /// The `Releaser` callback will be called when the context is destroyed.
+    /// The native context is not retained, as there is no way to do this in the EGL API. It is the
+    /// caller's responsibility to keep it alive for the duration of this context. Be careful when
+    /// using this method; it's essentially a last resort.
     ///
     /// This method is designed to allow `surfman` to deal with contexts created outside the
     /// library; for example, by Glutin. It's legal to use this method to wrap a context rendering
@@ -57,7 +60,7 @@ impl Device {
     /// will not modify or try to detect the render target. This means that any of the methods that
     /// query or replace the surface—e.g. `replace_context_color_surface`—will fail if called with
     /// a context object created via this method.
-    pub unsafe fn from_current_context(releaser: Releaser) -> Result<(Device, Context), Error> {
+    pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Grab the current EGL display and EGL context.
@@ -65,6 +68,7 @@ impl Device {
         debug_assert_ne!(egl_display, egl::NO_DISPLAY);
         let egl_context = egl::GetCurrentContext();
         debug_assert_ne!(egl_context, egl::NO_CONTEXT);
+        let native_context = Box::new(UnsafeCGLContextRef::current());
 
         println!("Device::from_current_context() = {:x}", egl_context);
 
@@ -144,10 +148,9 @@ impl Device {
         };
 
         let mut context = Context {
-            egl_context,
+            native_context,
             gl_info: GLInfo::new(&attributes),
             color_surface: ColorSurface::External,
-            releaser,
         };
 
         if !*previous_context_created {
@@ -321,7 +324,7 @@ impl Device {
     #[inline]
     pub fn context_color_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
         match context.framebuffer {
-            Framebuffer::None | Framebuffer::Window => None,
+            Framebuffer::None | Framebuffer::External => None,
             Framebuffer::Object { ref color_surface_texture, .. } => {
                 Some(&color_surface_texture.surface)
             }
@@ -330,8 +333,8 @@ impl Device {
 
     pub fn replace_context_color_surface(&self, context: &mut Context, new_color_surface: Surface)
                                          -> Result<Option<Surface>, Error> {
-        if let Framebuffer::Window = context.framebuffer {
-            return Err(Error::WindowAttached)
+        if let Framebuffer::External = context.framebuffer {
+            return Err(Error::ExternalRenderTarget)
         }
 
         self.make_context_current(context)?;
@@ -350,7 +353,7 @@ impl Device {
                 color_surface_texture.surface().descriptor().size ==
                     new_color_surface.descriptor().size
             }
-            Framebuffer::None | Framebuffer::Window => false,
+            Framebuffer::None | Framebuffer::External => false,
         };
         if can_modify_existing_framebuffer {
             return self.replace_color_surface_in_existing_framebuffer(context, new_color_surface)
@@ -378,7 +381,7 @@ impl Device {
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
         match context.framebuffer {
             Framebuffer::None => Err(Error::NoSurfaceAttached),
-            Framebuffer::Window => Err(Error::WindowAttached),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
             Framebuffer::Object { framebuffer_object, .. } => Ok(framebuffer_object),
         }
     }
@@ -423,7 +426,7 @@ impl Device {
         let (framebuffer_object,
              color_surface_texture,
              mut renderbuffers) = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Window => unreachable!(),
+            Framebuffer::External => unreachable!(),
             Framebuffer::None => return (None, Ok(())),
             Framebuffer::Object { framebuffer_object, color_surface_texture, renderbuffers } => {
                 (framebuffer_object, color_surface_texture, renderbuffers)

@@ -21,12 +21,9 @@ extern crate wio;
 
 pub mod platform;
 pub use platform::default::adapter::Adapter;
-pub use platform::default::context::{Context, NativeContext};
+pub use platform::default::context::Context;
 pub use platform::default::device::Device;
 pub use platform::default::surface::{Surface, SurfaceTexture};
-
-pub mod context;
-pub use context::ReleaseContext;
 
 pub mod error;
 pub use crate::error::{Error, WindowingApiError};

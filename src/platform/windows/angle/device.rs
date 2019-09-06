@@ -32,11 +32,17 @@ lazy_static! {
 }
 
 pub struct Device {
-    pub(crate) egl_device: EGLDeviceEXT,
     pub(crate) egl_display: EGLDisplay,
+    pub(crate) egl_device: EGLDeviceEXT,
     pub(crate) surface_bindings: Vec<SurfaceBinding>,
     pub(crate) d3d11_device: ComPtr<ID3D11Device>,
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
+}
+
+pub(crate) trait NativeDisplay {
+    fn egl_display(&self) -> EGLDisplay;
+    fn is_destroyed(&self) -> bool;
+    unsafe fn destroy(&mut self);
 }
 
 impl Device {
@@ -74,13 +80,22 @@ impl Device {
                                                       egl_device as *mut c_void,
                                                       &attribs[0]);
             assert_ne!(egl_display, egl::NO_DISPLAY);
+            let native_display = OwnedEGLDisplay { egl_display };
 
             // I don't think this should ever fail.
             let (mut major_version, mut minor_version) = (0, 0);
-            let result = egl::Initialize(egl_display, &mut major_version, &mut minor_version);
+            let result = egl::Initialize(native_display.egl_display(),
+                                         &mut major_version,
+                                         &mut minor_version);
             assert_ne!(result, egl::FALSE);
 
-            Ok(Device { egl_device, egl_display, surfaces: vec![], d3d11_device, d3d_driver_type })
+            Ok(Device {
+                native_display,
+                egl_device,
+                surfaces: vec![],
+                d3d11_device,
+                d3d_driver_type,
+            })
         }
     }
 
@@ -108,4 +123,27 @@ unsafe fn lookup_egl_extension(name: &'static [u8]) -> *const c_void {
     let f = egl::GetProcAddress(&name[0] as *const u8 as *const c_char);
     assert_ne!(f as usize, 0);
     f
+}
+
+struct OwnedEGLDisplay {
+    egl_display: EGLDisplay,
+}
+
+impl NativeDisplay for OwnedEGLDisplay {
+    #[inline]
+    fn egl_display(&self) -> EGLDisplay {
+        debug_assert!(!self.is_destroyed());
+        self.egl_display
+    }
+
+    #[inline]
+    fn is_destroyed(&self) -> bool {
+        self.egl_display == egl::NO_DISPLAY
+    }
+
+    unsafe fn destroy(&mut self) {
+        assert!(!self.is_destroyed());
+        CGLDestroyContext(self.cgl_context);
+        self.cgl_context = ptr::null_mut();
+    }
 }
