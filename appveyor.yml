@@ -11,5 +11,4 @@ install:
 build: false
 test_script:
   - cargo build --verbose
-  - cargo build --verbose --features no_wgl
 

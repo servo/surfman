@@ -1,11 +1,15 @@
 [package]
-name = "offscreen_gl_context"
+name = "surfman"
 license = "MIT / Apache-2.0"
 edition = "2018"
 version = "0.23.0"
-authors = ["Emilio Cobos Álvarez <emilio@crisal.io>", "The Servo Project Developers"]
-description = "Creation and manipulation of HW accelerated offscreen rendering contexts in multiple platforms. Originally intended for the Servo project's WebGL implementation."
-repository = "https://github.com/servo/rust-offscreen-rendering-context"
+authors = [
+    "Patrick Walton <pcwalton@mimiga.net>",
+    "Emilio Cobos Álvarez <emilio@crisal.io>",
+    "The Servo Project Developers",
+]
+description = "Multithreaded GPU usage made easy"
+repository = "https://github.com/pcwalton/rust-offscreen-rendering-context"
 build = "build.rs"
 
 [build-dependencies]
@@ -14,7 +18,6 @@ gl_generator = "0.11"
 [features]
 sm-default = ["x11"]
 sm-osmesa = ["osmesa-sys"]
-sm-no-wgl = []
 
 [dependencies]
 bitflags = "1.1"

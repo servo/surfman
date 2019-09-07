@@ -50,7 +50,7 @@ mod glx_extra {
     include!(concat!(env!("OUT_DIR"), "/glx_extra_bindings.rs"));
 }
 
-#[cfg(any(target_os="android", all(target_os="windows", feature = "sm-no-wgl")))]
+#[cfg(any(target_os="android", target_os="windows"))]
 #[allow(non_camel_case_types)]
 mod egl {
     use std::os::raw::{c_long, c_void};
