@@ -28,25 +28,6 @@ pub use platform::default::surface::{Surface, SurfaceTexture};
 pub mod error;
 pub use crate::error::{Error, WindowingApiError};
 
-/*
-mod framebuffer;
-
-mod gl_context;
-pub use gl_context::{GLContext, GLContextDispatcher, GLVersion};
-
-mod gl_context_attributes;
-pub use gl_context_attributes::GLContextAttributes;
-
-mod gl_context_capabilities;
-pub use gl_context_capabilities::GLContextCapabilities;
-
-mod gl_feature;
-pub use gl_feature::GLFeature;
-
-mod gl_formats;
-pub use gl_formats::{Format, GLFormats};
-*/
-
 mod gl_limits;
 pub use crate::gl_limits::GLLimits;
 
