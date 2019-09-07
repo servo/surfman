@@ -29,7 +29,7 @@ lazy_static! {
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
     gl_info: GLInfo,
-    color_surface: ColorSurface,
+    color_surface: Option<ColorSurface>,
 }
 
 pub(crate) trait NativeContext {
@@ -68,7 +68,7 @@ impl Device {
         debug_assert_ne!(egl_display, egl::NO_DISPLAY);
         let egl_context = egl::GetCurrentContext();
         debug_assert_ne!(egl_context, egl::NO_CONTEXT);
-        let native_context = Box::new(UnsafeCGLContextRef::current());
+        let native_context = Box::new(UnsafeEGLContextRef { egl_context });
 
         println!("Device::from_current_context() = {:x}", egl_context);
 
@@ -87,7 +87,8 @@ impl Device {
         assert!(!d3d11_device.is_null());
 
         // Create the device wrapper.
-        // FIXME(pcwalton): Using `D3D_DRIVER_TYPE_UNKNOWN` is unfortunate.
+        // FIXME(pcwalton): Using `D3D_DRIVER_TYPE_UNKNOWN` is unfortunate. Perhaps we should
+        // detect the "Microsoft Basic" string and switch to `D3D_DRIVER_TYPE_WARP` as appropriate.
         let device = Device {
             egl_device,
             egl_display,
@@ -178,49 +179,73 @@ impl Device {
 
         let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        let profile = if attributes.flavor.version.major >= 3 {
-            kCGLOGLPVersion_3_2_Core
-        } else {
-            kCGLOGLPVersion_Legacy
+        let renderable_type = match attributes.flavor.api {
+            GLApi::GL => egl::OPENGL_BIT,
+            GLApi::GLES => egl::OPENGL_ES2_BIT,
         };
 
-        let pixel_format_attributes = [
-            kCGLPFAOpenGLProfile, profile,
-            0, 0,
-        ];
+        let flags = attributes.flags;
+        let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
+        let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
+        let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
 
         unsafe {
-            let (mut pixel_format, mut pixel_format_count) = (ptr::null_mut(), 0);
-            let mut err = CGLChoosePixelFormat(pixel_format_attributes.as_ptr(),
-                                               &mut pixel_format,
-                                               &mut pixel_format_count);
-            if err != kCGLNoError {
-                return Err(Error::PixelFormatSelectionFailed(err.to_windowing_api_error()));
-            }
-            if pixel_format_count == 0 {
+            // Create config attributes.
+            let config_attributes = [
+                egl::SURFACE_TYPE as EGLint,         egl::PBUFFER_BIT as EGLint,
+                egl::RENDERABLE_TYPE as EGLint,      renderable_type as EGLint,
+                egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint,
+                egl::RED_SIZE as EGLint,             8,
+                egl::GREEN_SIZE as EGLint,           8,
+                egl::BLUE_SIZE as EGLint,            8,
+                egl::ALPHA_SIZE as EGLint,           alpha_size,
+                egl::DEPTH_SIZE as EGLint,           depth_size,
+                egl::STENCIL_SIZE as EGLint,         stencil_size,
+                egl::NONE as EGLint,                 0,
+                0,                                   0,
+            ];
+
+            // Pick a config.
+            let (mut config, mut config_count) = (ptr::null_mut(), 0);
+            let result = egl::ChooseConfig(self.native_display.egl_display(),
+                                           config_attributes.as_ptr(),
+                                           &mut config,
+                                           1,
+                                           config_count);
+            if result == egl::FALSE || config_count == 0 || config.is_null() {
                 return Err(Error::NoPixelFormatFound);
             }
 
-            let mut cgl_context = ptr::null_mut();
-            err = CGLCreateContext(pixel_format, ptr::null_mut(), &mut cgl_context);
-            if err != kCGLNoError {
-                return Err(Error::ContextCreationFailed(err.to_windowing_api_error()));
+            // Include some extra zeroes to work around broken implementations.
+            let attributes = [
+                egl::CONTEXT_CLIENT_VERSION as EGLint, attributes.flavor.version.major,
+                egl::NONE as EGLint, 0,
+                0, 0,
+            ];
+
+            let mut egl_context = egl::CreateContext(self.native_display.egl_display(),
+                                                     config,
+                                                     egl::NO_CONTEXT,
+                                                     attributes.as_ptr());
+            if egl_context == egl::NO_CONTEXT {
+                return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
             }
+            let native_context = OwnedEGLContext { egl_context };
 
-            debug_assert_ne!(cgl_context, ptr::null_mut());
-
-            let err = CGLSetCurrentContext(cgl_context);
-            if err != kCGLNoError {
-                return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
+            // FIXME(pcwalton): This might not work on all EGL implementations. We might have to
+            // make a dummy surface.
+            let result = egl::MakeCurrent(self.native_display.egl_display(),
+                                          egl::NO_SURFACE,
+                                          egl::NO_SURFACE,
+                                          native_context.egl_context());
+            if result == egl::FALSE {
+                return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
             }
-
-            println!("Device::create_context() = {:x}", cgl_context as usize);
 
             let mut context = Context {
                 cgl_context,
                 framebuffer: Framebuffer::None,
                 gl_info: GLInfo::new(attributes),
-                releaser: Box::new(OwnedCGLContext),
             };
 
             if !*previous_context_created {
@@ -236,40 +261,16 @@ impl Device {
     }
 
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        let mut result = Ok(());
-        if context.cgl_context.is_null() {
-            return result;
+        if context.native_context.is_destroyed() {
+            return Ok(());
         }
 
-        if let Framebuffer::Object {
-            framebuffer_object,
-            mut renderbuffers,
-            color_surface_texture,
-        } = mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            renderbuffers.destroy();
-
-            if framebuffer_object != 0 {
-                unsafe {
-                    gl::DeleteFramebuffers(1, &framebuffer_object);
-                }
-            }
-
-            match self.destroy_surface_texture(context, color_surface_texture) {
-                Err(err) => result = Err(err),
-                Ok(surface) => {
-                    if let Err(err) = self.destroy_surface(context, surface) {
-                        result = Err(err);
-                    }
-                }
-            }
+        if let Some(color_surface) = context.color_surface.take() {
+            self.destroy_surface(context, color_surface);
         }
 
-        unsafe {
-            context.releaser.release(context.cgl_context);
-            context.cgl_context = ptr::null_mut();
-        }
-
-        result
+        context.native_context.destroy(context);
+        Ok(())
     }
 
     #[inline]
@@ -279,9 +280,16 @@ impl Device {
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let err = CGLSetCurrentContext(context.cgl_context);
-            if err != kCGLNoError {
-                return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
+            let color_egl_surface = match context.color_surface {
+                Some(ref color_surface) => self.lookup_surface(color_surface),
+                None => egl::NO_SURFACE,
+            };
+            let result = egl::MakeCurrent(self.native_display.egl_display(),
+                                          color_egl_surface,
+                                          color_egl_surface,
+                                          context.native_context.egl_context());
+            if result == egl::FALSE {
+                return Err(Error::MakeCurrentFailed(WindowingApiError::Error));
             }
             Ok(())
         }
@@ -289,9 +297,12 @@ impl Device {
 
     pub fn make_context_not_current(&self, _: &Context) -> Result<(), Error> {
         unsafe {
-            let err = CGLSetCurrentContext(ptr::null_mut());
-            if err != kCGLNoError {
-                return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
+            let result = egl::MakeCurrent(self.native_display.egl_display(),
+                                          egl::NO_SURFACE,
+                                          egl::NO_SURFACE,
+                                          egl::NO_CONTEXT);
+            if result == egl::FALSE {
+                return Err(Error::MakeCurrentFailed(WindowingApiError::Error));
             }
             Ok(())
         }
@@ -476,13 +487,50 @@ impl Device {
     }
 }
 
-struct OwnedEGLContext;
+struct OwnedEGLContext {
+    egl_context: EGLContext,
+}
 
 impl ReleaseContext for OwnedEGLContext {
-    type Context = EGLContext;
+    #[inline]
+    fn egl_context(&self) -> EGLContext {
+        self.egl_context
+    }
 
-    unsafe fn release(&mut self, cgl_context: CGLContextObj) {
-        CGLSetCurrentContext(ptr::null_mut());
-        CGLDestroyContext(cgl_context);
+    #[inline]
+    fn is_destroyed(&self) -> bool {
+        self.egl_context == egl::NO_CONTEXT
+    }
+
+    unsafe fn destroy(&mut self, device: &Device) {
+        assert!(!self.is_destroyed());
+        egl::MakeCurrent(device.native_display.egl_display(),
+                         egl::NO_SURFACE,
+                         egl::NO_SURFACE,
+                         egl::NO_CONTEXT);
+        let result = egl::DestroyContext(device.native_display.egl_display(), self.egl_context);
+        assert_ne!(result, egl::FALSE);
+        self.egl_context = egl::NO_CONTEXT;
+    }
+}
+
+struct UnsafeEGLContextRef {
+    egl_context: EGLContext,
+}
+
+impl ReleaseContext for UnsafeEGLContextRef {
+    #[inline]
+    fn egl_context(&self) -> EGLContext {
+        self.egl_context
+    }
+
+    #[inline]
+    fn is_destroyed(&self) -> bool {
+        self.egl_context == egl::NO_CONTEXT
+    }
+
+    unsafe fn destroy(&mut self, device: &Device) {
+        assert!(!self.is_destroyed());
+        self.egl_context = egl::NO_CONTEXT;
     }
 }

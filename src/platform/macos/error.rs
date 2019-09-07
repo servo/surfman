@@ -1,4 +1,4 @@
-//! Translation of errors from the CGL API to surfman errors.
+//! Translation of errors from the CGL API to `surfman` errors.
 
 use crate::WindowingApiError;
 use cgl::CGLError;

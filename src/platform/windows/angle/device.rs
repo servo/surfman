@@ -32,7 +32,7 @@ lazy_static! {
 }
 
 pub struct Device {
-    pub(crate) egl_display: EGLDisplay,
+    pub(crate) native_display: NativeDisplay,
     pub(crate) egl_device: EGLDeviceEXT,
     pub(crate) surface_bindings: Vec<SurfaceBinding>,
     pub(crate) d3d11_device: ComPtr<ID3D11Device>,
@@ -143,7 +143,30 @@ impl NativeDisplay for OwnedEGLDisplay {
 
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
-        CGLDestroyContext(self.cgl_context);
-        self.cgl_context = ptr::null_mut();
+        let result = egl::Terminate(self.egl_display);
+        assert_ne!(result, egl::FALSE);
+        self.egl_display = egl::NO_DISPLAY;
+    }
+}
+
+pub(crate) struct UnsafeEGLDisplayRef {
+    egl_display: EGLDisplay,
+}
+
+impl NativeDisplay for UnsafeEGLDisplayRef {
+    #[inline]
+    fn egl_display(&self) -> EGLDisplay {
+        debug_assert!(!self.is_destroyed());
+        self.egl_display
+    }
+
+    #[inline]
+    fn is_destroyed(&self) -> bool {
+        self.egl_display == egl::NO_DISPLAY
+    }
+
+    unsafe fn destroy(&mut self) {
+        assert!(!self.is_destroyed());
+        self.egl_display = egl::NO_DISPLAY;
     }
 }
