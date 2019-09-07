@@ -34,46 +34,76 @@ pub enum Error {
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
 ///
-/// They all tend to follow the same pattern.
+/// They all tend to follow similar patterns.
 #[derive(Clone, Copy, Debug)]
 pub enum WindowingApiError {
     /// Miscellaneous error.
     Failed,
-    /// Invalid pixel format attribute.
+    /// CGL: Invalid pixel format attribute.
+    /// EGL: An unrecognized attribute or attribute value was passed in the attribute list.
 	BadAttribute,
-    /// Invalid renderer property.
+    /// CGL: Invalid renderer property.
 	BadProperty,
-    /// Invalid pixel format object.
+    /// CGL: Invalid pixel format object.
 	BadPixelFormat,
-    /// Invalid renderer information object.
+    /// CGL: Invalid renderer information object.
 	BadRendererInfo,
-    /// Invalid context object.
+    /// CGL: Invalid context object.
+    /// EGL: An EGLContext argument does not name a valid EGL rendering context. 
 	BadContext,
     /// Invalid drawable.
 	BadDrawable,
-    /// Invalid display.
+    /// CGL: Invalid display.
+    /// EGL: An EGLDisplay argument does not name a valid EGL display connection. 
 	BadDisplay,
-    /// Invalid context state.
+    /// CGL: Invalid context state.
 	BadState,
-    /// Invalid numerical value.
+    /// CGL: Invalid numerical value.
 	BadValue,
-    /// Invalid share context.
+    /// CGL: Invalid share context.
+    /// EGL: Arguments are inconsistent (for example, a valid context requires
+    /// buffers not supplied by a valid surface). 
 	BadMatch,
-    /// Invalid enumerant (constant).
+    /// CGL: Invalid enumerant (constant).
 	BadEnumeration,
-    /// Invalid off-screen drawable.
+    /// CGL: Invalid off-screen drawable.
 	BadOffScreen,
-    /// Invalid full-screen drawable.
+    /// CGL: Invalid full-screen drawable.
 	BadFullScreen,
-    /// Invalid window.
+    /// CGL: Invalid window.
 	BadWindow,
-    /// Invalid address; e.g. null pointer passed to function requiring a non-null pointer
-    /// argument.
+    /// CGL: Invalid address; e.g. null pointer passed to function requiring
+    /// a non-null pointer argument.
 	BadAddress,
-    /// Invalid code module.
+    /// CGL: Invalid code module.
 	BadCodeModule,
-    /// Invalid memory allocation; i.e. CGL couldn't allocate memory.
+    /// CGL: Invalid memory allocation; i.e. CGL couldn't allocate memory.
+    /// EGL: EGL failed to allocate resources for the requested operation.
 	BadAlloc,
-    /// Invalid Core Graphics connection.
+    /// CGL: Invalid Core Graphics connection.
 	BadConnection,
+    /// EGL: EGL is not initialized, or could not be initialized, for the
+    /// specified EGL display connection. 
+    NotInitialized,
+    /// EGL: EGL cannot access a requested resource (for example a context is
+    /// bound in another thread). 
+    BadAccess,
+    /// EGL: The current surface of the calling thread is a window, pixel
+    /// buffer or pixmap that is no longer valid. 
+    BadCurrentSurface,
+    /// EGL: An EGLSurface argument does not name a valid surface (window,
+    /// pixel buffer or pixmap) configured for GL rendering. 
+    BadSurface,
+    /// EGL: One or more argument values are invalid.
+    BadParameter,
+    /// EGL: A NativePixmapType argument does not refer to a valid native
+    /// pixmap.
+    BadNativePixmap,
+    /// EGL: A NativeWindowType argument does not refer to a valid native
+    /// window.
+    BadNativeWindow,
+    /// EGL: A power management event has occurred. The application must
+    /// destroy all contexts and reinitialise OpenGL ES state and objects to
+    /// continue rendering. 
+    ContextLost,
 }
