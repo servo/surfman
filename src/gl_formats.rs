@@ -1,5 +1,5 @@
-use gleam::gl::types::GLenum;
-use gleam::gl;
+use sparkle::gl;
+use sparkle::gl::GLenum;
 use crate::GLContextAttributes;
 use crate::GLVersion;
 

@@ -1,5 +1,5 @@
 use crate::gl_context::{GLContextDispatcher, GLVersion};
-use gleam::gl;
+use sparkle::gl;
 
 pub trait NativeGLContextMethods: Sized {
     type Handle;

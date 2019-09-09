@@ -1,9 +1,9 @@
 use std::ffi::CString;
 
 use crate::gl_context::GLVersion;
-use gleam::gl;
 use crate::glx;
 use crate::glx_extra;
+use sparkle::gl;
 use std::os::raw::*;
 use crate::glx::types::{GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use euclid::Size2D;

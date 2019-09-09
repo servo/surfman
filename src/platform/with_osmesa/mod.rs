@@ -3,7 +3,7 @@ use std::os::raw::c_int;
 use std::ptr;
 
 use crate::gl_context::GLVersion;
-use gleam::gl;
+use sparkle::gl;
 
 use crate::platform::NativeGLContextMethods;
 

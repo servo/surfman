@@ -2,7 +2,7 @@
 name = "offscreen_gl_context"
 license = "MIT / Apache-2.0"
 edition = "2018"
-version = "0.24.0"
+version = "0.25.0"
 authors = ["Emilio Cobos Álvarez <emilio@crisal.io>", "The Servo Project Developers"]
 description = "Creation and manipulation of HW accelerated offscreen rendering contexts in multiple platforms. Originally intended for the Servo project's WebGL implementation."
 repository = "https://github.com/servo/rust-offscreen-rendering-context"
@@ -20,11 +20,11 @@ test_egl_in_linux = ["libloading", "lazy_static"]
 
 [dependencies]
 euclid = "0.20"
-gleam = "0.7"
 lazy_static = { version = "1", optional = true }
 libloading = { version = "0.5", optional = true, default-features = false }
 log = "0.4"
 osmesa-sys = { version = "0.1", optional = true }
+sparkle = "0.1.3"
 serde = { version = "1.0", optional = true }
 
 [target.x86_64-apple-darwin.dependencies]

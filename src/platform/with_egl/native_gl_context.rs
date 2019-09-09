@@ -5,9 +5,9 @@ use std::ffi::CString;
 use std::ops::Deref;
 use crate::egl;
 use crate::egl::types::{EGLint, EGLBoolean, EGLDisplay, EGLSurface, EGLConfig, EGLContext};
-use gleam::gl;
 use crate::GLVersion;
 use libloading as lib;
+use sparkle::gl;
 
 lazy_static! {
     static ref GL_LIB: Option<lib::Library>  = {
