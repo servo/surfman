@@ -28,12 +28,12 @@ pub use platform::default::surface::{Surface, SurfaceTexture};
 pub mod error;
 pub use crate::error::{Error, WindowingApiError};
 
+mod info;
+pub use crate::info::{ContextAttributes, ContextAttributeFlags, FeatureFlags, GLApi, GLFlavor};
+pub use crate::info::{GLInfo, GLVersion};
+
 mod gl_limits;
 pub use crate::gl_limits::GLLimits;
-
-mod gl_info;
-pub use crate::gl_info::{ContextAttributes, ContextAttributeFlags, FeatureFlags, GLApi, GLFlavor};
-pub use crate::gl_info::{GLInfo, GLVersion};
 
 mod surface;
 pub use crate::surface::{SurfaceDescriptor, SurfaceFormat, SurfaceId};
