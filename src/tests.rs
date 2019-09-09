@@ -1,5 +1,5 @@
-use gleam::gl;
 use euclid::Size2D;
+use sparkle::gl;
 
 use crate::GLContext;
 #[cfg(all(target_os = "linux", feature = "test_egl_in_linux"))]
@@ -46,7 +46,7 @@ fn test_unbinding(api_version: GLVersion) {
     let ctx = GLContext::<NativeGLContext>::new(Size2D::new(256, 256),
                                                 GLContextAttributes::default(),
                                                 ColorAttachmentType::Renderbuffer,
-                                                gl::GlType::default(),
+                                                gl::GlType::Gl,
                                                 api_version,
                                                 None).unwrap();
 
@@ -72,7 +72,7 @@ fn test_renderbuffer_color_attachment(api_version: GLVersion) {
     test_gl_context(&GLContext::<NativeGLContext>::new(Size2D::new(256, 256),
                                                        GLContextAttributes::default(),
                                                        ColorAttachmentType::Renderbuffer,
-                                                       gl::GlType::default(),
+                                                       gl::GlType::Gl,
                                                        api_version,
                                                        None).unwrap());
 }
@@ -92,7 +92,7 @@ fn test_texture_color_attachment(api_version: GLVersion) {
     let context = GLContext::<NativeGLContext>::new(size,
                                                     GLContextAttributes::default(),
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
     test_gl_context(&context);
@@ -128,7 +128,7 @@ fn test_sharing(api_version: GLVersion) {
     let primary = GLContext::<NativeGLContext>::new(size,
                                                     GLContextAttributes::default(),
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
 
@@ -138,7 +138,7 @@ fn test_sharing(api_version: GLVersion) {
     let secondary = GLContext::<NativeGLContext>::new(size,
                                                       GLContextAttributes::default(),
                                                       ColorAttachmentType::Texture,
-                                                      gl::GlType::default(),
+                                                      gl::GlType::Gl,
                                                       api_version,
                                                       Some(&primary.handle())).unwrap();
 
@@ -151,7 +151,7 @@ fn test_sharing(api_version: GLVersion) {
     assert!(secondary_texture_id != 0);
 
     primary.make_current().unwrap();
-    assert!(primary.gl().is_texture(secondary_texture_id) != 0);
+    assert!(primary.gl().is_texture(secondary_texture_id));
 
     // Clearing and re-binding to a framebuffer instead of using getTexImage
     // since it's not available in GLES2
@@ -189,7 +189,7 @@ fn test_multithread_render(api_version: GLVersion) {
     let primary = GLContext::<NativeGLContext>::new(size,
                                                     GLContextAttributes::default(),
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
     test_gl_context(&primary);
@@ -200,7 +200,7 @@ fn test_multithread_render(api_version: GLVersion) {
         let secondary = GLContext::<NativeGLContext>::new(size,
                                                           GLContextAttributes::default(),
                                                           ColorAttachmentType::Texture,
-                                                          gl::GlType::default(),
+                                                          gl::GlType::Gl,
                                                           api_version,
                                                           None).unwrap();
         secondary.make_current().unwrap();
@@ -249,7 +249,7 @@ fn test_multithread_sharing(api_version: GLVersion) {
     let primary = GLContext::<NativeGLContext>::new(size,
                                                     GLContextAttributes::default(),
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
     primary.make_current().unwrap();
@@ -269,7 +269,7 @@ fn test_multithread_sharing(api_version: GLVersion) {
         let secondary = GLContext::<NativeGLContext>::new(size,
                                                       GLContextAttributes::default(),
                                                       ColorAttachmentType::Texture,
-                                                      gl::GlType::default(),
+                                                      gl::GlType::Gl,
                                                       api_version,
                                                       Some(&primary_handle)).unwrap();
         // Make the context current on this thread only
@@ -325,7 +325,7 @@ fn test_limits(api_version: GLVersion) {
     let context = GLContext::<NativeGLContext>::new(size,
                                                     GLContextAttributes::default(),
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
     assert!(context.borrow_limits().max_vertex_attribs != 0);
@@ -349,7 +349,7 @@ fn test_no_alpha(api_version: GLVersion) {
     let context = GLContext::<NativeGLContext>::new(size,
                                                     attributes,
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
     assert!(context.borrow_limits().max_vertex_attribs != 0);
@@ -373,7 +373,7 @@ fn test_no_depth(api_version: GLVersion) {
     let context = GLContext::<NativeGLContext>::new(size,
                                                     attributes,
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
     assert!(context.borrow_limits().max_vertex_attribs != 0);
@@ -398,7 +398,7 @@ fn test_no_depth_no_alpha(api_version: GLVersion) {
     let context = GLContext::<NativeGLContext>::new(size,
                                                     attributes,
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
     assert!(context.borrow_limits().max_vertex_attribs != 0);
@@ -424,7 +424,7 @@ fn test_no_premul_alpha(api_version: GLVersion) {
     let context = GLContext::<NativeGLContext>::new(size,
                                                     attributes,
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
     assert!(context.borrow_limits().max_vertex_attribs != 0);
@@ -450,7 +450,7 @@ fn test_in_a_row(api_version: GLVersion) {
     let context = GLContext::<NativeGLContext>::new(size,
                                                     attributes.clone(),
                                                     ColorAttachmentType::Texture,
-                                                    gl::GlType::default(),
+                                                    gl::GlType::Gl,
                                                     api_version,
                                                     None).unwrap();
 
@@ -459,14 +459,14 @@ fn test_in_a_row(api_version: GLVersion) {
     GLContext::<NativeGLContext>::new(size,
                                       attributes.clone(),
                                       ColorAttachmentType::Texture,
-                                      gl::GlType::default(),
+                                      gl::GlType::Gl,
                                       api_version,
                                       Some(&handle)).unwrap();
 
     GLContext::<NativeGLContext>::new(size,
                                       attributes.clone(),
                                       ColorAttachmentType::Texture,
-                                      gl::GlType::default(),
+                                      gl::GlType::Gl,
                                       api_version,
                                       Some(&handle)).unwrap();
 }
@@ -485,7 +485,7 @@ fn test_zero_size(api_version: GLVersion) {
     GLContext::<NativeGLContext>::new(Size2D::new(0, 320),
                                       GLContextAttributes::default(),
                                       ColorAttachmentType::Texture,
-                                      gl::GlType::default(),
+                                      gl::GlType::Gl,
                                       api_version,
                                       None).unwrap();
 }
@@ -511,7 +511,7 @@ fn test_both_depth_stencil(api_version: GLVersion) {
     GLContext::<NativeGLContext>::new(size,
                                       attributes,
                                       ColorAttachmentType::Texture,
-                                      gl::GlType::default(),
+                                      gl::GlType::Gl,
                                       api_version,
                                       None).unwrap();
 }
@@ -537,7 +537,7 @@ fn test_stencil_no_depth(api_version: GLVersion) {
     GLContext::<NativeGLContext>::new(size,
                                       attributes,
                                       ColorAttachmentType::Texture,
-                                      gl::GlType::default(),
+                                      gl::GlType::Gl,
                                       api_version,
                                       None).unwrap();
 }

@@ -1,6 +1,6 @@
 use euclid::default::Size2D;
-use gleam::gl;
-use gleam::gl::types::{GLuint, GLenum, GLint};
+use sparkle::gl;
+use sparkle::gl::types::{GLuint, GLenum, GLint};
 use std::rc::Rc;
 
 use crate::GLContext;
@@ -38,7 +38,7 @@ impl ColorAttachment {
         }
     }
 
-    fn destroy(self, gl: &dyn gl::Gl) {
+    fn destroy(self, gl: &gl::Gl) {
         match self {
             ColorAttachment::Renderbuffer(id) => gl.delete_renderbuffers(&[id]),
             ColorAttachment::Texture(tex_id) => gl.delete_textures(&[tex_id]),
@@ -52,7 +52,7 @@ impl ColorAttachment {
 /// packed or independent depth or stencil buffers,
 /// depending on context requirements.
 pub struct DrawBuffer {
-    gl_: Rc<dyn gl::Gl>,
+    gl_: Rc<gl::Gl>,
     size: Size2D<i32>,
     framebuffer: GLuint,
     color_attachment: Option<ColorAttachment>,
@@ -65,7 +65,7 @@ pub struct DrawBuffer {
 /// Helper function to create a render buffer
 /// TODO(emilio): We'll need to switch between `glRenderbufferStorage` and
 /// `glRenderbufferStorageMultisample` when we support antialising
-fn create_renderbuffer(gl_: &dyn gl::Gl,
+fn create_renderbuffer(gl_: &gl::Gl,
                        format: GLenum,
                        size: &Size2D<i32>) -> GLuint {
     let ret = gl_.gen_renderbuffers(1)[0];
@@ -120,7 +120,7 @@ impl DrawBuffer {
 
         draw_buffer.init(context, color_attachment_type)?;
 
-        debug_assert_eq!(draw_buffer.gl().check_frame_buffer_status(gl::FRAMEBUFFER),
+        debug_assert_eq!(draw_buffer.gl().check_framebuffer_status(gl::FRAMEBUFFER),
                          gl::FRAMEBUFFER_COMPLETE);
         debug_assert_eq!(draw_buffer.gl().get_error(),
                          gl::NO_ERROR);
@@ -159,7 +159,7 @@ impl DrawBuffer {
         }
     }
 
-    fn gl(&self) -> &dyn gl::Gl {
+    fn gl(&self) -> &gl::Gl {
         &*self.gl_
     }
 
@@ -233,7 +233,7 @@ impl DrawBuffer {
     fn attach_to_framebuffer(&mut self) -> Result<(), &'static str> {
         self.gl().bind_framebuffer(gl::FRAMEBUFFER, self.framebuffer);
         // NOTE: The assertion fails if the framebuffer is not bound
-        debug_assert_eq!(self.gl().is_framebuffer(self.framebuffer), gl::TRUE);
+        debug_assert!(self.gl().is_framebuffer(self.framebuffer));
 
         match *self.color_attachment.as_ref().unwrap() {
             ColorAttachment::Renderbuffer(color_renderbuffer) => {
@@ -241,7 +241,7 @@ impl DrawBuffer {
                                                   gl::COLOR_ATTACHMENT0,
                                                   gl::RENDERBUFFER,
                                                   color_renderbuffer);
-                debug_assert_eq!(self.gl().is_renderbuffer(color_renderbuffer), gl::TRUE);
+                debug_assert!(self.gl().is_renderbuffer(color_renderbuffer));
             },
             ColorAttachment::Texture(texture_id) => {
                 self.gl().framebuffer_texture_2d(gl::FRAMEBUFFER,
@@ -256,7 +256,7 @@ impl DrawBuffer {
                                                gl::DEPTH_STENCIL_ATTACHMENT,
                                                gl::RENDERBUFFER,
                                                self.packed_depth_stencil_renderbuffer);
-            debug_assert_eq!(self.gl().is_renderbuffer(self.packed_depth_stencil_renderbuffer), gl::TRUE);
+            debug_assert!(self.gl().is_renderbuffer(self.packed_depth_stencil_renderbuffer));
         }
 
         if self.depth_renderbuffer != 0 {
@@ -264,7 +264,7 @@ impl DrawBuffer {
                                               gl::DEPTH_ATTACHMENT,
                                               gl::RENDERBUFFER,
                                               self.depth_renderbuffer);
-            debug_assert_eq!(self.gl().is_renderbuffer(self.depth_renderbuffer), gl::TRUE);
+            debug_assert!(self.gl().is_renderbuffer(self.depth_renderbuffer));
         }
 
         if self.stencil_renderbuffer != 0 {
@@ -272,7 +272,7 @@ impl DrawBuffer {
                                               gl::STENCIL_ATTACHMENT,
                                               gl::RENDERBUFFER,
                                               self.stencil_renderbuffer);
-            debug_assert_eq!(self.gl().is_renderbuffer(self.stencil_renderbuffer), gl::TRUE);
+            debug_assert!(self.gl().is_renderbuffer(self.stencil_renderbuffer));
         }
 
         Ok(())

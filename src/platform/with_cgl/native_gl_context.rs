@@ -4,7 +4,7 @@ use std::mem;
 use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
 use core_foundation::base::TCFType;
 use core_foundation::string::CFString;
-use gleam::gl;
+use sparkle::gl;
 use std::str::FromStr;
 use std::sync::Mutex;
 

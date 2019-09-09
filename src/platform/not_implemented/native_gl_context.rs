@@ -1,6 +1,6 @@
-use gleam::gl;
 use crate::NativeGLContextMethods;
 use crate::GLVersion;
+use sparkle::gl;
 
 pub struct NativeGLContext;
 pub struct NativeGLContextHandle;

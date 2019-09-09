@@ -1,4 +1,4 @@
-use gleam::gl;
+use sparkle::gl;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -65,7 +65,7 @@ macro_rules! gl_integer {
     }
 }
 
-fn gl_fallible_integer(gl_: &dyn gl::Gl, pname: gl::GLenum) -> Result<u32, ()> {
+fn gl_fallible_integer(gl_: &gl::Gl, pname: gl::GLenum) -> Result<u32, ()> {
     let mut val = [0];
     unsafe {
         gl_.get_integer_v(pname, &mut val);
@@ -79,7 +79,7 @@ fn gl_fallible_integer(gl_: &dyn gl::Gl, pname: gl::GLenum) -> Result<u32, ()> {
 }
 
 impl GLLimits {
-    pub fn detect(gl_: &dyn gl::Gl) -> GLLimits {
+    pub fn detect(gl_: &gl::Gl) -> GLLimits {
         let max_vertex_attribs = gl_integer!(gl_, MAX_VERTEX_ATTRIBS);
         let max_tex_size = gl_integer!(gl_, MAX_TEXTURE_SIZE);
         let max_cube_map_tex_size = gl_integer!(gl_, MAX_CUBE_MAP_TEXTURE_SIZE);

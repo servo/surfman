@@ -1,5 +1,4 @@
-// use gleam::gl;
-use gleam::gl::{GLint};
+use sparkle::gl::{GLint};
 
 #[allow(unused_imports)]
 use crate::GLFeature;

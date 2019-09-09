@@ -1,6 +1,6 @@
 use euclid::default::Size2D;
-use gleam::gl;
-use gleam::gl::types::{GLuint};
+use sparkle::gl;
+use sparkle::gl::types::{GLuint};
 use std::rc::Rc;
 
 use crate::NativeGLContextMethods;
@@ -13,7 +13,7 @@ use crate::ColorAttachmentType;
 
 /// This is a wrapper over a native headless GL context
 pub struct GLContext<Native> {
-    gl_: Rc<dyn gl::Gl>,
+    gl_: Rc<gl::Gl>,
     native_context: Native,
     /// This an abstraction over a custom framebuffer
     /// with attachments according to WebGLContextAttributes
@@ -48,12 +48,16 @@ impl<Native> GLContext<Native>
                                                                    api_version,
                                                                    dispatcher)?;
         let gl_ = match api_type {
-            gl::GlType::Gl => unsafe { gl::GlFns::load_with(|s| Self::get_proc_address(s) as *const _) },
-            gl::GlType::Gles => unsafe { gl::GlesFns::load_with(|s| Self::get_proc_address(s) as *const _) },
+            gl::GlType::Gl => gl::Gl::gl_fns(
+                gl::ffi_gl::Gl::load_with(|s| Self::get_proc_address(s) as *const _)
+            ),
+            gl::GlType::Gles => gl::Gl::gles_fns(
+                gl::ffi_gles::Gles2::load_with(|s| Self::get_proc_address(s) as *const _)
+            ),
         };
 
         native_context.make_current()?;
-        let extensions = Self::query_extensions(&gl_, api_version);
+        let extensions = Self::query_extensions(&*gl_, api_version);
         let attributes = GLContextAttributes::any();
         let formats = GLFormats::detect(&attributes, &extensions[..], api_type, api_version);
         let limits = GLLimits::detect(&*gl_);
@@ -163,11 +167,11 @@ impl<Native> GLContext<Native>
         self.native_context.handle()
     }
 
-    pub fn gl(&self) -> &dyn gl::Gl {
+    pub fn gl(&self) -> &gl::Gl {
         &*self.gl_
     }
 
-    pub fn clone_gl(&self) -> Rc<dyn gl::Gl> {
+    pub fn clone_gl(&self) -> Rc<gl::Gl> {
         self.gl_.clone()
     }
 
@@ -242,7 +246,7 @@ impl<Native> GLContext<Native>
         Ok(())
     }
 
-    fn query_extensions(gl_: &Rc<dyn gl::Gl>, api_version: GLVersion) -> Vec<String> {
+    fn query_extensions(gl_: &gl::Gl, api_version: GLVersion) -> Vec<String> {
         if api_version.major_version() >=3 {
             // glGetString(GL_EXTENSIONS) is deprecated on OpenGL >= 3.x.
             // Some GL backends such as CGL generate INVALID_ENUM error when used.

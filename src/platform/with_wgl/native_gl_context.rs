@@ -1,7 +1,7 @@
 use crate::platform::NativeGLContextMethods;
-use gleam::gl;
 use crate::gl_context::GLContextDispatcher;
 use crate::GLVersion;
+use sparkle::gl;
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;

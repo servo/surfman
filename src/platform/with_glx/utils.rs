@@ -1,7 +1,7 @@
-use gleam::gl;
 use crate::glx;
 use x11::xlib::*;
 use glx::types::GLXDrawable;
+use sparkle::gl;
 use std::ffi::CStr;
 use std::os::raw::*;
 use euclid::default::Size2D;

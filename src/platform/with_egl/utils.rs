@@ -5,7 +5,7 @@ use super::{NativeGLContext, NativeGLContextHandle};
 use crate::GLVersion;
 use crate::egl;
 use crate::egl::types::{EGLNativeDisplayType, EGLDisplay, EGLConfig, EGLSurface, EGLint};
-use gleam::gl;
+use sparkle::gl;
 
 fn create_pbuffer_surface(display: EGLDisplay, config: EGLConfig, size: Size2D<i32>) -> Result<EGLSurface, &'static str> {
     let mut attrs = [
