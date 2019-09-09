@@ -63,7 +63,7 @@ impl Drop for Surface {
 
 impl Device {
     pub fn create_surface_from_descriptor(&mut self,
-                                          context: &mut Context,
+                                          _: &mut Context,
                                           descriptor: &SurfaceDescriptor)
                                           -> Result<Surface, Error> {
         unsafe {

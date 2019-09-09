@@ -2,7 +2,7 @@
 
 // resources/examples/blit.fs.glsl
 
-uniform sampler2D uSource;
+uniform sampler2DRect uSource;
 
 in vec2 vTexCoord;
 

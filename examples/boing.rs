@@ -1,5 +1,9 @@
 // examples/boing.rs
+//
+// This example demonstrates how to create a multithreaded OpenGL
+// application using `surfman`.
 
+use euclid::default::Size2D;
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -7,6 +11,11 @@ use sdl2::video::GLProfile;
 use std::fs::File;
 use std::io::Read;
 use std::os::raw::c_void;
+use std::sync::mpsc::{self, Sender};
+use std::thread;
+use std::time::Duration;
+use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLApi, GLFlavor};
+use surfman::{GLVersion, Surface, SurfaceDescriptor, SurfaceTexture};
 
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1];
 
@@ -29,9 +38,20 @@ fn main() {
     gl::load_with(|name| video.gl_get_proc_address(name) as *const _);
     window.gl_make_current(&gl_context).unwrap();
 
+    // Create surfman objects corresponding to that SDL context.
+    let (device, mut context) = unsafe {
+        Device::from_current_context().unwrap()
+    };
+    let adapter = device.adapter();
+
+    // Set up communication channels, and spawn our worker thread.
+    let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
+    thread::spawn(move || worker_thread(adapter, worker_to_main_sender));
+
     // Set up GL objects and state.
     let vertex_array = BlitVertexArray::new();
 
+    /*
     let mut ball_texture = 0;
     unsafe {
         gl::GenTextures(1, &mut ball_texture); ck();
@@ -56,6 +76,11 @@ fn main() {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
     }
+    */
+
+    // Fetch a surface.
+    let ball_surface = main_from_worker_receiver.recv().unwrap();
+    let ball_texture = device.create_surface_texture(&mut context, ball_surface).unwrap();
 
     // Enter main render loop.
     loop {
@@ -66,7 +91,7 @@ fn main() {
             gl::BindVertexArray(vertex_array.object); ck();
             gl::UseProgram(vertex_array.blit_program.program.object); ck();
             gl::ActiveTexture(gl::TEXTURE0); ck();
-            gl::BindTexture(gl::TEXTURE_2D, ball_texture); ck();
+            gl::BindTexture(SurfaceTexture::gl_texture_target(), ball_texture.gl_texture()); ck();
             gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
@@ -78,6 +103,48 @@ fn main() {
             Some(Event::KeyDown { keycode: Some(Keycode::Escape), .. }) => return,
             _ => {}
         }
+    }
+}
+
+fn worker_thread(adapter: Adapter, worker_to_main_sender: Sender<Surface>) {
+    // Open the device, and create a context.
+    let flavor = GLFlavor { api: GLApi::GL, version: GLVersion::new(3, 3) };
+    let context_attributes = ContextAttributes { flags: ContextAttributeFlags::empty(), flavor };
+    let mut device = Device::new(&adapter).unwrap();
+    let mut context = device.create_context(&context_attributes).unwrap();
+
+    // Create a surface, and attach it to the context.
+    let surface_size = Size2D::new(256, 256);
+    let surface_descriptor =
+        SurfaceDescriptor::from_context_attributes_and_size(&context_attributes, &surface_size);
+    let surface = device.create_surface_from_descriptor(&mut context,
+                                                        &surface_descriptor).unwrap();
+    device.replace_context_color_surface(&mut context, surface).unwrap();
+
+    // Make the context current.
+    device.make_context_current(&context).unwrap();
+
+    // Render to the surface.
+    unsafe {
+        let framebuffer_object = device.context_surface_framebuffer_object(&context).unwrap();
+        gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl::Viewport(0, 0, 256, 256);
+
+        gl::ClearColor(0.0, 0.5, 0.0, 1.0);
+        gl::Clear(gl::COLOR_BUFFER_BIT);
+        gl::Flush();
+    }
+
+    // Make a dummy service.
+    // FIXME(pcwalton): Bad! Change the API!
+    let surface = device.create_surface_from_descriptor(&mut context,
+                                                        &surface_descriptor).unwrap();
+    let surface = device.replace_context_color_surface(&mut context, surface).unwrap().unwrap();
+    worker_to_main_sender.send(surface).unwrap();
+
+    // FIXME(pcwalton)
+    loop {
+        thread::sleep(Duration::from_secs(1));
     }
 }
 
