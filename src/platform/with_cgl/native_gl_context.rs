@@ -41,13 +41,14 @@ impl NativeGLContext {
             None => 0 as CGLContextObj
         };
 
-        let mut native: CGLContextObj = unsafe { mem::uninitialized() };
+        let mut native = mem::MaybeUninit::uninit();
 
-        unsafe {
-            if CGLCreateContext(*pixel_format, shared, &mut native) != 0 {
+        let native = unsafe {
+            if CGLCreateContext(*pixel_format, shared, native.as_mut_ptr()) != 0 {
                 return Err("CGLCreateContext");
             }
-        }
+            native.assume_init()
+        };
 
         debug_assert!(native != 0 as CGLContextObj);
 
@@ -134,18 +135,19 @@ impl NativeGLContextMethods for NativeGLContext {
             0
         ];
 
-        let mut pixel_format : CGLPixelFormatObj = unsafe { mem::uninitialized() };
+        let mut pixel_format = mem::MaybeUninit::uninit();
         let mut pix_count = 0;
 
-        unsafe {
-            if CGLChoosePixelFormat(attributes.as_mut_ptr(), &mut pixel_format, &mut pix_count) != 0 {
+        let pixel_format = unsafe {
+            if CGLChoosePixelFormat(attributes.as_mut_ptr(), pixel_format.as_mut_ptr(), &mut pix_count) != 0 {
                 return Err("CGLChoosePixelFormat");
             }
 
             if pix_count == 0 {
                 return Err("No pixel formats available");
             }
-        }
+            pixel_format.assume_init()
+        };
 
         let result = NativeGLContext::new(with.map(|handle| &handle.0), &pixel_format);
 
