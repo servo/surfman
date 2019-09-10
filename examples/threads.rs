@@ -1,4 +1,4 @@
-// examples/boing.rs
+// examples/threads.rs
 //
 // This example demonstrates how to create a multithreaded OpenGL
 // application using `surfman`.
@@ -11,13 +11,15 @@ use sdl2::video::GLProfile;
 use std::fs::File;
 use std::io::Read;
 use std::os::raw::c_void;
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use std::time::Duration;
 use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLApi, GLFlavor};
 use surfman::{GLVersion, Surface, SurfaceDescriptor, SurfaceTexture};
 
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1];
+
+static TRANSFORM: [f32; 4] = [0.5, 0.0, 0.0, 0.5];
+static TRANSLATION: [f32; 2] = [0.0, 0.0];
 
 fn main() {
     // Set up SDL2.
@@ -30,7 +32,7 @@ fn main() {
     gl_attributes.set_context_version(3, 3);
 
     // Open a window.
-    let window = video.window("Boing ball example", 1067, 800).opengl().build().unwrap();
+    let window = video.window("Multithreaded example", 1067, 800).opengl().build().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     // Create the GL context in SDL, and make it current.
@@ -39,59 +41,46 @@ fn main() {
     window.gl_make_current(&gl_context).unwrap();
 
     // Create surfman objects corresponding to that SDL context.
-    let (device, mut context) = unsafe {
+    let (mut device, mut context) = unsafe {
         Device::from_current_context().unwrap()
     };
     let adapter = device.adapter();
 
     // Set up communication channels, and spawn our worker thread.
     let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
-    thread::spawn(move || worker_thread(adapter, worker_to_main_sender));
+    let (main_to_worker_sender, worker_from_main_receiver) = mpsc::channel();
+    thread::spawn(move || {
+        worker_thread(adapter, worker_to_main_sender, worker_from_main_receiver)
+    });
 
     // Set up GL objects and state.
     let vertex_array = BlitVertexArray::new();
 
-    /*
-    let mut ball_texture = 0;
-    unsafe {
-        gl::GenTextures(1, &mut ball_texture); ck();
-        gl::ActiveTexture(gl::TEXTURE0); ck();
-        gl::BindTexture(gl::TEXTURE_2D, ball_texture); ck();
-        let mut pixels: Vec<u8> = vec![0; 256 * 256 * 4];
-        for i in 0..(256 * 256) {
-            pixels[i * 4 + 0] = 128;
-            pixels[i * 4 + 3] = 255;
-        }
-        gl::TexImage2D(gl::TEXTURE_2D,
-                       0,
-                       gl::RGBA8 as GLint,
-                       256,
-                       256,
-                       0,
-                       gl::RGBA,
-                       gl::UNSIGNED_BYTE,
-                       pixels.as_ptr() as *const c_void); ck();
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-    }
-    */
-
-    // Fetch a surface.
-    let ball_surface = main_from_worker_receiver.recv().unwrap();
-    let ball_texture = device.create_surface_texture(&mut context, ball_surface).unwrap();
+    // Create an initial surface.
+    let mut surface = create_surface(&mut device);
+    let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
     // Enter main render loop.
     loop {
+        // Send back our old surface, and fetch a new one.
+        surface = device.destroy_surface_texture(&mut context, texture).unwrap();
+        main_to_worker_sender.send(surface).unwrap();
+        surface = main_from_worker_receiver.recv().unwrap();
+        texture = device.create_surface_texture(&mut context, surface).unwrap();
+
         unsafe {
-            gl::ClearColor(0.0, 0.0, 0.0, 1.0); ck();
+            gl::ClearColor(0.0, 0.0, 0.5, 1.0); ck();
             gl::Clear(gl::COLOR_BUFFER_BIT); ck();
 
             gl::BindVertexArray(vertex_array.object); ck();
             gl::UseProgram(vertex_array.blit_program.program.object); ck();
+            gl::UniformMatrix2fv(vertex_array.blit_program.transform_uniform,
+                                 1,
+                                 gl::FALSE,
+                                 TRANSFORM.as_ptr());
+            gl::Uniform2fv(vertex_array.blit_program.translation_uniform, 1, TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
-            gl::BindTexture(SurfaceTexture::gl_texture_target(), ball_texture.gl_texture()); ck();
+            gl::BindTexture(SurfaceTexture::gl_texture_target(), texture.gl_texture()); ck();
             gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
@@ -106,46 +95,54 @@ fn main() {
     }
 }
 
-fn worker_thread(adapter: Adapter, worker_to_main_sender: Sender<Surface>) {
-    // Open the device, and create a context.
-    let flavor = GLFlavor { api: GLApi::GL, version: GLVersion::new(3, 3) };
-    let context_attributes = ContextAttributes { flags: ContextAttributeFlags::empty(), flavor };
+fn worker_thread(adapter: Adapter,
+                 worker_to_main_sender: Sender<Surface>,
+                 worker_from_main_receiver: Receiver<Surface>) {
+    // Open the device, create an initial surface, create a context, and make it current.
     let mut device = Device::new(&adapter).unwrap();
-    let mut context = device.create_context(&context_attributes).unwrap();
-
-    // Create a surface, and attach it to the context.
-    let surface_size = Size2D::new(256, 256);
-    let surface_descriptor =
-        SurfaceDescriptor::from_context_attributes_and_size(&context_attributes, &surface_size);
-    let surface = device.create_surface_from_descriptor(&mut context,
-                                                        &surface_descriptor).unwrap();
-    device.replace_context_color_surface(&mut context, surface).unwrap();
-
-    // Make the context current.
+    let surface = create_surface(&mut device);
+    let context_attributes = create_context_attributes();
+    let mut context = device.create_context(&context_attributes, surface).unwrap();
     device.make_context_current(&context).unwrap();
 
-    // Render to the surface.
-    unsafe {
-        let framebuffer_object = device.context_surface_framebuffer_object(&context).unwrap();
-        gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        gl::Viewport(0, 0, 256, 256);
-
-        gl::ClearColor(0.0, 0.5, 0.0, 1.0);
-        gl::Clear(gl::COLOR_BUFFER_BIT);
-        gl::Flush();
-    }
-
-    // Make a dummy service.
-    // FIXME(pcwalton): Bad! Change the API!
-    let surface = device.create_surface_from_descriptor(&mut context,
-                                                        &surface_descriptor).unwrap();
-    let surface = device.replace_context_color_surface(&mut context, surface).unwrap().unwrap();
-    worker_to_main_sender.send(surface).unwrap();
-
-    // FIXME(pcwalton)
+    let (mut color, mut delta) = (0.0, 0.001);
     loop {
-        thread::sleep(Duration::from_secs(1));
+        // Render to the surface.
+        unsafe {
+            let framebuffer_object = device.context_surface_framebuffer_object(&context).unwrap();
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+            gl::Viewport(0, 0, 256, 256);
+
+            gl::ClearColor(0.0, color, 0.0, 1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT);
+            gl::Flush();
+        }
+
+        let new_surface = worker_from_main_receiver.recv().unwrap();
+        let old_surface = device.replace_context_color_surface(&mut context, new_surface).unwrap();
+        worker_to_main_sender.send(old_surface).unwrap();
+
+        color += delta;
+        if color >= 1.0 && delta > 0.0 {
+            color = 1.0;
+            delta = -delta;
+        } else if color <= 0.0 && delta < 0.0 {
+            color = 0.0;
+            delta = -delta;
+        }
     }
+}
+
+fn create_context_attributes() -> ContextAttributes {
+    let flavor = GLFlavor { api: GLApi::GL, version: GLVersion::new(3, 3) };
+    ContextAttributes { flags: ContextAttributeFlags::empty(), flavor }
+}
+
+fn create_surface(device: &mut Device) -> Surface {
+    let (context_attributes, size) = (create_context_attributes(), Size2D::new(256, 256));
+    let descriptor = SurfaceDescriptor::from_context_attributes_and_size(&context_attributes,
+                                                                         &size);
+    device.create_surface_from_descriptor(&descriptor).unwrap()
 }
 
 struct BlitVertexArray {
@@ -181,6 +178,8 @@ impl BlitVertexArray {
 struct BlitProgram {
     program: Program,
     position_attribute: GLint,
+    transform_uniform: GLint,
+    translation_uniform: GLint,
     source_uniform: GLint,
 }
 
@@ -193,10 +192,22 @@ impl BlitProgram {
             let position_attribute =
                 gl::GetAttribLocation(program.object,
                                       b"aPosition\0".as_ptr() as *const GLchar); ck();
+            let transform_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uTransform\0".as_ptr() as *const GLchar); ck();
+            let translation_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uTranslation\0".as_ptr() as *const GLchar); ck();
             let source_uniform =
                 gl::GetUniformLocation(program.object,
                                        b"uSource\0".as_ptr() as *const GLchar); ck();
-            BlitProgram { program, position_attribute, source_uniform }
+            BlitProgram {
+                program,
+                position_attribute,
+                transform_uniform,
+                translation_uniform,
+                source_uniform,
+            }
         }
     }
 }

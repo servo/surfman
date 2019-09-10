@@ -2,11 +2,15 @@
 
 // resources/examples/quad.vs.glsl
 
+uniform mat2 uTransform;
+uniform vec2 uTranslation;
+
 in vec2 aPosition;
 
 out vec2 vTexCoord;
 
 void main() {
     vTexCoord = aPosition;
-    gl_Position = vec4(mix(vec2(-1.0), vec2(1.0), aPosition), 0.0, 1.0);
+    vec2 position = uTransform * mix(vec2(-1.0), vec2(1.0), aPosition) + uTranslation;
+    gl_Position = vec4(position, 0.0, 1.0);
 }

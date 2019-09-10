@@ -50,9 +50,7 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface_from_descriptor(&mut self,
-                                          _: &mut Context,
-                                          descriptor: &SurfaceDescriptor)
+    pub fn create_surface_from_descriptor(&mut self, descriptor: &SurfaceDescriptor)
                                           -> Result<Surface, Error> {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
@@ -108,7 +106,7 @@ impl Device {
         }
     }
 
-    pub fn destroy_surface(&self, _: &mut Context, mut surface: Surface) -> Result<(), Error> {
+    pub fn destroy_surface(&self, mut surface: Surface) -> Result<(), Error> {
         // Nothing to do here.
         surface.destroyed = true;
         Ok(())
