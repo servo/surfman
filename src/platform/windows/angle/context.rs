@@ -13,7 +13,6 @@ use super::surface::{ColorSurface, Surface, SurfaceTexture};
 use gl;
 use gl::types::GLuint;
 use std::ffi::CString;
-use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
@@ -51,12 +50,65 @@ impl Drop for Context {
     }
 }
 
+#[derive(Clone)]
 pub struct ContextDescriptor {
     egl_config_id: EGLint,
-    phantom: PhantomData<*const ()>,
+    egl_context_client_version: EGLint,
 }
 
 impl Device {
+    pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
+                                     -> Result<ContextDescriptor, Error> {
+        let renderable_type = match attributes.flavor.api {
+            GLApi::GL => egl::OPENGL_BIT,
+            GLApi::GLES => egl::OPENGL_ES2_BIT,
+        };
+
+        let flags = attributes.flags;
+        let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
+        let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
+        let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
+
+        unsafe {
+            // Create config attributes.
+            let config_attributes = [
+                egl::SURFACE_TYPE as EGLint,         egl::PBUFFER_BIT as EGLint,
+                egl::RENDERABLE_TYPE as EGLint,      renderable_type as EGLint,
+                egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint,
+                egl::RED_SIZE as EGLint,             8,
+                egl::GREEN_SIZE as EGLint,           8,
+                egl::BLUE_SIZE as EGLint,            8,
+                egl::ALPHA_SIZE as EGLint,           alpha_size,
+                egl::DEPTH_SIZE as EGLint,           depth_size,
+                egl::STENCIL_SIZE as EGLint,         stencil_size,
+                egl::NONE as EGLint,                 0,
+                0,                                   0,
+            ];
+
+            // Pick a config.
+            let (mut config, mut config_count) = (ptr::null(), 0);
+            let result = egl::ChooseConfig(self.native_display.egl_display(),
+                                           config_attributes.as_ptr(),
+                                           &mut config,
+                                           1,
+                                           &mut config_count);
+            if result == egl::FALSE {
+                let err = egl::GetError().to_windowing_api_error();
+                return Err(Error::PixelFormatSelectionFailed(err));
+            }
+            if config_count == 0 || config.is_null() {
+                return Err(Error::NoPixelFormatFound);
+            }
+
+            // Get the config ID.
+            let mut egl_config_id = 0;
+            let result = egl::GetConfigAttrib(display, config, attr, &mut egl_config_id);
+            debug_assert_ne!(result, egl::FALSE);
+
+            Ok(ContextDescriptor { egl_config_id })
+        }
+    }
+
     /// Opens the device and context corresponding to the current EGL context.
     ///
     /// The native context is not retained, as there is no way to do this in the EGL API. It is the
@@ -111,60 +163,10 @@ impl Device {
             d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
         };
 
-        // Detect the GL version.
-        let mut client_version = 0;
-        let result = egl::QueryContext(egl_display,
-                                       egl_context,
-                                       egl::CONTEXT_CLIENT_VERSION as EGLint,
-                                       &mut client_version);
-        assert_ne!(result, egl::FALSE);
-        assert!(client_version > 0);
-        let version = GLVersion::new(client_version as u8, 0);
-        println!("client version = {}", client_version);
-
-        // Detect the config ID.
-        let mut egl_config_id = 0;
-        let result = egl::QueryContext(egl_display,
-                                       egl_context,
-                                       egl::CONFIG_ID as EGLint,
-                                       &mut egl_config_id);
-        assert_ne!(result, egl::FALSE);
-
-        // Fetch the current config.
-        let (mut egl_config, mut egl_config_count) = (ptr::null(), 0);
-        let egl_config_attrs = [
-            egl::CONFIG_ID as EGLint, egl_config_id,
-            egl::NONE as EGLint, egl::NONE as EGLint,
-            0, 0,
-        ];
-        let result = egl::ChooseConfig(egl_display,
-                                       &egl_config_attrs[0],
-                                       &mut egl_config,
-                                       1,
-                                       &mut egl_config_count);
-        assert_ne!(result, egl::FALSE);
-        assert!(egl_config_count > 0);
-
-        // Detect pixel format.
-        let alpha_size = get_config_attr(egl_display, egl_config, egl::ALPHA_SIZE as EGLint);
-        let depth_size = get_config_attr(egl_display, egl_config, egl::DEPTH_SIZE as EGLint);
-        let stencil_size = get_config_attr(egl_display, egl_config, egl::STENCIL_SIZE as EGLint);
-
-        // Convert to `surfman` context attribute flags.
-        let mut attribute_flags = ContextAttributeFlags::empty();
-        attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
-        attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
-        attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
-
-        // Create appropriate context attributes.
-        let attributes = ContextAttributes {
-            flags: attribute_flags,
-            flavor: GLFlavor { api: GLApi::GL, version },
-        };
-
+        // Create the config.
         let mut context = Context {
             native_context,
-            gl_info: GLInfo::new(&attributes),
+            gl_info: GLInfo::new(),
             color_surface: ColorSurface::External,
         };
 
@@ -175,69 +177,23 @@ impl Device {
             *previous_context_created = true;
         }
 
-        context.gl_info.populate();
-        return Ok((device, context));
+        let context_descriptor = device.context_descriptor(&context);
+        let context_attributes = device.context_descriptor_attributes(&context_descriptor);
+        context.gl_info.populate(&context_attributes);
 
-        unsafe fn get_config_attr(display: EGLDisplay, config: EGLConfig, attr: EGLint) -> EGLint {
-            let mut value = 0;
-            let result = egl::GetConfigAttrib(display, config, attr, &mut value);
-            debug_assert_ne!(result, egl::FALSE);
-            value
-        }
+        Ok((device, context))
     }
 
-    pub fn create_context(&self, attributes: &ContextAttributes, color_surface: Surface)
-                          -> Result<Context, Error> {
-        if attributes.flavor.api == GLApi::GLES {
-            return Err(Error::UnsupportedGLType);
-        }
-
+    pub fn create_context(&self, color_surface: Surface) -> Result<Context, Error> {
         let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        let renderable_type = match attributes.flavor.api {
-            GLApi::GL => egl::OPENGL_BIT,
-            GLApi::GLES => egl::OPENGL_ES2_BIT,
-        };
-
-        let flags = attributes.flags;
-        let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
-        let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
-        let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
+        let egl_config = self.context_descriptor_to_egl_config(&color_surface.descriptor);
+        let egl_context_client_version = color_surface.descriptor.flavor.version.major as EGLint;
 
         unsafe {
-            // Create config attributes.
-            let config_attributes = [
-                egl::SURFACE_TYPE as EGLint,         egl::PBUFFER_BIT as EGLint,
-                egl::RENDERABLE_TYPE as EGLint,      renderable_type as EGLint,
-                egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint,
-                egl::RED_SIZE as EGLint,             8,
-                egl::GREEN_SIZE as EGLint,           8,
-                egl::BLUE_SIZE as EGLint,            8,
-                egl::ALPHA_SIZE as EGLint,           alpha_size,
-                egl::DEPTH_SIZE as EGLint,           depth_size,
-                egl::STENCIL_SIZE as EGLint,         stencil_size,
-                egl::NONE as EGLint,                 0,
-                0,                                   0,
-            ];
-
-            // Pick a config.
-            let (mut config, mut config_count) = (ptr::null(), 0);
-            let result = egl::ChooseConfig(self.native_display.egl_display(),
-                                           config_attributes.as_ptr(),
-                                           &mut config,
-                                           1,
-                                           &mut config_count);
-            if result == egl::FALSE {
-                let err = egl::GetError().to_windowing_api_error();
-                return Err(Error::PixelFormatSelectionFailed(err));
-            }
-            if config_count == 0 || config.is_null() {
-                return Err(Error::NoPixelFormatFound);
-            }
-
             // Include some extra zeroes to work around broken implementations.
             let egl_context_attributes = [
-                egl::CONTEXT_CLIENT_VERSION as EGLint, attributes.flavor.version.major as EGLint,
+                egl::CONTEXT_CLIENT_VERSION as EGLint, egl_context_client_version,
                 egl::NONE as EGLint, 0,
                 0, 0,
             ];
@@ -250,10 +206,9 @@ impl Device {
                 let err = egl::GetError().to_windowing_api_error();
                 return Err(Error::ContextCreationFailed(err));
             }
-            let native_context = Box::new(OwnedEGLContext { egl_context });
 
             let mut context = Context {
-                native_context,
+                native_context: Box::new(OwnedEGLContext { egl_context }),
                 color_surface: ColorSurface::Managed(color_surface),
                 gl_info: GLInfo::new(attributes),
             };
@@ -265,7 +220,10 @@ impl Device {
                 *previous_context_created = true;
             }
 
-            context.gl_info.populate();
+            let context_descriptor = device.context_descriptor(&context);
+            let context_attributes = device.context_descriptor_attributes(&context_descriptor);
+            context.gl_info.populate(&context_attributes);
+
             self.make_context_current(&context)?;
             Ok(context)
         }
@@ -285,12 +243,36 @@ impl Device {
         Ok(())
     }
 
+    pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        unsafe {
+            // Get the EGL config ID.
+            let mut egl_config_id = 0;
+            let result = egl::QueryContext(egl_display,
+                                           egl_context,
+                                           egl::CONFIG_ID as EGLint,
+                                           &mut egl_config_id);
+            assert_ne!(result, egl::FALSE);
+
+            // Get the GL version.
+            let mut egl_context_client_version = 0;
+            let result = egl::QueryContext(egl_display,
+                                           egl_context,
+                                           egl::CONTEXT_CLIENT_VERSION as EGLint,
+                                           &mut egl_context_client_version);
+            assert_ne!(result, egl::FALSE);
+            debug_assert!(egl_context_client_version > 0);
+            println!("client version = {}", egl_context_client_version);
+
+            ContextDescriptor { egl_config_id, egl_context_client_version }
+        }
+    }
+
     #[inline]
     pub fn context_gl_info<'c>(&self, context: &'c Context) -> &'c GLInfo {
         &context.gl_info
     }
 
-    pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+    pub fn make_context_current(&mut self, context: &Context) -> Result<(), Error> {
         unsafe {
             let color_egl_surface = match context.color_surface {
                 ColorSurface::Managed(ref color_surface) => self.lookup_surface(color_surface),
@@ -349,6 +331,13 @@ impl Device {
             return Err(Error::ExternalRenderTarget)
         }
 
+        let context_descriptor = self.context_descriptor(context);
+        if new_color_surface.descriptor.egl_config_id != context_descriptor.egl_config_id ||
+                new_color_surface.descriptor.egl_context_client_version !=
+                context_descriptor.egl_context_client_version {
+            return Err(Error::IncompatibleContextDescriptor);
+        }
+
         let old_surface = match mem::replace(&mut context.color_surface,
                                              ColorSurface::Managed(new_color_surface)) {
             ColorSurface::None => None,
@@ -363,6 +352,49 @@ impl Device {
     #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
         Ok(0)
+    }
+
+    pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
+                                         -> ContextAttributes {
+        let egl_display = self.native_display.egl_display();
+        let egl_config = self.context_descriptor_to_egl_config(context_descriptor);
+
+        unsafe {
+            let alpha_size = get_config_attr(egl_display, egl_config, egl::ALPHA_SIZE as EGLint);
+            let depth_size = get_config_attr(egl_display, egl_config, egl::DEPTH_SIZE as EGLint);
+            let stencil_size = get_config_attr(egl_display,
+                                               egl_config,
+                                               egl::STENCIL_SIZE as EGLint);
+
+            // Convert to `surfman` context attribute flags.
+            let mut attribute_flags = ContextAttributeFlags::empty();
+            attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
+            attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
+            attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
+
+            // Create appropriate context attributes.
+            ContextAttributes { flags: attribute_flags, flavor: context_descriptor.flavor }
+        }
+    }
+
+    fn context_descriptor_to_egl_config(&self, context_descriptor: &ContextDescriptor) -> EGLint {
+        unsafe {
+            let config_attributes = [
+                egl::CONFIG_ID as EGLint,   context_descriptor.egl_config_id,
+                egl::NONE as EGLint,        0,
+                0,                          0,
+            ];
+
+            let (mut config, mut config_count) = (ptr::null(), 0);
+            let result = egl::ChooseConfig(self.native_display.egl_display(),
+                                           config_attributes.as_ptr(),
+                                           &mut config,
+                                           1,
+                                           &mut config_count);
+            assert_ne!(result, egl::FALSE);
+            assert!(config_count > 0);
+            config
+        }
     }
 }
 

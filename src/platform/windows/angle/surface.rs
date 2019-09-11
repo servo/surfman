@@ -28,7 +28,7 @@ pub struct Surface {
 
 pub(crate) struct SurfaceData {
     pub(crate) share_handle: HANDLE,
-    pub(crate) descriptor: SurfaceDescriptor,
+    pub(crate) context_descriptor: ContextDescriptor,
     pub(crate) destroyed: AtomicBool,
 }
 
@@ -42,7 +42,6 @@ pub struct SurfaceTexture {
 pub(crate) struct SurfaceBinding {
     pub(crate) surface: Surface,
     pub(crate) egl_surface: EGLSurface,
-    pub(crate) egl_config: EGLConfig,
 }
 
 unsafe impl Send for Surface {}
@@ -62,14 +61,13 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+    pub fn create_surface(&mut self, context_descriptor: &ContextDescriptor, size: &Size2D<i32>)
                           -> Result<Surface, Error> {
+        let egl_config = self.context_descriptor_to_egl_config(context_descriptor);
         unsafe {
-            let egl_config = self.flavor_to_config(&descriptor.flavor);
-
             let attributes = [
-                egl::WIDTH as EGLint,  descriptor.size.width as EGLint,
-                egl::HEIGHT as EGLint, descriptor.size.height as EGLint,
+                egl::WIDTH as EGLint,  size.width as EGLint,
+                egl::HEIGHT as EGLint, size.height as EGLint,
                 egl::NONE as EGLint,   0,
                 0,                     0,
             ];
@@ -91,7 +89,7 @@ impl Device {
             let surface = Surface {
                 data: Arc::new(SurfaceData {
                     share_handle,
-                    descriptor: *descriptor,
+                    context_descriptor: (*context_descriptor).clone(),
                     destroyed: AtomicBool::new(false),
                 }),
             };
@@ -106,7 +104,7 @@ impl Device {
         }
     }
 
-    pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
+    pub fn create_surface_texture(&mut self, _: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
         unsafe {
             let mut texture = 0;
@@ -150,6 +148,15 @@ impl Device {
         }
 
         Ok(surface_texture.surface)
+    }
+
+    pub(crate) fn lookup_surface(&self, surface: &Surface) -> Option<EGLSurface> {
+        for binding in &self.surface_bindings {
+            if binding.surface.data.ptr_eq(&*surface.data) {
+                return Some(binding.egl_surface);
+            }
+        }
+        None
     }
 }
 
