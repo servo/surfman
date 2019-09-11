@@ -30,12 +30,15 @@ lazy_static! {
     static ref CREATE_CONTEXT_MUTEX: Mutex<bool> = Mutex::new(false);
 }
 
-// CGL OpenGL Profile that chooses a Legacy/Pre-OpenGL 3.0 Implementation.
+// Choose a renderer compatible with GL 1.0.
 #[allow(non_upper_case_globals)]
 const kCGLOGLPVersion_Legacy: CGLPixelFormatAttribute = 0x1000;
-// CGL OpenGL Profile that chooses a Legacy/Pre-OpenGL 3.0 Implementation.
+// Choose a renderer capable of GL3.2 or later.
 #[allow(non_upper_case_globals)]
 const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
+// Choose a renderer capable of GL4.1 or later.
+#[allow(non_upper_case_globals)]
+const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
 
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
@@ -61,7 +64,6 @@ impl Drop for Context {
 
 pub struct ContextDescriptor {
     cgl_pixel_format: CGLPixelFormatObj,
-    pub(crate) attributes: ContextAttributes,
 }
 
 impl Drop for ContextDescriptor {
@@ -80,7 +82,6 @@ impl Clone for ContextDescriptor {
         unsafe {
             ContextDescriptor {
                 cgl_pixel_format: CGLRetainPixelFormat(self.cgl_pixel_format),
-                attributes: self.attributes,
             }
         }
     }
@@ -88,10 +89,15 @@ impl Clone for ContextDescriptor {
 
 unsafe impl Send for ContextDescriptor {}
 
+impl ContextDescriptor {
+}
+
 impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
-        let profile = if attributes.flavor.version.major >= 3 {
+        let profile = if attributes.flavor.version.major >= 4 {
+            kCGLOGLPVersion_GL4_Core
+        } else if attributes.flavor.version.major == 3 {
             kCGLOGLPVersion_3_2_Core
         } else {
             kCGLOGLPVersion_Legacy
@@ -122,7 +128,7 @@ impl Device {
                 return Err(Error::NoPixelFormatFound);
             }
 
-            Ok(ContextDescriptor { cgl_pixel_format, attributes: *attributes })
+            Ok(ContextDescriptor { cgl_pixel_format })
         }
     }
 
@@ -145,33 +151,10 @@ impl Device {
         let native_context = Box::new(UnsafeCGLContextRef::current());
         println!("Device::from_current_context() = {:x}", native_context.cgl_context() as usize);
 
-        // Detect context attributes.
+        // Get the context descriptor.
         let cgl_pixel_format = CGLGetPixelFormat(native_context.cgl_context());
         debug_assert_ne!(cgl_pixel_format, ptr::null_mut());
-
-        let alpha_size = get_pixel_format_attribute(cgl_pixel_format, kCGLPFAAlphaSize);
-        let depth_size = get_pixel_format_attribute(cgl_pixel_format, kCGLPFADepthSize);
-        let stencil_size = get_pixel_format_attribute(cgl_pixel_format, kCGLPFAStencilSize);
-        let gl_profile = get_pixel_format_attribute(cgl_pixel_format, kCGLPFAOpenGLProfile);
-
-        let mut attribute_flags = ContextAttributeFlags::empty();
-        attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
-        attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
-        attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
-
-        let version = if gl_profile == kCGLOGLPVersion_Legacy {
-            GLVersion::new(2, 0)
-        } else {
-            GLVersion::new(4, 2)
-        };
-
-        let attributes = ContextAttributes {
-            flags: attribute_flags,
-            flavor: GLFlavor { api: GLApi::GL, version },
-        };
-
-        // Create a context descriptor.
-        let descriptor = ContextDescriptor { cgl_pixel_format, attributes };
+        let descriptor = ContextDescriptor { cgl_pixel_format };
 
         // Create the context.
         let mut context = Context {
@@ -190,24 +173,11 @@ impl Device {
             *previous_context_created = true;
         }
 
-        context.gl_info.populate(&context.descriptor.attributes);
-        return Ok((device, context));
-
-        unsafe fn get_pixel_format_attribute(pixel_format: CGLPixelFormatObj,
-                                             attribute: CGLPixelFormatAttribute)
-                                             -> i32 {
-            let mut value = 0;
-            let err = CGLDescribePixelFormat(pixel_format, 0, attribute, &mut value);
-            debug_assert_eq!(err, kCGLNoError);
-            value
-        }
+        context.gl_info.populate(&device.context_descriptor_attributes(&context.descriptor));
+        Ok((device, context))
     }
 
     pub fn create_context(&self, color_surface: Surface) -> Result<Context, Error> {
-        if color_surface.descriptor.attributes.flavor.api == GLApi::GLES {
-            return Err(Error::UnsupportedGLType);
-        }
-
         // Take a lock so that we're only creating one context at a time. This serves two purposes:
         //
         // 1. CGLChoosePixelFormat fails, returning `kCGLBadConnection`, if multiple threads try to
@@ -248,7 +218,7 @@ impl Device {
                 *previous_context_created = true;
             }
 
-            context.gl_info.populate(&context.descriptor.attributes);
+            context.gl_info.populate(&self.context_descriptor_attributes(&context.descriptor));
 
             // Build the initial framebuffer.
             self.create_framebuffer(&mut context, color_surface)?;
@@ -400,11 +370,48 @@ impl Device {
         }
     }
 
+    pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
+                                         -> ContextAttributes {
+        unsafe {
+            let alpha_size = get_pixel_format_attribute(context_descriptor, kCGLPFAAlphaSize);
+            let depth_size = get_pixel_format_attribute(context_descriptor, kCGLPFADepthSize);
+            let stencil_size = get_pixel_format_attribute(context_descriptor, kCGLPFAStencilSize);
+            let gl_profile = get_pixel_format_attribute(context_descriptor, kCGLPFAOpenGLProfile);
+
+            let mut attribute_flags = ContextAttributeFlags::empty();
+            attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
+            attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
+            attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
+
+            let version = GLVersion::new(((gl_profile >> 12) & 0xf) as u8,
+                                        ((gl_profile >> 8) & 0xf) as u8);
+
+            return ContextAttributes {
+                flags: attribute_flags,
+                flavor: GLFlavor { api: GLApi::GL, version },
+            };
+        }
+
+        unsafe fn get_pixel_format_attribute(context_descriptor: &ContextDescriptor,
+                                             attribute: CGLPixelFormatAttribute)
+                                             -> i32 {
+            let mut value = 0;
+            let err = CGLDescribePixelFormat(context_descriptor.cgl_pixel_format,
+                                             0,
+                                             attribute,
+                                             &mut value);
+            debug_assert_eq!(err, kCGLNoError);
+            value
+        }
+    }
+
     // Assumes that the context is current.
     fn create_framebuffer(&self, context: &mut Context, color_surface: Surface)
                           -> Result<(), Error> {
         let size = color_surface.size();
         let color_surface_texture = self.create_surface_texture(context, color_surface)?;
+
+        let context_attributes = self.context_descriptor_attributes(&context.descriptor);
 
         unsafe {
             let mut framebuffer_object = 0;
@@ -417,9 +424,7 @@ impl Device {
                                      color_surface_texture.gl_texture(),
                                      0);
 
-            let renderbuffers = Renderbuffers::new(&size,
-                                                   &context.descriptor.attributes,
-                                                   &context.gl_info);
+            let renderbuffers = Renderbuffers::new(&size, &context_attributes, &context.gl_info);
             renderbuffers.bind_to_current_framebuffer();
 
             debug_assert_eq!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER),

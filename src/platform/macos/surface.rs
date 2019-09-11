@@ -84,10 +84,9 @@ impl Device {
             gl::BindTexture(gl::TEXTURE_RECTANGLE, texture);
 
             let size = native_surface.size();
-            let has_alpha = native_surface.descriptor()
-                                          .attributes
-                                          .flags
-                                          .contains(ContextAttributeFlags::ALPHA);
+            let has_alpha = self.context_descriptor_attributes(&native_surface.descriptor())
+                                .flags
+                                .contains(ContextAttributeFlags::ALPHA);
             native_surface.io_surface.bind_to_gl_texture(size.width, size.height, has_alpha);
 
             // Low filtering to allow rendering
