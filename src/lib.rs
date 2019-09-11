@@ -21,7 +21,7 @@ extern crate wio;
 
 pub mod platform;
 pub use platform::default::adapter::Adapter;
-pub use platform::default::context::Context;
+pub use platform::default::context::{Context, ContextDescriptor};
 pub use platform::default::device::Device;
 pub use platform::default::surface::{Surface, SurfaceTexture};
 
@@ -32,11 +32,11 @@ mod info;
 pub use crate::info::{ContextAttributes, ContextAttributeFlags, FeatureFlags, GLApi, GLFlavor};
 pub use crate::info::{GLInfo, GLVersion};
 
-mod gl_limits;
-pub use crate::gl_limits::GLLimits;
+mod limits;
+pub use crate::limits::GLLimits;
 
 mod surface;
-pub use crate::surface::{SurfaceDescriptor, SurfaceFormat, SurfaceId};
+pub use crate::surface::SurfaceId;
 
 #[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
 #[allow(improper_ctypes)]

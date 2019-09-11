@@ -13,8 +13,7 @@ use std::io::Read;
 use std::os::raw::c_void;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLApi, GLFlavor};
-use surfman::{GLVersion, Surface, SurfaceDescriptor, SurfaceTexture};
+use surfman::{Adapter, ContextDescriptor, Device, Surface, SurfaceTexture};
 
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1];
 
@@ -45,19 +44,24 @@ fn main() {
         Device::from_current_context().unwrap()
     };
     let adapter = device.adapter();
+    let context_descriptor = (*device.context_descriptor(&context)).clone();
 
     // Set up communication channels, and spawn our worker thread.
     let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
     let (main_to_worker_sender, worker_from_main_receiver) = mpsc::channel();
     thread::spawn(move || {
-        worker_thread(adapter, worker_to_main_sender, worker_from_main_receiver)
+        worker_thread(adapter,
+                      context_descriptor,
+                      worker_to_main_sender,
+                      worker_from_main_receiver)
     });
 
     // Set up GL objects and state.
     let vertex_array = BlitVertexArray::new();
 
     // Create an initial surface.
-    let mut surface = create_surface(&mut device);
+    let context_descriptor = (*device.context_descriptor(&context)).clone();
+    let mut surface = create_surface(&mut device, &context_descriptor);
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
     // Enter main render loop.
@@ -96,13 +100,13 @@ fn main() {
 }
 
 fn worker_thread(adapter: Adapter,
+                 context_descriptor: ContextDescriptor,
                  worker_to_main_sender: Sender<Surface>,
                  worker_from_main_receiver: Receiver<Surface>) {
     // Open the device, create an initial surface, create a context, and make it current.
     let mut device = Device::new(&adapter).unwrap();
-    let surface = create_surface(&mut device);
-    let context_attributes = create_context_attributes();
-    let mut context = device.create_context(&context_attributes, surface).unwrap();
+    let surface = create_surface(&mut device, &context_descriptor);
+    let mut context = device.create_context(surface).unwrap();
     device.make_context_current(&context).unwrap();
 
     let (mut color, mut delta) = (0.0, 0.001);
@@ -133,16 +137,8 @@ fn worker_thread(adapter: Adapter,
     }
 }
 
-fn create_context_attributes() -> ContextAttributes {
-    let flavor = GLFlavor { api: GLApi::GL, version: GLVersion::new(3, 3) };
-    ContextAttributes { flags: ContextAttributeFlags::empty(), flavor }
-}
-
-fn create_surface(device: &mut Device) -> Surface {
-    let (context_attributes, size) = (create_context_attributes(), Size2D::new(256, 256));
-    let descriptor = SurfaceDescriptor::from_context_attributes_and_size(&context_attributes,
-                                                                         &size);
-    device.create_surface_from_descriptor(&descriptor).unwrap()
+fn create_surface(device: &mut Device, context_descriptor: &ContextDescriptor) -> Surface {
+    device.create_surface(context_descriptor, &Size2D::new(256, 256)).unwrap()
 }
 
 struct BlitVertexArray {

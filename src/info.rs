@@ -1,6 +1,6 @@
 //! Cached OpenGL information.
 
-use crate::gl_limits::GLLimits;
+use crate::limits::GLLimits;
 use gl;
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -28,7 +28,7 @@ pub struct GLFlavor {
 }
 
 // https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct ContextAttributes {
     pub flavor: GLFlavor,
     pub flags: ContextAttributeFlags,
@@ -39,25 +39,20 @@ pub struct ContextAttributes {
 /// This data is cached.
 #[derive(Clone, Copy)]
 pub struct GLInfo {
-    pub attributes: ContextAttributes,
     pub limits: GLLimits,
     pub features: FeatureFlags,
 }
 
 impl GLInfo {
     // Creates a placeholder `GLInfo`. It must be populated afterward with the `populate()` method.
-    pub(crate) fn new(attributes: &ContextAttributes) -> GLInfo {
-        GLInfo {
-            attributes: *attributes,
-            limits: GLLimits::default(),
-            features: FeatureFlags::empty(),
-        }
+    pub(crate) fn new() -> GLInfo {
+        GLInfo { limits: GLLimits::default(), features: FeatureFlags::empty() }
     }
 
     // Assumes that the context with the given attributes is current.
-    pub(crate) fn populate(&mut self) {
+    pub(crate) fn populate(&mut self, attributes: &ContextAttributes) {
         self.limits = GLLimits::detect();
-        self.features = FeatureFlags::detect(&self.attributes);
+        self.features = FeatureFlags::detect(attributes);
     }
 }
 

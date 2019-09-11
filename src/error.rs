@@ -28,6 +28,9 @@ pub enum Error {
     NoAdapterFound,
     /// The device couldn't be opened.
     DeviceOpenFailed,
+    /// An attempt was made to attach a surface to a context, but the surface and context weren't
+    /// created with the same context descriptor.
+    IncompatibleContextDescriptor,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.

@@ -7,6 +7,8 @@ use std::os::raw::c_void;
 
 pub struct Context;
 
+pub struct ContextDescriptor;
+
 impl Device {
     pub fn create_context(&self, _: &GLInfo) -> Result<Context, Error> {
         Err(Error::UnsupportedOnThisPlatform)

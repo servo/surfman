@@ -1,8 +1,9 @@
 //! Surface management for macOS.
 
-use crate::{ContextAttributeFlags, Error, FeatureFlags, GLInfo, SurfaceDescriptor, SurfaceId};
-use super::context::Context;
+use crate::{ContextAttributeFlags, ContextAttributes, Error, FeatureFlags, GLInfo, SurfaceId};
+use super::context::{Context, ContextDescriptor};
 use super::device::Device;
+
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
@@ -14,7 +15,6 @@ use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerR
 use io_surface::{kIOSurfaceHeight, kIOSurfaceWidth};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
-use std::sync::Arc;
 use std::thread;
 
 const BYTES_PER_PIXEL: i32 = 4;
@@ -22,11 +22,11 @@ const BYTES_PER_PIXEL: i32 = 4;
 #[derive(Clone)]
 pub struct Surface {
     pub(crate) io_surface: IOSurface,
-    pub(crate) descriptor: Arc<SurfaceDescriptor>,
+    pub(crate) descriptor: ContextDescriptor,
+    pub(crate) size: Size2D<i32>,
     pub(crate) destroyed: bool,
 }
 
-#[derive(Debug)]
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) gl_texture: GLuint,
@@ -36,8 +36,8 @@ pub struct SurfaceTexture {
 unsafe impl Send for Surface {}
 
 impl Debug for Surface {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:?})", self.descriptor)
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "Surface({:x})", self.io_surface.as_concrete_TypeRef() as usize)
     }
 }
 
@@ -50,23 +50,28 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface_from_descriptor(&mut self, descriptor: &SurfaceDescriptor)
-                                          -> Result<Surface, Error> {
+    pub fn create_surface(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+                          -> Result<Surface, Error> {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),
-                 CFNumber::from(descriptor.size.width).as_CFType()),
+                 CFNumber::from(size.width).as_CFType()),
                 (CFString::wrap_under_get_rule(kIOSurfaceHeight),
-                 CFNumber::from(descriptor.size.height).as_CFType()),
+                 CFNumber::from(size.height).as_CFType()),
                 (CFString::wrap_under_get_rule(kIOSurfaceBytesPerElement),
                  CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
                 (CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
-                 CFNumber::from(descriptor.size.width * BYTES_PER_PIXEL).as_CFType()),
+                 CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType()),
             ]);
             io_surface::new(&props)
         };
 
-        Ok(Surface { io_surface, descriptor: Arc::new(*descriptor), destroyed: false })
+        Ok(Surface {
+            io_surface,
+            descriptor: (*descriptor).clone(),
+            size: *size,
+            destroyed: false,
+        })
     }
 
     pub fn create_surface_texture(&self, _: &mut Context, native_surface: Surface)
@@ -78,9 +83,12 @@ impl Device {
 
             gl::BindTexture(gl::TEXTURE_RECTANGLE, texture);
 
-            let descriptor = native_surface.descriptor();
-            let (size, alpha) = (descriptor.size, descriptor.format.has_alpha());
-            native_surface.io_surface.bind_to_gl_texture(size.width, size.height, alpha);
+            let size = native_surface.size();
+            let has_alpha = native_surface.descriptor()
+                                          .attributes
+                                          .flags
+                                          .contains(ContextAttributeFlags::ALPHA);
+            native_surface.io_surface.bind_to_gl_texture(size.width, size.height, has_alpha);
 
             // Low filtering to allow rendering
             gl::TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
@@ -125,8 +133,13 @@ impl Device {
 
 impl Surface {
     #[inline]
-    pub fn descriptor(&self) -> &SurfaceDescriptor {
-        &self.descriptor
+    pub fn descriptor(&self) -> ContextDescriptor {
+        self.descriptor.clone()
+    }
+
+    #[inline]
+    pub fn size(&self) -> Size2D<i32> {
+        self.size
     }
 
     #[inline]
@@ -184,10 +197,11 @@ impl Drop for Renderbuffers {
 }
 
 impl Renderbuffers {
-    pub(crate) fn new(size: &Size2D<i32>, info: &GLInfo) -> Renderbuffers {
+    pub(crate) fn new(size: &Size2D<i32>, attributes: &ContextAttributes, info: &GLInfo)
+                      -> Renderbuffers {
         unsafe {
-            if info.attributes.flags.contains(ContextAttributeFlags::DEPTH |
-                                              ContextAttributeFlags::STENCIL) &&
+            if attributes.flags.contains(ContextAttributeFlags::DEPTH |
+                                         ContextAttributeFlags::STENCIL) &&
                     info.features.contains(FeatureFlags::SUPPORTS_DEPTH24_STENCIL8) {
                 let mut renderbuffer = 0;
                 gl::GenRenderbuffers(1, &mut renderbuffer);
@@ -201,7 +215,7 @@ impl Renderbuffers {
             }
 
             let (mut depth_renderbuffer, mut stencil_renderbuffer) = (0, 0);
-            if info.attributes.flags.contains(ContextAttributeFlags::DEPTH) {
+            if attributes.flags.contains(ContextAttributeFlags::DEPTH) {
                 gl::GenRenderbuffers(1, &mut depth_renderbuffer);
                 gl::BindRenderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
                 gl::RenderbufferStorage(gl::RENDERBUFFER,
@@ -209,7 +223,7 @@ impl Renderbuffers {
                                         size.width,
                                         size.height);
             }
-            if info.attributes.flags.contains(ContextAttributeFlags::STENCIL) {
+            if attributes.flags.contains(ContextAttributeFlags::STENCIL) {
                 gl::GenRenderbuffers(1, &mut stencil_renderbuffer);
                 gl::BindRenderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
                 gl::RenderbufferStorage(gl::RENDERBUFFER,

@@ -62,8 +62,8 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface_from_descriptor(&mut self, descriptor: &SurfaceDescriptor)
-                                          -> Result<Surface, Error> {
+    pub fn create_surface(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+                          -> Result<Surface, Error> {
         unsafe {
             let egl_config = self.flavor_to_config(&descriptor.flavor);
 
