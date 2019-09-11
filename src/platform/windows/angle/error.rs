@@ -1,7 +1,8 @@
 //! Translation of errors from the CGL API to `surfman` errors.
 
 use crate::WindowingApiError;
-use egl::{self, EGLint};
+use crate::egl::types::{EGLenum, EGLint};
+use crate::egl;
 
 pub(crate) trait ToWindowingApiError {
     fn to_windowing_api_error(self) -> WindowingApiError;
@@ -9,7 +10,7 @@ pub(crate) trait ToWindowingApiError {
 
 impl ToWindowingApiError for EGLint {
     fn to_windowing_api_error(self) -> WindowingApiError {
-        match self {
+        match self as EGLenum {
             egl::NOT_INITIALIZED => WindowingApiError::NotInitialized,
             egl::BAD_ACCESS => WindowingApiError::BadAccess,
             egl::BAD_ALLOC => WindowingApiError::BadAlloc,
@@ -25,7 +26,5 @@ impl ToWindowingApiError for EGLint {
             egl::CONTEXT_LOST => WindowingApiError::ContextLost,
             _ => WindowingApiError::Failed,
         }
-        // TODO(pcwalton)
-        WindowingApiError::Failed
     }
 }

@@ -12,7 +12,6 @@ pub use with_osmesa as default;
 
 #[cfg(any(
     target_os="android",
-    all(target_os="windows", feature="no_wgl"),
     all(target_os="linux", feature = "test_egl_in_linux"),
 ))]
 pub mod with_egl;
@@ -24,8 +23,10 @@ pub mod macos;
 #[cfg(target_os = "macos")]
 pub use macos as default;
 
-#[cfg(all(target_os="windows", not(feature="no_wgl")))]
-pub mod with_wgl;
+#[cfg(target_os = "windows")]
+pub mod windows;
+#[cfg(target_os = "windows")]
+pub use windows::angle as default;
 
 #[cfg(target_os="ios")]
 pub mod with_eagl;

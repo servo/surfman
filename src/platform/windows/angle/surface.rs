@@ -1,25 +1,25 @@
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
+use crate::egl::types::{EGLConfig, EGLSurface, EGLenum};
+use crate::egl::{self, EGLint};
 use crate::{ContextAttributeFlags, Error, FeatureFlags, GLInfo, SurfaceDescriptor, SurfaceId};
 use super::context::Context;
-use super::device::Device;
-use super::surface::SurfaceBinding;
-use core_foundation::base::TCFType;
-use core_foundation::dictionary::CFDictionary;
-use core_foundation::number::CFNumber;
-use core_foundation::string::CFString;
+use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
+
 use euclid::default::Size2D;
 use gl;
 use gl::types::{GLenum, GLint, GLuint};
-use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
-use io_surface::{kIOSurfaceHeight, kIOSurfaceWidth};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use winapi::um::winnt::HANDLE;
 
 const BYTES_PER_PIXEL: i32 = 4;
+
+const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
 
 #[derive(Clone)]
 pub struct Surface {
@@ -49,22 +49,20 @@ unsafe impl Send for Surface {}
 
 impl Debug for Surface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:?})", self.descriptor)
+        write!(f, "Surface({:?})", self.data.descriptor)
     }
 }
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        if !self.destroyed && !thread::panicking() {
+        if !self.data.destroyed.load(Ordering::SeqCst) && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
         }
     }
 }
 
 impl Device {
-    pub fn create_surface_from_descriptor(&mut self,
-                                          _: &mut Context,
-                                          descriptor: &SurfaceDescriptor)
+    pub fn create_surface_from_descriptor(&mut self, descriptor: &SurfaceDescriptor)
                                           -> Result<Surface, Error> {
         unsafe {
             let egl_config = self.flavor_to_config(&descriptor.flavor);
@@ -76,17 +74,17 @@ impl Device {
                 0,                     0,
             ];
 
-            let egl_surface = egl::CreatePbufferSurface(self.egl_display,
+            let egl_surface = egl::CreatePbufferSurface(self.native_display.egl_display(),
                                                         egl_config,
                                                         attributes.as_ptr());
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
             let mut share_handle = INVALID_HANDLE_VALUE;
-            let result =
-                eglQuerySurfacePointerANGLE(self.egl_display,
-                                            egl_surface,
-                                            EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
-                                            &mut share_handle);
+            let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
+                self.native_display.egl_display(),
+                egl_surface,
+                EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
+                &mut share_handle);
             assert_ne!(result, egl::FALSE);
             assert_ne!(share_handle, INVALID_HANDLE_VALUE);
 
@@ -95,10 +93,10 @@ impl Device {
                     share_handle,
                     descriptor: *descriptor,
                     destroyed: AtomicBool::new(false),
-                },
+                }),
             };
 
-            self.surfaces.push(SurfaceBinding {
+            self.surface_bindings.push(SurfaceBinding {
                 surface: surface.clone(),
                 egl_surface,
                 egl_config,
@@ -117,28 +115,27 @@ impl Device {
 
             gl::BindTexture(gl::TEXTURE_2D, texture);
 
-            let egl_surface = self.get_angle_surface(&surface).egl_surface;
-            if egl::BindTexImage(self.egl_display, egl_surface, egl::BACK_BUFFER as GLint) ==
-                    egl::FALSE {
+            let egl_surface = self.lookup_surface(&surface).egl_surface;
+            if egl::BindTexImage(self.native_display.egl_display(),
+                                 egl_surface,
+                                 egl::BACK_BUFFER as GLint) == egl::FALSE {
                 panic!("Failed to bind EGL texture surface: {:x}!", egl::GetError())
             }
 
-            // Low filtering to allow rendering
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
+            // Initialize the texture, for convenience.
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
 
-            // TODO(emilio): Check if these two are neccessary, probably not
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-
-            gl.BindTexture(gl::TEXTURE_2D, 0);
+            gl::BindTexture(gl::TEXTURE_2D, 0);
             debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
 
             Ok(SurfaceTexture { surface, gl_texture: texture, phantom: PhantomData })
         }
     }
 
-    pub fn destroy_surface(&self, _: &mut Context, mut surface: Surface) -> Result<(), Error> {
+    pub fn destroy_surface(&self, mut surface: Surface) -> Result<(), Error> {
         // TODO(pcwalton): GC dead surfaces occasionally.
         // TODO(pcwalton): Check for double free?
         surface.data.destroyed.store(true, Ordering::SeqCst);
@@ -159,7 +156,7 @@ impl Device {
 impl Surface {
     #[inline]
     pub fn descriptor(&self) -> &SurfaceDescriptor {
-        &self.descriptor
+        &self.data.descriptor
     }
 
     #[inline]

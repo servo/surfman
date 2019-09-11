@@ -7,10 +7,8 @@ fn main() {
     let target = env::var("TARGET").unwrap();
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());
 
-    if target.contains("android") ||
-        (target.contains("windows") && cfg!(feature = "no_wgl")) ||
-        cfg!(feature = "test_egl_in_linux")
-    {
+    if target.contains("android") || target.contains("windows") ||
+            cfg!(feature = "test_egl_in_linux") {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, [])
             .write_bindings(gl_generator::StaticGenerator, &mut file).unwrap();
