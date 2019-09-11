@@ -42,7 +42,6 @@ const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
 
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
-    descriptor: ContextDescriptor,
     gl_info: GLInfo,
     framebuffer: Framebuffer,
 }
@@ -88,9 +87,6 @@ impl Clone for ContextDescriptor {
 }
 
 unsafe impl Send for ContextDescriptor {}
-
-impl ContextDescriptor {
-}
 
 impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
@@ -151,15 +147,9 @@ impl Device {
         let native_context = Box::new(UnsafeCGLContextRef::current());
         println!("Device::from_current_context() = {:x}", native_context.cgl_context() as usize);
 
-        // Get the context descriptor.
-        let cgl_pixel_format = CGLGetPixelFormat(native_context.cgl_context());
-        debug_assert_ne!(cgl_pixel_format, ptr::null_mut());
-        let descriptor = ContextDescriptor { cgl_pixel_format };
-
         // Create the context.
         let mut context = Context {
             native_context,
-            descriptor,
             gl_info: GLInfo::new(),
             framebuffer: Framebuffer::External,
         };
@@ -173,7 +163,10 @@ impl Device {
             *previous_context_created = true;
         }
 
-        context.gl_info.populate(&device.context_descriptor_attributes(&context.descriptor));
+        let context_descriptor = device.context_descriptor(&context);
+        let context_attributes = device.context_descriptor_attributes(&context_descriptor);
+        context.gl_info.populate(&context_attributes);
+
         Ok((device, context))
     }
 
@@ -206,7 +199,6 @@ impl Device {
 
             let mut context = Context {
                 native_context,
-                descriptor: color_surface.descriptor.clone(),
                 framebuffer: Framebuffer::None,
                 gl_info: GLInfo::new(),
             };
@@ -218,7 +210,9 @@ impl Device {
                 *previous_context_created = true;
             }
 
-            context.gl_info.populate(&self.context_descriptor_attributes(&context.descriptor));
+            let context_descriptor = self.context_descriptor(&context);
+            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+            context.gl_info.populate(&context_attributes);
 
             // Build the initial framebuffer.
             self.create_framebuffer(&mut context, color_surface)?;
@@ -257,8 +251,12 @@ impl Device {
     }
 
     #[inline]
-    pub fn context_descriptor<'c>(&self, context: &'c Context) -> &'c ContextDescriptor {
-        &context.descriptor
+    pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        unsafe {
+            let mut cgl_pixel_format = CGLGetPixelFormat(context.native_context.cgl_context());
+            cgl_pixel_format = CGLRetainPixelFormat(cgl_pixel_format);
+            ContextDescriptor { cgl_pixel_format }
+        }
     }
 
     #[inline]
@@ -327,7 +325,8 @@ impl Device {
             return Err(Error::ExternalRenderTarget);
         }
 
-        if new_color_surface.descriptor.cgl_pixel_format != context.descriptor.cgl_pixel_format {
+        let context_descriptor = self.context_descriptor(context);
+        if new_color_surface.descriptor.cgl_pixel_format != context_descriptor.cgl_pixel_format {
             return Err(Error::IncompatibleContextDescriptor);
         }
 
@@ -411,7 +410,8 @@ impl Device {
         let size = color_surface.size();
         let color_surface_texture = self.create_surface_texture(context, color_surface)?;
 
-        let context_attributes = self.context_descriptor_attributes(&context.descriptor);
+        let context_descriptor = self.context_descriptor(context);
+        let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
         unsafe {
             let mut framebuffer_object = 0;

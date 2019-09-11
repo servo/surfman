@@ -2,7 +2,7 @@
 
 use crate::egl::types::{EGLConfig, EGLSurface, EGLenum};
 use crate::egl::{self, EGLint};
-use crate::{ContextAttributeFlags, Error, FeatureFlags, GLInfo, SurfaceDescriptor, SurfaceId};
+use crate::{ContextAttributeFlags, Error, FeatureFlags, GLInfo, SurfaceId};
 use super::context::Context;
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 

@@ -13,6 +13,7 @@ use super::surface::{ColorSurface, Surface, SurfaceTexture};
 use gl;
 use gl::types::GLuint;
 use std::ffi::CString;
+use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
@@ -48,6 +49,11 @@ impl Drop for Context {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
+}
+
+pub struct ContextDescriptor {
+    egl_config_id: EGLint,
+    phantom: PhantomData<*const ()>,
 }
 
 impl Device {

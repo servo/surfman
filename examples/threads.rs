@@ -44,7 +44,7 @@ fn main() {
         Device::from_current_context().unwrap()
     };
     let adapter = device.adapter();
-    let context_descriptor = (*device.context_descriptor(&context)).clone();
+    let context_descriptor = device.context_descriptor(&context);
 
     // Set up communication channels, and spawn our worker thread.
     let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
@@ -60,7 +60,7 @@ fn main() {
     let vertex_array = BlitVertexArray::new();
 
     // Create an initial surface.
-    let context_descriptor = (*device.context_descriptor(&context)).clone();
+    let context_descriptor = device.context_descriptor(&context);
     let mut surface = create_surface(&mut device, &context_descriptor);
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
