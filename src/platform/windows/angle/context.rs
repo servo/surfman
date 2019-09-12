@@ -120,10 +120,10 @@ impl Device {
     /// library; for example, by Glutin. It's legal to use this method to wrap a context rendering
     /// to any target: either a window or a pbuffer. The target is opaque to `surfman`; the library
     /// will not modify or try to detect the render target. This means that any of the methods that
-    /// query or replace the surface—e.g. `replace_context_color_surface`—will fail if called with
+    /// query or replace the surface—e.g. `replace_context_surface`—will fail if called with
     /// a context object created via this method.
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
-        let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Grab the current EGL display and EGL context.
         let egl_display = egl::GetCurrentDisplay();
@@ -159,7 +159,6 @@ impl Device {
         let device = Device {
             native_display: Box::new(OwnedEGLDisplay { egl_display }),
             egl_device,
-            surface_bindings: vec![],
             d3d11_device,
             d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
         };
@@ -167,16 +166,13 @@ impl Device {
         // Create the config.
         let mut context = Context {
             native_context,
+            context_id: *next_context_id,
             gl_info: GLInfo::new(),
-            color_surface: Framebuffer::External,
+            surface: Framebuffer::External,
         };
+        *next_context_id += 1;
 
-        if !*previous_context_created {
-            gl::load_with(|symbol| {
-                device.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-            });
-            *previous_context_created = true;
-        }
+        device.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
 
         let context_descriptor = device.context_descriptor(&context);
         let context_attributes = device.context_descriptor_attributes(&context_descriptor);
@@ -185,11 +181,12 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&self, color_surface: Surface) -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+                          -> Result<Context, Error> {
         let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        let egl_config = self.context_descriptor_to_egl_config(&color_surface.descriptor);
-        let egl_context_client_version = color_surface.descriptor.flavor.version.major as EGLint;
+        let egl_config = self.context_descriptor_to_egl_config(&surface.descriptor);
+        let egl_context_client_version = surface.descriptor.flavor.version.major as EGLint;
 
         unsafe {
             // Include some extra zeroes to work around broken implementations.
@@ -210,20 +207,19 @@ impl Device {
 
             let mut context = Context {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
-                color_surface: Framebuffer::Surface(color_surface),
+                next_context_id: *next_context_id,
+                surface: Framebuffer::None,
                 gl_info: GLInfo::new(attributes),
             };
+            *next_context_id += 1;
 
-            if !*previous_context_created {
-                gl::load_with(|symbol| {
-                    self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-                });
-                *previous_context_created = true;
-            }
+            device.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
 
             let context_descriptor = device.context_descriptor(&context);
             let context_attributes = device.context_descriptor_attributes(&context_descriptor);
             context.gl_info.populate(&context_attributes);
+
+            context.framebuffer = Framebuffer::Surface(self.create_surface(&context, size)?);
 
             self.make_context_current(&context)?;
             Ok(context)
@@ -235,9 +231,9 @@ impl Device {
             return Ok(());
         }
 
-        if let Framebuffer::Surface(color_surface) = mem::replace(&mut context.color_surface,
-                                                                   Framebuffer::None) {
-            self.destroy_surface(color_surface);
+        if let Framebuffer::Surface(surface) = mem::replace(&mut context.framebuffer,
+                                                            Framebuffer::None) {
+            self.destroy_surface(surface);
         }
 
         context.native_context.destroy(self);
@@ -275,8 +271,8 @@ impl Device {
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let color_egl_surface = match context.color_surface {
-                Framebuffer::Surface(ref color_surface) => self.lookup_surface(color_surface),
+            let color_egl_surface = match context.framebuffer {
+                Framebuffer::Surface(ref surface) => self.lookup_surface(surface),
                 Framebuffer::None | Framebuffer::External => egl::NO_SURFACE,
             };
             let result = egl::MakeCurrent(self.native_display.egl_display(),
@@ -319,30 +315,27 @@ impl Device {
     }
 
     #[inline]
-    pub fn context_color_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
-        match context.color_surface {
+    pub fn context_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
+        match context.framebuffer {
             Framebuffer::None | Framebuffer::External => None,
             Framebuffer::Surface(ref surface) => Some(surface),
         }
     }
 
-    pub fn replace_context_color_surface(&self, context: &mut Context, new_color_surface: Surface)
-                                         -> Result<Option<Surface>, Error> {
-        if let Framebuffer::External = context.color_surface {
+    pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
+                                   -> Result<Surface, Error> {
+        if let Framebuffer::External = context.framebuffer {
             return Err(Error::ExternalRenderTarget)
         }
 
-        let context_descriptor = self.context_descriptor(context);
-        if new_color_surface.descriptor.egl_config_id != context_descriptor.egl_config_id ||
-                new_color_surface.descriptor.egl_context_client_version !=
-                context_descriptor.egl_context_client_version {
-            return Err(Error::IncompatibleContextDescriptor);
+        if context.id != new_surface.context_id {
+            return Err(Error::IncompatibleSurface);
         }
 
-        let old_surface = match mem::replace(&mut context.color_surface,
-                                             Framebuffer::Surface(new_color_surface)) {
-            Framebuffer::None => None,
-            Framebuffer::Surface(old_surface) => Some(old_surface),
+        let old_surface = match mem::replace(&mut context.framebuffer,
+                                             Framebuffer::Surface(new_surface)) {
+            Framebuffer::None | Framebuffer::External => unreachable!(),
+            Framebuffer::Surface(old_surface) => old_surface,
         };
 
         self.make_context_current(context)?;
@@ -396,6 +389,20 @@ impl Device {
             assert!(config_count > 0);
             config
         }
+    }
+
+    fn load_gl_functions_if_necessary(&self,
+                                      mut context: &mut Context,
+                                      next_context_id: &mut ContextID) {
+        // Load the GL functions from ANGLE if this is the first context created.
+        if *next_context_id == ContextID(0) {
+            gl::load_with(|symbol| {
+                self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
+            });
+            *previous_context_created = true;
+        }
+
+        next_context_id.0 += 1;
     }
 }
 

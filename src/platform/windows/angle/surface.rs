@@ -45,7 +45,7 @@ impl Debug for Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        if !self.data.destroyed.load(Ordering::SeqCst) && !thread::panicking() {
+        if self.egl_surface != egl::NO_SURFACE && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
         }
     }
@@ -54,7 +54,9 @@ impl Drop for Surface {
 impl Device {
     pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
                           -> Result<Surface, Error> {
+        let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(context_descriptor);
+
         unsafe {
             let attributes = [
                 egl::WIDTH as EGLint,  size.width as EGLint,
@@ -77,21 +79,12 @@ impl Device {
             assert_ne!(result, egl::FALSE);
             assert_ne!(share_handle, INVALID_HANDLE_VALUE);
 
-            let surface = Surface {
-                data: Arc::new(SurfaceData {
-                    share_handle,
-                    context_descriptor: (*context_descriptor).clone(),
-                    destroyed: AtomicBool::new(false),
-                }),
-            };
-
-            self.surface_bindings.push(SurfaceBinding {
-                surface: surface.clone(),
+            Ok(Surface {
+                share_handle,
+                size: *size,
+                context_id: context.id,
                 egl_surface,
-                egl_config,
-            });
-
-            Ok(surface)
+            })
         }
     }
 
@@ -124,9 +117,17 @@ impl Device {
         }
     }
 
-    pub fn destroy_surface(&self, mut surface: Surface) -> Result<(), Error> {
-        // TODO(pcwalton): GC dead surfaces occasionally.
-        // TODO(pcwalton): Check for double free?
+    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+                           -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
+        self.make_context_not_current(context)?;
+        unsafe {
+            egl::DestroySurface(surface.egl_surface);
+            surface.egl_surface = egl::NO_SURFACE;
+        }
         surface.data.destroyed.store(true, Ordering::SeqCst);
         Ok(())
     }
@@ -140,22 +141,14 @@ impl Device {
 
         Ok(surface_texture.surface)
     }
-
-    pub(crate) fn lookup_surface(&self, surface: &Surface) -> Option<EGLSurface> {
-        for binding in &self.surface_bindings {
-            if binding.surface.data.ptr_eq(&*surface.data) {
-                return Some(binding.egl_surface);
-            }
-        }
-        None
-    }
 }
 
 impl Surface {
     #[inline]
-    pub fn descriptor(&self) -> &SurfaceDescriptor {
-        &self.data.descriptor
+    pub fn size(&self) -> Size2D<i32> {
+        self.size
     }
+
 
     #[inline]
     pub fn id(&self) -> SurfaceId {
