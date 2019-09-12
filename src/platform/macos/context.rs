@@ -13,6 +13,7 @@ use cgl::{kCGLPFAStencilSize, kCGLPFAOpenGLProfile};
 use core_foundation::base::TCFType;
 use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
 use core_foundation::string::CFString;
+use euclid::default::Size2D;
 use gl;
 use gl::types::GLuint;
 use std::mem;
@@ -27,7 +28,7 @@ use std::thread;
 const kCGLNoError: CGLError = 0;
 
 lazy_static! {
-    static ref CREATE_CONTEXT_MUTEX: Mutex<bool> = Mutex::new(false);
+    static ref CREATE_CONTEXT_MUTEX: Mutex<ContextID> = Mutex::new(ContextID(0));
 }
 
 // Choose a renderer compatible with GL 1.0.
@@ -40,8 +41,12 @@ const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 #[allow(non_upper_case_globals)]
 const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
 
+#[derive(Clone, Copy, PartialEq)]
+pub struct ContextID(pub u64);
+
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
+    pub(crate) id: ContextID,
     gl_info: GLInfo,
     framebuffer: Framebuffer,
 }
@@ -141,7 +146,7 @@ impl Device {
     /// query or replace the surface—e.g. `replace_context_color_surface`—will fail if called with
     /// a context object created via this method.
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
-        let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Grab the current context.
         let native_context = Box::new(UnsafeCGLContextRef::current());
@@ -150,18 +155,13 @@ impl Device {
         // Create the context.
         let mut context = Context {
             native_context,
+            id: *next_context_id,
             gl_info: GLInfo::new(),
             framebuffer: Framebuffer::External,
         };
 
         let device = Device::new(&Adapter)?;
-
-        if !*previous_context_created {
-            gl::load_with(|symbol| {
-                device.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-            });
-            *previous_context_created = true;
-        }
+        device.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
 
         let context_descriptor = device.context_descriptor(&context);
         let context_attributes = device.context_descriptor_attributes(&context_descriptor);
@@ -170,17 +170,18 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&self, color_surface: Surface) -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+                          -> Result<Context, Error> {
         // Take a lock so that we're only creating one context at a time. This serves two purposes:
         //
         // 1. CGLChoosePixelFormat fails, returning `kCGLBadConnection`, if multiple threads try to
         //    open a display connection simultaneously.
         // 2. The first thread to create a context needs to load the GL function pointers.
-        let mut previous_context_created = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         unsafe {
             let mut cgl_context = ptr::null_mut();
-            let err = CGLCreateContext(color_surface.descriptor.cgl_pixel_format,
+            let err = CGLCreateContext(descriptor.cgl_pixel_format,
                                        ptr::null_mut(),
                                        &mut cgl_context);
             if err != kCGLNoError {
@@ -199,22 +200,19 @@ impl Device {
 
             let mut context = Context {
                 native_context,
+                id: *next_context_id,
                 framebuffer: Framebuffer::None,
                 gl_info: GLInfo::new(),
             };
 
-            if !*previous_context_created {
-                gl::load_with(|symbol| {
-                    self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-                });
-                *previous_context_created = true;
-            }
+            self.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
 
             let context_descriptor = self.context_descriptor(&context);
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
             context.gl_info.populate(&context_attributes);
 
             // Build the initial framebuffer.
+            let color_surface = self.create_surface(&context, size)?;
             self.create_framebuffer(&mut context, color_surface)?;
 
             Ok(context)
@@ -248,6 +246,19 @@ impl Device {
         }
 
         result
+    }
+
+    fn load_gl_functions_if_necessary(&self,
+                                      mut context: &mut Context,
+                                      next_context_id: &mut ContextID) {
+        // Load the GL functions from the OpenGL framework if this is the first context created.
+        if *next_context_id == ContextID(0) {
+            gl::load_with(|symbol| {
+                self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
+            });
+        }
+
+        next_context_id.0 += 1;
     }
 
     #[inline]
@@ -325,9 +336,8 @@ impl Device {
             return Err(Error::ExternalRenderTarget);
         }
 
-        let context_descriptor = self.context_descriptor(context);
-        if new_color_surface.descriptor.cgl_pixel_format != context_descriptor.cgl_pixel_format {
-            return Err(Error::IncompatibleContextDescriptor);
+        if new_color_surface.context_id != context.id {
+            return Err(Error::IncompatibleSurface);
         }
 
         self.make_context_current(context)?;

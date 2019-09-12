@@ -1,7 +1,7 @@
 //! Surface management for macOS.
 
 use crate::{ContextAttributeFlags, ContextAttributes, Error, FeatureFlags, GLInfo, SurfaceId};
-use super::context::{Context, ContextDescriptor};
+use super::context::{Context, ContextID};
 use super::device::Device;
 
 use core_foundation::base::TCFType;
@@ -22,8 +22,8 @@ const BYTES_PER_PIXEL: i32 = 4;
 #[derive(Clone)]
 pub struct Surface {
     pub(crate) io_surface: IOSurface,
-    pub(crate) descriptor: ContextDescriptor,
     pub(crate) size: Size2D<i32>,
+    pub(crate) context_id: ContextID,
     pub(crate) destroyed: bool,
 }
 
@@ -50,7 +50,7 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+    pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
                           -> Result<Surface, Error> {
         let io_surface = unsafe {
             let props = CFDictionary::from_CFType_pairs(&[
@@ -68,8 +68,8 @@ impl Device {
 
         Ok(Surface {
             io_surface,
-            descriptor: (*descriptor).clone(),
             size: *size,
+            context_id: context.id,
             destroyed: false,
         })
     }
@@ -84,10 +84,7 @@ impl Device {
             gl::BindTexture(gl::TEXTURE_RECTANGLE, texture);
 
             let size = native_surface.size();
-            let has_alpha = self.context_descriptor_attributes(&native_surface.descriptor())
-                                .flags
-                                .contains(ContextAttributeFlags::ALPHA);
-            native_surface.io_surface.bind_to_gl_texture(size.width, size.height, has_alpha);
+            native_surface.io_surface.bind_to_gl_texture(size.width, size.height, true);
 
             // Low filtering to allow rendering
             gl::TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
@@ -131,11 +128,6 @@ impl Device {
 }
 
 impl Surface {
-    #[inline]
-    pub fn descriptor(&self) -> ContextDescriptor {
-        self.descriptor.clone()
-    }
-
     #[inline]
     pub fn size(&self) -> Size2D<i32> {
         self.size

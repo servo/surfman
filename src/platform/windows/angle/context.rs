@@ -272,7 +272,7 @@ impl Device {
         &context.gl_info
     }
 
-    pub fn make_context_current(&mut self, context: &Context) -> Result<(), Error> {
+    pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
             let color_egl_surface = match context.color_surface {
                 ColorSurface::Managed(ref color_surface) => self.lookup_surface(color_surface),

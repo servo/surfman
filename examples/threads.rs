@@ -40,7 +40,7 @@ fn main() {
     window.gl_make_current(&gl_context).unwrap();
 
     // Create surfman objects corresponding to that SDL context.
-    let (mut device, mut context) = unsafe {
+    let (device, mut context) = unsafe {
         Device::from_current_context().unwrap()
     };
     let adapter = device.adapter();
@@ -59,9 +59,8 @@ fn main() {
     // Set up GL objects and state.
     let vertex_array = BlitVertexArray::new();
 
-    // Create an initial surface.
-    let context_descriptor = device.context_descriptor(&context);
-    let mut surface = create_surface(&mut device, &context_descriptor);
+    // Fetch our initial surface.
+    let mut surface = main_from_worker_receiver.recv().unwrap();
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
     // Enter main render loop.
@@ -103,11 +102,14 @@ fn worker_thread(adapter: Adapter,
                  context_descriptor: ContextDescriptor,
                  worker_to_main_sender: Sender<Surface>,
                  worker_from_main_receiver: Receiver<Surface>) {
-    // Open the device, create an initial surface, create a context, and make it current.
+    // Open the device, create a context, and make it current.
     let mut device = Device::new(&adapter).unwrap();
-    let surface = create_surface(&mut device, &context_descriptor);
-    let mut context = device.create_context(surface).unwrap();
+    let mut context = device.create_context(&context_descriptor, &Size2D::new(256, 256)).unwrap();
     device.make_context_current(&context).unwrap();
+
+    // Send an initial surface back to the main thread.
+    let surface = device.create_surface(&context, &Size2D::new(256, 256)).unwrap();
+    worker_to_main_sender.send(surface).unwrap();
 
     let (mut color, mut delta) = (0.0, 0.001);
     loop {
@@ -135,10 +137,6 @@ fn worker_thread(adapter: Adapter,
             delta = -delta;
         }
     }
-}
-
-fn create_surface(device: &mut Device, context_descriptor: &ContextDescriptor) -> Surface {
-    device.create_surface(context_descriptor, &Size2D::new(256, 256)).unwrap()
 }
 
 struct BlitVertexArray {
