@@ -19,17 +19,18 @@ use std::thread;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
-#[derive(Clone)]
 pub struct Surface {
     pub(crate) io_surface: IOSurface,
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
-    pub(crate) destroyed: bool,
+    pub(crate) framebuffer_object: GLuint,
+    pub(crate) texture_object: GLuint,
+    pub(crate) renderbuffers: Renderbuffers,
 }
 
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
-    pub(crate) gl_texture: GLuint,
+    pub(crate) texture_object: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
@@ -43,7 +44,7 @@ impl Debug for Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        if !self.destroyed && !thread::panicking() {
+        if self.framebuffer_object != 0 && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
         }
     }
@@ -52,45 +53,76 @@ impl Drop for Surface {
 impl Device {
     pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
                           -> Result<Surface, Error> {
-        let io_surface = unsafe {
-            let props = CFDictionary::from_CFType_pairs(&[
+        unsafe {
+            let properties = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),
-                 CFNumber::from(size.width).as_CFType()),
+                CFNumber::from(size.width).as_CFType()),
                 (CFString::wrap_under_get_rule(kIOSurfaceHeight),
-                 CFNumber::from(size.height).as_CFType()),
+                CFNumber::from(size.height).as_CFType()),
                 (CFString::wrap_under_get_rule(kIOSurfaceBytesPerElement),
-                 CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
+                CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
                 (CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
-                 CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType()),
+                CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType()),
             ]);
-            io_surface::new(&props)
-        };
 
-        Ok(Surface {
-            io_surface,
-            size: *size,
-            context_id: context.id,
-            destroyed: false,
+            let io_surface = io_surface::new(&properties);
+
+            let texture_object = self.bind_to_gl_texture(&io_surface, size);
+
+            let mut framebuffer_object = 0;
+            gl::GenFramebuffers(1, &mut framebuffer_object);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+
+            gl::FramebufferTexture2D(gl::FRAMEBUFFER,
+                                     gl::COLOR_ATTACHMENT0,
+                                     SurfaceTexture::gl_texture_target(),
+                                     texture_object,
+                                     0);
+
+            let context_descriptor = self.context_descriptor(context);
+            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+
+            let renderbuffers = Renderbuffers::new(&size, &context_attributes, &context.gl_info);
+            renderbuffers.bind_to_current_framebuffer();
+
+            debug_assert_eq!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER),
+                             gl::FRAMEBUFFER_COMPLETE);
+
+            // Set the viewport so that the application doesn't have to do so explicitly.
+            gl::Viewport(0, 0, size.width, size.height);
+
+            Ok(Surface {
+                io_surface,
+                size: *size,
+                context_id: context.id,
+                framebuffer_object,
+                texture_object,
+                renderbuffers,
+            })
+        }
+    }
+
+    pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
+                                  -> Result<SurfaceTexture, Error> {
+        let texture_object = self.bind_to_gl_texture(&surface.io_surface, &surface.size);
+        Ok(SurfaceTexture {
+            surface,
+            texture_object,
+            phantom: PhantomData,
         })
     }
 
-    pub fn create_surface_texture(&self, _: &mut Context, native_surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+    fn bind_to_gl_texture(&self, io_surface: &IOSurface, size: &Size2D<i32>) -> GLuint {
         unsafe {
             let mut texture = 0;
             gl::GenTextures(1, &mut texture);
             debug_assert_ne!(texture, 0);
 
             gl::BindTexture(gl::TEXTURE_RECTANGLE, texture);
+            io_surface.bind_to_gl_texture(size.width, size.height, true);
 
-            let size = native_surface.size();
-            native_surface.io_surface.bind_to_gl_texture(size.width, size.height, true);
-
-            // Low filtering to allow rendering
             gl::TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
             gl::TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
-
-            // TODO(emilio): Check if these two are neccessary, probably not
             gl::TexParameteri(gl::TEXTURE_RECTANGLE,
                               gl::TEXTURE_WRAP_S,
                               gl::CLAMP_TO_EDGE as GLint);
@@ -102,25 +134,31 @@ impl Device {
 
             debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
 
-            Ok(SurfaceTexture {
-                surface: native_surface,
-                gl_texture: texture,
-                phantom: PhantomData,
-            })
+            texture
         }
     }
 
-    pub fn destroy_surface(&self, mut surface: Surface) -> Result<(), Error> {
-        // Nothing to do here.
-        surface.destroyed = true;
+    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+                           -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface)
+        }
+
+        unsafe {
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            gl::DeleteFramebuffers(1, &surface.framebuffer_object);
+            surface.renderbuffers.destroy();
+            gl::DeleteTextures(1, &surface.texture_object);
+        }
+
         Ok(())
     }
 
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
                                    -> Result<Surface, Error> {
         unsafe {
-            gl::DeleteTextures(1, &surface_texture.gl_texture);
-            surface_texture.gl_texture = 0;
+            gl::DeleteTextures(1, &surface_texture.texture_object);
+            surface_texture.texture_object = 0;
         }
 
         Ok(surface_texture.surface)
@@ -147,7 +185,7 @@ impl SurfaceTexture {
 
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
-        self.gl_texture
+        self.texture_object
     }
 
     #[inline]
@@ -161,12 +199,8 @@ pub(crate) enum Framebuffer {
     None,
     // The context is externally-managed.
     External,
-    // The context renders to an OpenGL framebuffer object backed by an `IOSurface`.
-    Object {
-        framebuffer_object: GLuint,
-        color_surface_texture: SurfaceTexture,
-        renderbuffers: Renderbuffers,
-    },
+    // The context renders to a surface.
+    Surface(Surface),
 }
 
 pub(crate) enum Renderbuffers {

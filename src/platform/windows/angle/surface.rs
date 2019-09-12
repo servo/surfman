@@ -21,15 +21,11 @@ const BYTES_PER_PIXEL: i32 = 4;
 
 const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
 
-#[derive(Clone)]
 pub struct Surface {
-    pub(crate) data: Arc<SurfaceData>,
-}
-
-pub(crate) struct SurfaceData {
     pub(crate) share_handle: HANDLE,
-    pub(crate) context_descriptor: ContextDescriptor,
-    pub(crate) destroyed: AtomicBool,
+    pub(crate) size: Size2D<i32>,
+    pub(crate) context_id: ContextID,
+    pub(crate) egl_surface: EGLSurface,
 }
 
 #[derive(Debug)]
@@ -37,11 +33,6 @@ pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
-}
-
-pub(crate) struct SurfaceBinding {
-    pub(crate) surface: Surface,
-    pub(crate) egl_surface: EGLSurface,
 }
 
 unsafe impl Send for Surface {}
@@ -61,7 +52,7 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context_descriptor: &ContextDescriptor, size: &Size2D<i32>)
+    pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
                           -> Result<Surface, Error> {
         let egl_config = self.context_descriptor_to_egl_config(context_descriptor);
         unsafe {
@@ -189,11 +180,11 @@ impl SurfaceTexture {
     }
 }
 
-pub(crate) enum ColorSurface {
+pub(crate) enum Framebuffer {
     // No surface has been attached to the context.
     None,
     // The surface is externally-managed.
     External,
-    // The context renders to a DXGI surface that we manage.
-    Managed(Surface),
+    // The context renders to a surface that we manage.
+    Surface(Surface),
 }

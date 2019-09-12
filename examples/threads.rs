@@ -125,7 +125,7 @@ fn worker_thread(adapter: Adapter,
         }
 
         let new_surface = worker_from_main_receiver.recv().unwrap();
-        let old_surface = device.replace_context_color_surface(&mut context, new_surface).unwrap();
+        let old_surface = device.replace_context_surface(&mut context, new_surface).unwrap();
         worker_to_main_sender.send(old_surface).unwrap();
 
         color += delta;

@@ -8,7 +8,7 @@ use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
 use super::error::ToWindowingApiError;
-use super::surface::{ColorSurface, Surface, SurfaceTexture};
+use super::surface::{Framebuffer, Surface, SurfaceTexture};
 
 use gl;
 use gl::types::GLuint;
@@ -31,8 +31,9 @@ lazy_static! {
 
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
-    gl_info: GLInfo,
-    color_surface: ColorSurface,
+    pub(crate) id: ContextID,
+    pub(crate) gl_info: GLInfo,
+    framebuffer: Framebuffer,
 }
 
 pub(crate) trait NativeContext {
@@ -167,7 +168,7 @@ impl Device {
         let mut context = Context {
             native_context,
             gl_info: GLInfo::new(),
-            color_surface: ColorSurface::External,
+            color_surface: Framebuffer::External,
         };
 
         if !*previous_context_created {
@@ -209,7 +210,7 @@ impl Device {
 
             let mut context = Context {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
-                color_surface: ColorSurface::Managed(color_surface),
+                color_surface: Framebuffer::Surface(color_surface),
                 gl_info: GLInfo::new(attributes),
             };
 
@@ -234,8 +235,8 @@ impl Device {
             return Ok(());
         }
 
-        if let ColorSurface::Managed(color_surface) = mem::replace(&mut context.color_surface,
-                                                                   ColorSurface::None) {
+        if let Framebuffer::Surface(color_surface) = mem::replace(&mut context.color_surface,
+                                                                   Framebuffer::None) {
             self.destroy_surface(color_surface);
         }
 
@@ -275,8 +276,8 @@ impl Device {
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
             let color_egl_surface = match context.color_surface {
-                ColorSurface::Managed(ref color_surface) => self.lookup_surface(color_surface),
-                ColorSurface::None | ColorSurface::External => egl::NO_SURFACE,
+                Framebuffer::Surface(ref color_surface) => self.lookup_surface(color_surface),
+                Framebuffer::None | Framebuffer::External => egl::NO_SURFACE,
             };
             let result = egl::MakeCurrent(self.native_display.egl_display(),
                                           color_egl_surface,
@@ -320,14 +321,14 @@ impl Device {
     #[inline]
     pub fn context_color_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
         match context.color_surface {
-            ColorSurface::None | ColorSurface::External => None,
-            ColorSurface::Managed(ref surface) => Some(surface),
+            Framebuffer::None | Framebuffer::External => None,
+            Framebuffer::Surface(ref surface) => Some(surface),
         }
     }
 
     pub fn replace_context_color_surface(&self, context: &mut Context, new_color_surface: Surface)
                                          -> Result<Option<Surface>, Error> {
-        if let ColorSurface::External = context.color_surface {
+        if let Framebuffer::External = context.color_surface {
             return Err(Error::ExternalRenderTarget)
         }
 
@@ -339,9 +340,9 @@ impl Device {
         }
 
         let old_surface = match mem::replace(&mut context.color_surface,
-                                             ColorSurface::Managed(new_color_surface)) {
-            ColorSurface::None => None,
-            ColorSurface::Managed(old_surface) => Some(old_surface),
+                                             Framebuffer::Surface(new_color_surface)) {
+            Framebuffer::None => None,
+            Framebuffer::Surface(old_surface) => Some(old_surface),
         };
 
         self.make_context_current(context)?;
