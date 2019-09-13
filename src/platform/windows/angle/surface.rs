@@ -15,8 +15,10 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use winapi::shared::dxgi::IDXGIKeyedMutex;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winnt::HANDLE;
+use wio::com::ComPtr;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
@@ -24,8 +26,9 @@ const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
 
 pub struct Surface {
     pub(crate) share_handle: HANDLE,
-    pub(crate) size: Size2D<i32>,
+    pub(crate) keyed_mutex: ComPtr<IDXGIKeyedMutex>,
     pub(crate) egl_surface: EGLSurface,
+    pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
     pub(crate) context_descriptor: ContextDescriptor,
 }
@@ -84,8 +87,20 @@ impl Device {
             assert_ne!(result, egl::FALSE);
             assert_ne!(share_handle, INVALID_HANDLE_VALUE);
 
+            // `mozangle` builds ANGLE with keyed mutexes for sharing. Use the
+            // `EGL_ANGLE_keyed_mutex` extension to fetch the keyed mutex so we can grab it.
+            let mut keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
+            let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
+                self.native_display.egl_display(),
+                egl_surface,
+                EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
+                &mut keyed_mutex);
+            assert!(!keyed_mutex.is_null());
+            let keyed_mutex = ComPtr::from_raw(keyed_mutex);
+
             Ok(Surface {
                 share_handle,
+                keyed_mutex,
                 size: *size,
                 egl_surface,
                 context_id: context.id,

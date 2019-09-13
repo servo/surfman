@@ -225,9 +225,10 @@ impl Device {
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
             context.gl_info.populate(&context_attributes);
 
-            context.framebuffer = Framebuffer::Surface(self.create_surface(&context, size)?);
-
+            let initial_surface = self.create_surface(&context, size)?;
+            self.attach_surface(initial_surface);
             self.make_context_current(&context)?;
+
             Ok(context)
         }
     }
@@ -237,8 +238,7 @@ impl Device {
             return Ok(());
         }
 
-        if let Framebuffer::Surface(surface) = mem::replace(&mut context.framebuffer,
-                                                            Framebuffer::None) {
+        if let Some(surface) = self.release_surface(context) {
             self.destroy_surface(context, surface);
         }
 
@@ -336,12 +336,8 @@ impl Device {
             return Err(Error::IncompatibleSurface);
         }
 
-        let old_surface = match mem::replace(&mut context.framebuffer,
-                                             Framebuffer::Surface(new_surface)) {
-            Framebuffer::None | Framebuffer::External => unreachable!(),
-            Framebuffer::Surface(old_surface) => old_surface,
-        };
-
+        let old_surface = self.release_surface(context).expect("Where's our surface?");
+        self.framebuffer = Framebuffer::Surface(new_surface);
         self.make_context_current(context)?;
 
         Ok(old_surface)
@@ -417,6 +413,34 @@ impl Device {
         }
 
         next_context_id.0 += 1;
+    }
+
+    fn attach_surface(&self, context: &mut Context, surface: Surface) {
+        match context.framebuffer {
+            Framebuffer::None => {}
+            _ => panic!("Tried to attach a surface, but there was already a surface present!"),
+        }
+
+        unsafe {
+            let result = surface.keyed_mutex.AcquireSync(0xdefaced, INFINITE);
+            assert!(winerror::SUCCEEDED(result));
+        }
+
+        context.framebuffer = Framebuffer::Surface(surface);
+    }
+
+    fn release_surface(&self, context: &mut Context) -> Option<Surface> {
+        let surface = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            Framebuffer::Surface(surface) => surface,
+            Framebuffer::None | Framebuffer::External => return None,
+        };
+
+        unsafe {
+            let result = surface.keyed_mutex.ReleaseSync(0xdefaced);
+            assert!(winerror::SUCCEEDED(result));
+        }
+
+        Some(surface)
     }
 }
 
