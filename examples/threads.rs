@@ -6,6 +6,7 @@
 use euclid::default::Size2D;
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use sdl2::event::Event;
+use sdl2::hint;
 use sdl2::keyboard::Keycode;
 use sdl2::video::GLProfile;
 use std::fs::File;
@@ -20,15 +21,21 @@ static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1];
 static TRANSFORM: [f32; 4] = [0.5, 0.0, 0.0, 0.5];
 static TRANSLATION: [f32; 2] = [0.0, 0.0];
 
+#[cfg(target_os = "windows")]
+static SHADER_PREAMBLE: &[u8] = b"#version 300 es\n#define SAMPLER_TYPE sampler2D\n";
+#[cfg(not(target_os = "windows"))]
+static SHADER_PREAMBLE: &[u8] = b"#version 330\n#define SAMPLER_TYPE sampler2DRect\n";
+
 fn main() {
     // Set up SDL2.
     let sdl_context = sdl2::init().unwrap();
+    hint::set("SDL_OPENGL_ES_DRIVER", "1");
     let video = sdl_context.video().unwrap();
 
     // Make sure we have at least a GL 3.0 context.
     let gl_attributes = video.gl_attr();
-    gl_attributes.set_context_profile(GLProfile::Core);
-    gl_attributes.set_context_version(3, 3);
+    gl_attributes.set_context_profile(GLProfile::GLES);
+    gl_attributes.set_context_version(3, 0);
 
     // Open a window.
     let window = video.window("Multithreaded example", 1067, 800).opengl().build().unwrap();
@@ -81,9 +88,12 @@ fn main() {
                                  1,
                                  gl::FALSE,
                                  TRANSFORM.as_ptr());
-            gl::Uniform2fv(vertex_array.blit_program.translation_uniform, 1, TRANSLATION.as_ptr());
+            gl::Uniform2fv(vertex_array.blit_program.translation_uniform,
+                           1,
+                           TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
             gl::BindTexture(SurfaceTexture::gl_texture_target(), texture.gl_texture()); ck();
+            println!("bound texture {}", texture.gl_texture());
             gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
@@ -111,7 +121,7 @@ fn worker_thread(adapter: Adapter,
     let surface = device.create_surface(&context, &Size2D::new(256, 256)).unwrap();
     worker_to_main_sender.send(surface).unwrap();
 
-    let (mut color, mut delta) = (0.0, 0.001);
+    let (mut color, mut delta) = (1.0, -0.001);
     loop {
         // Render to the surface.
         unsafe {
@@ -119,7 +129,7 @@ fn worker_thread(adapter: Adapter,
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::Viewport(0, 0, 256, 256);
 
-            gl::ClearColor(0.0, color, 0.0, 1.0);
+            gl::ClearColor(color, color, color, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::Flush();
         }
@@ -232,7 +242,7 @@ struct Shader {
 
 impl Shader {
     fn new(name: &str, kind: ShaderKind) -> Shader {
-        let mut source = vec![];
+        let mut source = SHADER_PREAMBLE.to_vec();
         let path = format!("resources/examples/{}.{}.glsl", name, kind.extension());
         File::open(&path).expect("Failed to open shader source!")
                          .read_to_end(&mut source)

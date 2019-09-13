@@ -30,6 +30,10 @@ pub enum Error {
     DeviceOpenFailed,
     /// The surface was not created from this context.
     IncompatibleSurface,
+    /// The system couldn't import a surface from another thread.
+    SurfaceImportFailed(WindowingApiError),
+    /// The system couldn't create a surface texture from a surface.
+    SurfaceTextureCreationFailed(WindowingApiError),
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.

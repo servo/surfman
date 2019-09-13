@@ -3,8 +3,9 @@
 use crate::egl::types::{EGLConfig, EGLSurface, EGLenum};
 use crate::egl::{self, EGLint};
 use crate::{ContextAttributeFlags, Error, FeatureFlags, GLInfo, SurfaceId};
-use super::context::Context;
+use super::context::{self, Context, ContextDescriptor, ContextID};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
+use super::error::ToWindowingApiError;
 
 use euclid::default::Size2D;
 use gl;
@@ -24,13 +25,15 @@ const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
 pub struct Surface {
     pub(crate) share_handle: HANDLE,
     pub(crate) size: Size2D<i32>,
-    pub(crate) context_id: ContextID,
     pub(crate) egl_surface: EGLSurface,
+    pub(crate) context_id: ContextID,
+    pub(crate) context_descriptor: ContextDescriptor,
 }
 
 #[derive(Debug)]
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
+    pub(crate) local_egl_surface: EGLSurface,
     pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
 }
@@ -39,7 +42,7 @@ unsafe impl Send for Surface {}
 
 impl Debug for Surface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:?})", self.data.descriptor)
+        write!(f, "Surface({:x})", self.id().0)
     }
 }
 
@@ -55,14 +58,16 @@ impl Device {
     pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
                           -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
-        let egl_config = self.context_descriptor_to_egl_config(context_descriptor);
+        let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
         unsafe {
             let attributes = [
-                egl::WIDTH as EGLint,  size.width as EGLint,
-                egl::HEIGHT as EGLint, size.height as EGLint,
-                egl::NONE as EGLint,   0,
-                0,                     0,
+                egl::WIDTH as EGLint,           size.width as EGLint,
+                egl::HEIGHT as EGLint,          size.height as EGLint,
+                egl::TEXTURE_FORMAT as EGLint,  egl::TEXTURE_RGBA as EGLint,
+                egl::TEXTURE_TARGET as EGLint,  egl::TEXTURE_2D as EGLint,
+                egl::NONE as EGLint,            0,
+                0,                              0,
             ];
 
             let egl_surface = egl::CreatePbufferSurface(self.native_display.egl_display(),
@@ -82,26 +87,57 @@ impl Device {
             Ok(Surface {
                 share_handle,
                 size: *size,
-                context_id: context.id,
                 egl_surface,
+                context_id: context.id,
+                context_descriptor,
             })
         }
     }
 
-    pub fn create_surface_texture(&mut self, _: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+    pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
+        let local_egl_config = self.context_descriptor_to_egl_config(&surface.context_descriptor);
+        println!("local egl config renderable type={:x}",
+                 context::get_config_attr(self.native_display.egl_display(),
+                                          local_egl_config,
+                                          egl::RENDERABLE_TYPE as EGLint));
+
         unsafe {
+            // First, create an EGL surface local to this thread.
+            let pbuffer_attributes = [
+                egl::WIDTH as EGLint,           surface.size.width,
+                egl::HEIGHT as EGLint,          surface.size.height,
+                egl::TEXTURE_FORMAT as EGLint,  egl::TEXTURE_RGBA as EGLint,
+                egl::TEXTURE_TARGET as EGLint,  egl::TEXTURE_2D as EGLint,
+                egl::NONE as EGLint,            0,
+                0,                              0,
+            ];
+            println!("surface size={},{} share_handle={:x}",
+                     surface.size.width,
+                     surface.size.height,
+                     surface.share_handle as usize);
+            let local_egl_surface =
+                egl::CreatePbufferFromClientBuffer(self.native_display.egl_display(),
+                                                   EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
+                                                   surface.share_handle,
+                                                   local_egl_config,
+                                                   pbuffer_attributes.as_ptr());
+            if local_egl_surface == egl::NO_SURFACE {
+                let windowing_api_error = egl::GetError().to_windowing_api_error();
+                return Err((Error::SurfaceImportFailed(windowing_api_error), surface));
+            }
+
+            // Then bind that surface to the texture.
             let mut texture = 0;
             gl::GenTextures(1, &mut texture);
             debug_assert_ne!(texture, 0);
 
             gl::BindTexture(gl::TEXTURE_2D, texture);
-
-            let egl_surface = self.lookup_surface(&surface).egl_surface;
             if egl::BindTexImage(self.native_display.egl_display(),
-                                 egl_surface,
+                                 local_egl_surface,
                                  egl::BACK_BUFFER as GLint) == egl::FALSE {
-                panic!("Failed to bind EGL texture surface: {:x}!", egl::GetError())
+                let windowing_api_error = egl::GetError().to_windowing_api_error();
+                return Err((Error::SurfaceTextureCreationFailed(windowing_api_error), surface));
             }
 
             // Initialize the texture, for convenience.
@@ -113,7 +149,12 @@ impl Device {
             gl::BindTexture(gl::TEXTURE_2D, 0);
             debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
 
-            Ok(SurfaceTexture { surface, gl_texture: texture, phantom: PhantomData })
+            Ok(SurfaceTexture {
+                surface,
+                local_egl_surface,
+                gl_texture: texture,
+                phantom: PhantomData,
+            })
         }
     }
 
@@ -125,10 +166,10 @@ impl Device {
 
         self.make_context_not_current(context)?;
         unsafe {
-            egl::DestroySurface(surface.egl_surface);
+            egl::DestroySurface(self.native_display.egl_display(), surface.egl_surface);
             surface.egl_surface = egl::NO_SURFACE;
         }
-        surface.data.destroyed.store(true, Ordering::SeqCst);
+
         Ok(())
     }
 
@@ -137,6 +178,9 @@ impl Device {
         unsafe {
             gl::DeleteTextures(1, &surface_texture.gl_texture);
             surface_texture.gl_texture = 0;
+
+            egl::DestroySurface(self.native_display.egl_display(),
+                                surface_texture.local_egl_surface);
         }
 
         Ok(surface_texture.surface)
@@ -152,7 +196,7 @@ impl Surface {
 
     #[inline]
     pub fn id(&self) -> SurfaceId {
-        SurfaceId(self.data.share_handle as usize)
+        SurfaceId(self.share_handle as usize)
     }
 }
 

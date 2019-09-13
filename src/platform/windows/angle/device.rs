@@ -4,7 +4,7 @@ use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceE
 use crate::egl::types::{EGLSurface, EGLenum, EGLint};
 use crate::{Error, egl};
 use super::adapter::Adapter;
-use super::surface::SurfaceBinding;
+use super::context::ContextID;
 
 use std::mem;
 use std::os::raw::{c_char, c_void};
@@ -12,7 +12,7 @@ use std::ptr;
 use winapi::Interface;
 use winapi::shared::dxgi::IDXGIDevice;
 use winapi::shared::winerror;
-use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device};
+use winapi::um::d3d11::{D3D11CreateDevice, D3D11_CREATE_DEVICE_DEBUG, D3D11_SDK_VERSION, ID3D11Device};
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE, D3D_FEATURE_LEVEL_9_3};
 use wio::com::ComPtr;
 
@@ -21,7 +21,7 @@ pub(crate) const EGL_NO_DEVICE_EXT: EGLDeviceEXT = 0 as EGLDeviceEXT;
 
 const EGL_PLATFORM_DEVICE_EXT: EGLenum = 0x313f;
 
-struct EGLExtensionFunctions {
+pub(crate) struct EGLExtensionFunctions {
     CreateDeviceANGLE: extern "C" fn(device_type: EGLint,
                                      native_device: *mut c_void,
                                      attrib_list: *const EGLAttrib)
@@ -61,7 +61,6 @@ lazy_static! {
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
     pub(crate) egl_device: EGLDeviceEXT,
-    pub(crate) surface_bindings: Vec<SurfaceBinding>,
     pub(crate) d3d11_device: ComPtr<ID3D11Device>,
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
 }
@@ -83,7 +82,7 @@ impl Device {
             let result = D3D11CreateDevice(adapter.dxgi_adapter.as_raw(),
                                            d3d_driver_type,
                                            ptr::null_mut(),
-                                           0,
+                                           D3D11_CREATE_DEVICE_DEBUG,
                                            ptr::null_mut(),
                                            0,
                                            D3D11_SDK_VERSION,
@@ -120,7 +119,6 @@ impl Device {
             Ok(Device {
                 native_display,
                 egl_device,
-                surface_bindings: vec![],
                 d3d11_device,
                 d3d_driver_type,
             })

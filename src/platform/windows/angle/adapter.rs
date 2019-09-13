@@ -21,6 +21,8 @@ pub struct Adapter {
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
 }
 
+unsafe impl Send for Adapter {}
+
 impl Adapter {
     pub fn default() -> Result<Adapter, Error> {
         unsafe {

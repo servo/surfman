@@ -1,6 +1,6 @@
-#version 330
-
 // resources/examples/quad.vs.glsl
+
+precision highp float;
 
 uniform mat2 uTransform;
 uniform vec2 uTranslation;
