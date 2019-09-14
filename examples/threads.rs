@@ -8,7 +8,7 @@ use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use sdl2::event::Event;
 use sdl2::hint;
 use sdl2::keyboard::Keycode;
-use sdl2::video::GLProfile;
+use sdl2::video::{GLProfile, SwapInterval};
 use std::fs::File;
 use std::io::Read;
 use std::os::raw::c_void;
@@ -45,6 +45,7 @@ fn main() {
     let gl_context = window.gl_create_context().unwrap();
     gl::load_with(|name| video.gl_get_proc_address(name) as *const _);
     window.gl_make_current(&gl_context).unwrap();
+    video.gl_set_swap_interval(SwapInterval::VSync).unwrap();
 
     // Create surfman objects corresponding to that SDL context.
     let (device, mut context) = unsafe {
@@ -71,6 +72,7 @@ fn main() {
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
     // Enter main render loop.
+    let mut animation = Animation::new(0.75, 0.001);
     loop {
         // Send back our old surface, and fetch a new one.
         surface = device.destroy_surface_texture(&mut context, texture).unwrap();
@@ -79,7 +81,7 @@ fn main() {
         texture = device.create_surface_texture(&mut context, surface).unwrap();
 
         unsafe {
-            gl::ClearColor(0.0, 0.0, 0.5, 1.0); ck();
+            gl::ClearColor(0.0, 0.0, animation.tick(), 1.0); ck();
             gl::Clear(gl::COLOR_BUFFER_BIT); ck();
 
             gl::BindVertexArray(vertex_array.object); ck();
@@ -121,7 +123,7 @@ fn worker_thread(adapter: Adapter,
     let surface = device.create_surface(&context, &Size2D::new(256, 256)).unwrap();
     worker_to_main_sender.send(surface).unwrap();
 
-    let (mut color, mut delta) = (1.0, -0.001);
+    let mut animation = Animation::new(0.25, 0.001);
     loop {
         // Render to the surface.
         unsafe {
@@ -129,23 +131,37 @@ fn worker_thread(adapter: Adapter,
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::Viewport(0, 0, 256, 256);
 
-            gl::ClearColor(color, color, color, 1.0);
+            gl::ClearColor(0.0, animation.tick(), 0.0, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
-            gl::Flush();
         }
 
         let new_surface = worker_from_main_receiver.recv().unwrap();
         let old_surface = device.replace_context_surface(&mut context, new_surface).unwrap();
         worker_to_main_sender.send(old_surface).unwrap();
+    }
+}
 
-        color += delta;
-        if color >= 1.0 && delta > 0.0 {
-            color = 1.0;
-            delta = -delta;
-        } else if color <= 0.0 && delta < 0.0 {
-            color = 0.0;
-            delta = -delta;
+struct Animation {
+    value: f32,
+    delta: f32,
+}
+
+impl Animation {
+    fn new(value: f32, delta: f32) -> Animation {
+        Animation { value, delta }
+    }
+
+    fn tick(&mut self) -> f32 {
+        let old_value = self.value;
+        self.value += self.delta;
+        if self.value >= 1.0 && self.delta > 0.0 {
+            self.value = 1.0;
+            self.delta = -self.delta;
+        } else if self.value <= 0.0 && self.delta < 0.0 {
+            self.value = 0.0;
+            self.delta = -self.delta;
         }
+        old_value
     }
 }
 

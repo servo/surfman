@@ -20,8 +20,10 @@ use std::ptr;
 use std::str::FromStr;
 use std::sync::Mutex;
 use std::thread;
+use winapi::shared::winerror::S_OK;
 use winapi::um::d3d11::ID3D11Device;
 use winapi::um::d3dcommon::D3D_DRIVER_TYPE_UNKNOWN;
+use winapi::um::winbase::INFINITE;
 use wio::com::ComPtr;
 
 const EGL_DEVICE_EXT: EGLenum = 0x322c;
@@ -226,7 +228,7 @@ impl Device {
             context.gl_info.populate(&context_attributes);
 
             let initial_surface = self.create_surface(&context, size)?;
-            self.attach_surface(initial_surface);
+            self.attach_surface(&mut context, initial_surface);
             self.make_context_current(&context)?;
 
             Ok(context)
@@ -337,7 +339,7 @@ impl Device {
         }
 
         let old_surface = self.release_surface(context).expect("Where's our surface?");
-        self.framebuffer = Framebuffer::Surface(new_surface);
+        self.attach_surface(context, new_surface);
         self.make_context_current(context)?;
 
         Ok(old_surface)
@@ -422,8 +424,10 @@ impl Device {
         }
 
         unsafe {
-            let result = surface.keyed_mutex.AcquireSync(0xdefaced, INFINITE);
-            assert!(winerror::SUCCEEDED(result));
+            println!("begin AcquireSync");
+            let result = surface.keyed_mutex.AcquireSync(0, INFINITE);
+            println!("end AcquireSync");
+            assert_eq!(result, S_OK);
         }
 
         context.framebuffer = Framebuffer::Surface(surface);
@@ -436,8 +440,10 @@ impl Device {
         };
 
         unsafe {
-            let result = surface.keyed_mutex.ReleaseSync(0xdefaced);
-            assert!(winerror::SUCCEEDED(result));
+            println!("begin ReleaseSync");
+            let result = surface.keyed_mutex.ReleaseSync(0);
+            println!("end ReleaseSync");
+            assert_eq!(result, S_OK);
         }
 
         Some(surface)

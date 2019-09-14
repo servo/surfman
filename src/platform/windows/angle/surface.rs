@@ -12,17 +12,22 @@ use gl;
 use gl::types::{GLenum, GLint, GLuint};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
+use std::os::raw::c_void;
+use std::ptr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use winapi::shared::dxgi::IDXGIKeyedMutex;
+use winapi::shared::winerror::{self, S_OK};
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::HANDLE;
 use wio::com::ComPtr;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
 const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
+const EGL_DXGI_KEYED_MUTEX_ANGLE: EGLenum = 0x33a2;
 
 pub struct Surface {
     pub(crate) share_handle: HANDLE,
@@ -37,6 +42,7 @@ pub struct Surface {
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_surface: EGLSurface,
+    pub(crate) local_keyed_mutex: ComPtr<IDXGIKeyedMutex>,
     pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
 }
@@ -94,9 +100,11 @@ impl Device {
                 self.native_display.egl_display(),
                 egl_surface,
                 EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
-                &mut keyed_mutex);
+                &mut keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
+            assert_ne!(result, egl::FALSE);
             assert!(!keyed_mutex.is_null());
             let keyed_mutex = ComPtr::from_raw(keyed_mutex);
+            keyed_mutex.AddRef();
 
             Ok(Surface {
                 share_handle,
@@ -142,6 +150,21 @@ impl Device {
                 return Err((Error::SurfaceImportFailed(windowing_api_error), surface));
             }
 
+            // FIXME(pcwalton): Try to fetch a keyed mutex.
+            let mut local_keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
+            let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
+                self.native_display.egl_display(),
+                local_egl_surface,
+                EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
+                &mut local_keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
+            assert_ne!(result, egl::FALSE);
+            assert!(!local_keyed_mutex.is_null());
+            let local_keyed_mutex = ComPtr::from_raw(local_keyed_mutex);
+            local_keyed_mutex.AddRef();
+
+            let result = local_keyed_mutex.AcquireSync(0, INFINITE);
+            assert_eq!(result, S_OK);
+
             // Then bind that surface to the texture.
             let mut texture = 0;
             gl::GenTextures(1, &mut texture);
@@ -167,6 +190,7 @@ impl Device {
             Ok(SurfaceTexture {
                 surface,
                 local_egl_surface,
+                local_keyed_mutex,
                 gl_texture: texture,
                 phantom: PhantomData,
             })
@@ -193,6 +217,9 @@ impl Device {
         unsafe {
             gl::DeleteTextures(1, &surface_texture.gl_texture);
             surface_texture.gl_texture = 0;
+
+            let result = surface_texture.local_keyed_mutex.ReleaseSync(0);
+            assert_eq!(result, S_OK);
 
             egl::DestroySurface(self.native_display.egl_display(),
                                 surface_texture.local_egl_surface);
