@@ -1,10 +1,5 @@
 //! Platform-specific backends.
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
-pub mod with_glx;
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios")), feature="x11"))]
-pub use with_glx as default;
-
 #[cfg(feature="osmesa")]
 pub mod with_osmesa;
 #[cfg(feature="osmesa")]
@@ -12,8 +7,13 @@ pub use with_osmesa as default;
 
 #[cfg(target_os = "macos")]
 pub mod macos;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "sm-x11")))]
 pub use macos as default;
+
+#[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
+pub mod unix;
+#[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
+pub use unix as default;
 
 #[cfg(target_os = "windows")]
 pub mod windows;

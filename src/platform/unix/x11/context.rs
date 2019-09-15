@@ -1,4 +1,4 @@
-//! Wrapper for Core OpenGL contexts.
+//! Wrapper for GLX contexts.
 
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo, GLVersion};
 use super::adapter::Adapter;
@@ -143,8 +143,8 @@ impl Device {
     /// library; for example, by Glutin. It's legal to use this method to wrap a context rendering
     /// to any target: either a window or a pbuffer. The target is opaque to `surfman`; the library
     /// will not modify or try to detect the render target. This means that any of the methods that
-    /// query or replace the surface—e.g. `replace_context_surface`—will fail if called with a
-    /// context object created via this method.
+    /// query or replace the surface—e.g. `replace_context_color_surface`—will fail if called with
+    /// a context object created via this method.
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
@@ -433,3 +433,4 @@ impl NativeContext for UnsafeCGLContextRef {
         self.cgl_context = ptr::null_mut();
     }
 }
+

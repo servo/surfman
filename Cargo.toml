@@ -16,8 +16,8 @@ build = "build.rs"
 gl_generator = "0.11"
 
 [features]
-sm-default = ["x11"]
 sm-osmesa = ["osmesa-sys"]
+sm-x11 = ["x11"]
 
 [dependencies]
 bitflags = "1.1"
@@ -59,6 +59,10 @@ io-surface = { git = "https://github.com/zakorgy/core-foundation-rs", branch = "
 objc = "0.2"
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios"))))'.dependencies.x11]
+version = "2.3.0"
+features = ["xlib"]
+
+[target.'cfg(any(not(unix), target_os = "macos", target_os = "android", target_os = "ios"))'.dependencies.x11]
 optional = true
 version = "2.3.0"
 features = ["xlib"]

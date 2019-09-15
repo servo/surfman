@@ -48,14 +48,13 @@ fn main() {
     window.gl_make_current(&gl_context).unwrap();
     video.gl_set_swap_interval(SwapInterval::VSync).unwrap();
 
-    // Create surfman objects corresponding to that SDL context.
+    // Create `surfman` objects corresponding to that SDL context.
     let (device, mut context) = unsafe {
         Device::from_current_context().unwrap()
     };
     let adapter = device.adapter();
     let context_descriptor = device.context_descriptor(&context);
 
-    /*
     // Set up communication channels, and spawn our worker thread.
     let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
     let (main_to_worker_sender, worker_from_main_receiver) = mpsc::channel();
@@ -65,28 +64,23 @@ fn main() {
                       worker_to_main_sender,
                       worker_from_main_receiver)
     });
-    */
 
     // Set up GL objects and state.
     let vertex_array = BlitVertexArray::new();
 
-    /*
     // Fetch our initial surface.
     let mut surface = main_from_worker_receiver.recv().unwrap();
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
-    */
 
     // Enter main render loop.
     let mut animation = Animation::new(0.75, 0.01);
     let mut rng = rand::thread_rng();
     loop {
-        /*
         // Send back our old surface, and fetch a new one.
         surface = device.destroy_surface_texture(&mut context, texture).unwrap();
         main_to_worker_sender.send(surface).unwrap();
         surface = main_from_worker_receiver.recv().unwrap();
         texture = device.create_surface_texture(&mut context, surface).unwrap();
-        */
 
         unsafe {
             let value = animation.tick();
@@ -103,10 +97,9 @@ fn main() {
                            1,
                            TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
-            //gl::BindTexture(SurfaceTexture::gl_texture_target(), texture.gl_texture()); ck();
-            //println!("bound texture {}", texture.gl_texture());
-            //gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
-            //gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
+            gl::BindTexture(SurfaceTexture::gl_texture_target(), texture.gl_texture()); ck();
+            gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
+            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
         window.gl_swap_window();

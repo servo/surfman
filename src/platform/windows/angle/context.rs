@@ -142,8 +142,6 @@ impl Device {
         debug_assert_ne!(egl_context, egl::NO_CONTEXT);
         let native_context = Box::new(UnsafeEGLContextRef { egl_context });
 
-        //println!("Device::from_current_context() = {:x}", egl_context as usize);
-
         // Fetch the EGL device.
         let mut egl_device = EGL_NO_DEVICE_EXT;
         let result = (EGL_EXTENSION_FUNCTIONS.QueryDisplayAttribEXT)(
@@ -260,7 +258,6 @@ impl Device {
                 get_context_attr(self.native_display.egl_display(),
                                  context.native_context.egl_context(),
                                  egl::CONTEXT_CLIENT_VERSION as EGLint);
-            //println!("client version = {}", egl_context_client_version);
             ContextDescriptor { egl_config_id, egl_context_client_version }
         }
     }
@@ -396,10 +393,6 @@ impl Device {
                                            &mut config_count);
             assert_ne!(result, egl::FALSE);
             assert!(config_count > 0);
-            /*println!("renderable type: {:x}",
-                     get_config_attr(self.native_display.egl_display(),
-                                     config,
-                                     egl::RENDERABLE_TYPE as EGLint));*/
             config
         }
     }
@@ -424,9 +417,7 @@ impl Device {
         }
 
         unsafe {
-            //println!("begin AcquireSync");
             let result = surface.keyed_mutex.AcquireSync(0, INFINITE);
-            //println!("end AcquireSync");
             assert_eq!(result, S_OK);
         }
 
@@ -440,9 +431,7 @@ impl Device {
         };
 
         unsafe {
-            //println!("begin ReleaseSync");
             let result = surface.keyed_mutex.ReleaseSync(0);
-            //println!("end ReleaseSync");
             assert_eq!(result, S_OK);
         }
 
@@ -516,4 +505,3 @@ fn get_context_attr(egl_display: EGLDisplay, egl_context: EGLContext, attr: EGLi
         value
     }
 }
-

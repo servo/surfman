@@ -120,10 +120,6 @@ impl Device {
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, (Error, Surface)> {
         let local_egl_config = self.context_descriptor_to_egl_config(&surface.context_descriptor);
-        /*println!("local egl config renderable type={:x}",
-                 context::get_config_attr(self.native_display.egl_display(),
-                                          local_egl_config,
-                                          egl::RENDERABLE_TYPE as EGLint));*/
 
         unsafe {
             // First, create an EGL surface local to this thread.
@@ -135,10 +131,6 @@ impl Device {
                 egl::NONE as EGLint,            0,
                 0,                              0,
             ];
-            /*println!("surface size={},{} share_handle={:x}",
-                     surface.size.width,
-                     surface.size.height,
-                     surface.share_handle as usize);*/
             let local_egl_surface =
                 egl::CreatePbufferFromClientBuffer(self.native_display.egl_display(),
                                                    EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,

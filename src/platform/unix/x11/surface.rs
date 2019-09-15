@@ -1,4 +1,4 @@
-//! Surface management for macOS.
+//! Wrapper for GL-renderable pixmaps on X11.
 
 use crate::{ContextAttributeFlags, ContextAttributes, Error, FeatureFlags, GLInfo, SurfaceId};
 use super::context::{Context, ContextID};
