@@ -23,6 +23,7 @@ sm-osmesa = ["osmesa-sys"]
 bitflags = "1.1"
 gl = "0.13"
 lazy_static = "1"
+rand = "0.7"
 
 [dependencies.euclid]
 version = "0.20"

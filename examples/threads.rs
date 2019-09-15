@@ -5,6 +5,7 @@
 
 use euclid::default::Size2D;
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
+use rand::{self, Rng};
 use sdl2::event::Event;
 use sdl2::hint;
 use sdl2::keyboard::Keycode;
@@ -38,7 +39,7 @@ fn main() {
     gl_attributes.set_context_version(3, 0);
 
     // Open a window.
-    let window = video.window("Multithreaded example", 1067, 800).opengl().build().unwrap();
+    let window = video.window("Multithreaded example", 320, 240).opengl().build().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     // Create the GL context in SDL, and make it current.
@@ -54,6 +55,7 @@ fn main() {
     let adapter = device.adapter();
     let context_descriptor = device.context_descriptor(&context);
 
+    /*
     // Set up communication channels, and spawn our worker thread.
     let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
     let (main_to_worker_sender, worker_from_main_receiver) = mpsc::channel();
@@ -63,25 +65,32 @@ fn main() {
                       worker_to_main_sender,
                       worker_from_main_receiver)
     });
+    */
 
     // Set up GL objects and state.
     let vertex_array = BlitVertexArray::new();
 
+    /*
     // Fetch our initial surface.
     let mut surface = main_from_worker_receiver.recv().unwrap();
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
+    */
 
     // Enter main render loop.
-    let mut animation = Animation::new(0.75, 0.001);
+    let mut animation = Animation::new(0.75, 0.01);
+    let mut rng = rand::thread_rng();
     loop {
+        /*
         // Send back our old surface, and fetch a new one.
         surface = device.destroy_surface_texture(&mut context, texture).unwrap();
         main_to_worker_sender.send(surface).unwrap();
         surface = main_from_worker_receiver.recv().unwrap();
         texture = device.create_surface_texture(&mut context, surface).unwrap();
+        */
 
         unsafe {
-            gl::ClearColor(0.0, 0.0, animation.tick(), 1.0); ck();
+            let value = animation.tick();
+            gl::ClearColor(value, 0.0, 0.0, 1.0); ck();
             gl::Clear(gl::COLOR_BUFFER_BIT); ck();
 
             gl::BindVertexArray(vertex_array.object); ck();
@@ -94,18 +103,21 @@ fn main() {
                            1,
                            TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
-            gl::BindTexture(SurfaceTexture::gl_texture_target(), texture.gl_texture()); ck();
-            println!("bound texture {}", texture.gl_texture());
-            gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
-            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
+            //gl::BindTexture(SurfaceTexture::gl_texture_target(), texture.gl_texture()); ck();
+            //println!("bound texture {}", texture.gl_texture());
+            //gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
+            //gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
         window.gl_swap_window();
 
-        match event_pump.poll_event() {
-            Some(Event::Quit {..}) |
-            Some(Event::KeyDown { keycode: Some(Keycode::Escape), .. }) => return,
-            _ => {}
+        loop {
+            match event_pump.poll_event() {
+                Some(Event::Quit {..}) |
+                Some(Event::KeyDown { keycode: Some(Keycode::Escape), .. }) => return,
+                None => break,
+                _ => {}
+            }
         }
     }
 }
@@ -123,7 +135,7 @@ fn worker_thread(adapter: Adapter,
     let surface = device.create_surface(&context, &Size2D::new(256, 256)).unwrap();
     worker_to_main_sender.send(surface).unwrap();
 
-    let mut animation = Animation::new(0.25, 0.001);
+    let mut animation = Animation::new(0.25, 0.01);
     loop {
         // Render to the surface.
         unsafe {
@@ -154,10 +166,10 @@ impl Animation {
     fn tick(&mut self) -> f32 {
         let old_value = self.value;
         self.value += self.delta;
-        if self.value >= 1.0 && self.delta > 0.0 {
+        if self.value > 1.0 && self.delta > 0.0 {
             self.value = 1.0;
             self.delta = -self.delta;
-        } else if self.value <= 0.0 && self.delta < 0.0 {
+        } else if self.value < 0.0 && self.delta < 0.0 {
             self.value = 0.0;
             self.delta = -self.delta;
         }

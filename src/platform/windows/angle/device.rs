@@ -82,7 +82,7 @@ impl Device {
             let result = D3D11CreateDevice(adapter.dxgi_adapter.as_raw(),
                                            d3d_driver_type,
                                            ptr::null_mut(),
-                                           D3D11_CREATE_DEVICE_DEBUG,
+                                           0,
                                            ptr::null_mut(),
                                            0,
                                            D3D11_SDK_VERSION,
