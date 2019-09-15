@@ -2,8 +2,6 @@ use gleam::gl;
 use euclid::Size2D;
 
 use crate::GLContext;
-#[cfg(all(target_os = "linux", feature = "test_egl_in_linux"))]
-use crate::platform::with_egl::NativeGLContext;
 #[cfg(feature="test_osmesa")]
 use crate::platform::with_osmesa::OSMesaContext as NativeGLContext;
 #[cfg(not(any(feature = "test_egl_in_linux", feature = "test_osmesa")))]

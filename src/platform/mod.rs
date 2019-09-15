@@ -10,14 +10,6 @@ pub mod with_osmesa;
 #[cfg(feature="osmesa")]
 pub use with_osmesa as default;
 
-#[cfg(any(
-    target_os="android",
-    all(target_os="linux", feature = "test_egl_in_linux"),
-))]
-pub mod with_egl;
-#[cfg(any(target_os="android", all(target_os="windows", feature="no_wgl")))]
-pub use with_egl as default;
-
 #[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(target_os = "macos")]
