@@ -55,6 +55,7 @@ impl Device {
                                                 GLX_VISUAL_ID,
                                                 &mut glx_visual_id);
             if result != xlib::Success {
+                let windowing_api_error = error::
                 return Err(Error::SurfaceCreationFailed());
             }
         }
