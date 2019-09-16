@@ -4,33 +4,23 @@ use crate::{ContextAttributeFlags, ContextAttributes, Error, FeatureFlags, GLInf
 use super::context::{Context, ContextID};
 use super::device::Device;
 
-use core_foundation::base::TCFType;
-use core_foundation::dictionary::CFDictionary;
-use core_foundation::number::CFNumber;
-use core_foundation::string::CFString;
 use euclid::default::Size2D;
 use gl;
 use gl::types::{GLenum, GLint, GLuint};
-use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
-use io_surface::{kIOSurfaceHeight, kIOSurfaceWidth};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::thread;
-
-const BYTES_PER_PIXEL: i32 = 4;
+use x11::xlib;
 
 pub struct Surface {
-    pub(crate) io_surface: IOSurface,
+    pub(crate) glx_pixmap: GLXPixmap,
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
-    pub(crate) framebuffer_object: GLuint,
-    pub(crate) texture_object: GLuint,
-    pub(crate) renderbuffers: Renderbuffers,
 }
 
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
-    pub(crate) texture_object: GLuint,
+    pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
@@ -38,13 +28,13 @@ unsafe impl Send for Surface {}
 
 impl Debug for Surface {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "Surface({:x})", self.io_surface.as_concrete_TypeRef() as usize)
+        write!(formatter, "Surface({:x})", self.glx_pixmap as usize)
     }
 }
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        if self.framebuffer_object != 0 && !thread::panicking() {
+        if self.glx_pixmap != xlib::None && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
         }
     }
@@ -53,6 +43,22 @@ impl Drop for Surface {
 impl Device {
     pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
                           -> Result<Surface, Error> {
+        let display = self.native_display.display();
+
+        let context_descriptor = self.context_descriptor(context);
+        let glx_fb_config = self.context_descriptor_to_glx_fb_config(context_descriptor);
+
+        unsafe {
+            let mut glx_visual_id = xlib::None;
+            let result = glx::GetFBConfigAttrib(display,
+                                                glx_fb_config,
+                                                GLX_VISUAL_ID,
+                                                &mut glx_visual_id);
+            if result != xlib::Success {
+                return Err(Error::SurfaceCreationFailed());
+            }
+        }
+
         unsafe {
             let properties = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),

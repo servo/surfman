@@ -30,10 +30,14 @@ pub enum Error {
     DeviceOpenFailed,
     /// The surface was not created from this context.
     IncompatibleSurface,
+    /// The system couldn't create a surface.
+    SurfaceCreationFailed(WindowingApiError),
     /// The system couldn't import a surface from another thread.
     SurfaceImportFailed(WindowingApiError),
     /// The system couldn't create a surface texture from a surface.
     SurfaceTextureCreationFailed(WindowingApiError),
+    /// A context couldn't be created because there was no current context.
+    NoCurrentContext,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
@@ -45,6 +49,7 @@ pub enum WindowingApiError {
     Failed,
     /// CGL: Invalid pixel format attribute.
     /// EGL: An unrecognized attribute or attribute value was passed in the attribute list.
+    /// X11: Attribute to get is bad.
 	BadAttribute,
     /// CGL: Invalid renderer property.
 	BadProperty,
@@ -53,7 +58,8 @@ pub enum WindowingApiError {
     /// CGL: Invalid renderer information object.
 	BadRendererInfo,
     /// CGL: Invalid context object.
-    /// EGL: An EGLContext argument does not name a valid EGL rendering context. 
+    /// EGL: An EGLContext argument does not name a valid EGL rendering context.
+    /// X11: The context is invalid.
 	BadContext,
     /// Invalid drawable.
 	BadDrawable,
@@ -63,12 +69,14 @@ pub enum WindowingApiError {
     /// CGL: Invalid context state.
 	BadState,
     /// CGL: Invalid numerical value.
+    /// X11: Invalid value.
 	BadValue,
     /// CGL: Invalid share context.
     /// EGL: Arguments are inconsistent (for example, a valid context requires
     /// buffers not supplied by a valid surface). 
 	BadMatch,
     /// CGL: Invalid enumerant (constant).
+    /// X11: Invalid enum value.
 	BadEnumeration,
     /// CGL: Invalid off-screen drawable.
 	BadOffScreen,
@@ -110,4 +118,10 @@ pub enum WindowingApiError {
     /// destroy all contexts and reinitialise OpenGL ES state and objects to
     /// continue rendering. 
     ContextLost,
+    /// X11: Screen number is bad.
+    BadScreen,
+    /// X11: The GLX extension is unavailable on the server.
+    NoExtension,
+    /// X11: Visual number not known by GLX.
+    BadVisual,
 }

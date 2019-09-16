@@ -1,35 +1,19 @@
 //! Translation of X11 errors to `surfman` errors.
 
 use crate::WindowingApiError;
-use cgl::CGLError;
+use std::os::raw::c_int;
+use x11::glx::{GLX_BAD_ATTRIBUTE, GLX_BAD_CONTEXT, GLX_BAD_ENUM, GLX_BAD_SCREEN, GLX_BAD_VALUE};
+use x11::glx::{GLX_BAD_VISUAL, GLX_NO_EXTENSION}
 
-pub(crate) trait ToWindowingApiError {
-    fn to_windowing_api_error(self) -> WindowingApiError;
-}
-
-impl ToWindowingApiError for CGLError {
-    fn to_windowing_api_error(self) -> WindowingApiError {
-        match self {
-            10000 => WindowingApiError::BadAttribute,
-            10001 => WindowingApiError::BadProperty,
-            10002 => WindowingApiError::BadPixelFormat,
-            10003 => WindowingApiError::BadRendererInfo,
-            10004 => WindowingApiError::BadContext,
-            10005 => WindowingApiError::BadDrawable,
-            10006 => WindowingApiError::BadDisplay,
-            10007 => WindowingApiError::BadState,
-            10008 => WindowingApiError::BadValue,
-            10009 => WindowingApiError::BadMatch,
-            10010 => WindowingApiError::BadEnumeration,
-            10011 => WindowingApiError::BadOffScreen,
-            10012 => WindowingApiError::BadFullScreen,
-            10013 => WindowingApiError::BadWindow,
-            10014 => WindowingApiError::BadAddress,
-            10015 => WindowingApiError::BadCodeModule,
-            10016 => WindowingApiError::BadAlloc,
-            10017 => WindowingApiError::BadConnection,
-            _     => WindowingApiError::Failed,
-        }
+pub(crate) fn glx_error_to_windowing_api_error(glx_error: c_int) -> WindowingApiError {
+    match glx_error {
+        GLX_BAD_SCREEN => WindowingApiError::BadScreen,
+        GLX_BAD_ATTRIBUTE => WindowingApiError::BadAttribute,
+        GLX_NO_EXTENSION => WindowingApiError::NoExtension,
+        GLX_BAD_VISUAL => WindowingApiError::BadVisual,
+        GLX_BAD_CONTEXT => WindowingApiError::BadContext,
+        GLX_BAD_VALUE => WindowingApiError::BadValue,
+        GLX_BAD_ENUM => WindowingApiError::BadEnumeration,
+        _ => WindowingApiError::Failed,
     }
 }
-

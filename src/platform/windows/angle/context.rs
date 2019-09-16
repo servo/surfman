@@ -285,7 +285,6 @@ impl Device {
             }
 
             gl::Viewport(0, 0, size.width, size.height);
-
             Ok(())
         }
     }
