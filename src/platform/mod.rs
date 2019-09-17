@@ -13,7 +13,7 @@ pub use macos as default;
 #[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
 pub mod unix;
 #[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
-pub use unix as default;
+pub use unix::x11 as default;
 
 #[cfg(target_os = "windows")]
 pub mod windows;

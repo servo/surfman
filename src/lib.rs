@@ -44,11 +44,13 @@ mod glx {
     include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
 }
 
+/*
 #[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
 #[allow(improper_ctypes)]
 mod glx_extra {
     include!(concat!(env!("OUT_DIR"), "/glx_extra_bindings.rs"));
 }
+*/
 
 #[cfg(any(target_os = "android", target_os = "windows"))]
 #[allow(non_camel_case_types)]

@@ -1,16 +1,25 @@
 //! Wrapper for GL-renderable pixmaps on X11.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, FeatureFlags, GLInfo, SurfaceId};
+use crate::{Error, SurfaceId, WindowingApiError};
 use super::context::{Context, ContextID};
 use super::device::Device;
+use super::error;
 
+use crate::glx::types::Display as GlxDisplay;
+use crate::glx;
 use euclid::default::Size2D;
 use gl;
 use gl::types::{GLenum, GLint, GLuint};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
+use std::mem;
+use std::os::raw::{c_int, c_uint, c_void};
+use std::ptr;
 use std::thread;
-use x11::xlib;
+use x11::glx::{GLX_VISUAL_ID, GLXPixmap};
+use x11::glx::{glXCreatePixmap, glXDestroyPixmap, glXGetFBConfigAttrib};
+use x11::xlib::{self, Display, VisualID, XCreatePixmap, XDefaultScreen, XDefaultScreenOfDisplay};
+use x11::xlib::{XFree, XGetVisualInfo, XRootWindowOfScreen, XVisualInfo};
 
 pub struct Surface {
     pub(crate) glx_pixmap: GLXPixmap,
@@ -34,7 +43,7 @@ impl Debug for Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        if self.glx_pixmap != xlib::None && !thread::panicking() {
+        if self.glx_pixmap != 0 && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
         }
     }
@@ -46,102 +55,79 @@ impl Device {
         let display = self.native_display.display();
 
         let context_descriptor = self.context_descriptor(context);
-        let glx_fb_config = self.context_descriptor_to_glx_fb_config(context_descriptor);
+        let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
 
         unsafe {
-            let mut glx_visual_id = xlib::None;
-            let result = glx::GetFBConfigAttrib(display,
-                                                glx_fb_config,
-                                                GLX_VISUAL_ID,
-                                                &mut glx_visual_id);
-            if result != xlib::Success {
-                let windowing_api_error = error::
-                return Err(Error::SurfaceCreationFailed());
+            let mut glx_visual_id = 0;
+            let result = glXGetFBConfigAttrib(display,
+                                              glx_fb_config,
+                                              GLX_VISUAL_ID,
+                                              &mut glx_visual_id);
+            if result != xlib::Success as c_int {
+                let windowing_api_error = error::glx_error_to_windowing_api_error(result);
+                return Err(Error::SurfaceCreationFailed(windowing_api_error));
             }
-        }
 
-        unsafe {
-            let properties = CFDictionary::from_CFType_pairs(&[
-                (CFString::wrap_under_get_rule(kIOSurfaceWidth),
-                CFNumber::from(size.width).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceHeight),
-                CFNumber::from(size.height).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceBytesPerElement),
-                CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
-                CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType()),
-            ]);
+            // Get the depth of the current visual.
+            let depth = get_depth_of_visual_with_id(display, glx_visual_id as VisualID);
+            let depth = depth.expect("GLX FB config has an invalid visual ID!");
 
-            let io_surface = io_surface::new(&properties);
+            // Create an X11 pixmap.
+            let pixmap = XCreatePixmap(display,
+                                       XRootWindowOfScreen(XDefaultScreenOfDisplay(display)),
+                                       size.width as c_uint,
+                                       size.height as c_uint,
+                                       depth);
+            if pixmap == 0 {
+                return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
+            }
 
-            let texture_object = self.bind_to_gl_texture(&io_surface, size);
+            // Create a GLX pixmap.
+            let glx_pixmap = glXCreatePixmap(display, glx_fb_config, pixmap, ptr::null());
+            if glx_pixmap == 0 {
+                return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
+            }
 
-            let mut framebuffer_object = 0;
-            gl::GenFramebuffers(1, &mut framebuffer_object);
-            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-
-            gl::FramebufferTexture2D(gl::FRAMEBUFFER,
-                                     gl::COLOR_ATTACHMENT0,
-                                     SurfaceTexture::gl_texture_target(),
-                                     texture_object,
-                                     0);
-
-            let context_descriptor = self.context_descriptor(context);
-            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-
-            let renderbuffers = Renderbuffers::new(&size, &context_attributes, &context.gl_info);
-            renderbuffers.bind_to_current_framebuffer();
-
-            debug_assert_eq!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER),
-                             gl::FRAMEBUFFER_COMPLETE);
-
-            // Set the viewport so that the application doesn't have to do so explicitly.
-            gl::Viewport(0, 0, size.width, size.height);
-
-            Ok(Surface {
-                io_surface,
-                size: *size,
-                context_id: context.id,
-                framebuffer_object,
-                texture_object,
-                renderbuffers,
-            })
+            Ok(Surface { glx_pixmap, size: *size, context_id: context.id })
         }
     }
 
-    pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
+    pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
-        let texture_object = self.bind_to_gl_texture(&surface.io_surface, &surface.size);
-        Ok(SurfaceTexture {
-            surface,
-            texture_object,
-            phantom: PhantomData,
-        })
-    }
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface)
+        }
 
-    fn bind_to_gl_texture(&self, io_surface: &IOSurface, size: &Size2D<i32>) -> GLuint {
         unsafe {
-            let mut texture = 0;
-            gl::GenTextures(1, &mut texture);
-            debug_assert_ne!(texture, 0);
+            // Create a texture.
+            let mut gl_texture = 0;
+            gl::GenTextures(1, &mut gl_texture);
+            debug_assert_ne!(gl_texture, 0);
 
-            gl::BindTexture(gl::TEXTURE_RECTANGLE, texture);
-            io_surface.bind_to_gl_texture(size.width, size.height, true);
+            // Bind the surface's GLX pixmap to the texture.
+            let attributes = [
+                glx::TEXTURE_FORMAT_EXT as c_int,   glx::TEXTURE_FORMAT_RGBA_EXT as c_int,
+                glx::TEXTURE_TARGET_EXT as c_int,   glx::TEXTURE_2D_EXT as c_int,
+                0,
+            ];
+            gl::BindTexture(gl::TEXTURE_2D, gl_texture);
 
-            gl::TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
-            gl::TexParameteri(gl::TEXTURE_RECTANGLE, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
-            gl::TexParameteri(gl::TEXTURE_RECTANGLE,
-                              gl::TEXTURE_WRAP_S,
-                              gl::CLAMP_TO_EDGE as GLint);
-            gl::TexParameteri(gl::TEXTURE_RECTANGLE,
-                              gl::TEXTURE_WRAP_T,
-                              gl::CLAMP_TO_EDGE as GLint);
+            let display = self.native_display.display() as *mut GlxDisplay;
+            glx::BindTexImageEXT(display,
+                                 surface.glx_pixmap,
+                                 glx::FRONT_EXT as c_int,
+                                 attributes.as_ptr());
 
-            gl::BindTexture(gl::TEXTURE_RECTANGLE, 0);
+            // Initialize the texture, for convenience.
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
 
+            gl::BindTexture(gl::TEXTURE_2D, 0);
             debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
 
-            texture
+            Ok(SurfaceTexture { surface, gl_texture, phantom: PhantomData })
         }
     }
 
@@ -151,11 +137,11 @@ impl Device {
             return Err(Error::IncompatibleSurface)
         }
 
+        self.make_context_not_current(context)?;
+
         unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
-            gl::DeleteFramebuffers(1, &surface.framebuffer_object);
-            surface.renderbuffers.destroy();
-            gl::DeleteTextures(1, &surface.texture_object);
+            glXDestroyPixmap(self.native_display.display(), surface.glx_pixmap);
+            surface.glx_pixmap = 0;
         }
 
         Ok(())
@@ -164,8 +150,16 @@ impl Device {
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
                                    -> Result<Surface, Error> {
         unsafe {
-            gl::DeleteTextures(1, &surface_texture.texture_object);
-            surface_texture.texture_object = 0;
+            gl::BindTexture(gl::TEXTURE_2D, surface_texture.gl_texture);
+
+            let display = self.native_display.display() as *mut GlxDisplay;
+            glx::ReleaseTexImageEXT(display,
+                                    surface_texture.surface.glx_pixmap,
+                                    glx::FRONT_EXT as c_int);
+
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+            gl::DeleteTextures(1, &mut surface_texture.gl_texture);
+            surface_texture.gl_texture = 0;
         }
 
         Ok(surface_texture.surface)
@@ -180,7 +174,7 @@ impl Surface {
 
     #[inline]
     pub fn id(&self) -> SurfaceId {
-        SurfaceId(self.io_surface.as_concrete_TypeRef() as usize)
+        SurfaceId(self.glx_pixmap as usize)
     }
 }
 
@@ -192,12 +186,12 @@ impl SurfaceTexture {
 
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
-        self.texture_object
+        self.gl_texture
     }
 
     #[inline]
     pub fn gl_texture_target() -> GLenum {
-        gl::TEXTURE_RECTANGLE
+        gl::TEXTURE_2D
     }
 }
 
@@ -210,124 +204,22 @@ pub(crate) enum Framebuffer {
     Surface(Surface),
 }
 
-pub(crate) enum Renderbuffers {
-    IndividualDepthStencil {
-        depth: GLuint,
-        stencil: GLuint,
-    },
-    CombinedDepthStencil(GLuint),
-}
+unsafe fn get_depth_of_visual_with_id(display: *mut Display, visual_id: VisualID)
+                                      -> Option<c_uint> {
+    let mut visual_info_template: XVisualInfo = mem::zeroed();
+    visual_info_template.screen = XDefaultScreen(display);
+    visual_info_template.visualid = visual_id;
 
-impl Drop for Renderbuffers {
-    fn drop(&mut self) {
-        match *self {
-            Renderbuffers::IndividualDepthStencil { depth: 0, stencil: 0 } |
-            Renderbuffers::CombinedDepthStencil(0) => {}
-            _ => panic!("Should have destroyed the FBO renderbuffers with `destroy()`!"),
-        }
-    }
-}
-
-impl Renderbuffers {
-    pub(crate) fn new(size: &Size2D<i32>, attributes: &ContextAttributes, info: &GLInfo)
-                      -> Renderbuffers {
-        unsafe {
-            if attributes.flags.contains(ContextAttributeFlags::DEPTH |
-                                         ContextAttributeFlags::STENCIL) &&
-                    info.features.contains(FeatureFlags::SUPPORTS_DEPTH24_STENCIL8) {
-                let mut renderbuffer = 0;
-                gl::GenRenderbuffers(1, &mut renderbuffer);
-                gl::BindRenderbuffer(gl::RENDERBUFFER, renderbuffer);
-                gl::RenderbufferStorage(gl::RENDERBUFFER,
-                                        gl::DEPTH24_STENCIL8,
-                                        size.width,
-                                        size.height);
-                gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
-                return Renderbuffers::CombinedDepthStencil(renderbuffer);
-            }
-
-            let (mut depth_renderbuffer, mut stencil_renderbuffer) = (0, 0);
-            if attributes.flags.contains(ContextAttributeFlags::DEPTH) {
-                gl::GenRenderbuffers(1, &mut depth_renderbuffer);
-                gl::BindRenderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
-                gl::RenderbufferStorage(gl::RENDERBUFFER,
-                                        gl::DEPTH_COMPONENT24,
-                                        size.width,
-                                        size.height);
-            }
-            if attributes.flags.contains(ContextAttributeFlags::STENCIL) {
-                gl::GenRenderbuffers(1, &mut stencil_renderbuffer);
-                gl::BindRenderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
-                gl::RenderbufferStorage(gl::RENDERBUFFER,
-                                        gl::STENCIL_INDEX8,
-                                        size.width,
-                                        size.height);
-            }
-            gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
-
-            Renderbuffers::IndividualDepthStencil {
-                depth: depth_renderbuffer,
-                stencil: stencil_renderbuffer,
-            }
-        }
+    let mut matched_visual_infos_count = 0;
+    let matched_visual_infos = XGetVisualInfo(display,
+                                              xlib::VisualIDMask | xlib::VisualScreenMask,
+                                              &mut visual_info_template,
+                                              &mut matched_visual_infos_count);
+    if matched_visual_infos_count == 0 || matched_visual_infos.is_null() {
+        return None;
     }
 
-    pub(crate) fn bind_to_current_framebuffer(&self) {
-        unsafe {
-            match *self {
-                Renderbuffers::CombinedDepthStencil(renderbuffer) => {
-                    if renderbuffer != 0 {
-                        gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
-                                                    gl::DEPTH_STENCIL_ATTACHMENT,
-                                                    gl::RENDERBUFFER,
-                                                    renderbuffer);
-                    }
-                }
-                Renderbuffers::IndividualDepthStencil {
-                    depth: depth_renderbuffer,
-                    stencil: stencil_renderbuffer,
-                } => {
-                    if depth_renderbuffer != 0 {
-                        gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
-                                                    gl::DEPTH_ATTACHMENT,
-                                                    gl::RENDERBUFFER,
-                                                    depth_renderbuffer);
-                    }
-                    if stencil_renderbuffer != 0 {
-                        gl::FramebufferRenderbuffer(gl::FRAMEBUFFER,
-                                                    gl::STENCIL_ATTACHMENT,
-                                                    gl::RENDERBUFFER,
-                                                    stencil_renderbuffer);
-                    }
-                }
-            }
-        }
-    }
-
-    pub(crate) fn destroy(&mut self) {
-        unsafe {
-            gl::BindRenderbuffer(gl::RENDERBUFFER, 0);
-            match *self {
-                Renderbuffers::CombinedDepthStencil(ref mut renderbuffer) => {
-                    if *renderbuffer != 0 {
-                        gl::DeleteRenderbuffers(1, renderbuffer);
-                        *renderbuffer = 0;
-                    }
-                }
-                Renderbuffers::IndividualDepthStencil {
-                    depth: ref mut depth_renderbuffer,
-                    stencil: ref mut stencil_renderbuffer,
-                } => {
-                    if *stencil_renderbuffer != 0 {
-                        gl::DeleteRenderbuffers(1, stencil_renderbuffer);
-                        *stencil_renderbuffer = 0;
-                    }
-                    if *depth_renderbuffer != 0 {
-                        gl::DeleteRenderbuffers(1, depth_renderbuffer);
-                        *depth_renderbuffer = 0;
-                    }
-                }
-            }
-        }
-    }
+    let depth = (*matched_visual_infos).depth as c_uint;
+    XFree(matched_visual_infos as *mut c_void);
+    Some(depth)
 }

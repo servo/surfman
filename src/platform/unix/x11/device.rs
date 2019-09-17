@@ -2,16 +2,18 @@
 
 use crate::Error;
 use super::adapter::Adapter;
-use std::marker::PhantomData;
+
+use std::ffi::CStr;
+use std::os::raw::c_int;
 use std::ptr;
-use x11::xlib::{Display, XCloseDisplay, XOpenDisplay};
+use x11::xlib::{self, Display, XCloseDisplay, XDisplayString, XOpenDisplay};
 
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
 }
 
 pub(crate) trait NativeDisplay {
-    fn display(&self) -> Display;
+    fn display(&self) -> *mut Display;
     fn is_destroyed(&self) -> bool;
     unsafe fn destroy(&mut self);
 }
@@ -37,18 +39,18 @@ impl Device {
         unsafe {
             let display_name = XDisplayString(self.native_display.display());
             assert!(!display_name.is_null());
-            Adapter { adapter: Some(CStr::from_ptr(display_name).to_owned()) }
+            Adapter { display_name: Some(CStr::from_ptr(display_name).to_owned()) }
         }
     }
 }
 
 pub(crate) struct OwnedDisplay {
-    pub(crate) display: Display,
+    pub(crate) display: *mut Display,
 }
 
 impl NativeDisplay for OwnedDisplay {
     #[inline]
-    fn display(&self) -> Display {
+    fn display(&self) -> *mut Display {
         debug_assert!(!self.is_destroyed());
         self.display
     }
@@ -61,18 +63,18 @@ impl NativeDisplay for OwnedDisplay {
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
         let result = XCloseDisplay(self.display);
-        assert_eq!(result, xlib::Success);
-        self.display = ptr::null();
+        assert_eq!(result, xlib::Success as c_int);
+        self.display = ptr::null_mut();
     }
 }
 
 pub(crate) struct UnsafeDisplayRef {
-    pub(crate) display: Display,
+    pub(crate) display: *mut Display,
 }
 
 impl NativeDisplay for UnsafeDisplayRef {
     #[inline]
-    fn display(&self) -> Display {
+    fn display(&self) -> *mut Display {
         debug_assert!(!self.is_destroyed());
         self.display
     }
@@ -84,6 +86,6 @@ impl NativeDisplay for UnsafeDisplayRef {
 
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
-        self.display = ptr::null();
+        self.display = ptr::null_mut();
     }
 }

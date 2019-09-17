@@ -1,6 +1,7 @@
 //! A wrapper for X11 adapters (`DISPLAY` variables).
 
 use crate::Error;
+
 use std::ffi::CString;
 
 #[derive(Clone, Debug)]
@@ -12,6 +13,6 @@ impl Adapter {
     /// Returns the "best" adapter on this system.
     #[inline]
     pub fn default() -> Result<Adapter, Error> {
-        Ok(Adapter { None })
+        Ok(Adapter { display_name: None })
     }
 }
