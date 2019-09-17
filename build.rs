@@ -25,9 +25,13 @@ fn main() {
         }
     }
 
-    let mut file = File::create(&dest.join("glx_bindings.rs")).unwrap();
-    Registry::new(Api::Glx, (1, 4), Profile::Core, Fallbacks::All, [
-        "GLX_ARB_create_context",
-        "GLX_EXT_texture_from_pixmap",
-    ]).write_bindings(GlobalGenerator, &mut file).unwrap();
+    if cfg!(any(feature = "sm-x11",
+                all(unix, not(any(target_os = "macos", target_os = "android"))))) {
+        let mut file = File::create(&dest.join("glx_bindings.rs")).unwrap();
+        Registry::new(Api::Glx, (1, 4), Profile::Core, Fallbacks::All, [
+            "GLX_ARB_create_context",
+            "GLX_EXT_texture_from_pixmap",
+        ]).write_bindings(GlobalGenerator, &mut file).unwrap();
+        println!("cargo:rustc-link-lib=GL");
+    }
 }
