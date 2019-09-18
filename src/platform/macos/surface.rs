@@ -141,14 +141,18 @@ impl Device {
     pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
+            // Leak the surface, and return an error.
+            surface.framebuffer_object = 0;
             return Err(Error::IncompatibleSurface)
         }
 
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
             gl::DeleteFramebuffers(1, &surface.framebuffer_object);
+            surface.framebuffer_object = 0;
             surface.renderbuffers.destroy();
             gl::DeleteTextures(1, &surface.texture_object);
+            surface.texture_object = 0;
         }
 
         Ok(())
