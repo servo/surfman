@@ -24,19 +24,21 @@ static TRANSLATION: [f32; 2] = [0.0, 0.0];
 
 #[cfg(target_os = "windows")]
 static SHADER_PREAMBLE: &[u8] = b"#version 300 es\n#define SAMPLER_TYPE sampler2D\n";
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_os = "macos")]
 static SHADER_PREAMBLE: &[u8] = b"#version 330\n#define SAMPLER_TYPE sampler2DRect\n";
+#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+static SHADER_PREAMBLE: &[u8] = b"#version 330\n#define SAMPLER_TYPE sampler2D\n";
 
 fn main() {
     // Set up SDL2.
     let sdl_context = sdl2::init().unwrap();
-    hint::set("SDL_OPENGL_ES_DRIVER", "1");
+    //hint::set("SDL_OPENGL_ES_DRIVER", "1");
     let video = sdl_context.video().unwrap();
 
     // Make sure we have at least a GL 3.0 context.
     let gl_attributes = video.gl_attr();
-    gl_attributes.set_context_profile(GLProfile::GLES);
-    gl_attributes.set_context_version(3, 0);
+    gl_attributes.set_context_profile(GLProfile::Core);
+    gl_attributes.set_context_version(3, 3);
 
     // Open a window.
     let window = video.window("Multithreaded example", 320, 240).opengl().build().unwrap();
@@ -44,9 +46,11 @@ fn main() {
 
     // Create the GL context in SDL, and make it current.
     let gl_context = window.gl_create_context().unwrap();
-    gl::load_with(|name| video.gl_get_proc_address(name) as *const _);
+    surfman::load_with(|name| video.gl_get_proc_address(name) as *const _);
     window.gl_make_current(&gl_context).unwrap();
-    video.gl_set_swap_interval(SwapInterval::VSync).unwrap();
+
+    // Try to enable vsync, but ignore the error if we can't.
+    drop(video.gl_set_swap_interval(SwapInterval::VSync));
 
     // Create `surfman` objects corresponding to that SDL context.
     let (device, mut context) = unsafe {

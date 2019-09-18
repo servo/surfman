@@ -10,12 +10,19 @@ use x11::xlib::{self, Display, XCloseDisplay, XDisplayString, XOpenDisplay};
 
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
+    pub(crate) quirks: Quirks,
 }
 
 pub(crate) trait NativeDisplay {
     fn display(&self) -> *mut Display;
     fn is_destroyed(&self) -> bool;
     unsafe fn destroy(&mut self);
+}
+
+bitflags! {
+    pub struct Quirks: u8 {
+        const BROKEN_GLX_TEXTURE_FROM_PIXMAP = 0x01;
+    }
 }
 
 impl Device {
@@ -30,7 +37,10 @@ impl Device {
             if display.is_null() {
                 return Err(Error::DeviceOpenFailed);
             }
-            Ok(Device { native_display: Box::new(OwnedDisplay { display }) })
+            Ok(Device {
+                native_display: Box::new(OwnedDisplay { display }),
+                quirks: Quirks::detect(),
+            })
         }
     }
 
@@ -89,3 +99,11 @@ impl NativeDisplay for UnsafeDisplayRef {
         self.display = ptr::null_mut();
     }
 }
+
+impl Quirks {
+    pub(crate) fn detect() -> Quirks {
+        // TODO(pcwalton): Whitelist implementations with working `GLX_texture_from_pixmap`.
+        Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP
+    }
+}
+

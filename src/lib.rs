@@ -38,10 +38,17 @@ pub use crate::limits::GLLimits;
 mod surface;
 pub use crate::surface::SurfaceId;
 
+use std::os::raw::c_void;
+
 #[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
 #[allow(improper_ctypes)]
 mod glx {
     include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
+}
+
+pub fn load_with<F>(mut loader: F) where F: FnMut(&'static str) -> *const c_void {
+    gl::load_with(&mut loader);
+    glx::load_with(&mut loader);
 }
 
 /*

@@ -2,14 +2,14 @@
 
 use crate::{Error, SurfaceId, WindowingApiError};
 use super::context::{Context, ContextID};
-use super::device::Device;
+use super::device::{Device, Quirks};
 use super::error;
 
 use crate::glx::types::Display as GlxDisplay;
 use crate::glx;
 use euclid::default::Size2D;
 use gl;
-use gl::types::{GLenum, GLint, GLuint};
+use gl::types::{GLenum, GLint, GLuint, GLvoid};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
@@ -17,14 +17,16 @@ use std::os::raw::{c_int, c_uint, c_void};
 use std::ptr;
 use std::thread;
 use x11::glx::{GLX_VISUAL_ID, GLXPixmap};
-use x11::glx::{glXCreatePixmap, glXDestroyPixmap, glXGetFBConfigAttrib};
-use x11::xlib::{self, Display, VisualID, XCreatePixmap, XDefaultScreen, XDefaultScreenOfDisplay};
+use x11::glx::{glXCreatePixmap, glXDestroyPixmap, glXGetFBConfigAttrib, glXMakeCurrent};
+use x11::xlib::{self, Display, Pixmap, VisualID, XCreatePixmap, XDefaultScreen, XDefaultScreenOfDisplay};
 use x11::xlib::{XFree, XGetVisualInfo, XRootWindowOfScreen, XVisualInfo};
 
 pub struct Surface {
     pub(crate) glx_pixmap: GLXPixmap,
+    pub(crate) pixmap: Pixmap,
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
+    pub(crate) pixels: Option<Vec<u8>>,
 }
 
 pub struct SurfaceTexture {
@@ -88,35 +90,64 @@ impl Device {
                 return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
             }
 
-            Ok(Surface { glx_pixmap, size: *size, context_id: context.id })
+            Ok(Surface { glx_pixmap, pixmap, size: *size, context_id: context.id, pixels: None })
         }
     }
 
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
-        if context.id != surface.context_id {
-            return Err(Error::IncompatibleSurface)
-        }
+        let context_descriptor = self.context_descriptor(context);
+        let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
 
         unsafe {
+            drop(self.make_context_current(context));
+
             // Create a texture.
             let mut gl_texture = 0;
             gl::GenTextures(1, &mut gl_texture);
             debug_assert_ne!(gl_texture, 0);
-
-            // Bind the surface's GLX pixmap to the texture.
-            let attributes = [
-                glx::TEXTURE_FORMAT_EXT as c_int,   glx::TEXTURE_FORMAT_RGBA_EXT as c_int,
-                glx::TEXTURE_TARGET_EXT as c_int,   glx::TEXTURE_2D_EXT as c_int,
-                0,
-            ];
             gl::BindTexture(gl::TEXTURE_2D, gl_texture);
 
-            let display = self.native_display.display() as *mut GlxDisplay;
-            glx::BindTexImageEXT(display,
-                                 surface.glx_pixmap,
-                                 glx::FRONT_EXT as c_int,
-                                 attributes.as_ptr());
+            if !self.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
+                // Bind the surface's GLX pixmap to the texture.
+                let attributes = [
+                    glx::TEXTURE_FORMAT_EXT as c_int,   glx::TEXTURE_FORMAT_RGBA_EXT as c_int,
+                    glx::TEXTURE_TARGET_EXT as c_int,   glx::TEXTURE_2D_EXT as c_int,
+                    0,
+                ];
+                let display = self.native_display.display() as *mut GlxDisplay;
+                glx::BindTexImageEXT(display,
+                                     surface.glx_pixmap,
+                                     glx::FRONT_EXT as c_int,
+                                     attributes.as_ptr());
+            } else {
+                // `GLX_texture_from_pixmap` is broken. Bummer. Copy data that was read back from
+                // the CPU.
+                match surface.pixels {
+                    Some(ref pixels) => {
+                        gl::TexImage2D(gl::TEXTURE_2D,
+                                       0,
+                                       gl::RGBA8 as GLint,
+                                       surface.size.width,
+                                       surface.size.height,
+                                       0,
+                                       gl::RGBA,
+                                       gl::UNSIGNED_BYTE,
+                                       (*pixels).as_ptr() as *const GLvoid);
+                    }
+                    None => {
+                        gl::TexImage2D(gl::TEXTURE_2D,
+                                       0,
+                                       gl::RGBA8 as GLint,
+                                       surface.size.width,
+                                       surface.size.height,
+                                       0,
+                                       gl::RGBA,
+                                       gl::UNSIGNED_BYTE,
+                                       ptr::null());
+                    }
+                }
+            }
 
             // Initialize the texture, for convenience.
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
@@ -134,6 +165,8 @@ impl Device {
     pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
+            // Avoid a panic and just leak the surface.
+            surface.glx_pixmap = 0;
             return Err(Error::IncompatibleSurface)
         }
 
@@ -152,10 +185,12 @@ impl Device {
         unsafe {
             gl::BindTexture(gl::TEXTURE_2D, surface_texture.gl_texture);
 
-            let display = self.native_display.display() as *mut GlxDisplay;
-            glx::ReleaseTexImageEXT(display,
-                                    surface_texture.surface.glx_pixmap,
-                                    glx::FRONT_EXT as c_int);
+            if !self.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
+                let display = self.native_display.display() as *mut GlxDisplay;
+                glx::ReleaseTexImageEXT(display,
+                                        surface_texture.surface.glx_pixmap,
+                                        glx::FRONT_EXT as c_int);
+            }
 
             gl::BindTexture(gl::TEXTURE_2D, 0);
             gl::DeleteTextures(1, &mut surface_texture.gl_texture);

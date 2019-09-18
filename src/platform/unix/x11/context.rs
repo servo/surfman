@@ -2,7 +2,7 @@
 
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo};
 use crate::{GLVersion, WindowingApiError};
-use super::device::{Device, UnsafeDisplayRef};
+use super::device::{Device, Quirks, UnsafeDisplayRef};
 use super::surface::{Framebuffer, Surface};
 
 use crate::glx::types::Display as GlxDisplay;
@@ -17,12 +17,12 @@ use std::ptr;
 use std::sync::Mutex;
 use std::thread;
 use x11::glx::{GLX_ALPHA_SIZE};
-use x11::glx::{GLX_DEPTH_SIZE, GLX_DRAWABLE_TYPE};
+use x11::glx::{GLX_DEPTH_SIZE, GLX_DOUBLEBUFFER, GLX_DRAWABLE_TYPE};
 use x11::glx::{GLX_FBCONFIG_ID, GLX_PIXMAP_BIT};
 use x11::glx::{GLX_RENDER_TYPE, GLX_RGBA_BIT, GLX_STENCIL_SIZE};
 use x11::glx::{GLX_X_RENDERABLE, GLXContext, GLXFBConfig,  glXChooseFBConfig, glXDestroyContext};
 use x11::glx::{glXGetCurrentContext, glXGetCurrentDisplay, glXGetFBConfigAttrib};
-use x11::glx::{glXGetProcAddress, glXMakeCurrent, glXQueryContext};
+use x11::glx::{glXGetProcAddress, glXMakeCurrent, glXQueryContext, glXSwapBuffers};
 use x11::xlib::{self, Display, XDefaultScreen, XFree, XID};
 
 lazy_static! {
@@ -80,6 +80,7 @@ impl Device {
             GLX_RENDER_TYPE,                            GLX_RGBA_BIT,
             glx::BIND_TO_TEXTURE_RGBA_EXT as c_int,     xlib::True,
             glx::BIND_TO_TEXTURE_TARGETS_EXT as c_int,  glx::TEXTURE_2D_BIT_EXT as c_int,
+            GLX_DOUBLEBUFFER,                           xlib::False,
             0,
         ];
 
@@ -122,7 +123,10 @@ impl Device {
         if display.is_null() {
             return Err(Error::NoCurrentContext);
         }
-        let device = Device { native_display: Box::new(UnsafeDisplayRef { display }) };
+        let device = Device {
+            native_display: Box::new(UnsafeDisplayRef { display }),
+            quirks: Quirks::detect(),
+        };
 
         // Get the current context.
         let glx_context = glXGetCurrentContext();
@@ -289,14 +293,11 @@ impl Device {
 
     pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
                                    -> Result<Surface, Error> {
-        if let Framebuffer::External = context.framebuffer {
-            return Err(Error::ExternalRenderTarget)
-        }
-
         if context.id != new_surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
 
+        self.flush_context_surface(context);
         let old_surface = self.release_surface(context).expect("Where's our surface?");
         self.attach_surface(context, new_surface);
         self.make_context_current(context)?;
@@ -386,6 +387,43 @@ impl Device {
             Framebuffer::Surface(surface) => Some(surface),
             Framebuffer::None | Framebuffer::External => None,
         }
+    }
+
+    fn flush_context_surface(&self, context: &mut Context) -> Result<(), Error> {
+        if !self.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
+            return Ok(())
+        }
+
+        self.make_context_current(context)?;
+
+        let surface = match context.framebuffer {
+            Framebuffer::Surface(ref mut surface) => surface,
+            Framebuffer::None | Framebuffer::External => return Ok(()),
+        };
+
+        let length = surface.size.width as usize * surface.size.height as usize * 4;
+        let mut pixels = match mem::replace(&mut surface.pixels, None) {
+            None => vec![0; length],
+            Some(mut pixels) => {
+                if pixels.len() != length {
+                    pixels.resize(length, 0);
+                }
+                pixels
+            }
+        };
+
+        unsafe {
+            gl::ReadPixels(0,
+                           0,
+                           surface.size.width,
+                           surface.size.height,
+                           gl::RGBA,
+                           gl::UNSIGNED_BYTE,
+                           pixels.as_mut_ptr() as *mut c_void);
+        }
+
+        surface.pixels = Some(pixels);
+        Ok(())
     }
 }
 
