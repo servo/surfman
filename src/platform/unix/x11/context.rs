@@ -145,8 +145,7 @@ impl Device {
             gl_version: GLVersion::new(major_gl_version as u8, minor_gl_version as u8),
             framebuffer: Framebuffer::External,
         };
-
-        device.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
+        next_context_id.0 += 1;
 
         let context_descriptor = device.context_descriptor(&context);
         let context_attributes = device.context_descriptor_attributes(&context_descriptor);
@@ -187,8 +186,7 @@ impl Device {
                 gl_info: GLInfo::new(),
                 gl_version: descriptor.gl_version,
             };
-
-            self.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
+            next_context_id.0 += 1;
 
             let context_descriptor = self.context_descriptor(&context);
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
@@ -336,19 +334,6 @@ impl Device {
             // Create appropriate context attributes.
             ContextAttributes { flags: attribute_flags, flavor }
         }
-    }
-
-    fn load_gl_functions_if_necessary(&self,
-                                      mut context: &mut Context,
-                                      next_context_id: &mut ContextID) {
-        // Load the GL functions via GLX if this is the first context created.
-        if *next_context_id == ContextID(0) {
-            gl::load_with(|symbol| {
-                self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-            });
-        }
-
-        next_context_id.0 += 1;
     }
 
     pub(crate) fn context_descriptor_to_glx_fb_config(&self,

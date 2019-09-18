@@ -46,7 +46,7 @@ fn main() {
 
     // Create the GL context in SDL, and make it current.
     let gl_context = window.gl_create_context().unwrap();
-    surfman::load_with(|name| video.gl_get_proc_address(name) as *const _);
+    surfman::init();
     window.gl_make_current(&gl_context).unwrap();
 
     // Try to enable vsync, but ignore the error if we can't.

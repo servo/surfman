@@ -178,8 +178,7 @@ impl Device {
             gl_info: GLInfo::new(),
             framebuffer: Framebuffer::External,
         };
-
-        device.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
+        next_context_id.0 += 1;
 
         let context_descriptor = device.context_descriptor(&context);
         let context_attributes = device.context_descriptor_attributes(&context_descriptor);
@@ -218,8 +217,7 @@ impl Device {
                 framebuffer: Framebuffer::None,
                 gl_info: GLInfo::new(),
             };
-
-            self.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
+            next_context_id.0 += 1;
 
             let context_descriptor = self.context_descriptor(&context);
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
@@ -303,19 +301,6 @@ impl Device {
         }
     }
 
-    pub fn get_proc_address(&self, _: &Context, symbol_name: &str)
-                            -> Result<*const c_void, Error> {
-        unsafe {
-            let symbol_name: CString = CString::new(symbol_name).unwrap();
-            let fun_ptr = egl::GetProcAddress(symbol_name.as_ptr());
-            if fun_ptr.is_null() {
-                return Err(Error::GLFunctionNotFound);
-            }
-            
-            return Ok(fun_ptr as *const c_void);
-        }
-    }
-
     #[inline]
     pub fn context_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
         match context.framebuffer {
@@ -394,19 +379,6 @@ impl Device {
             assert!(config_count > 0);
             config
         }
-    }
-
-    fn load_gl_functions_if_necessary(&self,
-                                      mut context: &mut Context,
-                                      next_context_id: &mut ContextID) {
-        // Load the GL functions from ANGLE if this is the first context created.
-        if *next_context_id == ContextID(0) {
-            gl::load_with(|symbol| {
-                self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-            });
-        }
-
-        next_context_id.0 += 1;
     }
 
     fn attach_surface(&self, context: &mut Context, surface: Surface) {
