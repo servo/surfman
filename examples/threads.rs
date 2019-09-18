@@ -77,7 +77,7 @@ fn main() {
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
     // Enter main render loop.
-    let mut animation = Animation::new(0.75, 0.01);
+    let mut animation = Animation::new(0.75, 0.003);
     let mut rng = rand::thread_rng();
     loop {
         // Send back our old surface, and fetch a new one.
@@ -132,7 +132,7 @@ fn worker_thread(adapter: Adapter,
     let surface = device.create_surface(&context, &Size2D::new(256, 256)).unwrap();
     worker_to_main_sender.send(surface).unwrap();
 
-    let mut animation = Animation::new(0.25, 0.01);
+    let mut animation = Animation::new(0.25, 0.003);
     loop {
         // Render to the surface.
         unsafe {

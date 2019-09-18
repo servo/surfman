@@ -10,16 +10,11 @@ use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
 use cgl::{CGLPixelFormatAttribute, CGLPixelFormatObj, CGLReleasePixelFormat, CGLRetainPixelFormat};
 use cgl::{CGLSetCurrentContext, kCGLPFAAlphaSize, kCGLPFADepthSize};
 use cgl::{kCGLPFAStencilSize, kCGLPFAOpenGLProfile};
-use core_foundation::base::TCFType;
-use core_foundation::bundle::{CFBundleGetBundleWithIdentifier, CFBundleGetFunctionPointerForName};
-use core_foundation::string::CFString;
 use euclid::default::Size2D;
 use gl;
 use gl::types::GLuint;
 use std::mem;
-use std::os::raw::c_void;
 use std::ptr;
-use std::str::FromStr;
 use std::sync::Mutex;
 use std::thread;
 
@@ -158,9 +153,9 @@ impl Device {
             gl_info: GLInfo::new(),
             framebuffer: Framebuffer::External,
         };
+        next_context_id.0 += 1;
 
         let device = Device::new(&Adapter)?;
-        device.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
 
         let context_descriptor = device.context_descriptor(&context);
         let context_attributes = device.context_descriptor_attributes(&context_descriptor);
@@ -201,8 +196,7 @@ impl Device {
                 framebuffer: Framebuffer::None,
                 gl_info: GLInfo::new(),
             };
-
-            self.load_gl_functions_if_necessary(&mut context, &mut *next_context_id);
+            next_context_id.0 += 1;
 
             let context_descriptor = self.context_descriptor(&context);
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
@@ -229,19 +223,6 @@ impl Device {
         }
 
         Ok(())
-    }
-
-    fn load_gl_functions_if_necessary(&self,
-                                      mut context: &mut Context,
-                                      next_context_id: &mut ContextID) {
-        // Load the GL functions from the OpenGL framework if this is the first context created.
-        if *next_context_id == ContextID(0) {
-            gl::load_with(|symbol| {
-                self.get_proc_address(&mut context, symbol).unwrap_or(ptr::null())
-            });
-        }
-
-        next_context_id.0 += 1;
     }
 
     #[inline]
@@ -276,30 +257,6 @@ impl Device {
             }
             Ok(())
         }
-    }
-
-    pub fn get_proc_address(&self, _: &Context, symbol_name: &str)
-                            -> Result<*const c_void, Error> {
-        unsafe {
-            let framework_identifier: CFString =
-                FromStr::from_str(OPENGL_FRAMEWORK_IDENTIFIER).unwrap();
-            let framework =
-                CFBundleGetBundleWithIdentifier(framework_identifier.as_concrete_TypeRef());
-            if framework.is_null() {
-                return Err(Error::NoGLLibraryFound);
-            }
-
-            let symbol_name: CFString = FromStr::from_str(symbol_name).unwrap();
-            let fun_ptr = CFBundleGetFunctionPointerForName(framework,
-                                                            symbol_name.as_concrete_TypeRef());
-            if fun_ptr.is_null() {
-                return Err(Error::GLFunctionNotFound);
-            }
-            
-            return Ok(fun_ptr as *const c_void);
-        }
-
-        static OPENGL_FRAMEWORK_IDENTIFIER: &'static str = "com.apple.opengl";
     }
 
     #[inline]

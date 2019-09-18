@@ -48,16 +48,8 @@ mod glx {
 
 pub fn load_with<F>(mut loader: F) where F: FnMut(&'static str) -> *const c_void {
     gl::load_with(&mut loader);
-    glx::load_with(&mut loader);
+    platform::default::loader::load_with(&mut loader);
 }
-
-/*
-#[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
-#[allow(improper_ctypes)]
-mod glx_extra {
-    include!(concat!(env!("OUT_DIR"), "/glx_extra_bindings.rs"));
-}
-*/
 
 #[cfg(any(target_os = "android", target_os = "windows"))]
 #[allow(non_camel_case_types)]
