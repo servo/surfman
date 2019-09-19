@@ -1,9 +1,10 @@
 //! Wrapper for GLX contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLInfo};
-use crate::{GLVersion, WindowingApiError};
+use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
+use crate::surface::Framebuffer;
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, WindowingApiError};
 use super::device::{Device, Quirks, UnsafeDisplayRef};
-use super::surface::{Framebuffer, Surface};
+use super::surface::Surface;
 
 use crate::glx::types::Display as GlxDisplay;
 use crate::glx;
@@ -25,19 +26,11 @@ use x11::glx::{glXGetCurrentContext, glXGetCurrentDisplay, glXGetFBConfigAttrib}
 use x11::glx::{glXGetProcAddress, glXMakeCurrent, glXQueryContext, glXSwapBuffers};
 use x11::xlib::{self, Display, XDefaultScreen, XFree, XID};
 
-lazy_static! {
-    static ref CREATE_CONTEXT_MUTEX: Mutex<ContextID> = Mutex::new(ContextID(0));
-}
-
-#[derive(Clone, Copy, PartialEq)]
-pub struct ContextID(pub u64);
-
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
     pub(crate) id: ContextID,
-    pub(crate) gl_info: GLInfo,
+    framebuffer: Framebuffer<Surface>,
     gl_version: GLVersion,
-    framebuffer: Framebuffer,
 }
 
 pub(crate) trait NativeContext {
@@ -141,15 +134,10 @@ impl Device {
         let mut context = Context {
             native_context: Box::new(UnsafeGLXContextRef { glx_context }),
             id: *next_context_id,
-            gl_info: GLInfo::new(),
             gl_version: GLVersion::new(major_gl_version as u8, minor_gl_version as u8),
             framebuffer: Framebuffer::External,
         };
         next_context_id.0 += 1;
-
-        let context_descriptor = device.context_descriptor(&context);
-        let context_attributes = device.context_descriptor_attributes(&context_descriptor);
-        context.gl_info.populate(&context_attributes);
 
         Ok((device, context))
     }
@@ -183,14 +171,9 @@ impl Device {
                 native_context: Box::new(OwnedGLXContext { glx_context }),
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
-                gl_info: GLInfo::new(),
                 gl_version: descriptor.gl_version,
             };
             next_context_id.0 += 1;
-
-            let context_descriptor = self.context_descriptor(&context);
-            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-            context.gl_info.populate(&context_attributes);
 
             let initial_surface = self.create_surface(&context, size)?;
             self.attach_surface(&mut context, initial_surface);
@@ -231,11 +214,6 @@ impl Device {
                 gl_version: context.gl_version,
             }
         }
-    }
-
-    #[inline]
-    pub fn context_gl_info<'c>(&self, context: &'c Context) -> &'c GLInfo {
-        &context.gl_info
     }
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {

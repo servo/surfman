@@ -1,10 +1,12 @@
 //! Wrapper for Core OpenGL contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLInfo, GLVersion};
+use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
+use crate::surface::Framebuffer;
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use super::adapter::Adapter;
 use super::device::Device;
 use super::error::ToWindowingApiError;
-use super::surface::{Framebuffer, Surface};
+use super::surface::Surface;
 use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
 use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
 use cgl::{CGLPixelFormatAttribute, CGLPixelFormatObj, CGLReleasePixelFormat, CGLRetainPixelFormat};
@@ -15,16 +17,11 @@ use gl;
 use gl::types::GLuint;
 use std::mem;
 use std::ptr;
-use std::sync::Mutex;
 use std::thread;
 
 // No CGL error occurred.
 #[allow(non_upper_case_globals)]
 const kCGLNoError: CGLError = 0;
-
-lazy_static! {
-    static ref CREATE_CONTEXT_MUTEX: Mutex<ContextID> = Mutex::new(ContextID(0));
-}
 
 // Choose a renderer compatible with GL 1.0.
 #[allow(non_upper_case_globals)]
@@ -36,14 +33,10 @@ const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 #[allow(non_upper_case_globals)]
 const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
 
-#[derive(Clone, Copy, PartialEq)]
-pub struct ContextID(pub u64);
-
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
     pub(crate) id: ContextID,
-    pub(crate) gl_info: GLInfo,
-    framebuffer: Framebuffer,
+    framebuffer: Framebuffer<Surface>,
 }
 
 pub(crate) trait NativeContext {
@@ -143,24 +136,15 @@ impl Device {
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        // Grab the current context.
-        let native_context = Box::new(UnsafeCGLContextRef::current());
-
         // Create the context.
-        let mut context = Context {
-            native_context,
+        let context = Context {
+            native_context: Box::new(UnsafeCGLContextRef::current()),
             id: *next_context_id,
-            gl_info: GLInfo::new(),
             framebuffer: Framebuffer::External,
         };
         next_context_id.0 += 1;
 
         let device = Device::new(&Adapter)?;
-
-        let context_descriptor = device.context_descriptor(&context);
-        let context_attributes = device.context_descriptor_attributes(&context_descriptor);
-        context.gl_info.populate(&context_attributes);
-
         Ok((device, context))
     }
 
@@ -194,13 +178,8 @@ impl Device {
                 native_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
-                gl_info: GLInfo::new(),
             };
             next_context_id.0 += 1;
-
-            let context_descriptor = self.context_descriptor(&context);
-            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-            context.gl_info.populate(&context_attributes);
 
             // Build the initial framebuffer.
             context.framebuffer = Framebuffer::Surface(self.create_surface(&context, size)?);
@@ -232,11 +211,6 @@ impl Device {
             cgl_pixel_format = CGLRetainPixelFormat(cgl_pixel_format);
             ContextDescriptor { cgl_pixel_format }
         }
-    }
-
-    #[inline]
-    pub fn context_gl_info<'c>(&self, context: &'c Context) -> &'c GLInfo {
-        &context.gl_info
     }
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
@@ -294,11 +268,7 @@ impl Device {
 
     #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(surface.framebuffer_object),
-        }
+        self.context_surface(context).map(|surface| surface.framebuffer_object)
     }
 
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)

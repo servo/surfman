@@ -1,7 +1,8 @@
 //! Surface management for macOS.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, FeatureFlags, GLInfo, SurfaceId};
-use super::context::{Context, ContextID};
+use crate::context::ContextID;
+use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceID};
+use super::context::Context;
 use super::device::Device;
 
 use core_foundation::base::TCFType;
@@ -82,7 +83,7 @@ impl Device {
             let context_descriptor = self.context_descriptor(context);
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
-            let renderbuffers = Renderbuffers::new(&size, &context_attributes, &context.gl_info);
+            let renderbuffers = Renderbuffers::new(&size, &context_attributes);
             renderbuffers.bind_to_current_framebuffer();
 
             debug_assert_eq!(gl::CheckFramebufferStatus(gl::FRAMEBUFFER),
@@ -176,8 +177,8 @@ impl Surface {
     }
 
     #[inline]
-    pub fn id(&self) -> SurfaceId {
-        SurfaceId(self.io_surface.as_concrete_TypeRef() as usize)
+    pub fn id(&self) -> SurfaceID {
+        SurfaceID(self.io_surface.as_concrete_TypeRef() as usize)
     }
 }
 
@@ -196,15 +197,6 @@ impl SurfaceTexture {
     pub fn gl_texture_target() -> GLenum {
         gl::TEXTURE_RECTANGLE
     }
-}
-
-pub(crate) enum Framebuffer {
-    // No framebuffer has been attached to the context.
-    None,
-    // The context is externally-managed.
-    External,
-    // The context renders to a surface.
-    Surface(Surface),
 }
 
 pub(crate) enum Renderbuffers {
@@ -226,12 +218,10 @@ impl Drop for Renderbuffers {
 }
 
 impl Renderbuffers {
-    pub(crate) fn new(size: &Size2D<i32>, attributes: &ContextAttributes, info: &GLInfo)
-                      -> Renderbuffers {
+    pub(crate) fn new(size: &Size2D<i32>, attributes: &ContextAttributes) -> Renderbuffers {
         unsafe {
             if attributes.flags.contains(ContextAttributeFlags::DEPTH |
-                                         ContextAttributeFlags::STENCIL) &&
-                    info.features.contains(FeatureFlags::SUPPORTS_DEPTH24_STENCIL8) {
+                                         ContextAttributeFlags::STENCIL) {
                 let mut renderbuffer = 0;
                 gl::GenRenderbuffers(1, &mut renderbuffer);
                 gl::BindRenderbuffer(gl::RENDERBUFFER, renderbuffer);

@@ -26,12 +26,14 @@ pub use platform::default::surface::{Surface, SurfaceTexture};
 pub mod error;
 pub use crate::error::{Error, WindowingApiError};
 
+mod context;
+pub use crate::context::{ContextAttributes, ContextAttributeFlags};
+
 mod info;
-pub use crate::info::{ContextAttributes, ContextAttributeFlags, FeatureFlags, GLApi};
-pub use crate::info::{GLInfo, GLVersion};
+pub use crate::info::{GLApi, GLVersion};
 
 mod surface;
-pub use crate::surface::SurfaceId;
+pub use crate::surface::SurfaceID;
 
 #[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
 #[allow(improper_ctypes)]

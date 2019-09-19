@@ -1,13 +1,15 @@
 //! Wrapper for EGL contexts managed by ANGLE using Direct3D 11 as a backend on Windows.
 
+use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
+use crate::surface::Framebuffer;
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLenum, EGLint};
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLInfo, GLVersion, egl};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, egl};
 use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
 use super::error::ToWindowingApiError;
-use super::surface::{Framebuffer, Surface, SurfaceTexture};
+use super::surface::{Surface, SurfaceTexture};
 
 use euclid::default::Size2D;
 use gl;
@@ -27,18 +29,10 @@ use wio::com::ComPtr;
 
 const EGL_DEVICE_EXT: EGLenum = 0x322c;
 
-lazy_static! {
-    static ref CREATE_CONTEXT_MUTEX: Mutex<ContextID> = Mutex::new(ContextID(0));
-}
-
-#[derive(Clone, Copy, PartialEq)]
-pub struct ContextID(pub u64);
-
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
     pub(crate) id: ContextID,
-    pub(crate) gl_info: GLInfo,
-    framebuffer: Framebuffer,
+    framebuffer: Framebuffer<Surface>,
 }
 
 pub(crate) trait NativeContext {
@@ -169,14 +163,9 @@ impl Device {
         let mut context = Context {
             native_context,
             id: *next_context_id,
-            gl_info: GLInfo::new(),
             framebuffer: Framebuffer::External,
         };
         next_context_id.0 += 1;
-
-        let context_descriptor = device.context_descriptor(&context);
-        let context_attributes = device.context_descriptor_attributes(&context_descriptor);
-        context.gl_info.populate(&context_attributes);
 
         Ok((device, context))
     }
@@ -209,13 +198,8 @@ impl Device {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
-                gl_info: GLInfo::new(),
             };
             next_context_id.0 += 1;
-
-            let context_descriptor = self.context_descriptor(&context);
-            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-            context.gl_info.populate(&context_attributes);
 
             let initial_surface = self.create_surface(&context, size)?;
             self.attach_surface(&mut context, initial_surface);
@@ -252,11 +236,6 @@ impl Device {
                                  egl::CONTEXT_CLIENT_VERSION as EGLint);
             ContextDescriptor { egl_config_id, egl_context_client_version }
         }
-    }
-
-    #[inline]
-    pub fn context_gl_info<'c>(&self, context: &'c Context) -> &'c GLInfo {
-        &context.gl_info
     }
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {

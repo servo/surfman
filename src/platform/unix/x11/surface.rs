@@ -1,6 +1,6 @@
 //! Wrapper for GL-renderable pixmaps on X11.
 
-use crate::{Error, SurfaceId, WindowingApiError};
+use crate::{Error, SurfaceID, WindowingApiError};
 use super::context::{Context, ContextID};
 use super::device::{Device, Quirks};
 use super::error;
@@ -208,8 +208,8 @@ impl Surface {
     }
 
     #[inline]
-    pub fn id(&self) -> SurfaceId {
-        SurfaceId(self.glx_pixmap as usize)
+    pub fn id(&self) -> SurfaceID {
+        SurfaceID(self.glx_pixmap as usize)
     }
 }
 
@@ -228,15 +228,6 @@ impl SurfaceTexture {
     pub fn gl_texture_target() -> GLenum {
         gl::TEXTURE_2D
     }
-}
-
-pub(crate) enum Framebuffer {
-    // No framebuffer has been attached to the context.
-    None,
-    // The context is externally-managed.
-    External,
-    // The context renders to a surface.
-    Surface(Surface),
 }
 
 unsafe fn get_depth_of_visual_with_id(display: *mut Display, visual_id: VisualID)

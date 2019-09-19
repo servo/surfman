@@ -1,9 +1,10 @@
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
+use crate::context::ContextID;
 use crate::egl::types::{EGLConfig, EGLSurface, EGLenum};
 use crate::egl::{self, EGLint};
-use crate::{ContextAttributeFlags, Error, FeatureFlags, GLInfo, SurfaceId};
-use super::context::{self, Context, ContextDescriptor, ContextID};
+use crate::{ContextAttributeFlags, Error, SurfaceID};
+use super::context::{self, Context, ContextDescriptor};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 use super::error::ToWindowingApiError;
 
@@ -229,8 +230,8 @@ impl Surface {
 
 
     #[inline]
-    pub fn id(&self) -> SurfaceId {
-        SurfaceId(self.share_handle as usize)
+    pub fn id(&self) -> SurfaceID {
+        SurfaceID(self.share_handle as usize)
     }
 }
 
@@ -249,13 +250,4 @@ impl SurfaceTexture {
     pub fn gl_texture_target() -> GLenum {
         gl::TEXTURE_2D
     }
-}
-
-pub(crate) enum Framebuffer {
-    // No surface has been attached to the context.
-    None,
-    // The surface is externally-managed.
-    External,
-    // The context renders to a surface that we manage.
-    Surface(Surface),
 }

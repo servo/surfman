@@ -1,10 +1,10 @@
 //! A thread-local handle to the device.
 
+use crate::context::ContextID;
 use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLSurface, EGLenum, EGLint};
 use crate::{Error, GLApi, egl};
 use super::adapter::Adapter;
-use super::context::ContextID;
 
 use std::mem;
 use std::os::raw::{c_char, c_void};
