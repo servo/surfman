@@ -19,6 +19,3 @@ pub use unix::x11 as default;
 pub mod windows;
 #[cfg(target_os = "windows")]
 pub use windows::angle as default;
-
-#[cfg(target_os="ios")]
-pub mod with_eagl;

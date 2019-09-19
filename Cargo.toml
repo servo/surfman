@@ -55,14 +55,11 @@ core-foundation = { git = "https://github.com/zakorgy/core-foundation-rs", branc
 cgl = "0.3.2"
 io-surface = { git = "https://github.com/zakorgy/core-foundation-rs", branch = "io-surface-alpha" }
 
-[target.'cfg(target_os = "ios")'.dependencies]
-objc = "0.2"
-
-[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_os = "ios"))))'.dependencies.x11]
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
 version = "2.3.0"
 features = ["xlib"]
 
-[target.'cfg(any(not(unix), target_os = "macos", target_os = "android", target_os = "ios"))'.dependencies.x11]
+[target.'cfg(any(not(unix), target_os = "macos", target_os = "android"))'.dependencies.x11]
 optional = true
 version = "2.3.0"
 features = ["xlib"]
@@ -74,6 +71,3 @@ mozangle = { version = "0.2", features = ["egl"] }
 [target.'cfg(target_os = "windows")'.dependencies]
 wio = "0.2"
 winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "libloaderapi"] }
-
-[target.'cfg(any(target_os="macos", target_os="windows", target_os="android", target_os="ios"))'.dependencies]
-lazy_static = "1"
