@@ -1,6 +1,5 @@
 //! Cached OpenGL information.
 
-use crate::limits::GLLimits;
 use gl;
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -32,19 +31,17 @@ pub struct ContextAttributes {
 /// This data is cached.
 #[derive(Clone, Copy)]
 pub struct GLInfo {
-    pub limits: GLLimits,
     pub features: FeatureFlags,
 }
 
 impl GLInfo {
     // Creates a placeholder `GLInfo`. It must be populated afterward with the `populate()` method.
     pub(crate) fn new() -> GLInfo {
-        GLInfo { limits: GLLimits::default(), features: FeatureFlags::empty() }
+        GLInfo { features: FeatureFlags::empty() }
     }
 
     // Assumes that the context with the given attributes is current.
     pub(crate) fn populate(&mut self, attributes: &ContextAttributes) {
-        self.limits = GLLimits::detect();
         self.features = FeatureFlags::detect(attributes);
     }
 }

@@ -116,12 +116,7 @@ impl Device {
                                          &mut minor_version);
             assert_ne!(result, egl::FALSE);
 
-            Ok(Device {
-                native_display,
-                egl_device,
-                d3d11_device,
-                d3d_driver_type,
-            })
+            Ok(Device { native_display, egl_device, d3d11_device, d3d_driver_type })
         }
     }
 

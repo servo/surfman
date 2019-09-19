@@ -30,9 +30,6 @@ mod info;
 pub use crate::info::{ContextAttributes, ContextAttributeFlags, FeatureFlags, GLApi};
 pub use crate::info::{GLInfo, GLVersion};
 
-mod limits;
-pub use crate::limits::GLLimits;
-
 mod surface;
 pub use crate::surface::SurfaceId;
 
