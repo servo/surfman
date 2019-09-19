@@ -1,6 +1,6 @@
 //! Wrapper for GLX contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLInfo};
 use crate::{GLVersion, WindowingApiError};
 use super::device::{Device, Quirks, UnsafeDisplayRef};
 use super::surface::{Framebuffer, Surface};
@@ -98,7 +98,7 @@ impl Device {
             XFree(glx_fb_configs as *mut c_void);
 
             let glx_fb_config_id = get_config_attr(display, glx_fb_config, GLX_FBCONFIG_ID) as XID;
-            Ok(ContextDescriptor { glx_fb_config_id, gl_version: attributes.flavor.version })
+            Ok(ContextDescriptor { glx_fb_config_id, gl_version: attributes.version })
         }
     }
 
@@ -328,11 +328,8 @@ impl Device {
             attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
             attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
 
-            // Generate an appropriate GL flavor.
-            let flavor = GLFlavor { api: GLApi::GL, version: context_descriptor.gl_version };
-
             // Create appropriate context attributes.
-            ContextAttributes { flags: attribute_flags, flavor }
+            ContextAttributes { flags: attribute_flags, version: context_descriptor.gl_version }
         }
     }
 

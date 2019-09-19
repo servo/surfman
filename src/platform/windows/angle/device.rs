@@ -2,7 +2,7 @@
 
 use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLSurface, EGLenum, EGLint};
-use crate::{Error, egl};
+use crate::{Error, GLApi, egl};
 use super::adapter::Adapter;
 use super::context::ContextID;
 
@@ -142,6 +142,11 @@ impl Device {
 
             Adapter { dxgi_adapter, d3d_driver_type: self.d3d_driver_type }
         }
+    }
+
+    #[inline]
+    pub fn gl_api() -> GLApi {
+        GLApi::GLES
     }
 }
 

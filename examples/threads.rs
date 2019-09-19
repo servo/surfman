@@ -5,7 +5,6 @@
 
 use euclid::default::Size2D;
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
-use rand::{self, Rng};
 use sdl2::event::Event;
 use sdl2::hint;
 use sdl2::keyboard::Keycode;
@@ -15,24 +14,19 @@ use std::io::Read;
 use std::os::raw::c_void;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, ContextDescriptor, Device, Surface, SurfaceTexture};
+use surfman::{Adapter, ContextDescriptor, Device, GLApi, Surface, SurfaceTexture};
 
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1];
 
 static TRANSFORM: [f32; 4] = [0.5, 0.0, 0.0, 0.5];
 static TRANSLATION: [f32; 2] = [0.0, 0.0];
 
-#[cfg(target_os = "windows")]
-static SHADER_PREAMBLE: &[u8] = b"#version 300 es\n#define SAMPLER_TYPE sampler2D\n";
-#[cfg(target_os = "macos")]
-static SHADER_PREAMBLE: &[u8] = b"#version 330\n#define SAMPLER_TYPE sampler2DRect\n";
-#[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-static SHADER_PREAMBLE: &[u8] = b"#version 330\n#define SAMPLER_TYPE sampler2D\n";
-
 fn main() {
     // Set up SDL2.
     let sdl_context = sdl2::init().unwrap();
-    //hint::set("SDL_OPENGL_ES_DRIVER", "1");
+    if Device::gl_api() == GLApi::GLES {
+        hint::set("SDL_OPENGL_ES_DRIVER", "1");
+    }
     let video = sdl_context.video().unwrap();
 
     // Make sure we have at least a GL 3.0 context.
@@ -78,7 +72,6 @@ fn main() {
 
     // Enter main render loop.
     let mut animation = Animation::new(0.75, 0.003);
-    let mut rng = rand::thread_rng();
     loop {
         // Send back our old surface, and fetch a new one.
         surface = device.destroy_surface_texture(&mut context, texture).unwrap();
@@ -267,7 +260,19 @@ struct Shader {
 
 impl Shader {
     fn new(name: &str, kind: ShaderKind) -> Shader {
-        let mut source = SHADER_PREAMBLE.to_vec();
+        let mut source = vec![];
+        match Device::gl_api() {
+            GLApi::GL => source.extend_from_slice(b"#version 330\n"),
+            GLApi::GLES => source.extend_from_slice(b"#version 300 es\n"),
+        }
+        match SurfaceTexture::gl_texture_target() {
+            gl::TEXTURE_2D => source.extend_from_slice(b"#define SAMPLER_TYPE sampler2D\n"),
+            gl::TEXTURE_RECTANGLE => {
+                source.extend_from_slice(b"#define SAMPLER_TYPE sampler2DRect\n")
+            }
+            _ => {}
+        }
+
         let path = format!("resources/examples/{}.{}.glsl", name, kind.extension());
         File::open(&path).expect("Failed to open shader source!")
                          .read_to_end(&mut source)

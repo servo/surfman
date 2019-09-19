@@ -1,7 +1,8 @@
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
-use crate::Error;
+use crate::{Error, GLApi};
 use super::adapter::Adapter;
+
 use std::marker::PhantomData;
 
 #[derive(Clone)]
@@ -18,5 +19,10 @@ impl Device {
     #[inline]
     pub fn adapter(&self) -> Adapter {
         Adapter
+    }
+
+    #[inline]
+    pub fn gl_api() -> GLApi {
+        GLApi::GL
     }
 }

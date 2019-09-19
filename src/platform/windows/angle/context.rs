@@ -2,8 +2,7 @@
 
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLenum, EGLint};
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo};
-use crate::{GLVersion, egl};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLInfo, GLVersion, egl};
 use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
@@ -66,11 +65,6 @@ pub struct ContextDescriptor {
 impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
-        let renderable_type = match attributes.flavor.api {
-            GLApi::GL => egl::OPENGL_BIT,
-            GLApi::GLES => egl::OPENGL_ES2_BIT,
-        };
-
         let flags = attributes.flags;
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
@@ -80,7 +74,7 @@ impl Device {
             // Create config attributes.
             let config_attributes = [
                 egl::SURFACE_TYPE as EGLint,         egl::PBUFFER_BIT as EGLint,
-                egl::RENDERABLE_TYPE as EGLint,      renderable_type as EGLint,
+                egl::RENDERABLE_TYPE as EGLint,      egl::OPENGL_ES2_BIT as EGLint,
                 egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint,
                 egl::RED_SIZE as EGLint,             8,
                 egl::GREEN_SIZE as EGLint,           8,
@@ -349,14 +343,11 @@ impl Device {
             attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
             attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
 
-            // Generate an appropriate GL flavor.
-            let flavor = GLFlavor {
-                api: GLApi::GL,
-                version: GLVersion::new(context_descriptor.egl_context_client_version as u8, 0),
-            };
-
             // Create appropriate context attributes.
-            ContextAttributes { flags: attribute_flags, flavor }
+            ContextAttributes {
+                flags: attribute_flags,
+                version: GLVersion::new(context_descriptor.egl_context_client_version as u8, 0),
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 //! Wrapper for Core OpenGL contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLFlavor, GLInfo, GLVersion};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLInfo, GLVersion};
 use super::adapter::Adapter;
 use super::device::Device;
 use super::error::ToWindowingApiError;
@@ -91,9 +91,9 @@ unsafe impl Send for ContextDescriptor {}
 impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
-        let profile = if attributes.flavor.version.major >= 4 {
+        let profile = if attributes.version.major >= 4 {
             kCGLOGLPVersion_GL4_Core
-        } else if attributes.flavor.version.major == 3 {
+        } else if attributes.version.major == 3 {
             kCGLOGLPVersion_3_2_Core
         } else {
             kCGLOGLPVersion_Legacy
@@ -317,10 +317,7 @@ impl Device {
             let version = GLVersion::new(((gl_profile >> 12) & 0xf) as u8,
                                         ((gl_profile >> 8) & 0xf) as u8);
 
-            return ContextAttributes {
-                flags: attribute_flags,
-                flavor: GLFlavor { api: GLApi::GL, version },
-            };
+            return ContextAttributes { flags: attribute_flags, version };
         }
 
         unsafe fn get_pixel_format_attribute(context_descriptor: &ContextDescriptor,

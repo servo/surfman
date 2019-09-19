@@ -1,6 +1,6 @@
 //! A wrapper around X11 Displays.
 
-use crate::Error;
+use crate::{Error, GLApi};
 use super::adapter::Adapter;
 
 use std::ffi::CStr;
@@ -51,6 +51,11 @@ impl Device {
             assert!(!display_name.is_null());
             Adapter { display_name: Some(CStr::from_ptr(display_name).to_owned()) }
         }
+    }
+
+    #[inline]
+    pub fn gl_api() -> GLApi {
+        GLApi::GL
     }
 }
 

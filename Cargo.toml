@@ -24,7 +24,6 @@ bitflags = "1.1"
 gl = "0.13"
 lazy_static = "1"
 libc = "0.2"
-rand = "0.7"
 
 [dependencies.euclid]
 version = "0.20"

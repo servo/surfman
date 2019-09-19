@@ -20,17 +20,10 @@ bitflags! {
     }
 }
 
-/// The OpenGL API and its associated version.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GLFlavor {
-    pub api: GLApi,
-    pub version: GLVersion,
-}
-
 // https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
 #[derive(Clone, Copy, PartialEq)]
 pub struct ContextAttributes {
-    pub flavor: GLFlavor,
+    pub version: GLVersion,
     pub flags: ContextAttributeFlags,
 }
 
@@ -64,10 +57,9 @@ impl FeatureFlags {
 
         // Packed depth/stencil is included in OpenGL Core 3.x.
         // It may not be available in the extension list (e.g. on macOS).
-        if attributes.flavor.version.major >= 3 ||
-                extensions.0.iter().any(|name| {
-                    name == "GL_OES_packed_depth_stencil" || name == "GL_EXT_packed_depth_stencil"
-                }) {
+        if attributes.version.major >= 3 || extensions.0.iter().any(|name| {
+            name == "GL_OES_packed_depth_stencil" || name == "GL_EXT_packed_depth_stencil"
+        }) {
             flags.insert(FeatureFlags::SUPPORTS_DEPTH24_STENCIL8);
         }
 
@@ -103,7 +95,7 @@ impl GLExtensions {
     // Assumes that the context with the given attributes is current.
     fn detect(attributes: &ContextAttributes) -> GLExtensions {
         unsafe {
-            if attributes.flavor.version.major < 3 {
+            if attributes.version.major < 3 {
                 let extensions = gl::GetString(gl::EXTENSIONS) as *const c_char;
                 let extensions = CStr::from_ptr(extensions).to_string_lossy();
                 let extensions = extensions.split(&[',', ' '][..]);

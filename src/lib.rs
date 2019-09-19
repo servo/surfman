@@ -30,7 +30,7 @@ pub mod error;
 pub use crate::error::{Error, WindowingApiError};
 
 mod info;
-pub use crate::info::{ContextAttributes, ContextAttributeFlags, FeatureFlags, GLApi, GLFlavor};
+pub use crate::info::{ContextAttributes, ContextAttributeFlags, FeatureFlags, GLApi};
 pub use crate::info::{GLInfo, GLVersion};
 
 mod limits;
