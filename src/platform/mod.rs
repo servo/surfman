@@ -22,7 +22,3 @@ pub use windows::angle as default;
 
 #[cfg(target_os="ios")]
 pub mod with_eagl;
-
-pub mod not_implemented;
-#[cfg(not(any(unix, target_os="windows")))]
-pub use not_implemented as default;
