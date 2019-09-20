@@ -21,10 +21,21 @@ use x11::glx::{GLX_ALPHA_SIZE};
 use x11::glx::{GLX_DEPTH_SIZE, GLX_DOUBLEBUFFER, GLX_DRAWABLE_TYPE};
 use x11::glx::{GLX_FBCONFIG_ID, GLX_PIXMAP_BIT};
 use x11::glx::{GLX_RENDER_TYPE, GLX_RGBA_BIT, GLX_STENCIL_SIZE};
-use x11::glx::{GLX_X_RENDERABLE, GLXContext, GLXFBConfig,  glXChooseFBConfig, glXDestroyContext};
+use x11::glx::{GLX_X_RENDERABLE, GLXContext, GLXFBConfig, glXChooseFBConfig, glXDestroyContext};
 use x11::glx::{glXGetCurrentContext, glXGetCurrentDisplay, glXGetFBConfigAttrib};
 use x11::glx::{glXGetProcAddress, glXMakeCurrent, glXQueryContext, glXSwapBuffers};
 use x11::xlib::{self, Display, XDefaultScreen, XFree, XID};
+
+lazy_static! {
+    static ref GLX_GET_PROC_ADDRESS: extern "C" fn(*const GLubyte) -> *mut c_void = {
+        unsafe {
+            let symbol = &b"glXGetProcAddress\0"[0] as *const u8 as *const i8;
+            let function = dlsym(RTLD_DEFAULT, symbol);
+            assert!(!function.is_null());
+            mem::transmute(function)
+        }
+    };
+}
 
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,

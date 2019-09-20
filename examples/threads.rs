@@ -40,7 +40,6 @@ fn main() {
 
     // Create the GL context in SDL, and make it current.
     let gl_context = window.gl_create_context().unwrap();
-    surfman::init();
     window.gl_make_current(&gl_context).unwrap();
 
     // Try to enable vsync, but ignore the error if we can't.
@@ -50,6 +49,7 @@ fn main() {
     let (device, mut context) = unsafe {
         Device::from_current_context().unwrap()
     };
+    gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
     let adapter = device.adapter();
     let context_descriptor = device.context_descriptor(&context);
 

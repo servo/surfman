@@ -1,7 +1,9 @@
+// surfman/build.rs
+
+use gl_generator::{Api, Fallbacks, Profile, Registry, StaticGenerator, StructGenerator};
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
-use gl_generator::{Api, GlobalGenerator, Fallbacks, Profile, Registry};
 
 fn main() {
     let target = env::var("TARGET").unwrap();
@@ -11,8 +13,8 @@ fn main() {
             target.contains("windows") ||
             cfg!(feature = "test_egl_in_linux") {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
-        Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, [])
-            .write_bindings(gl_generator::StaticGenerator, &mut file).unwrap();
+        let registry = Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, []);
+        registry.write_bindings(StaticGenerator, &mut file).unwrap();
 
         // Historically, Android builds have succeeded with rust-link-lib=EGL.
         // On Windows when relying on %LIBS% to contain libEGL.lib, however,
@@ -31,7 +33,11 @@ fn main() {
         Registry::new(Api::Glx, (1, 4), Profile::Core, Fallbacks::All, [
             "GLX_ARB_create_context",
             "GLX_EXT_texture_from_pixmap",
-        ]).write_bindings(GlobalGenerator, &mut file).unwrap();
+        ]).write_bindings(StructGenerator, &mut file).unwrap();
         println!("cargo:rustc-link-lib=GL");
     }
+
+    let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
+    let registry = Registry::new(Api::Gl, (3, 3), Profile::Core, Fallbacks::All, []);
+    registry.write_bindings(StructGenerator, &mut file).unwrap();
 }

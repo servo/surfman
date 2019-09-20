@@ -20,7 +20,6 @@ pub mod platform;
 pub use platform::default::adapter::Adapter;
 pub use platform::default::context::{Context, ContextDescriptor};
 pub use platform::default::device::Device;
-pub use platform::default::loader::get_proc_address;
 pub use platform::default::surface::{Surface, SurfaceTexture};
 
 pub mod error;
@@ -35,15 +34,13 @@ pub use crate::info::{GLApi, GLVersion};
 mod surface;
 pub use crate::surface::SurfaceID;
 
-#[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
-#[allow(improper_ctypes)]
-mod glx {
-    include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
+mod gl {
+    include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
 }
 
-pub fn init() {
-    gl::load_with(get_proc_address);
-    platform::default::loader::init();
+#[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
+mod glx {
+    include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
 }
 
 #[cfg(any(target_os = "android", target_os = "windows"))]

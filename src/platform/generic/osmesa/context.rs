@@ -1,25 +1,30 @@
 //! Wrapper for OSMesa contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
+use crate::gl::types::GLuint;
+use crate::gl::{self, Gl};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, WindowingApiError};
 use super::device::Device;
 use super::surface::Surface;
 
 use euclid::default::Size2D;
-use gl;
-use gl::types::GLuint;
 use osmesa_sys::{self, OSMESA_CONTEXT_MAJOR_VERSION, OSMESA_CONTEXT_MINOR_VERSION};
 use osmesa_sys::{OSMESA_CORE_PROFILE, OSMESA_DEPTH_BITS, OSMESA_FORMAT, OSMESA_PROFILE};
 use osmesa_sys::{OSMESA_STENCIL_BITS, OSMesaContext, OSMesaCreateContextAttribs};
 use osmesa_sys::{OSMesaDestroyContext, OSMesaGetCurrentContext, OSMesaGetDepthBuffer};
-use osmesa_sys::{OSMesaGetIntegerv, OSMesaMakeCurrent};
+use osmesa_sys::{OSMesaGetIntegerv, OSMesaGetProcAddress, OSMesaMakeCurrent};
+use std::ffi::CString;
 use std::marker::PhantomData;
 use std::mem;
-use std::os::raw::{c_int, c_void};
+use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::sync::Arc;
 use std::thread;
+
+thread_local! {
+    pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
+}
 
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
@@ -149,68 +154,73 @@ impl Device {
     // FIXME(pcwalton): Probably should return a result here to avoid an unwrap.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         self.make_context_current(context).unwrap();
-        unsafe {
-            // Fetch the current GL version.
-            let (mut major_gl_version, mut minor_gl_version) = (0, 0);
-            gl::GetIntegerv(gl::MAJOR_VERSION, &mut major_gl_version);
-            gl::GetIntegerv(gl::MINOR_VERSION, &mut minor_gl_version);
 
-            // Fetch the current image format.
-            let mut format = 0;
-            OSMesaGetIntegerv(OSMESA_FORMAT, &mut format);
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                // Fetch the current GL version.
+                let (mut major_gl_version, mut minor_gl_version) = (0, 0);
+                gl.GetIntegerv(gl::MAJOR_VERSION, &mut major_gl_version);
+                gl.GetIntegerv(gl::MINOR_VERSION, &mut minor_gl_version);
 
-            // Fetch the depth size.
-            let (mut depth_width, mut depth_height, mut depth_byte_size) = (0, 0, 0);
-            let mut depth_buffer = ptr::null_mut();
-            let has_depth = OSMesaGetDepthBuffer(context.native_context.osmesa_context(),
-                                                &mut depth_width,
-                                                &mut depth_height,
-                                                &mut depth_byte_size,
-                                                &mut depth_buffer);
-            if has_depth == gl::FALSE {
-                depth_byte_size = 0;
+                // Fetch the current image format.
+                let mut format = 0;
+                OSMesaGetIntegerv(OSMESA_FORMAT, &mut format);
+
+                // Fetch the depth size.
+                let (mut depth_width, mut depth_height, mut depth_byte_size) = (0, 0, 0);
+                let mut depth_buffer = ptr::null_mut();
+                let has_depth = OSMesaGetDepthBuffer(context.native_context.osmesa_context(),
+                                                    &mut depth_width,
+                                                    &mut depth_height,
+                                                    &mut depth_byte_size,
+                                                    &mut depth_buffer);
+                if has_depth == gl::FALSE {
+                    depth_byte_size = 0;
+                }
+
+                // Create a set of attributes.
+                //
+                // FIXME(pcwalton): I don't see a way to get the current stencil size in the OSMesa
+                // API. Just guess, I suppose.
+                // FIXME(pcwalton): How does OSMesa deal with packed depth/stencil?
+                ContextDescriptor {
+                    attributes: Arc::new(vec![
+                        OSMESA_FORMAT,                  format,
+                        OSMESA_DEPTH_BITS,              depth_byte_size * 8,
+                        OSMESA_STENCIL_BITS,            8,
+                        OSMESA_PROFILE,                 OSMESA_CORE_PROFILE,
+                        OSMESA_CONTEXT_MAJOR_VERSION,   major_gl_version,
+                        OSMESA_CONTEXT_MINOR_VERSION,   minor_gl_version,
+                        0,
+                    ]),
+                }
             }
-
-            // Create a set of attributes.
-            //
-            // FIXME(pcwalton): I don't see a way to get the current stencil size in the OSMesa
-            // API. Just guess, I suppose.
-            // FIXME(pcwalton): How does OSMesa deal with packed depth/stencil?
-            ContextDescriptor {
-                attributes: Arc::new(vec![
-                    OSMESA_FORMAT,                  format,
-                    OSMESA_DEPTH_BITS,              depth_byte_size * 8,
-                    OSMESA_STENCIL_BITS,            8,
-                    OSMESA_PROFILE,                 OSMESA_CORE_PROFILE,
-                    OSMESA_CONTEXT_MAJOR_VERSION,   major_gl_version,
-                    OSMESA_CONTEXT_MINOR_VERSION,   minor_gl_version,
-                    0,
-                ]),
-            }
-        }
+        })
     }
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
-        unsafe {
-            let surface = match context.framebuffer {
-                Framebuffer::Surface(ref surface) => surface,
-                Framebuffer::None | Framebuffer::External => {
-                    return Err(Error::ExternalRenderTarget)
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                let surface = match context.framebuffer {
+                    Framebuffer::Surface(ref surface) => surface,
+                    Framebuffer::None | Framebuffer::External => {
+                        return Err(Error::ExternalRenderTarget)
+                    }
+                };
+
+                let ok = OSMesaMakeCurrent(context.native_context.osmesa_context(),
+                                        (*surface.pixels.get()).as_mut_ptr() as *mut c_void,
+                                        gl::UNSIGNED_BYTE,
+                                        surface.size.width,
+                                        surface.size.height);
+                if ok == gl::FALSE {
+                    return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
                 }
-            };
 
-            let ok = OSMesaMakeCurrent(context.native_context.osmesa_context(),
-                                       (*surface.pixels.get()).as_mut_ptr() as *mut c_void,
-                                       gl::UNSIGNED_BYTE,
-                                       surface.size.width,
-                                       surface.size.height);
-            if ok == gl::FALSE {
-                return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
+                gl.Viewport(0, 0, surface.size.width, surface.size.height);
+                Ok(())
             }
-
-            gl::Viewport(0, 0, surface.size.width, surface.size.height);
-            Ok(())
-        }
+        })
     }
 
     pub fn make_context_not_current(&self, _: &Context) -> Result<(), Error> {
@@ -239,9 +249,12 @@ impl Device {
         }
 
         self.make_context_current(context)?;
-        unsafe {
-            gl::Flush();
-        }
+
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                gl.Flush();
+            }
+        });
 
         let old_surface = self.release_surface(context).expect("Where's our surface?");
         self.attach_surface(context, new_surface);
@@ -289,6 +302,10 @@ impl Device {
         }
 
         context_attributes
+    }
+
+    pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
+        get_proc_address(symbol_name)
     }
 
     fn attach_surface(&self, context: &mut Context, surface: Surface) {
@@ -347,5 +364,16 @@ impl NativeContext for UnsafeOSMesaContextRef {
     unsafe fn destroy(&mut self, _: &Device) {
         assert!(!self.is_destroyed());
         self.osmesa_context = ptr::null_mut();
+    }
+}
+
+fn get_proc_address(symbol_name: &str) -> *const c_void {
+    unsafe {
+        let symbol_name: CString = CString::new(symbol_name).unwrap();
+        let symbol_name = symbol_name.as_ptr() as *const u8 as *const c_char;
+        match OSMesaGetProcAddress(symbol_name) {
+            Some(pointer) => pointer as *const c_void,
+            None => ptr::null(),
+        }
     }
 }

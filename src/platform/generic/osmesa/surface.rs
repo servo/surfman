@@ -1,13 +1,13 @@
 //! Wrapper for GL-renderable pixmaps on X11.
 
 use crate::context::ContextID;
+use crate::gl;
+use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
 use crate::{Error, SurfaceID};
-use super::context::Context;
+use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 
 use euclid::default::Size2D;
-use gl;
-use gl::types::{GLenum, GLint, GLuint, GLvoid};
 use std::cell::UnsafeCell;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
@@ -56,33 +56,35 @@ impl Device {
         unsafe {
             drop(self.make_context_current(context));
 
-            // Create a texture.
-            let mut gl_texture = 0;
-            gl::GenTextures(1, &mut gl_texture);
-            debug_assert_ne!(gl_texture, 0);
-            gl::BindTexture(gl::TEXTURE_2D, gl_texture);
+            GL_FUNCTIONS.with(|gl| {
+                // Create a texture.
+                let mut gl_texture = 0;
+                gl.GenTextures(1, &mut gl_texture);
+                debug_assert_ne!(gl_texture, 0);
+                gl.BindTexture(gl::TEXTURE_2D, gl_texture);
 
-            // TODO(pcwalton): Can we avoid this copy somehow?
-            gl::TexImage2D(gl::TEXTURE_2D,
-                           0,
-                           gl::RGBA8 as GLint,
-                           surface.size.width,
-                           surface.size.height,
-                           0,
-                           gl::RGBA,
-                           gl::UNSIGNED_BYTE,
-                           (*surface.pixels.get()).as_ptr() as *const GLvoid);
+                // TODO(pcwalton): Can we avoid this copy somehow?
+                gl.TexImage2D(gl::TEXTURE_2D,
+                              0,
+                              gl::RGBA8 as GLint,
+                              surface.size.width,
+                              surface.size.height,
+                              0,
+                              gl::RGBA,
+                              gl::UNSIGNED_BYTE,
+                              (*surface.pixels.get()).as_ptr() as *const GLvoid);
 
-            // Initialize the texture, for convenience.
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+                // Initialize the texture, for convenience.
+                gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+                gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+                gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+                gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
 
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-            debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
+                gl.BindTexture(gl::TEXTURE_2D, 0);
+                debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
 
-            Ok(SurfaceTexture { surface, gl_texture, phantom: PhantomData })
+                Ok(SurfaceTexture { surface, gl_texture, phantom: PhantomData })
+            })
         }
     }
 
@@ -95,11 +97,13 @@ impl Device {
 
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
                                    -> Result<Surface, Error> {
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-            gl::DeleteTextures(1, &mut surface_texture.gl_texture);
-            surface_texture.gl_texture = 0;
-        }
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                gl.BindTexture(gl::TEXTURE_2D, 0);
+                gl.DeleteTextures(1, &mut surface_texture.gl_texture);
+                surface_texture.gl_texture = 0;
+            }
+        });
 
         Ok(surface_texture.surface)
     }

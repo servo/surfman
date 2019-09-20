@@ -1,22 +1,29 @@
 //! Wrapper for Core OpenGL contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
+use crate::gl::Gl;
+use crate::gl::types::GLuint;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use super::adapter::Adapter;
 use super::device::Device;
 use super::error::ToWindowingApiError;
 use super::surface::Surface;
+
 use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
 use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
 use cgl::{CGLPixelFormatAttribute, CGLPixelFormatObj, CGLReleasePixelFormat, CGLRetainPixelFormat};
 use cgl::{CGLSetCurrentContext, kCGLPFAAlphaSize, kCGLPFADepthSize};
 use cgl::{kCGLPFAStencilSize, kCGLPFAOpenGLProfile};
+use core_foundation::base::TCFType;
+use core_foundation::bundle::CFBundleGetBundleWithIdentifier;
+use core_foundation::bundle::{CFBundleGetFunctionPointerForName, CFBundleRef};
+use core_foundation::string::CFString;
 use euclid::default::Size2D;
-use gl;
-use gl::types::GLuint;
 use std::mem;
+use std::os::raw::c_void;
 use std::ptr;
+use std::str::FromStr;
 use std::thread;
 
 // No CGL error occurred.
@@ -32,6 +39,25 @@ const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 // Choose a renderer capable of GL4.1 or later.
 #[allow(non_upper_case_globals)]
 const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
+
+static OPENGL_FRAMEWORK_IDENTIFIER: &'static str = "com.apple.opengl";
+
+thread_local! {
+    pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
+}
+
+thread_local! {
+    static OPENGL_FRAMEWORK: CFBundleRef = {
+        unsafe {
+            let framework_identifier: CFString =
+                FromStr::from_str(OPENGL_FRAMEWORK_IDENTIFIER).unwrap();
+            let framework =
+                CFBundleGetBundleWithIdentifier(framework_identifier.as_concrete_TypeRef());
+            assert!(!framework.is_null());
+            framework
+        }
+    };
+}
 
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
@@ -255,9 +281,11 @@ impl Device {
         self.make_context_current(context)?;
 
         // Make sure all changes are synchronized. Apple requires this.
-        unsafe {
-            gl::Flush();
-        }
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                gl.Flush();
+            }
+        });
 
         let new_framebuffer = Framebuffer::Surface(new_surface);
         match mem::replace(&mut context.framebuffer, new_framebuffer) {
@@ -301,6 +329,11 @@ impl Device {
             debug_assert_eq!(err, kCGLNoError);
             value
         }
+    }
+
+    #[inline]
+    pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
+        get_proc_address(symbol_name)
     }
 }
 
@@ -356,4 +389,13 @@ impl NativeContext for UnsafeCGLContextRef {
         assert!(!self.is_destroyed());
         self.cgl_context = ptr::null_mut();
     }
+}
+
+fn get_proc_address(symbol_name: &str) -> *const c_void {
+    OPENGL_FRAMEWORK.with(|framework| {
+        unsafe {
+            let symbol_name: CFString = FromStr::from_str(symbol_name).unwrap();
+            CFBundleGetFunctionPointerForName(*framework, symbol_name.as_concrete_TypeRef())
+        }
+    })
 }
