@@ -132,8 +132,8 @@ impl Device {
                                             glx::FRONT_EXT as c_int,
                                             attributes.as_ptr());
                     } else {
-                        // `GLX_texture_from_pixmap` is broken. Bummer. Copy data that was read back from
-                        // the CPU.
+                        // `GLX_texture_from_pixmap` is broken. Bummer. Copy data that was read
+                        // back from the CPU.
                         match surface.pixels {
                             Some(ref pixels) => {
                                 gl.TexImage2D(gl::TEXTURE_2D,
