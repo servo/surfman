@@ -1,5 +1,6 @@
 //! A wrapper around X11 Displays.
 
+use crate::glx::types::Display as GlxDisplay;
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
 
@@ -56,6 +57,10 @@ impl Device {
     #[inline]
     pub fn gl_api() -> GLApi {
         GLApi::GL
+    }
+
+    pub(crate) fn glx_display(&self) -> *mut GlxDisplay {
+        self.native_display.display() as *mut GlxDisplay
     }
 }
 

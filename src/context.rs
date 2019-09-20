@@ -28,6 +28,7 @@ pub struct ContextAttributes {
 }
 
 impl ContextAttributes {
+    #[allow(dead_code)]
     pub(crate) fn zeroed() -> ContextAttributes {
         ContextAttributes { version: GLVersion::new(0, 0), flags: ContextAttributeFlags::empty() }
     }
