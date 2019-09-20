@@ -98,7 +98,7 @@ impl DrawBuffer {
         }
 
         if attrs.preserve_drawing_buffer {
-            return Err("preserveDrawingBuffer is not supported yet");
+            error!("preserveDrawingBuffer is not supported yet");
         }
 
         // See https://github.com/servo/servo/issues/12320
