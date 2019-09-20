@@ -26,3 +26,9 @@ pub struct ContextAttributes {
     pub version: GLVersion,
     pub flags: ContextAttributeFlags,
 }
+
+impl ContextAttributes {
+    pub(crate) fn zeroed() -> ContextAttributes {
+        ContextAttributes { version: GLVersion::new(0, 0), flags: ContextAttributeFlags::empty() }
+    }
+}
