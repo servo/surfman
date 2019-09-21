@@ -4,6 +4,7 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLenum, EGLint};
 use crate::gl::types::GLuint;
+use crate::gl::{self, Gl};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, egl};
 use super::adapter::Adapter;
@@ -13,10 +14,9 @@ use super::error::ToWindowingApiError;
 use super::surface::{Surface, SurfaceTexture};
 
 use euclid::default::Size2D;
-use gl;
 use std::ffi::CString;
 use std::mem;
-use std::os::raw::c_void;
+use std::os::raw::{c_char, c_void};
 use std::ptr;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -129,9 +129,13 @@ impl Device {
 
         // Grab the current EGL display and EGL context.
         let egl_display = egl::GetCurrentDisplay();
-        debug_assert_ne!(egl_display, egl::NO_DISPLAY);
+        if egl_display == egl::NO_DISPLAY {
+            return Err(Error::NoCurrentContext);
+        }
         let egl_context = egl::GetCurrentContext();
-        debug_assert_ne!(egl_context, egl::NO_CONTEXT);
+        if egl_context == egl::NO_CONTEXT {
+            return Err(Error::NoCurrentContext);
+        }
         let native_context = Box::new(UnsafeEGLContextRef { egl_context });
 
         // Fetch the EGL device.
@@ -259,7 +263,7 @@ impl Device {
                 return Err(Error::MakeCurrentFailed(err));
             }
 
-            GL_FUNCTIONS.with(|gl| gl::Viewport(0, 0, size.width, size.height));
+            GL_FUNCTIONS.with(|gl| gl.Viewport(0, 0, size.width, size.height));
 
             Ok(())
         }
@@ -460,6 +464,6 @@ fn get_context_attr(egl_display: EGLDisplay, egl_context: EGLContext, attr: EGLi
 pub fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
-        egl::GetProcAddress(symbol_name.as_ptr() as *const u8)
+        egl::GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as *const c_void
     }
 }

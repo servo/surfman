@@ -24,15 +24,21 @@ static TRANSLATION: [f32; 2] = [0.0, 0.0];
 fn main() {
     // Set up SDL2.
     let sdl_context = sdl2::init().unwrap();
-    if Device::gl_api() == GLApi::GLES {
+    let gl_api = Device::gl_api();
+    if gl_api == GLApi::GLES {
         hint::set("SDL_OPENGL_ES_DRIVER", "1");
     }
     let video = sdl_context.video().unwrap();
 
     // Make sure we have at least a GL 3.0 context.
     let gl_attributes = video.gl_attr();
-    gl_attributes.set_context_profile(GLProfile::Core);
-    gl_attributes.set_context_version(3, 3);
+    if gl_api == GLApi::GLES {
+        gl_attributes.set_context_profile(GLProfile::GLES);
+        gl_attributes.set_context_version(3, 0);
+    } else {
+        gl_attributes.set_context_profile(GLProfile::Core);
+        gl_attributes.set_context_version(3, 3);
+    }
 
     // Open a window.
     let window = video.window("Multithreaded example", 320, 240).opengl().build().unwrap();

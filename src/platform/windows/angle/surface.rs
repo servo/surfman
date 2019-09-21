@@ -189,7 +189,7 @@ impl Device {
                     gl_texture: texture,
                     phantom: PhantomData,
                 })
-            }
+            })
         }
     }
 
