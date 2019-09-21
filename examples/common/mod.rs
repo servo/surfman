@@ -1,0 +1,117 @@
+// examples/common/mod.rs
+//
+// OpenGL convenience wrappers used in the examples.
+
+use gl::types::{GLchar, GLenum, GLint, GLuint};
+use gl;
+use std::fs::File;
+use std::io::Read;
+use std::os::raw::c_void;
+use surfman::{Device, GLApi, SurfaceTexture};
+
+pub struct Program {
+    pub object: GLuint,
+    #[allow(dead_code)]
+    vertex_shader: Shader,
+    #[allow(dead_code)]
+    fragment_shader: Shader,
+}
+
+impl Program {
+    pub fn new(vertex_shader: Shader, fragment_shader: Shader) -> Program {
+        unsafe {
+            let program = gl::CreateProgram(); ck();
+            gl::AttachShader(program, vertex_shader.object); ck();
+            gl::AttachShader(program, fragment_shader.object); ck();
+            gl::LinkProgram(program); ck();
+            Program { object: program, vertex_shader, fragment_shader }
+        }
+    }
+}
+
+pub struct Shader {
+    object: GLuint,
+}
+
+impl Shader {
+    pub fn new(name: &str, kind: ShaderKind) -> Shader {
+        let mut source = vec![];
+        match Device::gl_api() {
+            GLApi::GL => source.extend_from_slice(b"#version 330\n"),
+            GLApi::GLES => source.extend_from_slice(b"#version 300 es\n"),
+        }
+        match SurfaceTexture::gl_texture_target() {
+            gl::TEXTURE_2D => source.extend_from_slice(b"#define SAMPLER_TYPE sampler2D\n"),
+            gl::TEXTURE_RECTANGLE => {
+                source.extend_from_slice(b"#define SAMPLER_TYPE sampler2DRect\n")
+            }
+            _ => {}
+        }
+
+        let path = format!("resources/examples/{}.{}.glsl", name, kind.extension());
+        File::open(&path).expect("Failed to open shader source!")
+                         .read_to_end(&mut source)
+                         .unwrap();
+        unsafe {
+            let shader = gl::CreateShader(kind.to_gl()); ck();
+            gl::ShaderSource(shader,
+                             1,
+                             &(source.as_ptr() as *const GLchar),
+                             &(source.len() as GLint)); ck();
+            gl::CompileShader(shader); ck();
+
+            let mut compile_status = 0;
+            gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut compile_status); ck();
+            debug_assert_eq!(compile_status, gl::TRUE as GLint);
+
+            Shader { object: shader }
+        }
+    }
+}
+
+pub struct Buffer {
+    pub object: GLuint,
+}
+
+impl Buffer {
+    pub fn from_data(data: &[u8]) -> Buffer {
+        unsafe {
+            let mut buffer = 0;
+            gl::GenBuffers(1, &mut buffer); ck();
+            gl::BindBuffer(gl::ARRAY_BUFFER, buffer); ck();
+            gl::BufferData(gl::ARRAY_BUFFER,
+                           data.len() as isize,
+                           data.as_ptr() as *const c_void,
+                           gl::STATIC_DRAW); ck();
+            Buffer { object: buffer }
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum ShaderKind {
+    Vertex,
+    Fragment,
+}
+
+impl ShaderKind {
+    fn extension(self) -> &'static str {
+        match self {
+            ShaderKind::Vertex => "vs",
+            ShaderKind::Fragment => "fs",
+        }
+    }
+
+    fn to_gl(self) -> GLenum {
+        match self {
+            ShaderKind::Vertex => gl::VERTEX_SHADER,
+            ShaderKind::Fragment => gl::FRAGMENT_SHADER,
+        }
+    }
+}
+
+pub fn ck() {
+    unsafe {
+        debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
+    }
+}
