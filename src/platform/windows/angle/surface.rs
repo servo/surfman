@@ -3,14 +3,14 @@
 use crate::context::ContextID;
 use crate::egl::types::{EGLConfig, EGLSurface, EGLenum};
 use crate::egl::{self, EGLint};
+use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::gl;
 use crate::{ContextAttributeFlags, Error, SurfaceID};
-use super::context::{self, Context, ContextDescriptor};
+use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 use super::error::ToWindowingApiError;
 
 use euclid::default::Size2D;
-use gl;
-use gl::types::{GLenum, GLint, GLuint};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
@@ -158,35 +158,38 @@ impl Device {
             let result = local_keyed_mutex.AcquireSync(0, INFINITE);
             assert_eq!(result, S_OK);
 
-            // Then bind that surface to the texture.
-            let mut texture = 0;
-            gl::GenTextures(1, &mut texture);
-            debug_assert_ne!(texture, 0);
+            GL_FUNCTIONS.with(|gl| {
+                // Then bind that surface to the texture.
+                let mut texture = 0;
+                gl.GenTextures(1, &mut texture);
+                debug_assert_ne!(texture, 0);
 
-            gl::BindTexture(gl::TEXTURE_2D, texture);
-            if egl::BindTexImage(self.native_display.egl_display(),
-                                 local_egl_surface,
-                                 egl::BACK_BUFFER as GLint) == egl::FALSE {
-                let windowing_api_error = egl::GetError().to_windowing_api_error();
-                return Err((Error::SurfaceTextureCreationFailed(windowing_api_error), surface));
+                gl.BindTexture(gl::TEXTURE_2D, texture);
+                if egl::BindTexImage(self.native_display.egl_display(),
+                                    local_egl_surface,
+                                    egl::BACK_BUFFER as GLint) == egl::FALSE {
+                    let windowing_api_error = egl::GetError().to_windowing_api_error();
+                    return Err((Error::SurfaceTextureCreationFailed(windowing_api_error),
+                                surface));
+                }
+
+                // Initialize the texture, for convenience.
+                gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+                gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+                gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+                gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+
+                gl.BindTexture(gl::TEXTURE_2D, 0);
+                debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
+
+                Ok(SurfaceTexture {
+                    surface,
+                    local_egl_surface,
+                    local_keyed_mutex,
+                    gl_texture: texture,
+                    phantom: PhantomData,
+                })
             }
-
-            // Initialize the texture, for convenience.
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-            debug_assert_eq!(gl::GetError(), gl::NO_ERROR);
-
-            Ok(SurfaceTexture {
-                surface,
-                local_egl_surface,
-                local_keyed_mutex,
-                gl_texture: texture,
-                phantom: PhantomData,
-            })
         }
     }
 
@@ -208,7 +211,7 @@ impl Device {
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
                                    -> Result<Surface, Error> {
         unsafe {
-            gl::DeleteTextures(1, &surface_texture.gl_texture);
+            GL_FUNCTIONS.with(|gl| gl.DeleteTextures(1, &surface_texture.gl_texture));
             surface_texture.gl_texture = 0;
 
             let result = surface_texture.local_keyed_mutex.ReleaseSync(0);

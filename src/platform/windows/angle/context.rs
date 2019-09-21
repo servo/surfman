@@ -1,9 +1,10 @@
 //! Wrapper for EGL contexts managed by ANGLE using Direct3D 11 as a backend on Windows.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::surface::Framebuffer;
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLenum, EGLint};
+use crate::gl::types::GLuint;
+use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, egl};
 use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
@@ -13,7 +14,6 @@ use super::surface::{Surface, SurfaceTexture};
 
 use euclid::default::Size2D;
 use gl;
-use gl::types::GLuint;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::c_void;
@@ -28,6 +28,10 @@ use winapi::um::winbase::INFINITE;
 use wio::com::ComPtr;
 
 const EGL_DEVICE_EXT: EGLenum = 0x322c;
+
+thread_local! {
+    pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
+}
 
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
@@ -255,7 +259,8 @@ impl Device {
                 return Err(Error::MakeCurrentFailed(err));
             }
 
-            gl::Viewport(0, 0, size.width, size.height);
+            GL_FUNCTIONS.with(|gl| gl::Viewport(0, 0, size.width, size.height));
+
             Ok(())
         }
     }
@@ -328,6 +333,11 @@ impl Device {
                 version: GLVersion::new(context_descriptor.egl_context_client_version as u8, 0),
             }
         }
+    }
+
+    #[inline]
+    pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
+        get_proc_address(symbol_name)
     }
 
     pub(crate) fn context_descriptor_to_egl_config(&self, context_descriptor: &ContextDescriptor)
@@ -444,5 +454,12 @@ fn get_context_attr(egl_display: EGLDisplay, egl_context: EGLContext, attr: EGLi
         let result = egl::QueryContext(egl_display, egl_context, attr, &mut value);
         assert_ne!(result, egl::FALSE);
         value
+    }
+}
+
+pub fn get_proc_address(symbol_name: &str) -> *const c_void {
+    unsafe {
+        let symbol_name: CString = CString::new(symbol_name).unwrap();
+        egl::GetProcAddress(symbol_name.as_ptr() as *const u8)
     }
 }
