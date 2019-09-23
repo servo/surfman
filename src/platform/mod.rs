@@ -4,6 +4,11 @@ pub mod generic;
 #[cfg(feature = "sm-osmesa")]
 pub use generic::osmesa as default;
 
+#[cfg(target_os = "android")]
+pub mod android;
+#[cfg(target_os = "android")]
+pub use android as default;
+
 #[cfg(target_os = "macos")]
 pub mod macos;
 #[cfg(all(target_os = "macos", not(any(feature = "sm-x11", feature = "sm-osmesa"))))]
