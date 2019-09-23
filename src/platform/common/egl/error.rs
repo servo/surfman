@@ -1,4 +1,6 @@
-//! Translation of errors from the CGL API to `surfman` errors.
+// surfman/src/platform/windows/angle/error.rs
+
+//! Translation of errors from the EGL API to `surfman` errors.
 
 use crate::WindowingApiError;
 use crate::egl::types::{EGLenum, EGLint};

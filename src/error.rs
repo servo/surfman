@@ -70,6 +70,7 @@ pub enum WindowingApiError {
 	BadState,
     /// CGL: Invalid numerical value.
     /// X11: Invalid value.
+    /// GL: Given when a value parameter is not a legal value for that function.
 	BadValue,
     /// CGL: Invalid share context.
     /// EGL: Arguments are inconsistent (for example, a valid context requires
@@ -77,6 +78,7 @@ pub enum WindowingApiError {
 	BadMatch,
     /// CGL: Invalid enumerant (constant).
     /// X11: Invalid enum value.
+    /// GL: Given when an enumeration parameter is not a legal enumeration for that function.
 	BadEnumeration,
     /// CGL: Invalid off-screen drawable.
 	BadOffScreen,
@@ -124,4 +126,7 @@ pub enum WindowingApiError {
     NoExtension,
     /// X11: Visual number not known by GLX.
     BadVisual,
+    /// GL: Given when the set of state for a command is not legal for the parameters given to that
+    /// command.
+    BadOperation,
 }

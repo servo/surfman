@@ -1,14 +1,32 @@
 //! A thread-local handle to the device.
 
-use crate::context::ContextID;
-use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDisplay};
-use crate::egl::types::{EGLSurface, EGLenum, EGLint};
+use crate::egl::types::{EGLClientBuffer, EGLDisplay, EGLImageKHR, EGLenum};
 use crate::{Error, GLApi, egl};
 use super::adapter::Adapter;
+use super::bindings::hardware_buffer::AHardwareBuffer;
 
 use std::mem;
 use std::os::raw::{c_char, c_void};
-use std::ptr;
+
+#[allow(non_snake_case)]
+pub(crate) struct EGLExtensionFunctions {
+    pub(crate) GetNativeClientBufferANDROID: extern "C" fn(buffer: *const AHardwareBuffer)
+                                                           -> EGLClientBuffer,
+    pub(crate) ImageTargetTexture2DOES: extern "C" fn(target: EGLenum, image: EGLImageKHR),
+}
+
+lazy_static! {
+    pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
+        unsafe {
+            EGLExtensionFunctions {
+                GetNativeClientBufferANDROID:
+                    mem::transmute(lookup_egl_extension(b"eglGetNativeClientBufferANDROID\0")),
+                ImageTargetTexture2DOES:
+                    mem::transmute(lookup_egl_extension(b"glEGLImageTargetTexture2DOES\0")),
+            }
+        }
+    };
+}
 
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
@@ -22,9 +40,9 @@ pub(crate) trait NativeDisplay {
 
 impl Device {
     #[inline]
-    pub fn new(adapter: &Adapter) -> Result<Device, Error> {
+    pub fn new(_: &Adapter) -> Result<Device, Error> {
         unsafe {
-            let display = egl::GetDisplay(egl::DEFAULT_DISPLAY);
+            let egl_display = egl::GetDisplay(egl::DEFAULT_DISPLAY);
             assert_ne!(egl_display, egl::NO_DISPLAY);
             let native_display = Box::new(OwnedEGLDisplay { egl_display });
 
@@ -81,7 +99,7 @@ impl NativeDisplay for OwnedEGLDisplay {
 }
 
 pub(crate) struct UnsafeEGLDisplayRef {
-    egl_display: EGLDisplay,
+    pub(crate) egl_display: EGLDisplay,
 }
 
 impl NativeDisplay for UnsafeEGLDisplayRef {

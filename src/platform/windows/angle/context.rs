@@ -5,12 +5,12 @@ use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDispl
 use crate::egl::types::{EGLenum, EGLint};
 use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
+use crate::platform::common::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, egl};
 use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
-use super::error::ToWindowingApiError;
 use super::surface::{Surface, SurfaceTexture};
 
 use euclid::default::Size2D;
