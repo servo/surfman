@@ -26,7 +26,7 @@ libc = "0.2"
 
 [dependencies.euclid]
 version = "0.20"
-features = ["serde"]
+features = []
 
 [dependencies.glutin]
 version = "0.21"
@@ -34,11 +34,6 @@ optional = true
 
 [dependencies.osmesa-sys]
 version = "0.1"
-optional = true
-
-[dependencies.serde]
-version = "1.0"
-features = ["derive"]
 optional = true
 
 [dev-dependencies]
