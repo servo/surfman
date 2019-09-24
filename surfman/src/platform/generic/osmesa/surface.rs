@@ -13,6 +13,8 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::thread;
 
+const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+
 pub struct Surface {
     pub(crate) pixels: UnsafeCell<Vec<u8>>,
     pub(crate) size: Size2D<i32>,
@@ -107,6 +109,11 @@ impl Device {
 
         Ok(surface_texture.surface)
     }
+
+    #[inline]
+    pub fn surface_gl_texture_target(&self) -> GLenum {
+        SURFACE_GL_TEXTURE_TARGET
+    }
 }
 
 impl Surface {
@@ -127,10 +134,5 @@ impl SurfaceTexture {
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
         self.gl_texture
-    }
-
-    #[inline]
-    pub fn gl_texture_target(&self) -> GLenum {
-        gl::TEXTURE_2D
     }
 }

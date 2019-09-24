@@ -27,6 +27,8 @@ use wio::com::ComPtr;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
+const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+
 const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
 const EGL_DXGI_KEYED_MUTEX_ANGLE: EGLenum = 0x33a2;
 
@@ -223,6 +225,11 @@ impl Device {
 
         Ok(surface_texture.surface)
     }
+
+    #[inline]
+    pub fn surface_gl_texture_target(&self) -> GLenum {
+        SURFACE_GL_TEXTURE_TARGET
+    }
 }
 
 impl Surface {
@@ -242,10 +249,5 @@ impl SurfaceTexture {
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
         self.gl_texture
-    }
-
-    #[inline]
-    pub fn gl_texture_target(&self) -> GLenum {
-        gl::TEXTURE_2D
     }
 }

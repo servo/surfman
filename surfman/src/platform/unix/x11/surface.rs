@@ -22,6 +22,8 @@ use x11::glx::{GLX_VISUAL_ID, GLXPixmap};
 use x11::xlib::{self, Display, Pixmap, VisualID, XCreatePixmap, XDefaultScreen};
 use x11::xlib::{XDefaultScreenOfDisplay, XFree, XGetVisualInfo, XRootWindowOfScreen, XVisualInfo};
 
+const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+
 pub struct Surface {
     pub(crate) glx_pixmap: GLXPixmap,
     #[allow(dead_code)]
@@ -223,6 +225,11 @@ impl Device {
             })
         })
     }
+
+    #[inline]
+    pub fn surface_gl_texture_target(&self) -> GLenum {
+        SURFACE_GL_TEXTURE_TARGET
+    }
 }
 
 impl Surface {
@@ -241,11 +248,6 @@ impl SurfaceTexture {
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
         self.gl_texture
-    }
-
-    #[inline]
-    pub fn gl_texture_target(&self) -> GLenum {
-        gl::TEXTURE_2D
     }
 }
 

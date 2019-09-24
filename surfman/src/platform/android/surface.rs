@@ -28,7 +28,7 @@ use std::thread;
 const EGL_NATIVE_BUFFER_ANDROID: EGLenum = 0x3140;
 
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
-const GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 pub struct Surface {
     pub(crate) hardware_buffer: *mut AHardwareBuffer,
@@ -106,7 +106,7 @@ impl Device {
 
                 gl.FramebufferTexture2D(gl::FRAMEBUFFER,
                                         gl::COLOR_ATTACHMENT0,
-                                        GL_TEXTURE_TARGET,
+                                        SURFACE_GL_TEXTURE_TARGET,
                                         texture_object,
                                         0);
 
@@ -231,6 +231,11 @@ impl Device {
             Ok(surface_texture.surface)
         })
     }
+
+    #[inline]
+    pub fn surface_gl_texture_target(&self) -> GLenum {
+        SURFACE_GL_TEXTURE_TARGET
+    }
 }
 
 impl Surface {
@@ -249,10 +254,5 @@ impl SurfaceTexture {
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
         self.texture_object
-    }
-
-    #[inline]
-    pub fn gl_texture_target(&self) -> GLenum {
-        GL_TEXTURE_TARGET
     }
 }

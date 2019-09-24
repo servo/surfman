@@ -70,12 +70,12 @@ fn main() {
                       worker_from_main_receiver)
     });
 
+    // Set up GL objects and state.
+    let vertex_array = BlitVertexArray::new(device.surface_gl_texture_target());
+
     // Fetch our initial surface.
     let mut surface = main_from_worker_receiver.recv().unwrap();
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
-
-    // Set up GL objects and state.
-    let vertex_array = BlitVertexArray::new(texture.gl_texture_target());
 
     // Enter main render loop.
     let mut animation = Animation::new(0.75, 0.003);
@@ -101,7 +101,7 @@ fn main() {
                            1,
                            TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
-            gl::BindTexture(texture.gl_texture_target(), texture.gl_texture()); ck();
+            gl::BindTexture(device.surface_gl_texture_target(), texture.gl_texture()); ck();
             gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }

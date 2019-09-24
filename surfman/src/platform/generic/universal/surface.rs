@@ -102,6 +102,14 @@ impl Device {
             _ => Err(Error::IncompatibleContext),
         }
     }
+
+    #[inline]
+    pub fn surface_gl_texture_target(&self) -> GLenum {
+        match *self {
+            Device::Hardware(ref device) => device.surface_gl_texture_target(),
+            Device::Software(ref device) => device.surface_gl_texture_target(),
+        }
+    }
 }
 
 impl Surface {
@@ -128,14 +136,6 @@ impl SurfaceTexture {
         match *self {
             SurfaceTexture::Hardware(ref surface_texture) => surface_texture.gl_texture(),
             SurfaceTexture::Software(ref surface_texture) => surface_texture.gl_texture(),
-        }
-    }
-
-    #[inline]
-    pub fn gl_texture_target(&self) -> GLenum {
-        match *self {
-            SurfaceTexture::Hardware(ref surface_texture) => surface_texture.gl_texture_target(),
-            SurfaceTexture::Software(ref surface_texture) => surface_texture.gl_texture_target(),
         }
     }
 }
