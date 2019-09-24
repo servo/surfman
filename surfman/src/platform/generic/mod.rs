@@ -1,7 +1,10 @@
-// surfman/src/platform/unix/mod.rs
+// surfman/src/platform/generic/mod.rs
 
-#[cfg(any(target_os = "android", all(target_os = "windows", not(feature = "sm-osmesa"))))]
+#[cfg(any(target_os = "android", target_os = "windows"))]
 pub(crate) mod egl;
 
 #[cfg(feature = "sm-osmesa")]
 pub mod osmesa;
+
+#[cfg(feature = "sm-osmesa")]
+pub mod universal;

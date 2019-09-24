@@ -17,6 +17,7 @@ gl_generator = "0.11"
 
 [features]
 sm-osmesa = ["osmesa-sys"]
+sm-osmesa-default = ["sm-osmesa"]
 sm-x11 = ["x11"]
 
 [dependencies]

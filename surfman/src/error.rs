@@ -28,8 +28,6 @@ pub enum Error {
     NoAdapterFound,
     /// The device couldn't be opened.
     DeviceOpenFailed,
-    /// The surface was not created from this context.
-    IncompatibleSurface,
     /// The system couldn't create a surface.
     SurfaceCreationFailed(WindowingApiError),
     /// The system couldn't import a surface from another thread.
@@ -38,6 +36,16 @@ pub enum Error {
     SurfaceTextureCreationFailed(WindowingApiError),
     /// A context couldn't be created because there was no current context.
     NoCurrentContext,
+    /// The surface was not created from this context.
+    IncompatibleSurface,
+    /// The context descriptor is from a hardware device, but this is a software device, or vice
+    /// versa.
+    IncompatibleContextDescriptor,
+    /// The context is from a hardware device, but this is a software device, or vice versa.
+    IncompatibleContext,
+    /// The surface texture is from a hardware device, but this is a software device, or vice
+    /// versa.
+    IncompatibleSurfaceTexture,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
