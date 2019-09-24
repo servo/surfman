@@ -6,14 +6,14 @@
 use crate::common::{Buffer, Program, Shader, ShaderKind, ck};
 
 use euclid::default::Size2D;
-use gl::types::{GLchar, GLint, GLuint, GLvoid};
+use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use sdl2::event::Event;
 use sdl2::hint;
 use sdl2::keyboard::Keycode;
 use sdl2::video::{GLProfile, SwapInterval};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, ContextDescriptor, Device, GLApi, Surface, SurfaceTexture};
+use surfman::{Adapter, ContextDescriptor, Device, GLApi, Surface};
 
 mod common;
 
@@ -70,12 +70,12 @@ fn main() {
                       worker_from_main_receiver)
     });
 
-    // Set up GL objects and state.
-    let vertex_array = BlitVertexArray::new();
-
     // Fetch our initial surface.
     let mut surface = main_from_worker_receiver.recv().unwrap();
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
+
+    // Set up GL objects and state.
+    let vertex_array = BlitVertexArray::new(texture.gl_texture_target());
 
     // Enter main render loop.
     let mut animation = Animation::new(0.75, 0.003);
@@ -101,7 +101,7 @@ fn main() {
                            1,
                            TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
-            gl::BindTexture(SurfaceTexture::gl_texture_target(), texture.gl_texture()); ck();
+            gl::BindTexture(texture.gl_texture_target(), texture.gl_texture()); ck();
             gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
@@ -182,8 +182,8 @@ struct BlitVertexArray {
 }
 
 impl BlitVertexArray {
-    fn new() -> BlitVertexArray {
-        let blit_program = BlitProgram::new();
+    fn new(gl_texture_target: GLenum) -> BlitVertexArray {
+        let blit_program = BlitProgram::new(gl_texture_target);
         unsafe {
             let mut vertex_array = 0;
             gl::GenVertexArrays(1, &mut vertex_array); ck();
@@ -213,9 +213,9 @@ struct BlitProgram {
 }
 
 impl BlitProgram {
-    fn new() -> BlitProgram {
-        let vertex_shader = Shader::new("quad", ShaderKind::Vertex);
-        let fragment_shader = Shader::new("blit", ShaderKind::Fragment);
+    fn new(gl_texture_target: GLenum) -> BlitProgram {
+        let vertex_shader = Shader::new("quad", ShaderKind::Vertex, gl_texture_target);
+        let fragment_shader = Shader::new("blit", ShaderKind::Fragment, gl_texture_target);
         let program = Program::new(vertex_shader, fragment_shader);
         unsafe {
             let position_attribute =

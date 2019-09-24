@@ -1,6 +1,5 @@
 //! A surface abstraction that can switch between hardware and software rendering.
 
-use crate::gl;
 use crate::gl::types::{GLenum, GLuint};
 use crate::platform::default::surface::{Surface as HWSurface, SurfaceTexture as HWSurfaceTexture};
 use crate::platform::generic::osmesa::surface::Surface as OSMesaSurface;
@@ -125,12 +124,6 @@ impl Surface {
 
 impl SurfaceTexture {
     #[inline]
-    pub fn surface(&self) -> &Surface {
-        // FIXME(pcwalton): Can't be implemented using this signature!
-        unimplemented!()
-    }
-
-    #[inline]
     pub fn gl_texture(&self) -> GLuint {
         match *self {
             SurfaceTexture::Hardware(ref surface_texture) => surface_texture.gl_texture(),
@@ -139,8 +132,10 @@ impl SurfaceTexture {
     }
 
     #[inline]
-    pub fn gl_texture_target() -> GLenum {
-        // FIXME(pcwalton): Can't be implemented using this signature!
-        gl::TEXTURE_2D
+    pub fn gl_texture_target(&self) -> GLenum {
+        match *self {
+            SurfaceTexture::Hardware(ref surface_texture) => surface_texture.gl_texture_target(),
+            SurfaceTexture::Software(ref surface_texture) => surface_texture.gl_texture_target(),
+        }
     }
 }

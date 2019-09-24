@@ -7,7 +7,7 @@ use crate::platform::default::device::Device as HWDevice;
 use crate::platform::generic::osmesa::context::Context as OSMesaContext;
 use crate::platform::generic::osmesa::context::ContextDescriptor as OSMesaContextDescriptor;
 use crate::platform::generic::osmesa::device::Device as OSMesaDevice;
-use crate::{ContextAttributes, Error};
+use crate::{ContextAttributes, Error, SurfaceID};
 use super::device::Device;
 use super::surface::Surface;
 
@@ -115,12 +115,6 @@ impl Device {
         }
     }
 
-    // FIXME(pcwalton): This signature doesn't work for the universal device!
-    #[inline]
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
-        unimplemented!()
-    }
-
     pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
                                    -> Result<Surface, Error> {
         match (self, &mut *context) {
@@ -144,7 +138,6 @@ impl Device {
         }
     }
 
-    #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
         match (self, context) {
             (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
@@ -152,6 +145,30 @@ impl Device {
             }
             (&Device::Software(ref device), &Context::Software(ref context)) => {
                 device.context_surface_framebuffer_object(context)
+            }
+            _ => Err(Error::IncompatibleContext),
+        }
+    }
+
+    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
+        match (self, context) {
+            (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
+                device.context_surface_size(context)
+            }
+            (&Device::Software(ref device), &Context::Software(ref context)) => {
+                device.context_surface_size(context)
+            }
+            _ => Err(Error::IncompatibleContext),
+        }
+    }
+
+    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
+        match (self, context) {
+            (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
+                device.context_surface_id(context)
+            }
+            (&Device::Software(ref device), &Context::Software(ref context)) => {
+                device.context_surface_id(context)
             }
             _ => Err(Error::IncompatibleContext),
         }

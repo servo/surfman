@@ -20,6 +20,8 @@ use std::thread;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
+const GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
+
 pub struct Surface {
     pub(crate) io_surface: IOSurface,
     pub(crate) size: Size2D<i32>,
@@ -39,7 +41,7 @@ unsafe impl Send for Surface {}
 
 impl Debug for Surface {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "Surface({:x})", self.io_surface.as_concrete_TypeRef() as usize)
+        write!(formatter, "Surface({:x})", self.id().0)
     }
 }
 
@@ -77,7 +79,7 @@ impl Device {
 
                 gl.FramebufferTexture2D(gl::FRAMEBUFFER,
                                         gl::COLOR_ATTACHMENT0,
-                                        SurfaceTexture::gl_texture_target(),
+                                        GL_TEXTURE_TARGET,
                                         texture_object,
                                         0);
 
@@ -196,17 +198,12 @@ impl Surface {
 
 impl SurfaceTexture {
     #[inline]
-    pub fn surface(&self) -> &Surface {
-        &self.surface
-    }
-
-    #[inline]
     pub fn gl_texture(&self) -> GLuint {
         self.texture_object
     }
 
     #[inline]
-    pub fn gl_texture_target() -> GLenum {
-        gl::TEXTURE_RECTANGLE
+    pub fn gl_texture_target(&self) -> GLenum {
+        GL_TEXTURE_TARGET
     }
 }

@@ -7,7 +7,7 @@ use gl;
 use std::fs::File;
 use std::io::Read;
 use std::os::raw::c_void;
-use surfman::{Device, GLApi, SurfaceTexture};
+use surfman::{Device, GLApi};
 
 pub struct Program {
     pub object: GLuint,
@@ -34,13 +34,13 @@ pub struct Shader {
 }
 
 impl Shader {
-    pub fn new(name: &str, kind: ShaderKind) -> Shader {
+    pub fn new(name: &str, kind: ShaderKind, gl_texture_target: GLenum) -> Shader {
         let mut source = vec![];
         match Device::gl_api() {
             GLApi::GL => source.extend_from_slice(b"#version 330\n"),
             GLApi::GLES => source.extend_from_slice(b"#version 300 es\n"),
         }
-        match SurfaceTexture::gl_texture_target() {
+        match gl_texture_target {
             gl::TEXTURE_2D => source.extend_from_slice(b"#define SAMPLER_TYPE sampler2D\n"),
             gl::TEXTURE_RECTANGLE => {
                 source.extend_from_slice(b"#define SAMPLER_TYPE sampler2DRect\n")

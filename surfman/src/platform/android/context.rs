@@ -6,7 +6,7 @@ use crate::gl::Gl;
 use crate::gl::types::GLuint;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, egl};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceID, egl};
 use super::device::{Device, UnsafeEGLDisplayRef};
 use super::surface::Surface;
 
@@ -264,8 +264,7 @@ impl Device {
         }
     }
 
-    #[inline]
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
         match context.framebuffer {
             Framebuffer::None => unreachable!(),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
@@ -303,6 +302,16 @@ impl Device {
     #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
         self.context_surface(context).map(|surface| surface.framebuffer_object)
+    }
+
+    #[inline]
+    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
+        self.context_surface(context).map(|surface| surface.size())
+    }
+
+    #[inline]
+    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
+        self.context_surface(context).map(|surface| surface.id())
     }
 
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)

@@ -4,7 +4,7 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceID, WindowingApiError};
 use super::device::Device;
 use super::surface::Surface;
 
@@ -234,7 +234,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
         match context.framebuffer {
             Framebuffer::None => unreachable!(),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
@@ -270,6 +270,16 @@ impl Device {
             Framebuffer::External => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(_) => Ok(0),
         }
+    }
+
+    #[inline]
+    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
+        self.context_surface(context).map(|surface| surface.size())
+    }
+
+    #[inline]
+    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
+        self.context_surface(context).map(|surface| surface.id())
     }
 
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)

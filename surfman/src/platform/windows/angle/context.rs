@@ -7,7 +7,7 @@ use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, egl};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceID, egl};
 use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
@@ -284,7 +284,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
+    fn context_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
         match context.framebuffer {
             Framebuffer::None | Framebuffer::External => None,
             Framebuffer::Surface(ref surface) => Some(surface),
@@ -311,6 +311,16 @@ impl Device {
     #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
         Ok(0)
+    }
+
+    #[inline]
+    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
+        self.context_surface(context).map(|surface| surface.size())
+    }
+
+    #[inline]
+    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
+        self.context_surface(context).map(|surface| surface.id())
     }
 
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)

@@ -125,17 +125,12 @@ impl Surface {
 
 impl SurfaceTexture {
     #[inline]
-    pub fn surface(&self) -> &Surface {
-        &self.surface
-    }
-
-    #[inline]
     pub fn gl_texture(&self) -> GLuint {
         self.gl_texture
     }
 
     #[inline]
-    pub fn gl_texture_target() -> GLenum {
+    pub fn gl_texture_target(&self) -> GLenum {
         gl::TEXTURE_2D
     }
 }

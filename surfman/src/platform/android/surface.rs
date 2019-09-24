@@ -25,7 +25,10 @@ use std::marker::PhantomData;
 use std::ptr;
 use std::thread;
 
-const EGL_NATIVE_BUFFER_ANDROID:    EGLenum = 0x3140;
+const EGL_NATIVE_BUFFER_ANDROID: EGLenum = 0x3140;
+
+// FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
+const GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 pub struct Surface {
     pub(crate) hardware_buffer: *mut AHardwareBuffer,
@@ -103,7 +106,7 @@ impl Device {
 
                 gl.FramebufferTexture2D(gl::FRAMEBUFFER,
                                         gl::COLOR_ATTACHMENT0,
-                                        SurfaceTexture::gl_texture_target(),
+                                        GL_TEXTURE_TARGET,
                                         texture_object,
                                         0);
 
@@ -244,17 +247,12 @@ impl Surface {
 
 impl SurfaceTexture {
     #[inline]
-    pub fn surface(&self) -> &Surface {
-        &self.surface
-    }
-
-    #[inline]
     pub fn gl_texture(&self) -> GLuint {
         self.texture_object
     }
 
     #[inline]
-    pub fn gl_texture_target() -> GLenum {
-        gl::TEXTURE_2D
+    pub fn gl_texture_target(&self) -> GLenum {
+        GL_TEXTURE_TARGET
     }
 }
