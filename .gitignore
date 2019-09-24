@@ -1,3 +1,8 @@
 target
-Cargo.lock
+*.lock
 *~
+*.iml
+/android-example/local.properties
+gc.properties
+*.bin
+/android-example/.idea

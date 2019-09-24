@@ -5,7 +5,7 @@ use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDispl
 use crate::egl::types::{EGLenum, EGLint};
 use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
-use crate::platform::common::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, egl};
 use super::adapter::Adapter;

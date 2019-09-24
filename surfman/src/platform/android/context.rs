@@ -4,7 +4,7 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::gl::Gl;
 use crate::gl::types::GLuint;
-use crate::platform::common::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, egl};
 use super::device::{Device, UnsafeEGLDisplayRef};
