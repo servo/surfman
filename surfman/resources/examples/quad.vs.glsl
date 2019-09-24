@@ -1,4 +1,4 @@
-// resources/examples/quad.vs.glsl
+// surfman/resources/examples/quad.vs.glsl
 
 precision highp float;
 

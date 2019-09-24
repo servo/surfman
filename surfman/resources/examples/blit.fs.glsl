@@ -1,4 +1,4 @@
-// resources/examples/blit.fs.glsl
+// surfman/resources/examples/blit.fs.glsl
 
 precision highp float;
 
@@ -11,4 +11,3 @@ out vec4 oFragColor;
 void main() {
     oFragColor = texture(uSource, vTexCoord);
 }
-

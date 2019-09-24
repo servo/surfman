@@ -14,8 +14,8 @@ fn main() {
             cfg!(feature = "test_egl_in_linux") {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, [
+            "EGL_KHR_gl_image",
             "EGL_KHR_image_base",
-            "GL_OES_EGL_image_external",
         ]);
         registry.write_bindings(StaticGenerator, &mut file).unwrap();
 

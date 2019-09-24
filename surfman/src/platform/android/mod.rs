@@ -4,6 +4,3 @@ pub mod adapter;
 pub mod context;
 pub mod device;
 pub mod surface;
-
-mod bindings;
-mod error;

@@ -1,7 +1,6 @@
-// examples/threads.rs
+// surfman/examples/threads.rs
 //
-// This example demonstrates how to create a multithreaded OpenGL
-// application using `surfman`.
+// This example demonstrates how to create a multithreaded OpenGL application using `surfman`.
 
 use crate::common::{Buffer, Program, Shader, ShaderKind, ck};
 

@@ -1,17 +1,14 @@
 //! A thread-local handle to the device.
 
-use crate::egl::types::{EGLClientBuffer, EGLDisplay, EGLImageKHR, EGLenum};
+use crate::egl::types::{EGLDisplay, EGLImageKHR, EGLenum};
 use crate::{Error, GLApi, egl};
 use super::adapter::Adapter;
-use super::bindings::hardware_buffer::AHardwareBuffer;
 
 use std::mem;
 use std::os::raw::{c_char, c_void};
 
 #[allow(non_snake_case)]
 pub(crate) struct EGLExtensionFunctions {
-    pub(crate) GetNativeClientBufferANDROID: extern "C" fn(buffer: *const AHardwareBuffer)
-                                                           -> EGLClientBuffer,
     pub(crate) ImageTargetTexture2DOES: extern "C" fn(target: EGLenum, image: EGLImageKHR),
 }
 
@@ -19,8 +16,6 @@ lazy_static! {
     pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
         unsafe {
             EGLExtensionFunctions {
-                GetNativeClientBufferANDROID:
-                    mem::transmute(lookup_egl_extension(b"eglGetNativeClientBufferANDROID\0")),
                 ImageTargetTexture2DOES:
                     mem::transmute(lookup_egl_extension(b"glEGLImageTargetTexture2DOES\0")),
             }
