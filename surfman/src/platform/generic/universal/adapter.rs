@@ -19,13 +19,13 @@ impl Adapter {
         }
     }
 
-    /// Returns a hardware adapter.
+    /// Returns the "best" hardware adapter on this system.
     #[inline]
     pub fn hardware() -> Result<Adapter, Error> {
         HWAdapter::default().map(Adapter::Hardware)
     }
 
-    /// Returns a software adapter.
+    /// Returns the "best" software adapter on this system.
     #[inline]
     pub fn software() -> Result<Adapter, Error> {
         OSMesaAdapter::default().map(Adapter::Software)
