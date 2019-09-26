@@ -299,12 +299,12 @@ impl Device {
             return Err(Error::IncompatibleSurface);
         }
 
-        // If the surface does not use a DXGI keyed mutex, then flush.
-        // FIXME(pcwalton): Is this sufficient?
+        // If the surface does not use a DXGI keyed mutex, then finish.
+        // FIXME(pcwalton): Is this necessary and sufficient?
         if !new_surface.uses_keyed_mutex() {
             self.make_context_current(context)?;
             unsafe {
-                GL_FUNCTIONS.with(|gl| gl.Flush());
+                GL_FUNCTIONS.with(|gl| gl.Finish());
             }
         }
 
