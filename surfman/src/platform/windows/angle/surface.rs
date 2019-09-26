@@ -5,10 +5,10 @@ use crate::egl::types::{EGLConfig, EGLSurface, EGLenum};
 use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
+use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::{ContextAttributeFlags, Error, SurfaceID};
 use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
-use super::error::ToWindowingApiError;
 
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};

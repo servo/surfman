@@ -103,7 +103,7 @@ impl Device {
             let egl_config_id = get_config_attr(self.native_display.egl_display(),
                                                 config,
                                                 egl::CONFIG_ID as EGLint);
-            let egl_context_client_version = context_attributes.version.major as EGLint;
+            let egl_context_client_version = attributes.version.major as EGLint;
 
             Ok(ContextDescriptor { egl_config_id, egl_context_client_version })
         }
@@ -281,10 +281,11 @@ impl Device {
     }
 
     #[inline]
-    fn context_surface<'c>(&self, context: &'c Context) -> Option<&'c Surface> {
+    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
         match context.framebuffer {
-            Framebuffer::None | Framebuffer::External => None,
-            Framebuffer::Surface(ref surface) => Some(surface),
+            Framebuffer::None => unreachable!(),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(surface),
         }
     }
 
