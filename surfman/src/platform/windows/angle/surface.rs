@@ -34,7 +34,7 @@ const EGL_DXGI_KEYED_MUTEX_ANGLE: EGLenum = 0x33a2;
 
 pub struct Surface {
     pub(crate) share_handle: HANDLE,
-    pub(crate) keyed_mutex: ComPtr<IDXGIKeyedMutex>,
+    pub(crate) keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
     pub(crate) egl_surface: EGLSurface,
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
@@ -45,7 +45,7 @@ pub struct Surface {
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_surface: EGLSurface,
-    pub(crate) local_keyed_mutex: ComPtr<IDXGIKeyedMutex>,
+    pub(crate) local_keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
     pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
 }
@@ -104,10 +104,13 @@ impl Device {
                 egl_surface,
                 EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
                 &mut keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
-            assert_ne!(result, egl::FALSE);
-            assert!(!keyed_mutex.is_null());
-            let keyed_mutex = ComPtr::from_raw(keyed_mutex);
-            keyed_mutex.AddRef();
+            let keyed_mutex = if result != egl::FALSE && !keyed_mutex.is_null() {
+                let keyed_mutex = ComPtr::from_raw(keyed_mutex);
+                keyed_mutex.AddRef();
+                Some(keyed_mutex)
+            } else {
+                None
+            };
 
             Ok(Surface {
                 share_handle,
@@ -145,20 +148,23 @@ impl Device {
                 return Err((Error::SurfaceImportFailed(windowing_api_error), surface));
             }
 
-            // FIXME(pcwalton): Try to fetch a keyed mutex.
             let mut local_keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
             let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
                 self.native_display.egl_display(),
                 local_egl_surface,
                 EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
                 &mut local_keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
-            assert_ne!(result, egl::FALSE);
-            assert!(!local_keyed_mutex.is_null());
-            let local_keyed_mutex = ComPtr::from_raw(local_keyed_mutex);
-            local_keyed_mutex.AddRef();
+            let local_keyed_mutex = if result != egl::FALSE && !local_keyed_mutex.is_null() {
+                let local_keyed_mutex = ComPtr::from_raw(local_keyed_mutex);
+                local_keyed_mutex.AddRef();
 
-            let result = local_keyed_mutex.AcquireSync(0, INFINITE);
-            assert_eq!(result, S_OK);
+                let result = local_keyed_mutex.AcquireSync(0, INFINITE);
+                assert_eq!(result, S_OK);
+
+                Some(local_keyed_mutex)
+            } else {
+                None
+            };
 
             GL_FUNCTIONS.with(|gl| {
                 // Then bind that surface to the texture.
@@ -216,8 +222,10 @@ impl Device {
             GL_FUNCTIONS.with(|gl| gl.DeleteTextures(1, &surface_texture.gl_texture));
             surface_texture.gl_texture = 0;
 
-            let result = surface_texture.local_keyed_mutex.ReleaseSync(0);
-            assert_eq!(result, S_OK);
+            if let Some(ref local_keyed_mutex) = surface_texture.local_keyed_mutex {
+                let result = local_keyed_mutex.ReleaseSync(0);
+                assert_eq!(result, S_OK);
+            }
 
             egl::DestroySurface(self.native_display.egl_display(),
                                 surface_texture.local_egl_surface);
@@ -242,6 +250,11 @@ impl Surface {
     #[inline]
     pub fn id(&self) -> SurfaceID {
         SurfaceID(self.share_handle as usize)
+    }
+
+    #[inline]
+    pub(crate) fn uses_keyed_mutex(&self) -> bool {
+        self.keyed_mutex.is_some()
     }
 }
 

@@ -299,6 +299,15 @@ impl Device {
             return Err(Error::IncompatibleSurface);
         }
 
+        // If the surface does not use a DXGI keyed mutex, then flush.
+        // FIXME(pcwalton): Is this sufficient?
+        if !new_surface.uses_keyed_mutex() {
+            self.make_context_current(context)?;
+            unsafe {
+                GL_FUNCTIONS.with(|gl| gl.Flush());
+            }
+        }
+
         let old_surface = self.release_surface(context).expect("Where's our surface?");
         self.attach_surface(context, new_surface);
         self.make_context_current(context)?;
@@ -379,9 +388,11 @@ impl Device {
             _ => panic!("Tried to attach a surface, but there was already a surface present!"),
         }
 
-        unsafe {
-            let result = surface.keyed_mutex.AcquireSync(0, INFINITE);
-            assert_eq!(result, S_OK);
+        if let Some(ref keyed_mutex) = surface.keyed_mutex {
+            unsafe {
+                let result = keyed_mutex.AcquireSync(0, INFINITE);
+                assert_eq!(result, S_OK);
+            }
         }
 
         context.framebuffer = Framebuffer::Surface(surface);
@@ -393,9 +404,11 @@ impl Device {
             Framebuffer::None | Framebuffer::External => return None,
         };
 
-        unsafe {
-            let result = surface.keyed_mutex.ReleaseSync(0);
-            assert_eq!(result, S_OK);
+        if let Some(ref keyed_mutex) = surface.keyed_mutex {
+            unsafe {
+                let result = keyed_mutex.ReleaseSync(0);
+                assert_eq!(result, S_OK);
+            }
         }
 
         Some(surface)
