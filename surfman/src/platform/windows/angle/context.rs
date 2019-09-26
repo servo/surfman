@@ -100,11 +100,11 @@ impl Device {
             }
 
             // Get the config ID and version.
-            let egl_config_id = get_context_attr(self.native_display.egl_display(),
+            let egl_config_id = get_config_attr(self.native_display.egl_display(),
                                                 config,
                                                 egl::CONFIG_ID as EGLint);
             let egl_context_client_version =
-                get_context_attr(self.native_display.egl_display(),
+                get_config_attr(self.native_display.egl_display(),
                                 config,
                                 egl::CONTEXT_CLIENT_VERSION as EGLint);
 
