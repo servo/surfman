@@ -13,6 +13,6 @@ out vec2 vTexCoord;
 
 void main() {
     vTexCoord = uTexTransform * aPosition + uTexTranslation;
-    vec2 position = uTransform * mix(vec2(-1.0), vec2(1.0), aPosition) + uTranslation;
+    vec2 position = uTransform * aPosition + uTranslation;
     gl_Position = vec4(position, 0.0, 1.0);
 }

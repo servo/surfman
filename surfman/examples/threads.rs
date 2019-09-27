@@ -4,7 +4,7 @@
 
 use crate::common::{Buffer, Program, Shader, ShaderKind, ck};
 
-use euclid::default::Size2D;
+use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use sdl2::event::Event;
 use sdl2::hint;
@@ -16,20 +16,23 @@ use surfman::{Adapter, ContextDescriptor, Device, GLApi, Surface};
 
 mod common;
 
-const WINDOW_WIDTH:  i32 = 640;
-const WINDOW_HEIGHT: i32 = 480;
+const WINDOW_WIDTH:  i32 = 800;
+const WINDOW_HEIGHT: i32 = 600;
 
 const SUBSCREEN_WIDTH:  i32 = 256;
 const SUBSCREEN_HEIGHT: i32 = 256;
 
 const CHECK_SIZE: f32 = 16.0;
 
+const INITIAL_VELOCITY_X: f32 = 1.5;
+const INITIAL_VELOCITY_Y: f32 = 0.0;
+const GRAVITY: f32 = -0.2;
+
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1 ];
 
-static BLIT_TRANSLATION: [f32; 2] = [0.0, 0.0];
 static BLIT_TRANSFORM: [f32; 4] = [
-    SUBSCREEN_WIDTH as f32 / WINDOW_WIDTH as f32, 0.0,
-    0.0, SUBSCREEN_HEIGHT as f32 / WINDOW_HEIGHT as f32,
+    SUBSCREEN_WIDTH as f32 / WINDOW_WIDTH as f32 * 2.0, 0.0,
+    0.0, SUBSCREEN_HEIGHT as f32 / WINDOW_HEIGHT as f32 * 2.0,
 ];
 
 static CHECK_TRANSFORM: [f32; 4] = [
@@ -37,8 +40,11 @@ static CHECK_TRANSFORM: [f32; 4] = [
     0.0, SUBSCREEN_HEIGHT as f32 / CHECK_SIZE as f32,
 ];
 
-static IDENTITY_TRANSFORM: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
-static ZERO_TRANSLATION:   [f32; 2] = [0.0, 0.0];
+static IDENTITY_TRANSFORM:      [f32; 4] = [1.0, 0.0, 0.0, 1.0];
+static ZERO_TRANSLATION:        [f32; 2] = [0.0, 0.0];
+
+static NDC_TRANSFORM:   [f32; 4] = [2.0, 0.0, 0.0, 2.0];
+static NDC_TRANSLATION: [f32; 2] = [-1.0, -1.0];
 
 fn main() {
     // Set up SDL2.
@@ -99,8 +105,15 @@ fn main() {
     let mut surface = main_from_worker_receiver.recv().unwrap();
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
+    // Compute initial subscreen position.
+    let subscreen_origin =
+        Point2D::new(WINDOW_WIDTH as f32 * 0.5 - SUBSCREEN_WIDTH as f32 * 0.5,
+                     WINDOW_HEIGHT as f32 * 0.65 - SUBSCREEN_HEIGHT as f32 * 0.5);
+    let subscreen_size = Size2D::new(SUBSCREEN_WIDTH as f32, SUBSCREEN_HEIGHT as f32);
+    let mut subscreen_rect = Rect::new(subscreen_origin, subscreen_size);
+    let mut subscreen_velocity = Vector2D::new(INITIAL_VELOCITY_X, INITIAL_VELOCITY_Y);
+
     // Enter main render loop.
-    let mut animation = Animation::new(0.75, 0.003);
     loop {
         // Send back our old surface, and fetch a new one.
         surface = device.destroy_surface_texture(&mut context, texture).unwrap();
@@ -109,8 +122,7 @@ fn main() {
         texture = device.create_surface_texture(&mut context, surface).unwrap();
 
         unsafe {
-            let value = animation.tick();
-            gl::ClearColor(value, 0.0, 0.0, 1.0); ck();
+            gl::ClearColor(0.0, 0.0, 0.0, 1.0); ck();
             gl::Clear(gl::COLOR_BUFFER_BIT); ck();
 
             // Draw gridlines.
@@ -119,10 +131,10 @@ fn main() {
             gl::UniformMatrix2fv(grid_vertex_array.grid_program.transform_uniform,
                                  1,
                                  gl::FALSE,
-                                 IDENTITY_TRANSFORM.as_ptr());
+                                 NDC_TRANSFORM.as_ptr());
             gl::Uniform2fv(grid_vertex_array.grid_program.translation_uniform,
                            1,
-                           ZERO_TRANSLATION.as_ptr());
+                           NDC_TRANSLATION.as_ptr());
             gl::UniformMatrix2fv(grid_vertex_array.grid_program.tex_transform_uniform,
                                  1,
                                  gl::FALSE,
@@ -139,6 +151,9 @@ fn main() {
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
 
             // Draw subscreen.
+            let subscreen_translation =
+                Point2D::new(subscreen_rect.origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
+                             subscreen_rect.origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
             gl::BindVertexArray(blit_vertex_array.object); ck();
             gl::UseProgram(blit_vertex_array.blit_program.program.object); ck();
             gl::UniformMatrix2fv(blit_vertex_array.blit_program.transform_uniform,
@@ -147,7 +162,7 @@ fn main() {
                                  BLIT_TRANSFORM.as_ptr());
             gl::Uniform2fv(blit_vertex_array.blit_program.translation_uniform,
                            1,
-                           BLIT_TRANSLATION.as_ptr());
+                           [subscreen_translation.x, subscreen_translation.y].as_ptr());
             gl::UniformMatrix2fv(blit_vertex_array.blit_program.tex_transform_uniform,
                                  1,
                                  gl::FALSE,
@@ -170,6 +185,24 @@ fn main() {
                 None => break,
                 _ => {}
             }
+        }
+
+        // Advance subscreen.
+        subscreen_velocity += Vector2D::new(0.0, GRAVITY);
+        subscreen_rect = subscreen_rect.translate(subscreen_velocity);
+
+        // Bounce off edges.
+        if subscreen_rect.origin.y <= 0.0 {
+            subscreen_rect.origin.y = 0.0;
+            subscreen_velocity.y = f32::abs(subscreen_velocity.y);
+        }
+        if subscreen_rect.origin.x <= 0.0 {
+            subscreen_rect.origin.x = 0.0;
+            subscreen_velocity.x = f32::abs(subscreen_velocity.x);
+        }
+        if subscreen_rect.max_x() >= WINDOW_WIDTH as f32 {
+            subscreen_rect.origin.x = (WINDOW_WIDTH - SUBSCREEN_WIDTH) as f32;
+            subscreen_velocity.x = -f32::abs(subscreen_velocity.x);
         }
     }
 }
@@ -207,10 +240,10 @@ fn worker_thread(adapter: Adapter,
             gl::UniformMatrix2fv(vertex_array.check_program.transform_uniform,
                                  1,
                                  gl::FALSE,
-                                 IDENTITY_TRANSFORM.as_ptr());
+                                 NDC_TRANSFORM.as_ptr());
             gl::Uniform2fv(vertex_array.check_program.translation_uniform,
                            1,
-                           ZERO_TRANSLATION.as_ptr());
+                           NDC_TRANSLATION.as_ptr());
             gl::UniformMatrix2fv(vertex_array.check_program.tex_transform_uniform,
                                  1,
                                  gl::FALSE,
@@ -226,30 +259,6 @@ fn worker_thread(adapter: Adapter,
         worker_to_main_sender.send(old_surface).unwrap();
 
         offset += 1.0 / CHECK_SIZE;
-    }
-}
-
-struct Animation {
-    value: f32,
-    delta: f32,
-}
-
-impl Animation {
-    fn new(value: f32, delta: f32) -> Animation {
-        Animation { value, delta }
-    }
-
-    fn tick(&mut self) -> f32 {
-        let old_value = self.value;
-        self.value += self.delta;
-        if self.value > 1.0 && self.delta > 0.0 {
-            self.value = 1.0;
-            self.delta = -self.delta;
-        } else if self.value < 0.0 && self.delta < 0.0 {
-            self.value = 0.0;
-            self.delta = -self.delta;
-        }
-        old_value
     }
 }
 
