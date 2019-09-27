@@ -41,10 +41,8 @@ impl Shader {
             GLApi::GLES => source.extend_from_slice(b"#version 300 es\n"),
         }
         match gl_texture_target {
-            gl::TEXTURE_2D => source.extend_from_slice(b"#define SAMPLER_TYPE sampler2D\n"),
-            gl::TEXTURE_RECTANGLE => {
-                source.extend_from_slice(b"#define SAMPLER_TYPE sampler2DRect\n")
-            }
+            gl::TEXTURE_2D => {}
+            gl::TEXTURE_RECTANGLE => source.extend_from_slice(b"#define SAMPLER_RECT\n"),
             _ => {}
         }
 

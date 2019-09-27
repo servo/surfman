@@ -5,4 +5,7 @@ target
 /android-example/local.properties
 gc.properties
 *.bin
+/android-example/app/build
+/android-example/.gradle
 /android-example/.idea
+SDL2
