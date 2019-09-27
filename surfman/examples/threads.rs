@@ -92,7 +92,8 @@ fn main() {
     });
 
     // Set up GL objects and state.
-    let vertex_array = BlitVertexArray::new(device.surface_gl_texture_target());
+    let grid_vertex_array = GridVertexArray::new(device.surface_gl_texture_target());
+    let blit_vertex_array = BlitVertexArray::new(device.surface_gl_texture_target());
 
     // Fetch our initial surface.
     let mut surface = main_from_worker_receiver.recv().unwrap();
@@ -112,25 +113,51 @@ fn main() {
             gl::ClearColor(value, 0.0, 0.0, 1.0); ck();
             gl::Clear(gl::COLOR_BUFFER_BIT); ck();
 
-            gl::BindVertexArray(vertex_array.object); ck();
-            gl::UseProgram(vertex_array.blit_program.program.object); ck();
-            gl::UniformMatrix2fv(vertex_array.blit_program.transform_uniform,
-                                 1,
-                                 gl::FALSE,
-                                 BLIT_TRANSFORM.as_ptr());
-            gl::Uniform2fv(vertex_array.blit_program.translation_uniform,
-                           1,
-                           BLIT_TRANSLATION.as_ptr());
-            gl::UniformMatrix2fv(vertex_array.blit_program.tex_transform_uniform,
+            // Draw gridlines.
+            gl::BindVertexArray(grid_vertex_array.object); ck();
+            gl::UseProgram(grid_vertex_array.grid_program.program.object); ck();
+            gl::UniformMatrix2fv(grid_vertex_array.grid_program.transform_uniform,
                                  1,
                                  gl::FALSE,
                                  IDENTITY_TRANSFORM.as_ptr());
-            gl::Uniform2fv(vertex_array.blit_program.tex_translation_uniform,
+            gl::Uniform2fv(grid_vertex_array.grid_program.translation_uniform,
+                           1,
+                           ZERO_TRANSLATION.as_ptr());
+            gl::UniformMatrix2fv(grid_vertex_array.grid_program.tex_transform_uniform,
+                                 1,
+                                 gl::FALSE,
+                                 CHECK_TRANSFORM.as_ptr());
+            gl::Uniform2fv(grid_vertex_array.grid_program.tex_translation_uniform,
+                           1,
+                           ZERO_TRANSLATION.as_ptr());
+            gl::Uniform4fv(grid_vertex_array.grid_program.gridline_color_uniform,
+                           1,
+                           [1.0, 1.0, 1.0, 1.0].as_ptr());
+            gl::Uniform4fv(grid_vertex_array.grid_program.bg_color_uniform,
+                           1,
+                           [0.0, 0.0, 0.0, 1.0].as_ptr());
+            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
+
+            // Draw subscreen.
+            gl::BindVertexArray(blit_vertex_array.object); ck();
+            gl::UseProgram(blit_vertex_array.blit_program.program.object); ck();
+            gl::UniformMatrix2fv(blit_vertex_array.blit_program.transform_uniform,
+                                 1,
+                                 gl::FALSE,
+                                 BLIT_TRANSFORM.as_ptr());
+            gl::Uniform2fv(blit_vertex_array.blit_program.translation_uniform,
+                           1,
+                           BLIT_TRANSLATION.as_ptr());
+            gl::UniformMatrix2fv(blit_vertex_array.blit_program.tex_transform_uniform,
+                                 1,
+                                 gl::FALSE,
+                                 IDENTITY_TRANSFORM.as_ptr());
+            gl::Uniform2fv(blit_vertex_array.blit_program.tex_translation_uniform,
                            1,
                            ZERO_TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
             gl::BindTexture(device.surface_gl_texture_target(), texture.gl_texture()); ck();
-            gl::Uniform1i(vertex_array.blit_program.source_uniform, 0); ck();
+            gl::Uniform1i(blit_vertex_array.blit_program.source_uniform, 0); ck();
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
@@ -256,6 +283,36 @@ impl BlitVertexArray {
     }
 }
 
+struct GridVertexArray {
+    object: GLuint,
+    grid_program: GridProgram,
+    #[allow(dead_code)]
+    position_buffer: Buffer,
+}
+
+impl GridVertexArray {
+    fn new(gl_texture_target: GLenum) -> GridVertexArray {
+        let grid_program = GridProgram::new(gl_texture_target);
+        unsafe {
+            let mut vertex_array = 0;
+            gl::GenVertexArrays(1, &mut vertex_array); ck();
+            gl::BindVertexArray(vertex_array); ck();
+
+            let position_buffer = Buffer::from_data(&QUAD_VERTEX_POSITIONS);
+            gl::BindBuffer(gl::ARRAY_BUFFER, position_buffer.object); ck();
+            gl::VertexAttribPointer(grid_program.position_attribute as GLuint,
+                                    2,
+                                    gl::UNSIGNED_BYTE,
+                                    gl::FALSE,
+                                    2,
+                                    0 as *const GLvoid); ck();
+            gl::EnableVertexAttribArray(grid_program.position_attribute as GLuint); ck();
+
+            GridVertexArray { object: vertex_array, grid_program, position_buffer }
+        }
+    }
+}
+
 struct CheckVertexArray {
     object: GLuint,
     check_program: CheckProgram,
@@ -328,6 +385,58 @@ impl BlitProgram {
                 tex_transform_uniform,
                 tex_translation_uniform,
                 source_uniform,
+            }
+        }
+    }
+}
+
+struct GridProgram {
+    program: Program,
+    position_attribute: GLint,
+    transform_uniform: GLint,
+    translation_uniform: GLint,
+    tex_transform_uniform: GLint,
+    tex_translation_uniform: GLint,
+    gridline_color_uniform: GLint,
+    bg_color_uniform: GLint,
+}
+
+impl GridProgram {
+    fn new(gl_texture_target: GLenum) -> GridProgram {
+        let vertex_shader = Shader::new("quad", ShaderKind::Vertex, gl_texture_target);
+        let fragment_shader = Shader::new("grid", ShaderKind::Fragment, gl_texture_target);
+        let program = Program::new(vertex_shader, fragment_shader);
+        unsafe {
+            let position_attribute =
+                gl::GetAttribLocation(program.object,
+                                      b"aPosition\0".as_ptr() as *const GLchar); ck();
+            let transform_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uTransform\0".as_ptr() as *const GLchar); ck();
+            let translation_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uTranslation\0".as_ptr() as *const GLchar); ck();
+            let tex_transform_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uTexTransform\0".as_ptr() as *const GLchar); ck();
+            let tex_translation_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uTexTranslation\0".as_ptr() as *const GLchar); ck();
+            let gridline_color_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uGridlineColor\0".as_ptr() as *const GLchar); ck();
+            let bg_color_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uBGColor\0".as_ptr() as *const GLchar); ck();
+            GridProgram {
+                program,
+                position_attribute,
+                transform_uniform,
+                translation_uniform,
+                tex_transform_uniform,
+                tex_translation_uniform,
+                gridline_color_uniform,
+                bg_color_uniform,
             }
         }
     }
