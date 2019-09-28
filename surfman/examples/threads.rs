@@ -19,14 +19,20 @@ mod common;
 const WINDOW_WIDTH:  i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
 
-const SUBSCREEN_WIDTH:  i32 = 256;
-const SUBSCREEN_HEIGHT: i32 = 256;
+const SUBSCREEN_WIDTH:  i32 = 192;
+const SUBSCREEN_HEIGHT: i32 = 192;
 
 const CHECK_SIZE: f32 = 16.0;
 
 const INITIAL_VELOCITY_X: f32 = 1.5;
 const INITIAL_VELOCITY_Y: f32 = 0.0;
 const GRAVITY: f32 = -0.2;
+const INITIAL_ROTATION_X: f32 = 0.2;
+const INITIAL_ROTATION_Y: f32 = 0.6;
+const INITIAL_ROTATION_Z: f32 = 0.2;
+const ROTATION_SPEED_X: f32 = 0.03;
+const ROTATION_SPEED_Y: f32 = 0.01;
+const ROTATION_SPEED_Z: f32 = 0.05;
 
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1 ];
 
@@ -45,6 +51,9 @@ static ZERO_TRANSLATION:        [f32; 2] = [0.0, 0.0];
 
 static NDC_TRANSFORM:   [f32; 4] = [2.0, 0.0, 0.0, 2.0];
 static NDC_TRANSLATION: [f32; 2] = [-1.0, -1.0];
+
+static CHECK_COLOR_A: [f32; 4] = [0.8, 0.0, 0.0, 1.0];
+static CHECK_COLOR_B: [f32; 4] = [0.9, 0.9, 0.9, 1.0];
 
 fn main() {
     // Set up SDL2.
@@ -173,7 +182,11 @@ fn main() {
             gl::ActiveTexture(gl::TEXTURE0); ck();
             gl::BindTexture(device.surface_gl_texture_target(), texture.gl_texture()); ck();
             gl::Uniform1i(blit_vertex_array.blit_program.source_uniform, 0); ck();
+            gl::Enable(gl::BLEND);
+            gl::BlendEquation(gl::FUNC_ADD);
+            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
+            gl::Disable(gl::BLEND);
         }
 
         window.gl_swap_window();
@@ -224,7 +237,10 @@ fn worker_thread(adapter: Adapter,
     let surface = device.create_surface(&context, &size).unwrap();
     worker_to_main_sender.send(surface).unwrap();
 
-    let mut offset = 0.0;
+    let mut theta_x = INITIAL_ROTATION_X;
+    let mut theta_y = INITIAL_ROTATION_Y;
+    let mut theta_z = INITIAL_ROTATION_Z;
+
     loop {
         // Render to the surface.
         unsafe {
@@ -247,10 +263,19 @@ fn worker_thread(adapter: Adapter,
             gl::UniformMatrix2fv(vertex_array.check_program.tex_transform_uniform,
                                  1,
                                  gl::FALSE,
-                                 CHECK_TRANSFORM.as_ptr());
+                                 NDC_TRANSFORM.as_ptr());
             gl::Uniform2fv(vertex_array.check_program.tex_translation_uniform,
                            1,
-                           [offset, 0.0].as_ptr());
+                           NDC_TRANSLATION.as_ptr());
+            gl::Uniform3fv(vertex_array.check_program.rotation_uniform,
+                           1,
+                           [theta_x, theta_y, theta_z].as_ptr());
+            gl::Uniform4fv(vertex_array.check_program.color_a_uniform,
+                           1,
+                           CHECK_COLOR_A.as_ptr());
+            gl::Uniform4fv(vertex_array.check_program.color_b_uniform,
+                           1,
+                           CHECK_COLOR_B.as_ptr());
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
@@ -258,7 +283,9 @@ fn worker_thread(adapter: Adapter,
         let old_surface = device.replace_context_surface(&mut context, new_surface).unwrap();
         worker_to_main_sender.send(old_surface).unwrap();
 
-        offset += 1.0 / CHECK_SIZE;
+        theta_x += ROTATION_SPEED_X;
+        theta_y += ROTATION_SPEED_Y;
+        theta_z += ROTATION_SPEED_Z;
     }
 }
 
@@ -458,6 +485,9 @@ struct CheckProgram {
     translation_uniform: GLint,
     tex_transform_uniform: GLint,
     tex_translation_uniform: GLint,
+    rotation_uniform: GLint,
+    color_a_uniform: GLint,
+    color_b_uniform: GLint,
 }
 
 impl CheckProgram {
@@ -481,6 +511,15 @@ impl CheckProgram {
             let tex_translation_uniform =
                 gl::GetUniformLocation(program.object,
                                        b"uTexTranslation\0".as_ptr() as *const GLchar); ck();
+            let rotation_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uRotation\0".as_ptr() as *const GLchar); ck();
+            let color_a_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uColorA\0".as_ptr() as *const GLchar); ck();
+            let color_b_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uColorB\0".as_ptr() as *const GLchar); ck();
             CheckProgram {
                 program,
                 position_attribute,
@@ -488,6 +527,9 @@ impl CheckProgram {
                 translation_uniform,
                 tex_transform_uniform,
                 tex_translation_uniform,
+                rotation_uniform,
+                color_a_uniform,
+                color_b_uniform,
             }
         }
     }
