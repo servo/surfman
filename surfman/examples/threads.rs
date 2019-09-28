@@ -111,23 +111,21 @@ fn main() {
     let blit_vertex_array = BlitVertexArray::new(device.surface_gl_texture_target());
 
     // Fetch our initial surface.
-    let mut surface = main_from_worker_receiver.recv().unwrap();
+    let NewFrame { mut surface, origin: _ } = main_from_worker_receiver.recv().unwrap();
+    let mut origin;
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
-
-    // Compute initial subscreen position.
-    let subscreen_origin =
-        Point2D::new(WINDOW_WIDTH as f32 * 0.5 - SUBSCREEN_WIDTH as f32 * 0.5,
-                     WINDOW_HEIGHT as f32 * 0.65 - SUBSCREEN_HEIGHT as f32 * 0.5);
-    let subscreen_size = Size2D::new(SUBSCREEN_WIDTH as f32, SUBSCREEN_HEIGHT as f32);
-    let mut subscreen_rect = Rect::new(subscreen_origin, subscreen_size);
-    let mut subscreen_velocity = Vector2D::new(INITIAL_VELOCITY_X, INITIAL_VELOCITY_Y);
 
     // Enter main render loop.
     loop {
         // Send back our old surface, and fetch a new one.
         surface = device.destroy_surface_texture(&mut context, texture).unwrap();
         main_to_worker_sender.send(surface).unwrap();
-        surface = main_from_worker_receiver.recv().unwrap();
+        let NewFrame {
+            surface: new_surface,
+            origin: new_origin,
+        } = main_from_worker_receiver.recv().unwrap();
+        surface = new_surface;
+        origin = new_origin;
         texture = device.create_surface_texture(&mut context, surface).unwrap();
 
         unsafe {
@@ -160,9 +158,8 @@ fn main() {
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
 
             // Draw subscreen.
-            let subscreen_translation =
-                Point2D::new(subscreen_rect.origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
-                             subscreen_rect.origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
+            let subscreen_translation = Point2D::new(origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
+                                                     origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
             gl::BindVertexArray(blit_vertex_array.object); ck();
             gl::UseProgram(blit_vertex_array.blit_program.program.object); ck();
             gl::UniformMatrix2fv(blit_vertex_array.blit_program.transform_uniform,
@@ -199,30 +196,12 @@ fn main() {
                 _ => {}
             }
         }
-
-        // Advance subscreen.
-        subscreen_velocity += Vector2D::new(0.0, GRAVITY);
-        subscreen_rect = subscreen_rect.translate(subscreen_velocity);
-
-        // Bounce off edges.
-        if subscreen_rect.origin.y <= 0.0 {
-            subscreen_rect.origin.y = 0.0;
-            subscreen_velocity.y = f32::abs(subscreen_velocity.y);
-        }
-        if subscreen_rect.origin.x <= 0.0 {
-            subscreen_rect.origin.x = 0.0;
-            subscreen_velocity.x = f32::abs(subscreen_velocity.x);
-        }
-        if subscreen_rect.max_x() >= WINDOW_WIDTH as f32 {
-            subscreen_rect.origin.x = (WINDOW_WIDTH - SUBSCREEN_WIDTH) as f32;
-            subscreen_velocity.x = -f32::abs(subscreen_velocity.x);
-        }
     }
 }
 
 fn worker_thread(adapter: Adapter,
                  context_descriptor: ContextDescriptor,
-                 worker_to_main_sender: Sender<Surface>,
+                 worker_to_main_sender: Sender<NewFrame>,
                  worker_from_main_receiver: Receiver<Surface>) {
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
@@ -233,13 +212,22 @@ fn worker_thread(adapter: Adapter,
     // Set up GL objects and state.
     let vertex_array = CheckVertexArray::new(device.surface_gl_texture_target());
 
-    // Send an initial surface back to the main thread.
-    let surface = device.create_surface(&context, &size).unwrap();
-    worker_to_main_sender.send(surface).unwrap();
+    // Initialize our origin and size.
+    let subscreen_origin =
+        Point2D::new(WINDOW_WIDTH as f32 * 0.5 - SUBSCREEN_WIDTH as f32 * 0.5,
+                     WINDOW_HEIGHT as f32 * 0.65 - SUBSCREEN_HEIGHT as f32 * 0.5);
+    let subscreen_size = Size2D::new(SUBSCREEN_WIDTH as f32, SUBSCREEN_HEIGHT as f32);
+    let mut subscreen_rect = Rect::new(subscreen_origin, subscreen_size);
+    let mut subscreen_velocity = Vector2D::new(INITIAL_VELOCITY_X, INITIAL_VELOCITY_Y);
 
+    // Initialize our rotation.
     let mut theta_x = INITIAL_ROTATION_X;
     let mut theta_y = INITIAL_ROTATION_Y;
     let mut theta_z = INITIAL_ROTATION_Z;
+
+    // Send an initial surface back to the main thread.
+    let surface = device.create_surface(&context, &size).unwrap();
+    worker_to_main_sender.send(NewFrame { surface, origin: subscreen_rect.origin }).unwrap();
 
     loop {
         // Render to the surface.
@@ -281,12 +269,39 @@ fn worker_thread(adapter: Adapter,
 
         let new_surface = worker_from_main_receiver.recv().unwrap();
         let old_surface = device.replace_context_surface(&mut context, new_surface).unwrap();
-        worker_to_main_sender.send(old_surface).unwrap();
+        worker_to_main_sender.send(NewFrame {
+            surface: old_surface,
+            origin: subscreen_rect.origin,
+        }).unwrap();
 
+        // Advance subscreen.
+        subscreen_velocity += Vector2D::new(0.0, GRAVITY);
+        subscreen_rect = subscreen_rect.translate(subscreen_velocity);
+
+        // Bounce off edges.
+        if subscreen_rect.origin.y <= 0.0 {
+            subscreen_rect.origin.y = 0.0;
+            subscreen_velocity.y = f32::abs(subscreen_velocity.y);
+        }
+        if subscreen_rect.origin.x <= 0.0 {
+            subscreen_rect.origin.x = 0.0;
+            subscreen_velocity.x = f32::abs(subscreen_velocity.x);
+        }
+        if subscreen_rect.max_x() >= WINDOW_WIDTH as f32 {
+            subscreen_rect.origin.x = (WINDOW_WIDTH - SUBSCREEN_WIDTH) as f32;
+            subscreen_velocity.x = -f32::abs(subscreen_velocity.x);
+        }
+
+        // Rotate.
         theta_x += ROTATION_SPEED_X;
         theta_y += ROTATION_SPEED_Y;
         theta_z += ROTATION_SPEED_Z;
     }
+}
+
+struct NewFrame {
+    surface: Surface,
+    origin: Point2D<f32>,
 }
 
 struct BlitVertexArray {
