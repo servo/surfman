@@ -35,23 +35,20 @@ float pow16(float n) {
 }
 
 mat3 rotateZXY(vec3 theta) {
-    float x0 = cos(theta.y), x1 = cos(theta.z);
-    float x2 = sin(theta.z), x3 = cos(theta.x);
-    float x4 = x2 * x3;
-    float x5 = sin(theta.y), x6 = sin(theta.x);
-    float x7 = x1 * x6;
-    float x8 = x2 * x6;
-    float x9 = x1 * x3;
-    return mat3(x0 * x1,       -x0 * x2,      x5,
-                x4 + x5 * x7,  -x5 * x8 + x9, -x0 * x6,
-                -x5 * x9 + x8, x4 * x5 + x7,  x0 * x3);
+    vec3 tCos = cos(theta), tSin = sin(theta);
+    vec4 zx = vec4(tSin.zz, tCos.zz) * vec4(tCos.x, tSin.xx, tCos.x);
+    return mat3( tCos.y * tCos.z, -tCos.y * tSin.z,  tSin.y,
+                 tSin.y * zx.z,   -tSin.y * zx.y,   -tCos.y * tSin.x,
+                -tSin.y * zx.w,    tSin.y * zx.x,    tCos.y * tCos.x) +
+           mat3(0.0,  0.0,  0.0,
+                zx.x, zx.w, 0.0,
+                zx.y, zx.z, 0.0);
 }
 
 void main() {
     vec3 rayDirection = normalize(vec3(gl_FragCoord.xy + uViewportOrigin, 0.0) - CAMERA_POSITION);
 
-    vec3 center = vec3(uViewportOrigin, 0.0) +
-        vec3(SUBSCREEN_LENGTH, SUBSCREEN_LENGTH, 0.0) * vec3(0.5);
+    vec3 center = vec3(uViewportOrigin, 0.0) + vec3(vec2(SUBSCREEN_LENGTH * 0.5), 0.0);
     vec3 originToCenter = center - CAMERA_POSITION;
     float tCA = dot(originToCenter, rayDirection);
 
