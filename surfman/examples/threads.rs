@@ -19,8 +19,11 @@ mod common;
 const WINDOW_WIDTH:  i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
 
-const SUBSCREEN_WIDTH:  i32 = 192;
-const SUBSCREEN_HEIGHT: i32 = 192;
+const SUBSCREEN_WIDTH:  i32 = 256;
+const SUBSCREEN_HEIGHT: i32 = 256;
+
+const BALL_WIDTH:  i32 = 192;
+const BALL_HEIGHT: i32 = 192;
 
 const CHECK_SIZE: f32 = 16.0;
 
@@ -213,12 +216,13 @@ fn worker_thread(adapter: Adapter,
     let vertex_array = CheckVertexArray::new(device.surface_gl_texture_target());
 
     // Initialize our origin and size.
-    let subscreen_origin =
-        Point2D::new(WINDOW_WIDTH as f32 * 0.5 - SUBSCREEN_WIDTH as f32 * 0.5,
-                     WINDOW_HEIGHT as f32 * 0.65 - SUBSCREEN_HEIGHT as f32 * 0.5);
-    let subscreen_size = Size2D::new(SUBSCREEN_WIDTH as f32, SUBSCREEN_HEIGHT as f32);
-    let mut subscreen_rect = Rect::new(subscreen_origin, subscreen_size);
-    let mut subscreen_velocity = Vector2D::new(INITIAL_VELOCITY_X, INITIAL_VELOCITY_Y);
+    let ball_origin = Point2D::new(WINDOW_WIDTH as f32 * 0.5 - BALL_WIDTH as f32 * 0.5,
+                                   WINDOW_HEIGHT as f32 * 0.65 - BALL_HEIGHT as f32 * 0.5);
+    let ball_size = Size2D::new(BALL_WIDTH as f32, BALL_HEIGHT as f32);
+    let mut ball_rect = Rect::new(ball_origin, ball_size);
+    let mut ball_velocity = Vector2D::new(INITIAL_VELOCITY_X, INITIAL_VELOCITY_Y);
+    let subscreen_offset = (Point2D::new(SUBSCREEN_WIDTH as f32, SUBSCREEN_HEIGHT as f32) -
+                            Point2D::new(BALL_WIDTH as f32, BALL_HEIGHT as f32)) * 0.5;
 
     // Initialize our rotation.
     let mut theta_x = INITIAL_ROTATION_X;
@@ -227,7 +231,10 @@ fn worker_thread(adapter: Adapter,
 
     // Send an initial surface back to the main thread.
     let surface = device.create_surface(&context, &size).unwrap();
-    worker_to_main_sender.send(NewFrame { surface, origin: subscreen_rect.origin }).unwrap();
+    worker_to_main_sender.send(NewFrame {
+        surface,
+        origin: ball_rect.origin - subscreen_offset,
+    }).unwrap();
 
     loop {
         // Render to the surface.
@@ -266,7 +273,7 @@ fn worker_thread(adapter: Adapter,
                            CHECK_COLOR_B.as_ptr());
             gl::Uniform2fv(vertex_array.check_program.viewport_origin_uniform,
                            1,
-                           [subscreen_rect.origin.x, subscreen_rect.origin.y].as_ptr());
+                           [ball_rect.origin.x, ball_rect.origin.y].as_ptr());
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
@@ -274,25 +281,25 @@ fn worker_thread(adapter: Adapter,
         let old_surface = device.replace_context_surface(&mut context, new_surface).unwrap();
         worker_to_main_sender.send(NewFrame {
             surface: old_surface,
-            origin: subscreen_rect.origin,
+            origin: ball_rect.origin - subscreen_offset,
         }).unwrap();
 
-        // Advance subscreen.
-        subscreen_velocity += Vector2D::new(0.0, GRAVITY);
-        subscreen_rect = subscreen_rect.translate(subscreen_velocity);
+        // Advance ball.
+        ball_velocity += Vector2D::new(0.0, GRAVITY);
+        ball_rect = ball_rect.translate(ball_velocity);
 
         // Bounce off edges.
-        if subscreen_rect.origin.y <= 0.0 {
-            subscreen_rect.origin.y = 0.0;
-            subscreen_velocity.y = f32::abs(subscreen_velocity.y);
+        if ball_rect.origin.y <= 0.0 {
+            ball_rect.origin.y = 0.0;
+            ball_velocity.y = f32::abs(ball_velocity.y);
         }
-        if subscreen_rect.origin.x <= 0.0 {
-            subscreen_rect.origin.x = 0.0;
-            subscreen_velocity.x = f32::abs(subscreen_velocity.x);
+        if ball_rect.origin.x <= 0.0 {
+            ball_rect.origin.x = 0.0;
+            ball_velocity.x = f32::abs(ball_velocity.x);
         }
-        if subscreen_rect.max_x() >= WINDOW_WIDTH as f32 {
-            subscreen_rect.origin.x = (WINDOW_WIDTH - SUBSCREEN_WIDTH) as f32;
-            subscreen_velocity.x = -f32::abs(subscreen_velocity.x);
+        if ball_rect.max_x() >= WINDOW_WIDTH as f32 {
+            ball_rect.origin.x = (WINDOW_WIDTH - BALL_WIDTH) as f32;
+            ball_velocity.x = -f32::abs(ball_velocity.x);
         }
 
         // Rotate.
