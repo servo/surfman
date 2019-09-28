@@ -34,6 +34,19 @@ float pow16(float n) {
     return n8 * n8;
 }
 
+mat3 rotateZXY(vec3 theta) {
+    float x0 = cos(theta.y), x1 = cos(theta.z);
+    float x2 = sin(theta.z), x3 = cos(theta.x);
+    float x4 = x2 * x3;
+    float x5 = sin(theta.y), x6 = sin(theta.x);
+    float x7 = x1 * x6;
+    float x8 = x2 * x6;
+    float x9 = x1 * x3;
+    return mat3(x0 * x1,       -x0 * x2,      x5,
+                x4 + x5 * x7,  -x5 * x8 + x9, -x0 * x6,
+                -x5 * x9 + x8, x4 * x5 + x7,  x0 * x3);
+}
+
 void main() {
     vec3 rayDirection = normalize(vec3(gl_FragCoord.xy + uViewportOrigin, 0.0) - CAMERA_POSITION);
 
@@ -61,18 +74,8 @@ void main() {
     vec3 hitPosition = CAMERA_POSITION + rayDirection * vec3(t);
     vec3 normal = normalize(hitPosition - center);
 
-    // Hack
-    vec3 texNormal = normal;
-    texNormal = mat3(vec3(cos(uRotation.y), 0.0, sin(uRotation.y)),
-                     vec3(0.0, 1.0, 0.0),
-                     vec3(-sin(uRotation.y), 0.0, cos(uRotation.y))) * texNormal;
-    texNormal = mat3(vec3(1.0, 0.0, 0.0),
-                     vec3(0.0, cos(uRotation.x), -sin(uRotation.x)),
-                     vec3(0.0, sin(uRotation.x),  cos(uRotation.x))) * texNormal;
-    texNormal = mat3(vec3(cos(uRotation.z), -sin(uRotation.z), 0.0),
-                     vec3(sin(uRotation.z),  cos(uRotation.z), 0.0),
-                     vec3(0.0, 0.0, 1.0)) * texNormal;
-
+    // Hack: Just rotate the texture instead of rotating the sphere.
+    vec3 texNormal = rotateZXY(uRotation) * normal;
     vec2 uv = vec2((1.0 + atan(texNormal.z, texNormal.x) / PI) * 0.5,
                    acos(texNormal.y) / PI) * vec2(12.0);
 
