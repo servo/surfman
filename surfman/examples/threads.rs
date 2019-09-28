@@ -264,6 +264,9 @@ fn worker_thread(adapter: Adapter,
             gl::Uniform4fv(vertex_array.check_program.color_b_uniform,
                            1,
                            CHECK_COLOR_B.as_ptr());
+            gl::Uniform2fv(vertex_array.check_program.viewport_origin_uniform,
+                           1,
+                           [subscreen_rect.origin.x, subscreen_rect.origin.y].as_ptr());
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
@@ -503,6 +506,7 @@ struct CheckProgram {
     rotation_uniform: GLint,
     color_a_uniform: GLint,
     color_b_uniform: GLint,
+    viewport_origin_uniform: GLint,
 }
 
 impl CheckProgram {
@@ -535,6 +539,9 @@ impl CheckProgram {
             let color_b_uniform =
                 gl::GetUniformLocation(program.object,
                                        b"uColorB\0".as_ptr() as *const GLchar); ck();
+            let viewport_origin_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uViewportOrigin\0".as_ptr() as *const GLchar); ck();
             CheckProgram {
                 program,
                 position_attribute,
@@ -545,6 +552,7 @@ impl CheckProgram {
                 rotation_uniform,
                 color_a_uniform,
                 color_b_uniform,
+                viewport_origin_uniform,
             }
         }
     }

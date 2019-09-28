@@ -2,6 +2,7 @@
 
 precision highp float;
 
+uniform vec2 uViewportOrigin;
 uniform vec3 uRotation;
 uniform vec4 uColorA;
 uniform vec4 uColorB;
@@ -13,15 +14,16 @@ out vec4 oFragColor;
 const float PI = 3.14159;
 const float RADIUS = 96.0;
 const float RADIUS_SQ = RADIUS * RADIUS;
-const vec3 CENTER = vec3(RADIUS, RADIUS, 0.0);
+const vec3 CAMERA_POSITION = vec3(400.0, 300.0, -1000.0);
 
 void main() {
-    float t = -1.0;
-    vec3 rayOrigin = vec3(CENTER.xy, -1000.0);
-    vec3 rayDirection = normalize(vec3(gl_FragCoord.xy, 0.0) - rayOrigin);
+    vec3 rayDirection = normalize(vec3(gl_FragCoord.xy + uViewportOrigin, 0.0) - CAMERA_POSITION);
 
-    vec3 originToCenter = CENTER - rayOrigin;
+    vec3 center = vec3(uViewportOrigin, 0.0) + vec3(RADIUS, RADIUS, 0.0);
+    vec3 originToCenter = center - CAMERA_POSITION;
     float tCA = dot(originToCenter, rayDirection);
+
+    float t = -1.0;
     if (tCA >= 0.0) {
         float d2 = dot(originToCenter, originToCenter) - tCA * tCA;
         if (d2 <= RADIUS_SQ) {
@@ -37,8 +39,8 @@ void main() {
         return;
     }
 
-    vec3 hitPosition = rayOrigin + rayDirection * vec3(t);
-    vec3 normal = normalize(hitPosition - CENTER);
+    vec3 hitPosition = CAMERA_POSITION + rayDirection * vec3(t);
+    vec3 normal = normalize(hitPosition - center);
 
     normal = mat3(vec3(cos(uRotation.y), 0.0, sin(uRotation.y)),
                   vec3(0.0, 1.0, 0.0),
