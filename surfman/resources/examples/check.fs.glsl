@@ -25,7 +25,14 @@ const float LIGHT_SPECULAR = 1.0;
 const float MATERIAL_AMBIENT = 0.2;
 const float MATERIAL_DIFFUSE = 0.7;
 const float MATERIAL_SPECULAR = 0.1;
-const float MATERIAL_ALBEDO = 16.0;
+
+// Hardcoded albedo of 16.0. Works around precision issues.
+float pow16(float n) {
+    float n2 = n * n;
+    float n4 = n2 * n2;
+    float n8 = n4 * n4;
+    return n8 * n8;
+}
 
 void main() {
     vec3 rayDirection = normalize(vec3(gl_FragCoord.xy + uViewportOrigin, 0.0) - CAMERA_POSITION);
@@ -73,12 +80,12 @@ void main() {
     vec4 diffuse = ((on.x ^ on.y) > 0) ? uColorA : uColorB;
 
     vec3 lightDirection = normalize(LIGHT_POSITION - hitPosition);
-    vec3 reflection = normalize(2.0 * dot(lightDirection, normal) * normal - lightDirection);
+    vec3 reflection = -reflect(lightDirection, normal);
     vec3 viewer = normalize(CAMERA_POSITION - hitPosition);
 
     float intensity = LIGHT_AMBIENT * MATERIAL_AMBIENT +
         MATERIAL_DIFFUSE * dot(lightDirection, normal) * LIGHT_DIFFUSE +
-        MATERIAL_SPECULAR * pow(dot(reflection, viewer), MATERIAL_ALBEDO) * LIGHT_SPECULAR;
+        MATERIAL_SPECULAR * pow16(dot(reflection, viewer)) * LIGHT_SPECULAR;
 
     oFragColor = vec4(intensity * diffuse.rgb, diffuse.a);
 }
