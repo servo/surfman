@@ -45,31 +45,46 @@ mat3 rotateZXY(vec3 theta) {
                 zx.y, zx.z, 0.0);
 }
 
-void main() {
-    vec3 rayDirection = normalize(vec3(gl_FragCoord.xy + uViewportOrigin, 0.0) - CAMERA_POSITION);
-
-    vec3 center = vec3(uViewportOrigin, 0.0) + vec3(vec2(SUBSCREEN_LENGTH * 0.5), 0.0);
-    vec3 originToCenter = center - CAMERA_POSITION;
+bool raytraceSphere(vec3 rayOrigin,
+                    vec3 rayDirection,
+                    vec3 center,
+                    float radiusSq,
+                    out vec3 outHitPosition,
+                    out vec3 outHitNormal) {
+    vec3 originToCenter = center - rayOrigin;
     float tCA = dot(originToCenter, rayDirection);
+    if (tCA < 0.0)
+        return false;
 
-    float t = -1.0;
-    if (tCA >= 0.0) {
-        float d2 = dot(originToCenter, originToCenter) - tCA * tCA;
-        if (d2 <= RADIUS_SQ) {
-            float tHC = sqrt(RADIUS_SQ - d2);
-            vec2 ts = vec2(tCA) + vec2(-tHC, tHC);
-            ts = vec2(min(ts.x, ts.y), max(ts.x, ts.y));
-            t = ts.x >= 0.0 ? ts.x : ts.y;
-        }
-    }
+    float d2 = dot(originToCenter, originToCenter) - tCA * tCA;
+    if (d2 > radiusSq)
+        return false;
 
-    if (t < 0.0) {
+    float tHC = sqrt(radiusSq - d2);
+    vec2 ts = vec2(tCA) + vec2(-tHC, tHC);
+    ts = vec2(min(ts.x, ts.y), max(ts.x, ts.y));
+
+    float t = ts.x >= 0.0 ? ts.x : ts.y;
+    if (t < 0.0)
+        return false;
+
+    vec3 hitPosition = rayOrigin + rayDirection * vec3(t);
+    outHitPosition = hitPosition;
+    outHitNormal = normalize(hitPosition - center);
+    return true;
+}
+
+void main() {
+    vec3 rayOrigin = CAMERA_POSITION;
+    vec3 rayDirection = normalize(vec3(gl_FragCoord.xy + uViewportOrigin, 0.0) - rayOrigin);
+    vec3 center = vec3(uViewportOrigin, 0.0) + vec3(vec2(SUBSCREEN_LENGTH * 0.5), 0.0);
+
+    vec3 hitPosition, normal;
+    bool hit = raytraceSphere(rayOrigin, rayDirection, center, RADIUS_SQ, hitPosition, normal);
+    if (!hit) {
         oFragColor = vec4(0.0);
         return;
     }
-
-    vec3 hitPosition = CAMERA_POSITION + rayDirection * vec3(t);
-    vec3 normal = normalize(hitPosition - center);
 
     // Hack: Just rotate the texture instead of rotating the sphere.
     vec3 texNormal = rotateZXY(uRotation) * normal;

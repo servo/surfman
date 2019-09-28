@@ -7,6 +7,7 @@ use gl;
 use std::fs::File;
 use std::io::Read;
 use std::os::raw::c_void;
+use std::ptr;
 use surfman::{Device, GLApi};
 
 pub struct Program {
@@ -60,6 +61,17 @@ impl Shader {
 
             let mut compile_status = 0;
             gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut compile_status); ck();
+            if compile_status != gl::TRUE as GLint {
+                let mut info_log_length = 0;
+                gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut info_log_length);
+                let mut info_log = vec![0; info_log_length as usize + 1];
+                gl::GetShaderInfoLog(shader,
+                                     info_log_length,
+                                     ptr::null_mut(),
+                                     info_log.as_mut_ptr() as *mut i8);
+                eprintln!("Failed to compile shader:\n{}", String::from_utf8_lossy(&info_log));
+                panic!("Shader compilation failed!");
+            }
             debug_assert_eq!(compile_status, gl::TRUE as GLint);
 
             Shader { object: shader }
