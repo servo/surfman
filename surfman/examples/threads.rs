@@ -37,6 +37,8 @@ const ROTATION_SPEED_X: f32 = 0.03;
 const ROTATION_SPEED_Y: f32 = 0.01;
 const ROTATION_SPEED_Z: f32 = 0.05;
 
+const SPHERE_RADIUS: f32 = 96.0;
+
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1 ];
 
 static BLIT_TRANSFORM: [f32; 4] = [
@@ -57,6 +59,9 @@ static NDC_TRANSLATION: [f32; 2] = [-1.0, -1.0];
 
 static CHECK_COLOR_A: [f32; 4] = [0.8, 0.0, 0.0, 1.0];
 static CHECK_COLOR_B: [f32; 4] = [0.9, 0.9, 0.9, 1.0];
+
+static CAMERA_POSITION: [f32; 3] = [400.0, 300.0, -1000.0];
+static LIGHT_POSITION:  [f32; 3] = [600.0, 450.0, -500.0];
 
 fn main() {
     // Set up SDL2.
@@ -271,9 +276,19 @@ fn worker_thread(adapter: Adapter,
             gl::Uniform4fv(vertex_array.check_program.color_b_uniform,
                            1,
                            CHECK_COLOR_B.as_ptr());
-            gl::Uniform2fv(vertex_array.check_program.viewport_origin_uniform,
+            gl::Uniform2f(vertex_array.check_program.viewport_origin_uniform,
+                          ball_rect.origin.x,
+                          ball_rect.origin.y);
+            gl::Uniform1f(vertex_array.check_program.radius_uniform, SPHERE_RADIUS);
+            gl::Uniform3fv(vertex_array.check_program.camera_position_uniform,
                            1,
-                           [ball_rect.origin.x, ball_rect.origin.y].as_ptr());
+                           CAMERA_POSITION.as_ptr());
+            gl::Uniform3fv(vertex_array.check_program.light_position_uniform,
+                           1,
+                           LIGHT_POSITION.as_ptr());
+            gl::Uniform2f(vertex_array.check_program.framebuffer_size_uniform,
+                          SUBSCREEN_WIDTH as f32,
+                          SUBSCREEN_HEIGHT as f32);
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
@@ -514,6 +529,10 @@ struct CheckProgram {
     color_a_uniform: GLint,
     color_b_uniform: GLint,
     viewport_origin_uniform: GLint,
+    radius_uniform: GLint,
+    camera_position_uniform: GLint,
+    light_position_uniform: GLint,
+    framebuffer_size_uniform: GLint,
 }
 
 impl CheckProgram {
@@ -549,6 +568,18 @@ impl CheckProgram {
             let viewport_origin_uniform =
                 gl::GetUniformLocation(program.object,
                                        b"uViewportOrigin\0".as_ptr() as *const GLchar); ck();
+            let radius_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uRadius\0".as_ptr() as *const GLchar); ck();
+            let camera_position_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uCameraPosition\0".as_ptr() as *const GLchar); ck();
+            let light_position_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uLightPosition\0".as_ptr() as *const GLchar); ck();
+            let framebuffer_size_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uFramebufferSize\0".as_ptr() as *const GLchar); ck();
             CheckProgram {
                 program,
                 position_attribute,
@@ -560,6 +591,10 @@ impl CheckProgram {
                 color_a_uniform,
                 color_b_uniform,
                 viewport_origin_uniform,
+                radius_uniform,
+                light_position_uniform,
+                camera_position_uniform,
+                framebuffer_size_uniform,
             }
         }
     }

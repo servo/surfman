@@ -3,9 +3,13 @@
 precision highp float;
 
 uniform vec2 uViewportOrigin;
+uniform vec2 uFramebufferSize;
 uniform vec3 uRotation;
 uniform vec4 uColorA;
 uniform vec4 uColorB;
+uniform vec3 uCameraPosition;
+uniform vec3 uLightPosition;
+uniform float uRadius;
 
 in vec2 vTexCoord;
 
@@ -13,12 +17,6 @@ out vec4 oFragColor;
 
 const float PI = 3.14159;
 
-const float SUBSCREEN_LENGTH = 256.0;
-const float RADIUS = 96.0;
-const float RADIUS_SQ = RADIUS * RADIUS;
-const vec3 CAMERA_POSITION = vec3(400.0, 300.0, -1000.0);
-
-const vec3 LIGHT_POSITION = vec3(600.0, 450.0, -500.0);
 const float LIGHT_AMBIENT = 1.0;
 const float LIGHT_DIFFUSE = 1.0;
 const float LIGHT_SPECULAR = 1.0;
@@ -48,7 +46,7 @@ mat3 rotateZXY(vec3 theta) {
 bool raytraceSphere(vec3 rayOrigin,
                     vec3 rayDirection,
                     vec3 center,
-                    float radiusSq,
+                    float radius,
                     out vec3 outHitPosition,
                     out vec3 outHitNormal) {
     vec3 originToCenter = center - rayOrigin;
@@ -57,6 +55,7 @@ bool raytraceSphere(vec3 rayOrigin,
         return false;
 
     float d2 = dot(originToCenter, originToCenter) - tCA * tCA;
+    float radiusSq = radius * radius;
     if (d2 > radiusSq)
         return false;
 
@@ -75,12 +74,12 @@ bool raytraceSphere(vec3 rayOrigin,
 }
 
 void main() {
-    vec3 rayOrigin = CAMERA_POSITION;
+    vec3 rayOrigin = uCameraPosition;
     vec3 rayDirection = normalize(vec3(gl_FragCoord.xy + uViewportOrigin, 0.0) - rayOrigin);
-    vec3 center = vec3(uViewportOrigin, 0.0) + vec3(vec2(SUBSCREEN_LENGTH * 0.5), 0.0);
+    vec3 center = vec3(uViewportOrigin, 0.0) + vec3(uFramebufferSize * vec2(0.5), 0.0);
 
     vec3 hitPosition, normal;
-    bool hit = raytraceSphere(rayOrigin, rayDirection, center, RADIUS_SQ, hitPosition, normal);
+    bool hit = raytraceSphere(rayOrigin, rayDirection, center, uRadius, hitPosition, normal);
     if (!hit) {
         oFragColor = vec4(0.0);
         return;
@@ -94,9 +93,9 @@ void main() {
     ivec2 on = ivec2(greaterThanEqual(mod(uv, vec2(2.0)), vec2(1.0)));
     vec4 diffuse = ((on.x ^ on.y) > 0) ? uColorA : uColorB;
 
-    vec3 lightDirection = normalize(LIGHT_POSITION - hitPosition);
+    vec3 lightDirection = normalize(uLightPosition - hitPosition);
     vec3 reflection = -reflect(lightDirection, normal);
-    vec3 viewer = normalize(CAMERA_POSITION - hitPosition);
+    vec3 viewer = normalize(uCameraPosition - hitPosition);
 
     float intensity = LIGHT_AMBIENT * MATERIAL_AMBIENT +
         MATERIAL_DIFFUSE * dot(lightDirection, normal) * LIGHT_DIFFUSE +
