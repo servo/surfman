@@ -4,14 +4,18 @@ precision highp float;
 
 uniform vec4 uGridlineColor;
 uniform vec4 uBGColor;
+uniform float uRadius;
+uniform vec2 uSpherePosition;
+uniform vec3 uCameraPosition;
+uniform vec3 uLightPosition;
 
 in vec2 vTexCoord;
 
 out vec4 oFragColor;
 
-const float EPSILON = 0.0001;
-
-const float DEPTH = 100.0;
+const float DEPTH = 200.0;
+const int GRID_SPACING = 50;
+const float SHADOW_ATTENUATION = 0.7;
 
 // FIXME(pcwalton): Move to an include file.
 bool raytraceSphere(vec3 rayOrigin,
@@ -45,14 +49,18 @@ bool raytraceSphere(vec3 rayOrigin,
 }
 
 void main() {
-    /*
     vec3 rayOrigin = vec3(gl_FragCoord.xy, DEPTH);
     vec3 rayDirection = normalize(uLightPosition - rayOrigin);
+    vec3 origin = vec3(uSpherePosition, 0.0);
 
-    bool hit = raytraceSphere(rayOrigin, rayDirection, 
-    */
+    vec3 hitPosition, hitNormal;
+    bool hit = raytraceSphere(rayOrigin, rayDirection, origin, uRadius, hitPosition, hitNormal);
 
-    vec2 dist = fwidth(vTexCoord);
-    bool on = any(lessThanEqual(mod(vTexCoord + dist * 0.5 + EPSILON, 1.0) / dist, vec2(1.0)));
-    oFragColor = on ? uGridlineColor : uBGColor;
+    bool onGrid = any(equal(ivec2(gl_FragCoord.xy) % ivec2(GRID_SPACING), ivec2(0)));
+
+    vec4 color = onGrid ? uGridlineColor : uBGColor;
+    if (hit)
+        color.rgb *= vec3(SHADOW_ATTENUATION);
+
+    oFragColor = color;
 }

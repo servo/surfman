@@ -63,6 +63,19 @@ static CHECK_COLOR_B: [f32; 4] = [0.9, 0.9, 0.9, 1.0];
 static CAMERA_POSITION: [f32; 3] = [400.0, 300.0, -1000.0];
 static LIGHT_POSITION:  [f32; 3] = [600.0, 450.0, -500.0];
 
+static GRIDLINE_COLOR: [f32; 4] = [
+    (0x9e as f32) / 255.0,
+    (0x2b as f32) / 255.0,
+    (0x86 as f32) / 255.0,
+    1.0,
+];
+static BACKGROUND_COLOR: [f32; 4] = [
+    (0xaa as f32) / 255.0,
+    (0xaa as f32) / 255.0,
+    (0xaa as f32) / 255.0,
+    1.0,
+];
+
 fn main() {
     // Set up SDL2.
     let sdl_context = sdl2::init().unwrap();
@@ -119,21 +132,27 @@ fn main() {
     let blit_vertex_array = BlitVertexArray::new(device.surface_gl_texture_target());
 
     // Fetch our initial surface.
-    let NewFrame { mut surface, origin: _ } = main_from_worker_receiver.recv().unwrap();
-    let mut origin;
+    let NewFrame { mut surface, .. } = main_from_worker_receiver.recv().unwrap();
+    let (mut viewport_origin, mut sphere_position);
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
     // Enter main render loop.
     loop {
-        // Send back our old surface, and fetch a new one.
+        // Send back our old surface.
         surface = device.destroy_surface_texture(&mut context, texture).unwrap();
         main_to_worker_sender.send(surface).unwrap();
+
+        // Fetch a new surface.
         let NewFrame {
             surface: new_surface,
-            origin: new_origin,
+            viewport_origin: new_viewport_origin,
+            sphere_position: new_sphere_position,
         } = main_from_worker_receiver.recv().unwrap();
         surface = new_surface;
-        origin = new_origin;
+        viewport_origin = new_viewport_origin;
+        sphere_position = new_sphere_position;
+
+        // Wrap it in a texture.
         texture = device.create_surface_texture(&mut context, surface).unwrap();
 
         unsafe {
@@ -159,15 +178,26 @@ fn main() {
                            ZERO_TRANSLATION.as_ptr());
             gl::Uniform4fv(grid_vertex_array.grid_program.gridline_color_uniform,
                            1,
-                           [1.0, 1.0, 1.0, 1.0].as_ptr());
+                           GRIDLINE_COLOR.as_ptr());
             gl::Uniform4fv(grid_vertex_array.grid_program.bg_color_uniform,
                            1,
-                           [0.0, 0.0, 0.0, 1.0].as_ptr());
+                           BACKGROUND_COLOR.as_ptr());
+            gl::Uniform2f(grid_vertex_array.grid_program.sphere_position_uniform,
+                          sphere_position.x,
+                          sphere_position.y);
+            gl::Uniform1f(grid_vertex_array.grid_program.radius_uniform, SPHERE_RADIUS);
+            gl::Uniform3fv(grid_vertex_array.grid_program.camera_position_uniform,
+                           1,
+                           CAMERA_POSITION.as_ptr());
+            gl::Uniform3fv(grid_vertex_array.grid_program.light_position_uniform,
+                           1,
+                           LIGHT_POSITION.as_ptr());
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
 
             // Draw subscreen.
-            let subscreen_translation = Point2D::new(origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
-                                                     origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
+            let subscreen_translation =
+                Point2D::new(viewport_origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
+                             viewport_origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
             gl::BindVertexArray(blit_vertex_array.object); ck();
             gl::UseProgram(blit_vertex_array.blit_program.program.object); ck();
             gl::UniformMatrix2fv(blit_vertex_array.blit_program.transform_uniform,
@@ -238,7 +268,8 @@ fn worker_thread(adapter: Adapter,
     let surface = device.create_surface(&context, &size).unwrap();
     worker_to_main_sender.send(NewFrame {
         surface,
-        origin: ball_rect.origin - subscreen_offset,
+        viewport_origin: ball_rect.origin - subscreen_offset,
+        sphere_position: ball_rect.center(),
     }).unwrap();
 
     loop {
@@ -287,8 +318,8 @@ fn worker_thread(adapter: Adapter,
                            1,
                            LIGHT_POSITION.as_ptr());
             gl::Uniform2f(vertex_array.check_program.sphere_position_uniform,
-                          lerp(ball_rect.origin.x, ball_rect.max_x(), 0.5),
-                          lerp(ball_rect.origin.y, ball_rect.max_y(), 0.5));
+                          ball_rect.center().x,
+                          ball_rect.center().y);
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
@@ -296,7 +327,8 @@ fn worker_thread(adapter: Adapter,
         let old_surface = device.replace_context_surface(&mut context, new_surface).unwrap();
         worker_to_main_sender.send(NewFrame {
             surface: old_surface,
-            origin: ball_rect.origin - subscreen_offset,
+            viewport_origin: ball_rect.origin - subscreen_offset,
+            sphere_position: ball_rect.center(),
         }).unwrap();
 
         // Advance ball.
@@ -326,7 +358,8 @@ fn worker_thread(adapter: Adapter,
 
 struct NewFrame {
     surface: Surface,
-    origin: Point2D<f32>,
+    viewport_origin: Point2D<f32>,
+    sphere_position: Point2D<f32>,
 }
 
 struct BlitVertexArray {
@@ -475,6 +508,10 @@ struct GridProgram {
     tex_translation_uniform: GLint,
     gridline_color_uniform: GLint,
     bg_color_uniform: GLint,
+    radius_uniform: GLint,
+    sphere_position_uniform: GLint,
+    camera_position_uniform: GLint,
+    light_position_uniform: GLint,
 }
 
 impl GridProgram {
@@ -504,6 +541,18 @@ impl GridProgram {
             let bg_color_uniform =
                 gl::GetUniformLocation(program.object,
                                        b"uBGColor\0".as_ptr() as *const GLchar); ck();
+            let radius_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uRadius\0".as_ptr() as *const GLchar); ck();
+            let camera_position_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uCameraPosition\0".as_ptr() as *const GLchar); ck();
+            let light_position_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uLightPosition\0".as_ptr() as *const GLchar); ck();
+            let sphere_position_uniform =
+                gl::GetUniformLocation(program.object,
+                                       b"uSpherePosition\0".as_ptr() as *const GLchar); ck();
             GridProgram {
                 program,
                 position_attribute,
@@ -513,6 +562,10 @@ impl GridProgram {
                 tex_translation_uniform,
                 gridline_color_uniform,
                 bg_color_uniform,
+                radius_uniform,
+                camera_position_uniform,
+                light_position_uniform,
+                sphere_position_uniform,
             }
         }
     }
@@ -598,8 +651,4 @@ impl CheckProgram {
             }
         }
     }
-}
-
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    a + (b - a) * t
 }

@@ -24,6 +24,8 @@ const float MATERIAL_AMBIENT = 0.2;
 const float MATERIAL_DIFFUSE = 0.7;
 const float MATERIAL_SPECULAR = 0.1;
 
+const vec2 CHECKER_COUNTS = vec2(16.0, 8.0);
+
 // Hardcoded albedo of 16.0. Works around precision issues.
 float pow16(float n) {
     float n2 = n * n;
@@ -88,7 +90,7 @@ void main() {
     // Hack: Just rotate the texture instead of rotating the sphere.
     vec3 texNormal = rotateZXY(uRotation) * normal;
     vec2 uv = vec2((1.0 + atan(texNormal.z, texNormal.x) / PI) * 0.5,
-                   acos(texNormal.y) / PI) * vec2(12.0);
+                   acos(texNormal.y) / PI) * CHECKER_COUNTS;
 
     ivec2 on = ivec2(greaterThanEqual(mod(uv, vec2(2.0)), vec2(1.0)));
     vec4 diffuse = ((on.x ^ on.y) > 0) ? uColorA : uColorB;
