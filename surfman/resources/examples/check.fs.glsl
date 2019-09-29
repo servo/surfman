@@ -3,7 +3,7 @@
 precision highp float;
 
 uniform vec2 uViewportOrigin;
-uniform vec2 uFramebufferSize;
+uniform vec2 uSpherePosition;
 uniform vec3 uRotation;
 uniform vec4 uColorA;
 uniform vec4 uColorB;
@@ -76,7 +76,7 @@ bool raytraceSphere(vec3 rayOrigin,
 void main() {
     vec3 rayOrigin = uCameraPosition;
     vec3 rayDirection = normalize(vec3(gl_FragCoord.xy + uViewportOrigin, 0.0) - rayOrigin);
-    vec3 center = vec3(uViewportOrigin, 0.0) + vec3(uFramebufferSize * vec2(0.5), 0.0);
+    vec3 center = vec3(uSpherePosition, 0.0);
 
     vec3 hitPosition, normal;
     bool hit = raytraceSphere(rayOrigin, rayDirection, center, uRadius, hitPosition, normal);

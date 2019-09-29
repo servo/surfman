@@ -277,8 +277,8 @@ fn worker_thread(adapter: Adapter,
                            1,
                            CHECK_COLOR_B.as_ptr());
             gl::Uniform2f(vertex_array.check_program.viewport_origin_uniform,
-                          ball_rect.origin.x,
-                          ball_rect.origin.y);
+                          ball_rect.origin.x - subscreen_offset.x,
+                          ball_rect.origin.y - subscreen_offset.y);
             gl::Uniform1f(vertex_array.check_program.radius_uniform, SPHERE_RADIUS);
             gl::Uniform3fv(vertex_array.check_program.camera_position_uniform,
                            1,
@@ -286,9 +286,9 @@ fn worker_thread(adapter: Adapter,
             gl::Uniform3fv(vertex_array.check_program.light_position_uniform,
                            1,
                            LIGHT_POSITION.as_ptr());
-            gl::Uniform2f(vertex_array.check_program.framebuffer_size_uniform,
-                          SUBSCREEN_WIDTH as f32,
-                          SUBSCREEN_HEIGHT as f32);
+            gl::Uniform2f(vertex_array.check_program.sphere_position_uniform,
+                          lerp(ball_rect.origin.x, ball_rect.max_x(), 0.5),
+                          lerp(ball_rect.origin.y, ball_rect.max_y(), 0.5));
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
@@ -532,7 +532,7 @@ struct CheckProgram {
     radius_uniform: GLint,
     camera_position_uniform: GLint,
     light_position_uniform: GLint,
-    framebuffer_size_uniform: GLint,
+    sphere_position_uniform: GLint,
 }
 
 impl CheckProgram {
@@ -577,9 +577,9 @@ impl CheckProgram {
             let light_position_uniform =
                 gl::GetUniformLocation(program.object,
                                        b"uLightPosition\0".as_ptr() as *const GLchar); ck();
-            let framebuffer_size_uniform =
+            let sphere_position_uniform =
                 gl::GetUniformLocation(program.object,
-                                       b"uFramebufferSize\0".as_ptr() as *const GLchar); ck();
+                                       b"uSpherePosition\0".as_ptr() as *const GLchar); ck();
             CheckProgram {
                 program,
                 position_attribute,
@@ -594,8 +594,12 @@ impl CheckProgram {
                 radius_uniform,
                 light_position_uniform,
                 camera_position_uniform,
-                framebuffer_size_uniform,
+                sphere_position_uniform,
             }
         }
     }
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
 }
