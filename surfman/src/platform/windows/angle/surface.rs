@@ -204,6 +204,8 @@ impl Device {
     pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
+            // leak!
+            surface.egl_surface = egl::NO_SURFACE;
             return Err(Error::IncompatibleSurface);
         }
 
