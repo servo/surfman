@@ -259,6 +259,13 @@ impl Device {
         }
     }
 
+    fn temporarily_make_context_current(&self, context: &Context)
+                                        -> Result<CurrentContextGuard, Error> {
+        let guard = CurrentContextGuard::new();
+        self.make_context_current(context)?;
+        Ok(guard)
+    }
+
     pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
                                    -> Result<Surface, Error> {
         if let Framebuffer::External = context.framebuffer {
@@ -269,7 +276,7 @@ impl Device {
             return Err(Error::IncompatibleSurface);
         }
 
-        self.make_context_current(context)?;
+        let _guard = self.temporarily_make_context_current(context)?;
 
         // Make sure all changes are synchronized. Apple requires this.
         GL_FUNCTIONS.with(|gl| {
@@ -407,4 +414,25 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
             CFBundleGetFunctionPointerForName(*framework, symbol_name.as_concrete_TypeRef())
         }
     })
+}
+
+#[must_use]
+struct CurrentContextGuard {
+    old_cgl_context: CGLContextObj,
+}
+
+impl Drop for CurrentContextGuard {
+    fn drop(&mut self) {
+        unsafe {
+            CGLSetCurrentContext(self.old_cgl_context);
+        }
+    }
+}
+
+impl CurrentContextGuard {
+    fn new() -> CurrentContextGuard {
+        unsafe {
+            CurrentContextGuard { old_cgl_context: CGLGetCurrentContext() }
+        }
+    }
 }
