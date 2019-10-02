@@ -1,7 +1,7 @@
 //! Wrapper for EGL contexts managed by ANGLE using Direct3D 11 as a backend on Windows.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
+use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay, EGLSurface};
 use crate::egl::types::{EGLenum, EGLint};
 use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
@@ -208,7 +208,6 @@ impl Device {
 
             let initial_surface = self.create_surface(&context, size)?;
             self.attach_surface(&mut context, initial_surface);
-            self.make_context_current(&context)?;
 
             Ok(context)
         }
@@ -266,7 +265,7 @@ impl Device {
         }
     }
 
-    pub fn make_context_not_current(&self, _: &Context) -> Result<(), Error> {
+    pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
             let result = egl::MakeCurrent(self.native_display.egl_display(),
                                           egl::NO_SURFACE,
@@ -277,6 +276,19 @@ impl Device {
                 return Err(Error::MakeCurrentFailed(err));
             }
             Ok(())
+        }
+    }
+
+    fn temporarily_make_context_current(&self, context: &Context)
+                                        -> Result<CurrentContextGuard, Error> {
+        let guard = CurrentContextGuard::new();
+        self.make_context_current(context)?;
+        Ok(guard)
+    }
+
+    pub(crate) fn context_is_current(&self, context: &Context) -> bool {
+        unsafe {
+            egl::GetCurrentContext() == context.native_context.egl_context()
         }
     }
 
@@ -299,20 +311,26 @@ impl Device {
             return Err(Error::IncompatibleSurface);
         }
 
-        // If the surface does not use a DXGI keyed mutex, then finish.
-        // FIXME(pcwalton): Is this necessary and sufficient?
-        if !new_surface.uses_keyed_mutex() {
-            self.make_context_current(context)?;
-            unsafe {
+        unsafe {
+            let is_current = self.context_is_current(context);
+
+            // If the surface does not use a DXGI keyed mutex, then finish.
+            // FIXME(pcwalton): Is this necessary and sufficient?
+            if !new_surface.uses_keyed_mutex() {
+                let guard = self.temporarily_make_context_current(context)?;
                 GL_FUNCTIONS.with(|gl| gl.Finish());
             }
+
+            let old_surface = self.release_surface(context).expect("Where's our surface?");
+            self.attach_surface(context, new_surface);
+
+            if is_current {
+                // We need to make ourselves current again, because the surface changed.
+                self.make_context_current(context)?;
+            }
+
+            Ok(old_surface)
         }
-
-        let old_surface = self.release_surface(context).expect("Where's our surface?");
-        self.attach_surface(context, new_surface);
-        self.make_context_current(context)?;
-
-        Ok(old_surface)
     }
 
     #[inline]
@@ -488,3 +506,36 @@ pub fn get_proc_address(symbol_name: &str) -> *const c_void {
         egl::GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as *const c_void
     }
 }
+
+#[must_use]
+struct CurrentContextGuard {
+    old_egl_display: EGLDisplay,
+    old_egl_draw_surface: EGLSurface,
+    old_egl_read_surface: EGLSurface,
+    old_egl_context: EGLContext,
+}
+
+impl Drop for CurrentContextGuard {
+    fn drop(&mut self) {
+        unsafe {
+            egl::MakeCurrent(self.old_egl_display,
+                             self.old_egl_draw_surface,
+                             self.old_egl_read_surface,
+                             self.old_egl_context);
+        }
+    }
+}
+
+impl CurrentContextGuard {
+    fn new() -> CurrentContextGuard {
+        unsafe {
+            CurrentContextGuard {
+                old_egl_display: egl::GetCurrentDisplay(),
+                old_egl_draw_surface: egl::GetCurrentSurface(egl::DRAW as EGLint),
+                old_egl_read_surface: egl::GetCurrentSurface(egl::READ as EGLint),
+                old_egl_context: egl::GetCurrentContext(),
+            }
+        }
+    }
+}
+

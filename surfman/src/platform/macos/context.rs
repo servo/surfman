@@ -249,7 +249,7 @@ impl Device {
         }
     }
 
-    pub fn make_context_not_current(&self, _: &Context) -> Result<(), Error> {
+    pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
             let err = CGLSetCurrentContext(ptr::null_mut());
             if err != kCGLNoError {
