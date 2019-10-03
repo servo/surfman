@@ -42,14 +42,8 @@ sdl2-sys = "0.32"
 
 [target.x86_64-apple-darwin.dependencies]
 cgl = "0.3.2"
-
-[target.x86_64-apple-darwin.dependencies.core-foundation]
-git = "https://github.com/zakorgy/core-foundation-rs"
-branch = "io-surface-alpha"
-
-[target.x86_64-apple-darwin.dependencies.io-surface]
-git = "https://github.com/zakorgy/core-foundation-rs"
-branch = "io-surface-alpha"
+core-foundation = "0.6"
+io-surface = "0.12"
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
 version = "2.3.0"
