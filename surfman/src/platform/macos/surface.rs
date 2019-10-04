@@ -18,12 +18,11 @@ use display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink
 use euclid::default::Size2D;
 use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
 use io_surface::{kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
-use mach::mach_time::{mach_absolute_time, mach_wait_until};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
 #[cfg(feature = "sm-winit")]
@@ -76,7 +75,12 @@ pub(crate) struct ViewInfo {
     layer: CALayer,
     front_surface: IOSurface,
     display_link: DisplayLink,
-    next_vblank_time: Arc<Mutex<u64>>,
+    next_vblank: Arc<VblankCond>,
+}
+
+struct VblankCond {
+    mutex: Mutex<()>,
+    cond: Condvar,
 }
 
 pub enum SurfaceType {
@@ -162,9 +166,9 @@ impl Device {
         let display_id = device_description.get(description_key).to_i64().unwrap() as u32;
         println!("display_id={}", display_id);
         let mut display_link = DisplayLink::on_display(display_id).unwrap();
-        let next_vblank_time = Arc::new(Mutex::new(0));
+        let next_vblank = Arc::new(VblankCond { mutex: Mutex::new(()), cond: Condvar::new() });
         display_link.set_output_callback(display_link_output_callback,
-                                         mem::transmute(next_vblank_time.clone()));
+                                         mem::transmute(next_vblank.clone()));
         display_link.start();
 
         transaction::begin();
@@ -179,7 +183,7 @@ impl Device {
 
         transaction::commit();
 
-        ViewInfo { layer, front_surface, display_link, next_vblank_time }
+        ViewInfo { layer, front_surface, display_link, next_vblank }
     }
 
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
@@ -328,8 +332,8 @@ impl Surface {
                 gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
 
                 // Wait for the next swap interval.
-                let next_vblank_time = *view_info.next_vblank_time.lock().unwrap();
-                mach_wait_until(next_vblank_time);
+                let next_vblank_mutex_guard = view_info.next_vblank.mutex.lock().unwrap();
+                drop(view_info.next_vblank.cond.wait(next_vblank_mutex_guard).unwrap());
 
                 Ok(())
             }
@@ -377,21 +381,24 @@ impl Drop for ViewInfo {
             self.display_link.stop();
 
             // Drop the reference that the callback was holding onto.
-            mem::transmute_copy::<Arc<Mutex<u64>>, Arc<Mutex<u64>>>(&self.next_vblank_time);
+            mem::transmute_copy::<Arc<VblankCond>, Arc<VblankCond>>(&self.next_vblank);
         }
     }
 }
 
 unsafe extern "C" fn display_link_output_callback(_: *mut CVDisplayLink,
                                                   _: *const CVTimeStamp,
-                                                  output_timestamp: *const CVTimeStamp,
+                                                  _: *const CVTimeStamp,
                                                   _: i64,
                                                   _: *mut i64,
                                                   user_data: *mut c_void)
                                                   -> i32 {
-    let next_vblank_time: Arc<Mutex<u64>> = mem::transmute(user_data);
-    *(*next_vblank_time).lock().unwrap() = /*(*output_timestamp).host_time*/ mach_absolute_time();
-    //println!("{}", (*output_timestamp).host_time);
-    mem::forget(next_vblank_time);
+    let next_vblank: Arc<VblankCond> = mem::transmute(user_data);
+    {
+        let _guard = next_vblank.mutex.lock().unwrap();
+        next_vblank.cond.notify_all();
+    }
+
+    mem::forget(next_vblank);
     kCVReturnSuccess
 }
