@@ -12,15 +12,14 @@ extern crate bitflags;
 extern crate lazy_static;
 
 #[cfg(target_os = "macos")]
-extern crate io_surface;
-#[cfg(target_os = "windows")]
-extern crate wio;
+#[macro_use]
+extern crate objc;
 
 pub mod platform;
 pub use platform::default::adapter::Adapter;
 pub use platform::default::context::{Context, ContextDescriptor};
 pub use platform::default::device::Device;
-pub use platform::default::surface::{Surface, SurfaceTexture};
+pub use platform::default::surface::{NativeWidget, Surface, SurfaceTexture, SurfaceType};
 
 pub mod error;
 pub use crate::error::{Error, WindowingApiError};
@@ -32,7 +31,7 @@ mod info;
 pub use crate::info::{GLApi, GLVersion};
 
 mod surface;
-pub use crate::surface::SurfaceID;
+pub use crate::surface::{HiDPIMode, SurfaceID};
 
 mod renderbuffers;
 

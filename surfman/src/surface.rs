@@ -20,3 +20,9 @@ impl Display for SurfaceID {
         write!(f, "{:?}", *self)
     }
 }
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum HiDPIMode {
+    Off,
+    On,
+}

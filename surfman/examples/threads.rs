@@ -6,13 +6,19 @@ use crate::common::{Buffer, Program, Shader, ShaderKind, ck};
 
 use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
+/*
 use sdl2::event::Event;
 use sdl2::hint;
 use sdl2::keyboard::Keycode;
 use sdl2::video::{GLProfile, SwapInterval};
+*/
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, ContextDescriptor, Device, GLApi, Surface};
+use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, ContextDescriptor, Device};
+use surfman::{GLVersion, HiDPIMode, NativeWidget, Surface, SurfaceType};
+use winit::dpi::LogicalSize;
+use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
+use winit::{WindowBuilder, WindowEvent};
 
 mod common;
 
@@ -77,6 +83,7 @@ static BACKGROUND_COLOR: [f32; 4] = [
 ];
 
 fn main() {
+    /*
     // Set up SDL2.
     let sdl_context = sdl2::init().unwrap();
     let gl_api = Device::gl_api();
@@ -112,10 +119,30 @@ fn main() {
     // Create `surfman` objects corresponding to that SDL context.
     let (device, mut context) = unsafe {
         Device::from_current_context().unwrap()
+    };*/
+
+    let adapter = Adapter::default().unwrap();
+    let mut device = Device::new(&adapter).unwrap();
+
+    let context_attributes = ContextAttributes {
+        version: GLVersion::new(3, 3),
+        flags: ContextAttributeFlags::empty(),
     };
+    let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
+
+    let logical_size = LogicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
+    let mut event_loop = EventsLoop::new();
+    let window = WindowBuilder::new().with_title("Multithreaded example")
+                                     .with_dimensions(logical_size)
+                                     .build(&event_loop)
+                                     .unwrap();
+    window.show();
+
+    let native_widget = NativeWidget::from_winit_window(&window, HiDPIMode::Off);
+    let surface_type = SurfaceType::Widget { native_widget };
+    let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
+    device.make_context_current(&context).unwrap();
     gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
-    let adapter = device.adapter();
-    let context_descriptor = device.context_descriptor(&context);
 
     // Set up communication channels, and spawn our worker thread.
     let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
@@ -137,7 +164,8 @@ fn main() {
     let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
 
     // Enter main render loop.
-    loop {
+    let mut exit = false;
+    while !exit {
         // Send back our old surface.
         surface = device.destroy_surface_texture(&mut context, texture).unwrap();
         main_to_worker_sender.send(surface).unwrap();
@@ -156,7 +184,13 @@ fn main() {
         texture = device.create_surface_texture(&mut context, surface).unwrap();
 
         unsafe {
-            gl::ClearColor(0.0, 0.0, 0.0, 1.0); ck();
+            device.make_context_current(&context).unwrap();
+
+            let framebuffer_object = device.context_surface_framebuffer_object(&context).unwrap();
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+            gl::Viewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+            gl::ClearColor(0.0, 0.0, 1.0, 1.0); ck();
             gl::Clear(gl::COLOR_BUFFER_BIT); ck();
 
             // Draw gridlines.
@@ -224,16 +258,23 @@ fn main() {
             gl::Disable(gl::BLEND);
         }
 
-        window.gl_swap_window();
+        device.present_context_surface(&mut context).unwrap();
 
-        loop {
-            match event_pump.poll_event() {
-                Some(Event::Quit {..}) |
-                Some(Event::KeyDown { keycode: Some(Keycode::Escape), .. }) => return,
-                None => break,
+        event_loop.poll_events(|event| {
+            match event {
+                Event::WindowEvent { event: WindowEvent::Destroyed, .. } |
+                Event::DeviceEvent {
+                    event: DeviceEvent::Key(KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    }),
+                    ..
+                } => exit = true,
                 _ => {}
             }
-        }
+        });
+
+        //thread::sleep_ms(15);
     }
 }
 
@@ -243,8 +284,9 @@ fn worker_thread(adapter: Adapter,
                  worker_from_main_receiver: Receiver<Surface>) {
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
+    let surface_type = SurfaceType::Generic { size };
     let mut device = Device::new(&adapter).unwrap();
-    let mut context = device.create_context(&context_descriptor, &size).unwrap();
+    let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
     device.make_context_current(&context).unwrap();
 
     // Set up GL objects and state.
@@ -265,7 +307,7 @@ fn worker_thread(adapter: Adapter,
     let mut theta_z = INITIAL_ROTATION_Z;
 
     // Send an initial surface back to the main thread.
-    let surface = device.create_surface(&context, &size).unwrap();
+    let surface = device.create_surface(&context, &surface_type).unwrap();
     worker_to_main_sender.send(NewFrame {
         surface,
         viewport_origin: ball_rect.origin - subscreen_offset,

@@ -14,7 +14,7 @@ use std::fs::File;
 use std::mem;
 use std::path::Path;
 use std::slice;
-use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLVersion};
+use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLVersion, SurfaceType};
 
 mod common;
 
@@ -71,9 +71,9 @@ fn main() {
         flags: ContextAttributeFlags::empty(),
     };
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
-    let mut context = device.create_context(&context_descriptor,
-                                            &Size2D::new(FRAMEBUFFER_WIDTH,
-                                                         FRAMEBUFFER_HEIGHT)).unwrap();
+    let mut context = device.create_context(&context_descriptor, &SurfaceType::Generic {
+        size: Size2D::new(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT),
+    }).unwrap();
 
     gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
     device.make_context_current(&context).unwrap();

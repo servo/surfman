@@ -8,7 +8,7 @@ use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceI
 use super::adapter::Adapter;
 use super::device::Device;
 use super::error::ToWindowingApiError;
-use super::surface::Surface;
+use super::surface::{Surface, SurfaceType};
 
 use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
 use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
@@ -174,7 +174,7 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
                           -> Result<Context, Error> {
         // Take a lock so that we're only creating one context at a time. This serves two purposes:
         //
@@ -208,7 +208,8 @@ impl Device {
             next_context_id.0 += 1;
 
             // Build the initial framebuffer.
-            context.framebuffer = Framebuffer::Surface(self.create_surface(&context, size)?);
+            let surface = self.create_surface(&context, surface_type)?;
+            context.framebuffer = Framebuffer::Surface(surface);
             Ok(context)
         }
     }
@@ -259,8 +260,8 @@ impl Device {
         }
     }
 
-    fn temporarily_make_context_current(&self, context: &Context)
-                                        -> Result<CurrentContextGuard, Error> {
+    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
+                                                   -> Result<CurrentContextGuard, Error> {
         let guard = CurrentContextGuard::new();
         self.make_context_current(context)?;
         Ok(guard)
@@ -290,6 +291,12 @@ impl Device {
             Framebuffer::None | Framebuffer::External => unreachable!(),
             Framebuffer::Surface(old_surface) => Ok(old_surface),
         }
+    }
+
+    #[inline]
+    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
+        let _guard = self.temporarily_make_context_current(context);
+        self.context_surface_mut(context).and_then(|surface| surface.present())
     }
 
     #[inline]
@@ -349,6 +356,14 @@ impl Device {
             Framebuffer::None => unreachable!(),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(surface),
+        }
+    }
+
+    fn context_surface_mut<'c>(&self, context: &'c mut Context) -> Result<&'c mut Surface, Error> {
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref mut surface) => Ok(surface),
         }
     }
 }
@@ -417,7 +432,7 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
 }
 
 #[must_use]
-struct CurrentContextGuard {
+pub(crate) struct CurrentContextGuard {
     old_cgl_context: CGLContextObj,
 }
 
