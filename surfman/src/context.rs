@@ -5,7 +5,7 @@ use crate::info::GLVersion;
 
 use std::sync::Mutex;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ContextID(pub u64);
 
 lazy_static! {
