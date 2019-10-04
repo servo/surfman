@@ -8,8 +8,8 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, ContextDescriptor, Device};
-use surfman::{GLVersion, HiDPIMode, NativeWidget, Surface, SurfaceType};
+use surfman::{Adapter, Context, ContextAttributeFlags, ContextAttributes, ContextDescriptor};
+use surfman::{Device, GLVersion, HiDPIMode, NativeWidget, Surface, SurfaceTexture, SurfaceType};
 use winit::dpi::LogicalSize;
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 use winit::{WindowBuilder, WindowEvent};
@@ -78,13 +78,7 @@ static BACKGROUND_COLOR: [f32; 4] = [
 
 fn main() {
     let adapter = Adapter::default().unwrap();
-    let mut device = Device::new(&adapter).unwrap();
-
-    let context_attributes = ContextAttributes {
-        version: GLVersion::new(3, 3),
-        flags: ContextAttributeFlags::empty(),
-    };
-    let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
+    let device = Device::new(&adapter).unwrap();
 
     let logical_size = LogicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
     let mut event_loop = EventsLoop::new();
@@ -95,126 +89,11 @@ fn main() {
     window.show();
 
     let native_widget = NativeWidget::from_winit_window(&window, HiDPIMode::Off);
-    let surface_type = SurfaceType::Widget { native_widget };
-    let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
-    device.make_context_current(&context).unwrap();
-    gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
-
-    // Set up communication channels, and spawn our worker thread.
-    let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
-    let (main_to_worker_sender, worker_from_main_receiver) = mpsc::channel();
-    thread::spawn(move || {
-        worker_thread(adapter,
-                      context_descriptor,
-                      worker_to_main_sender,
-                      worker_from_main_receiver)
-    });
-
-    // Set up GL objects and state.
-    let grid_vertex_array = GridVertexArray::new(device.surface_gl_texture_target());
-    let blit_vertex_array = BlitVertexArray::new(device.surface_gl_texture_target());
-
-    // Fetch our initial surface.
-    let NewFrame { mut surface, .. } = main_from_worker_receiver.recv().unwrap();
-    let (mut viewport_origin, mut sphere_position);
-    let mut texture = device.create_surface_texture(&mut context, surface).unwrap();
-
-    // Enter main render loop.
+    let mut app = App::new(adapter, device, native_widget);
     let mut exit = false;
+
     while !exit {
-        // Send back our old surface.
-        surface = device.destroy_surface_texture(&mut context, texture).unwrap();
-        main_to_worker_sender.send(surface).unwrap();
-
-        // Fetch a new surface.
-        let NewFrame {
-            surface: new_surface,
-            viewport_origin: new_viewport_origin,
-            sphere_position: new_sphere_position,
-        } = main_from_worker_receiver.recv().unwrap();
-        surface = new_surface;
-        viewport_origin = new_viewport_origin;
-        sphere_position = new_sphere_position;
-
-        // Wrap it in a texture.
-        texture = device.create_surface_texture(&mut context, surface).unwrap();
-
-        unsafe {
-            device.make_context_current(&context).unwrap();
-
-            let framebuffer_object = device.context_surface_framebuffer_object(&context).unwrap();
-            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-            gl::Viewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-
-            gl::ClearColor(0.0, 0.0, 1.0, 1.0); ck();
-            gl::Clear(gl::COLOR_BUFFER_BIT); ck();
-
-            // Draw gridlines.
-            gl::BindVertexArray(grid_vertex_array.object); ck();
-            gl::UseProgram(grid_vertex_array.grid_program.program.object); ck();
-            gl::UniformMatrix2fv(grid_vertex_array.grid_program.transform_uniform,
-                                 1,
-                                 gl::FALSE,
-                                 NDC_TRANSFORM.as_ptr());
-            gl::Uniform2fv(grid_vertex_array.grid_program.translation_uniform,
-                           1,
-                           NDC_TRANSLATION.as_ptr());
-            gl::UniformMatrix2fv(grid_vertex_array.grid_program.tex_transform_uniform,
-                                 1,
-                                 gl::FALSE,
-                                 CHECK_TRANSFORM.as_ptr());
-            gl::Uniform2fv(grid_vertex_array.grid_program.tex_translation_uniform,
-                           1,
-                           ZERO_TRANSLATION.as_ptr());
-            gl::Uniform4fv(grid_vertex_array.grid_program.gridline_color_uniform,
-                           1,
-                           GRIDLINE_COLOR.as_ptr());
-            gl::Uniform4fv(grid_vertex_array.grid_program.bg_color_uniform,
-                           1,
-                           BACKGROUND_COLOR.as_ptr());
-            gl::Uniform2f(grid_vertex_array.grid_program.sphere_position_uniform,
-                          sphere_position.x,
-                          sphere_position.y);
-            gl::Uniform1f(grid_vertex_array.grid_program.radius_uniform, SPHERE_RADIUS);
-            gl::Uniform3fv(grid_vertex_array.grid_program.camera_position_uniform,
-                           1,
-                           CAMERA_POSITION.as_ptr());
-            gl::Uniform3fv(grid_vertex_array.grid_program.light_position_uniform,
-                           1,
-                           LIGHT_POSITION.as_ptr());
-            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
-
-            // Draw subscreen.
-            let subscreen_translation =
-                Point2D::new(viewport_origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
-                             viewport_origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
-            gl::BindVertexArray(blit_vertex_array.object); ck();
-            gl::UseProgram(blit_vertex_array.blit_program.program.object); ck();
-            gl::UniformMatrix2fv(blit_vertex_array.blit_program.transform_uniform,
-                                 1,
-                                 gl::FALSE,
-                                 BLIT_TRANSFORM.as_ptr());
-            gl::Uniform2fv(blit_vertex_array.blit_program.translation_uniform,
-                           1,
-                           [subscreen_translation.x, subscreen_translation.y].as_ptr());
-            gl::UniformMatrix2fv(blit_vertex_array.blit_program.tex_transform_uniform,
-                                 1,
-                                 gl::FALSE,
-                                 IDENTITY_TRANSFORM.as_ptr());
-            gl::Uniform2fv(blit_vertex_array.blit_program.tex_translation_uniform,
-                           1,
-                           ZERO_TRANSLATION.as_ptr());
-            gl::ActiveTexture(gl::TEXTURE0); ck();
-            gl::BindTexture(device.surface_gl_texture_target(), texture.gl_texture()); ck();
-            gl::Uniform1i(blit_vertex_array.blit_program.source_uniform, 0); ck();
-            gl::Enable(gl::BLEND);
-            gl::BlendEquation(gl::FUNC_ADD);
-            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
-            gl::Disable(gl::BLEND);
-        }
-
-        device.present_context_surface(&mut context).unwrap();
+        app.tick();
 
         event_loop.poll_events(|event| {
             match event {
@@ -229,14 +108,166 @@ fn main() {
                 _ => {}
             }
         });
+    }
+}
 
-        //thread::sleep_ms(15);
+struct App {
+    main_from_worker_receiver: Receiver<Frame>,
+    main_to_worker_sender: Sender<Surface>,
+    grid_vertex_array: GridVertexArray,
+    blit_vertex_array: BlitVertexArray,
+    device: Device,
+    context: Context,
+    texture: Option<SurfaceTexture>,
+    frame: Frame,
+}
+
+impl App {
+    fn new(adapter: Adapter, mut device: Device, native_widget: NativeWidget) -> App {
+        let context_attributes = ContextAttributes {
+            version: GLVersion::new(3, 3),
+            flags: ContextAttributeFlags::empty(),
+        };
+        let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
+
+        let surface_type = SurfaceType::Widget { native_widget };
+        let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
+        device.make_context_current(&context).unwrap();
+        gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
+
+        // Set up communication channels, and spawn our worker thread.
+        let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
+        let (main_to_worker_sender, worker_from_main_receiver) = mpsc::channel();
+        thread::spawn(move || {
+            worker_thread(adapter,
+                          context_descriptor,
+                          worker_to_main_sender,
+                          worker_from_main_receiver)
+        });
+
+        // Set up GL objects and state.
+        let grid_vertex_array = GridVertexArray::new(device.surface_gl_texture_target());
+        let blit_vertex_array = BlitVertexArray::new(device.surface_gl_texture_target());
+
+        // Fetch our initial surface.
+        let mut frame = main_from_worker_receiver.recv().unwrap();
+        let texture = Some(device.create_surface_texture(&mut context,
+                                                         frame.surface.take().unwrap())
+                                 .unwrap());
+
+        App {
+            main_from_worker_receiver,
+            main_to_worker_sender,
+            grid_vertex_array,
+            blit_vertex_array,
+            device,
+            texture,
+            frame,
+            context,
+        }
+    }
+
+    fn tick(&mut self) {
+        // Send back our old surface.
+        let surface = self.device
+                          .destroy_surface_texture(&mut self.context, self.texture.take().unwrap())
+                          .unwrap();
+        self.main_to_worker_sender.send(surface).unwrap();
+
+        // Fetch a new frame.
+        self.frame = self.main_from_worker_receiver.recv().unwrap();
+
+        // Wrap it in a texture.
+        self.texture =
+            Some(self.device
+                     .create_surface_texture(&mut self.context, self.frame.surface.take().unwrap())
+                     .unwrap());
+
+        unsafe {
+            self.device.make_context_current(&self.context).unwrap();
+
+            let framebuffer_object = self.device
+                                         .context_surface_framebuffer_object(&self.context)
+                                         .unwrap();
+            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+            gl::Viewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+            gl::ClearColor(0.0, 0.0, 1.0, 1.0); ck();
+            gl::Clear(gl::COLOR_BUFFER_BIT); ck();
+
+            // Draw gridlines.
+            gl::BindVertexArray(self.grid_vertex_array.object); ck();
+            gl::UseProgram(self.grid_vertex_array.grid_program.program.object); ck();
+            gl::UniformMatrix2fv(self.grid_vertex_array.grid_program.transform_uniform,
+                                 1,
+                                 gl::FALSE,
+                                 NDC_TRANSFORM.as_ptr());
+            gl::Uniform2fv(self.grid_vertex_array.grid_program.translation_uniform,
+                           1,
+                           NDC_TRANSLATION.as_ptr());
+            gl::UniformMatrix2fv(self.grid_vertex_array.grid_program.tex_transform_uniform,
+                                 1,
+                                 gl::FALSE,
+                                 CHECK_TRANSFORM.as_ptr());
+            gl::Uniform2fv(self.grid_vertex_array.grid_program.tex_translation_uniform,
+                           1,
+                           ZERO_TRANSLATION.as_ptr());
+            gl::Uniform4fv(self.grid_vertex_array.grid_program.gridline_color_uniform,
+                           1,
+                           GRIDLINE_COLOR.as_ptr());
+            gl::Uniform4fv(self.grid_vertex_array.grid_program.bg_color_uniform,
+                           1,
+                           BACKGROUND_COLOR.as_ptr());
+            gl::Uniform2f(self.grid_vertex_array.grid_program.sphere_position_uniform,
+                          self.frame.sphere_position.x,
+                          self.frame.sphere_position.y);
+            gl::Uniform1f(self.grid_vertex_array.grid_program.radius_uniform, SPHERE_RADIUS);
+            gl::Uniform3fv(self.grid_vertex_array.grid_program.camera_position_uniform,
+                           1,
+                           CAMERA_POSITION.as_ptr());
+            gl::Uniform3fv(self.grid_vertex_array.grid_program.light_position_uniform,
+                           1,
+                           LIGHT_POSITION.as_ptr());
+            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
+
+            // Draw subscreen.
+            let subscreen_translation =
+                Point2D::new(self.frame.viewport_origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
+                             self.frame.viewport_origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
+            gl::BindVertexArray(self.blit_vertex_array.object); ck();
+            gl::UseProgram(self.blit_vertex_array.blit_program.program.object); ck();
+            gl::UniformMatrix2fv(self.blit_vertex_array.blit_program.transform_uniform,
+                                 1,
+                                 gl::FALSE,
+                                 BLIT_TRANSFORM.as_ptr());
+            gl::Uniform2fv(self.blit_vertex_array.blit_program.translation_uniform,
+                           1,
+                           [subscreen_translation.x, subscreen_translation.y].as_ptr());
+            gl::UniformMatrix2fv(self.blit_vertex_array.blit_program.tex_transform_uniform,
+                                 1,
+                                 gl::FALSE,
+                                 IDENTITY_TRANSFORM.as_ptr());
+            gl::Uniform2fv(self.blit_vertex_array.blit_program.tex_translation_uniform,
+                           1,
+                           ZERO_TRANSLATION.as_ptr());
+            gl::ActiveTexture(gl::TEXTURE0); ck();
+            gl::BindTexture(self.device.surface_gl_texture_target(),
+                            self.texture.as_ref().unwrap().gl_texture()); ck();
+            gl::Uniform1i(self.blit_vertex_array.blit_program.source_uniform, 0); ck();
+            gl::Enable(gl::BLEND);
+            gl::BlendEquation(gl::FUNC_ADD);
+            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+            gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
+            gl::Disable(gl::BLEND);
+        }
+
+        self.device.present_context_surface(&mut self.context).unwrap();
     }
 }
 
 fn worker_thread(adapter: Adapter,
                  context_descriptor: ContextDescriptor,
-                 worker_to_main_sender: Sender<NewFrame>,
+                 worker_to_main_sender: Sender<Frame>,
                  worker_from_main_receiver: Receiver<Surface>) {
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
@@ -263,8 +294,8 @@ fn worker_thread(adapter: Adapter,
     let mut theta_z = INITIAL_ROTATION_Z;
 
     // Send an initial surface back to the main thread.
-    let surface = device.create_surface(&context, &surface_type).unwrap();
-    worker_to_main_sender.send(NewFrame {
+    let surface = Some(device.create_surface(&context, &surface_type).unwrap());
+    worker_to_main_sender.send(Frame {
         surface,
         viewport_origin: ball_rect.origin - subscreen_offset,
         sphere_position: ball_rect.center(),
@@ -322,8 +353,8 @@ fn worker_thread(adapter: Adapter,
         }
 
         let new_surface = worker_from_main_receiver.recv().unwrap();
-        let old_surface = device.replace_context_surface(&mut context, new_surface).unwrap();
-        worker_to_main_sender.send(NewFrame {
+        let old_surface = Some(device.replace_context_surface(&mut context, new_surface).unwrap());
+        worker_to_main_sender.send(Frame {
             surface: old_surface,
             viewport_origin: ball_rect.origin - subscreen_offset,
             sphere_position: ball_rect.center(),
@@ -354,8 +385,8 @@ fn worker_thread(adapter: Adapter,
     }
 }
 
-struct NewFrame {
-    surface: Surface,
+struct Frame {
+    surface: Option<Surface>,
     viewport_origin: Point2D<f32>,
     sphere_position: Point2D<f32>,
 }
