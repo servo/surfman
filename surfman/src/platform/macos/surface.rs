@@ -9,11 +9,12 @@ use super::device::Device;
 
 use cocoa::appkit::{NSScreen, NSView as NSViewMethods, NSWindow};
 use cocoa::base::{YES, id};
-use cocoa::quartzcore::{CALayer, transaction};
+use cocoa::quartzcore::{CALayer, CATransform3D, transaction};
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
+use core_graphics::geometry::{CGRect, CGSize, CG_ZERO_POINT};
 use display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use euclid::default::Size2D;
 use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
@@ -164,7 +165,6 @@ impl Device {
             CFDictionary::wrap_under_get_rule(window.screen().deviceDescription() as *const _);
         let description_key: CFString = CFString::from("NSScreenNumber");
         let display_id = device_description.get(description_key).to_i64().unwrap() as u32;
-        println!("display_id={}", display_id);
         let mut display_link = DisplayLink::on_display(display_id).unwrap();
         let next_vblank = Arc::new(VblankCond { mutex: Mutex::new(()), cond: Condvar::new() });
         display_link.set_output_callback(display_link_output_callback,
@@ -174,12 +174,22 @@ impl Device {
         transaction::begin();
         transaction::set_disable_actions(true);
 
-        let layer = CALayer::new();
-        layer.set_contents(front_surface.obj as id);
-        native_widget.view.0.setLayer(layer.id());
+        let superlayer = CALayer::new();
+        native_widget.view.0.setLayer(superlayer.id());
         native_widget.view.0.setWantsLayer(YES);
+
+        // Flip contents right-side-up.
+        let sublayer_transform =
+            CATransform3D::from_scale(1.0, -1.0, 1.0).translate(0.0, -size.height as f64, 0.0);
+        superlayer.set_sublayer_transform(sublayer_transform);
+
+        let layer = CALayer::new();
+        let layer_size = CGSize::new(size.width as f64, size.height as f64);
+        layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
+        layer.set_contents(front_surface.obj as id);
         layer.set_opaque(true);
         layer.set_contents_opaque(true);
+        superlayer.add_sublayer(&layer);
 
         transaction::commit();
 

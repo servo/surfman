@@ -6,12 +6,6 @@ use crate::common::{Buffer, Program, Shader, ShaderKind, ck};
 
 use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
-/*
-use sdl2::event::Event;
-use sdl2::hint;
-use sdl2::keyboard::Keycode;
-use sdl2::video::{GLProfile, SwapInterval};
-*/
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, ContextDescriptor, Device};
@@ -83,44 +77,6 @@ static BACKGROUND_COLOR: [f32; 4] = [
 ];
 
 fn main() {
-    /*
-    // Set up SDL2.
-    let sdl_context = sdl2::init().unwrap();
-    let gl_api = Device::gl_api();
-    if gl_api == GLApi::GLES {
-        hint::set("SDL_OPENGL_ES_DRIVER", "1");
-    }
-    let video = sdl_context.video().unwrap();
-
-    // Make sure we have at least a GL 3.0 context.
-    let gl_attributes = video.gl_attr();
-    if gl_api == GLApi::GLES {
-        gl_attributes.set_context_profile(GLProfile::GLES);
-        gl_attributes.set_context_version(3, 0);
-    } else {
-        gl_attributes.set_context_profile(GLProfile::Core);
-        gl_attributes.set_context_version(3, 3);
-    }
-
-    // Open a window.
-    let window = video.window("Multithreaded example", WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)
-                      .opengl()
-                      .build()
-                      .unwrap();
-    let mut event_pump = sdl_context.event_pump().unwrap();
-
-    // Create the GL context in SDL, and make it current.
-    let gl_context = window.gl_create_context().unwrap();
-    window.gl_make_current(&gl_context).unwrap();
-
-    // Try to enable vsync, but ignore the error if we can't.
-    drop(video.gl_set_swap_interval(SwapInterval::VSync));
-
-    // Create `surfman` objects corresponding to that SDL context.
-    let (device, mut context) = unsafe {
-        Device::from_current_context().unwrap()
-    };*/
-
     let adapter = Adapter::default().unwrap();
     let mut device = Device::new(&adapter).unwrap();
 
