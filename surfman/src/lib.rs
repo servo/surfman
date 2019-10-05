@@ -26,7 +26,7 @@ pub mod error;
 pub use crate::error::{Error, WindowingApiError};
 
 mod context;
-pub use crate::context::{ContextAttributes, ContextAttributeFlags};
+pub use crate::context::{ContextAttributes, ContextAttributeFlags, ContextID};
 
 mod info;
 pub use crate::info::{GLApi, GLVersion};

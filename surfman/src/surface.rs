@@ -1,5 +1,7 @@
 //! Information related to hardware surfaces.
 
+use crate::ContextID;
+use crate::Surface;
 use std::fmt::{self, Display, Formatter};
 
 // The default framebuffer for a context.
@@ -18,5 +20,11 @@ pub struct SurfaceID(pub usize);
 impl Display for SurfaceID {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", *self)
+    }
+}
+
+impl Surface {
+    pub fn context_id(&self) -> ContextID {
+        self.context_id
     }
 }
