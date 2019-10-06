@@ -139,6 +139,7 @@ impl Renderbuffers {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn leak(&mut self) {
         match *self {
             Renderbuffers::CombinedDepthStencil(ref mut renderbuffer) => *renderbuffer = 0,

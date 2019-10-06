@@ -4,7 +4,7 @@
 //! EGL.
 
 use crate::context::ContextID;
-use crate::egl::types::{EGLClientBuffer, EGLImageKHR, EGLint};
+use crate::egl::types::{EGLClientBuffer, EGLImageKHR, EGLSurface, EGLint};
 use crate::gl::Gl;
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::renderbuffers::Renderbuffers;
@@ -12,9 +12,11 @@ use crate::{Error, SurfaceID, egl, gl};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 
+use android_ndk_sys::{ANativeWindow, ANativeWindow_getHeight, ANativeWindow_getWidth};
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
+use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
 
@@ -22,18 +24,28 @@ use std::thread;
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 pub struct Surface {
-    pub(crate) egl_image: EGLImageKHR,
-    pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
-    pub(crate) framebuffer_object: GLuint,
-    pub(crate) texture_object: GLuint,
-    pub(crate) renderbuffers: Renderbuffers,
+    pub(crate) size: Size2D<i32>,
+    pub(crate) objects: SurfaceObjects,
+    pub(crate) destroyed: bool,
 }
 
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) texture_object: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
+}
+
+pub(crate) enum SurfaceObjects {
+    EGLImage {
+        egl_image: EGLImageKHR,
+        framebuffer_object: GLuint,
+        texture_object: GLuint,
+        renderbuffers: Renderbuffers,
+    },
+    Window {
+        egl_surface: EGLSurface,
+    },
 }
 
 unsafe impl Send for Surface {}
@@ -46,15 +58,36 @@ impl Debug for Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        if self.framebuffer_object != 0 && !thread::panicking() {
+        if !self.destroyed && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
         }
     }
 }
 
+pub enum SurfaceType {
+    Generic { size: Size2D<i32> },
+    Widget { native_widget: NativeWidget },
+}
+
+pub struct NativeWidget {
+    pub(crate) native_window: *mut ANativeWindow,
+}
+
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
+    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
                           -> Result<Surface, Error> {
+        match *surface_type {
+            SurfaceType::Generic { ref size } => self.create_generic_surface(context, size),
+            SurfaceType::Widget { ref native_widget } => {
+                unsafe {
+                    self.create_window_surface(context, native_widget.native_window)
+                }
+            }
+        }
+    }
+
+    fn create_generic_surface(&mut self, context: &Context, size: &Size2D<i32>)
+                              -> Result<Surface, Error> {
         GL_FUNCTIONS.with(|gl| {
             unsafe {
                 // Initialize the texture.
@@ -89,7 +122,7 @@ impl Device {
                 let context_descriptor = self.context_descriptor(context);
                 let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
-                let renderbuffers = Renderbuffers::new(&size, &context_attributes);
+                let renderbuffers = Renderbuffers::new(size, &context_attributes);
                 renderbuffers.bind_to_current_framebuffer();
 
                 debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
@@ -99,22 +132,69 @@ impl Device {
                 gl.Viewport(0, 0, size.width, size.height);
 
                 Ok(Surface {
-                    egl_image,
                     size: *size,
                     context_id: context.id,
-                    framebuffer_object,
-                    texture_object,
-                    renderbuffers,
+                    objects: SurfaceObjects::EGLImage {
+                        egl_image,
+                        framebuffer_object,
+                        texture_object,
+                        renderbuffers,
+                    },
+                    destroyed: false,
                 })
             }
+        })
+    }
+
+    unsafe fn create_window_surface(&mut self,
+                                    context: &Context,
+                                    native_window: *mut ANativeWindow)
+                                    -> Result<Surface, Error> {
+        let width = ANativeWindow_getWidth(native_window);
+        let height = ANativeWindow_getHeight(native_window);
+
+        let context_descriptor = self.context_descriptor(context);
+        let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
+
+        let egl_surface = egl::CreateWindowSurface(self.native_display.egl_display(),
+                                                   egl_config,
+                                                   native_window as *const c_void,
+                                                   ptr::null());
+        assert_ne!(egl_surface, egl::NO_SURFACE);
+
+        Ok(Surface {
+            context_id: context.id,
+            size: Size2D::new(width, height),
+            objects: SurfaceObjects::Window { egl_surface },
+            destroyed: false,
         })
     }
 
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
         unsafe {
-            let texture_object = self.bind_to_gl_texture(surface.egl_image);
+            let texture_object = match surface.objects {
+                SurfaceObjects::Window { .. } => return Err(Error::WidgetAttached),
+                SurfaceObjects::EGLImage { egl_image, .. } => self.bind_to_gl_texture(egl_image),
+            };
             Ok(SurfaceTexture { surface, texture_object, phantom: PhantomData })
+        }
+    }
+
+    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
+        self.present_surface_without_context(surface)
+    }
+
+    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
+                                                  -> Result<(), Error> {
+        unsafe {
+            match surface.objects {
+                SurfaceObjects::Window { egl_surface } => {
+                    egl::SwapBuffers(self.native_display.egl_display(), egl_surface);
+                    Ok(())
+                }
+                SurfaceObjects::EGLImage { .. } => Err(Error::NoWidgetAttached),
+            }
         }
     }
 
@@ -161,27 +241,41 @@ impl Device {
                            -> Result<(), Error> {
         if context.id != surface.context_id {
             // Leak the surface, and return an error.
-            surface.framebuffer_object = 0;
+            surface.destroyed = true;
             return Err(Error::IncompatibleSurface);
         }
 
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
-                gl.DeleteFramebuffers(1, &surface.framebuffer_object);
-                surface.framebuffer_object = 0;
-                surface.renderbuffers.destroy();
+        unsafe {
+            match surface.objects {
+                SurfaceObjects::EGLImage {
+                    ref mut egl_image,
+                    ref mut framebuffer_object,
+                    ref mut texture_object,
+                    ref mut renderbuffers,
+                } => {
+                    GL_FUNCTIONS.with(|gl| {
+                        gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+                        gl.DeleteFramebuffers(1, framebuffer_object);
+                        *framebuffer_object = 0;
+                        renderbuffers.destroy();
 
-                let result = egl::DestroyImageKHR(self.native_display.egl_display(),
-                                                  surface.egl_image);
-                assert_ne!(result, egl::FALSE);
-                surface.egl_image = egl::NO_IMAGE_KHR;
+                        let result = egl::DestroyImageKHR(self.native_display.egl_display(),
+                                                          *egl_image);
+                        assert_ne!(result, egl::FALSE);
+                        *egl_image = egl::NO_IMAGE_KHR;
 
-                gl.DeleteTextures(1, &surface.texture_object);
-                surface.texture_object = 0;
+                        gl.DeleteTextures(1, texture_object);
+                        *texture_object = 0;
+                    });
+                }
+                SurfaceObjects::Window { ref mut egl_surface } => {
+                    egl::DestroySurface(self.native_display.egl_display(), *egl_surface);
+                    *egl_surface = egl::NO_SURFACE;
+                }
             }
-        });
+        }
 
+        surface.destroyed = true;
         Ok(())
     }
 
@@ -203,15 +297,24 @@ impl Device {
     }
 }
 
+impl NativeWidget {
+    #[inline]
+    pub unsafe fn from_native_window(native_window: *mut ANativeWindow) -> NativeWidget {
+        NativeWidget { native_window }
+    }
+}
+
 impl Surface {
     #[inline]
     pub fn size(&self) -> Size2D<i32> {
         self.size
     }
 
-    #[inline]
     pub fn id(&self) -> SurfaceID {
-        SurfaceID(self.egl_image as usize)
+        match self.objects {
+            SurfaceObjects::EGLImage { egl_image, .. } => SurfaceID(egl_image as usize),
+            SurfaceObjects::Window { egl_surface } => SurfaceID(egl_surface as usize),
+        }
     }
 }
 

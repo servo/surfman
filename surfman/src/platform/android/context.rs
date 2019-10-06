@@ -8,7 +8,7 @@ use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceID, egl};
 use super::device::{Device, UnsafeEGLDisplayRef};
-use super::surface::Surface;
+use super::surface::{Surface, SurfaceObjects, SurfaceType};
 
 use euclid::default::Size2D;
 use std::ffi::CString;
@@ -141,7 +141,7 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
                           -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
@@ -189,7 +189,7 @@ impl Device {
             assert_ne!(pbuffer, egl::NO_SURFACE);
 
             // Build the initial framebuffer.
-            let target = self.create_surface(&context, size)?;
+            let target = self.create_surface(&context, surface_type)?;
             context.framebuffer = Framebuffer::Surface(ContextSurfaces { pbuffer, target });
             Ok(context)
         }
@@ -233,14 +233,19 @@ impl Device {
             let egl_display = self.native_display.egl_display();
             let egl_context = context.native_context.egl_context();
 
-            let pbuffer = match context.framebuffer {
-                Framebuffer::Surface(ContextSurfaces { pbuffer, .. }) => pbuffer,
+            let egl_surface = match context.framebuffer {
+                Framebuffer::Surface(ContextSurfaces { pbuffer, ref target }) => {
+                    match target.objects {
+                        SurfaceObjects::Window { egl_surface } => egl_surface,
+                        SurfaceObjects::EGLImage { .. } => pbuffer,
+                    }
+                }
                 Framebuffer::None | Framebuffer::External => {
                     return Err(Error::ExternalRenderTarget)
                 }
             };
 
-            let result = egl::MakeCurrent(egl_display, pbuffer, pbuffer, egl_context);
+            let result = egl::MakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
             if result == egl::FALSE {
                 let err = egl::GetError().to_windowing_api_error();
                 return Err(Error::MakeCurrentFailed(err));
@@ -264,11 +269,26 @@ impl Device {
         }
     }
 
+    #[inline]
+    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
+        self.context_surface_mut(context).and_then(|surface| {
+            self.present_surface_without_context(surface)
+        })
+    }
+
     fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
         match context.framebuffer {
             Framebuffer::None => unreachable!(),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ContextSurfaces { ref target, .. }) => Ok(target),
+        }
+    }
+
+    fn context_surface_mut<'c>(&self, context: &'c mut Context) -> Result<&'c mut Surface, Error> {
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ContextSurfaces { ref mut target, .. }) => Ok(target),
         }
     }
 
@@ -301,7 +321,12 @@ impl Device {
 
     #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        self.context_surface(context).map(|surface| surface.framebuffer_object)
+        self.context_surface(context).map(|surface| {
+            match surface.objects {
+                SurfaceObjects::EGLImage { framebuffer_object, .. } => framebuffer_object,
+                SurfaceObjects::Window { .. } => 0,
+            }
+        })
     }
 
     #[inline]

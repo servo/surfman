@@ -199,7 +199,7 @@ impl Device {
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
         if surface.view_info.is_some() {
-            return Err(Error::WindowAttached);
+            return Err(Error::WidgetAttached);
         }
 
         let texture_object = self.bind_to_gl_texture(&surface.io_surface, &surface.size);
@@ -328,7 +328,7 @@ impl Surface {
                 transaction::set_disable_actions(true);
 
                 let view_info = match self.view_info {
-                    None => return Err(Error::NoWindowAttached),
+                    None => return Err(Error::NoWidgetAttached),
                     Some(ref mut view_info) => view_info,
                 };
                 mem::swap(&mut view_info.front_surface, &mut self.io_surface);

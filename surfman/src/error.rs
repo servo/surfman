@@ -51,9 +51,9 @@ pub enum Error {
     /// There is no software adapter available with this backend.
     NoSoftwareAdapters,
     /// The surface has no window attachment.
-    NoWindowAttached,
+    NoWidgetAttached,
     /// The surface has a window attachement.
-    WindowAttached,
+    WidgetAttached,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
