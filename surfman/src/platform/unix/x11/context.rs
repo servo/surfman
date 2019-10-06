@@ -9,7 +9,7 @@ use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::{SurfaceID, WindowingApiError};
 use super::device::{Device, Quirks, UnsafeDisplayRef};
-use super::surface::Surface;
+use super::surface::{Surface, SurfaceDrawables, SurfaceType};
 
 use euclid::default::Size2D;
 use libc::{RTLD_DEFAULT, dlsym};
@@ -203,7 +203,8 @@ impl Device {
                 };
                 next_context_id.0 += 1;
 
-                let initial_surface = self.create_surface(&context, size)?;
+                let initial_surface_type = SurfaceType::Generic { size: *size };
+                let initial_surface = self.create_surface(&context, &initial_surface_type)?;
                 self.attach_surface(&mut context, initial_surface);
                 self.make_context_current(&context)?;
 
@@ -254,12 +255,21 @@ impl Device {
         GLX_FUNCTIONS.with(|glx| {
             GL_FUNCTIONS.with(|gl| {
                 unsafe {
-                    let (glx_drawable, size) = match context.framebuffer {
-                        Framebuffer::Surface(ref surface) => (surface.glx_pixmap, surface.size),
+                    let (glx_drawable, size);
+                    match context.framebuffer {
+                        Framebuffer::Surface(ref surface) => {
+                            match surface.drawables {
+                                SurfaceDrawables::Pixmap { glx_pixmap, .. } => {
+                                    glx_drawable = glx_pixmap;
+                                }
+                                SurfaceDrawables::Window { window } => glx_drawable = window,
+                            };
+                            size = surface.size;
+                        }
                         Framebuffer::None | Framebuffer::External => {
                             return Err(Error::ExternalRenderTarget)
                         }
-                    };
+                    }
 
                     let ok = glx.MakeCurrent(glx_display,
                                              glx_drawable,
@@ -299,6 +309,14 @@ impl Device {
             Framebuffer::None => unreachable!(),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(surface),
+        }
+    }
+
+    fn context_surface_mut<'c>(&self, context: &'c mut Context) -> Result<&'c mut Surface, Error> {
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref mut surface) => Ok(surface),
         }
     }
 
@@ -408,8 +426,15 @@ impl Device {
             Framebuffer::None | Framebuffer::External => return Ok(()),
         };
 
-        let length = surface.size.width as usize * surface.size.height as usize * 4;
-        let mut pixels = match mem::replace(&mut surface.pixels, None) {
+        let pixels_slot = match surface.drawables {
+            SurfaceDrawables::Pixmap { ref mut pixels, .. } => pixels,
+            SurfaceDrawables::Window { .. } => return Ok(()),
+        };
+
+        let size = surface.size;
+        let length = size.width as usize * size.height as usize * 4;
+
+        let mut pixels = match mem::replace(pixels_slot, None) {
             None => vec![0; length],
             Some(mut pixels) => {
                 if pixels.len() != length {
@@ -423,16 +448,23 @@ impl Device {
             unsafe {
                 gl.ReadPixels(0,
                               0,
-                              surface.size.width,
-                              surface.size.height,
+                              size.width,
+                              size.height,
                               gl::RGBA,
                               gl::UNSIGNED_BYTE,
                               pixels.as_mut_ptr() as *mut c_void);
             }
         });
 
-        surface.pixels = Some(pixels);
+        *pixels_slot = Some(pixels);
         Ok(())
+    }
+
+    #[inline]
+    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
+        self.context_surface_mut(context).and_then(|surface| {
+            self.present_surface_without_context(surface)
+        })
     }
 }
 
