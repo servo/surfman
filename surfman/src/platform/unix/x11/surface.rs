@@ -6,7 +6,7 @@ use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
 use crate::glx::types::Display as GlxDisplay;
 use crate::{gl, glx};
-use crate::{Error, SurfaceID, WindowingApiError};
+use crate::{Error, HiDPIMode, SurfaceID, WindowingApiError};
 use super::context::{Context, GLX_FUNCTIONS, GL_FUNCTIONS};
 use super::device::{Device, Quirks};
 use super::error;
@@ -24,7 +24,7 @@ use x11::xlib::{XDefaultScreenOfDisplay, XFree, XGetGeometry, XGetVisualInfo};
 use x11::xlib::{XRootWindowOfScreen, XVisualInfo};
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::Window as WinitWindow;
 #[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
 
@@ -80,6 +80,12 @@ impl Drop for Surface {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum SurfaceKind {
+    Pixmap,
+    Window,
+}
+
 impl Device {
     pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
                           -> Result<Surface, Error> {
@@ -96,7 +102,8 @@ impl Device {
         let (display, glx_display) = (self.native_display.display(), self.glx_display());
 
         let context_descriptor = self.context_descriptor(context);
-        let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
+        let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor,
+                                                                     SurfaceKind::Pixmap);
 
         GLX_FUNCTIONS.with(|glx| {
             unsafe {
@@ -354,7 +361,7 @@ impl SurfaceTexture {
 impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
+    pub fn from_winit_window(window: &WinitWindow, _: HiDPIMode) -> NativeWidget {
         unsafe {
             NativeWidget {
                 window: window.get_xlib_window().expect("Where's the X11 window?"),

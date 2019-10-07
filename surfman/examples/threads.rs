@@ -126,7 +126,7 @@ impl App {
     fn new(adapter: Adapter, mut device: Device, native_widget: NativeWidget) -> App {
         let context_attributes = ContextAttributes {
             version: GLVersion::new(3, 3),
-            flags: ContextAttributeFlags::empty(),
+            flags: ContextAttributeFlags::ALPHA,
         };
         let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
 
