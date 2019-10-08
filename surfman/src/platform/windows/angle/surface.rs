@@ -25,6 +25,11 @@ use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::HANDLE;
 use wio::com::ComPtr;
 
+#[cfg(feature = "sm-winit")]
+use winit::Window;
+#[cfg(feature = "sm-winit")]
+use winit::os::windows::WindowExt;
+
 const BYTES_PER_PIXEL: i32 = 4;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
@@ -33,12 +38,11 @@ const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
 const EGL_DXGI_KEYED_MUTEX_ANGLE: EGLenum = 0x33a2;
 
 pub struct Surface {
-    pub(crate) share_handle: HANDLE,
-    pub(crate) keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
     pub(crate) egl_surface: EGLSurface,
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
     pub(crate) context_descriptor: ContextDescriptor,
+    pub(crate) win32_objects: Win32Objects,
 }
 
 #[derive(Debug)]
@@ -66,9 +70,34 @@ impl Drop for Surface {
     }
 }
 
+pub(crate) enum Win32Objects {
+    Window,
+    Pbuffer {
+        share_handle: HANDLE,
+        keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
+    }
+}
+
+pub enum SurfaceType {
+    Generic { size: Size2D<i32> },
+    Widget { native_widget: NativeWidget },
+}
+
+pub struct NativeWidget {
+    pub(crate) window_handle: HWND,
+}
+
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
+    pub fn create_surface(&mut self, context: &Context, type: &SurfaceType)
                           -> Result<Surface, Error> {
+        match *type {
+            SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size),
+            SurfaceType::Widget { ref widget } => self.create_window_surface(context, widget),
+        }
+    }
+
+    fn create_pbuffer_surface(&mut self, context: &Context, size: &Size2D<i32>)
+                              -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
@@ -113,20 +142,50 @@ impl Device {
             };
 
             Ok(Surface {
-                share_handle,
-                keyed_mutex,
-                size: *size,
                 egl_surface,
+                size: *size,
                 context_id: context.id,
                 context_descriptor,
+                win32_objects: Win32Objects::Pbuffer { share_handle, keyed_mutex },
+            })
+        }
+    }
+
+    fn create_window_surface(&mut self, context: &Context, native_widget: &NativeWidget)
+                              -> Result<Surface, Error> {
+        let context_descriptor = self.context_descriptor(context);
+        let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
+
+        unsafe {
+            let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+            let ok = GetWindowRect(native_widget.window_handle, &mut rect);
+            assert_ne!(ok, 0);
+
+            let attributes = [egl::NONE as EGLint];
+            let egl_surface = egl::CreateWindowSurface(self.native_display.egl_display(),
+                                                       egl_config,
+                                                       native_widget.window_handle,
+                                                       attributes.as_ptr());
+            assert_ne!(egl_surface, egl::NO_SURFACE);
+
+            Ok(Surface {
+                egl_surface,
+                size: Size2D::new(rect.right - rect.left, rect.bottom - rect.top),
+                context_id: context.id,
+                context_descriptor,
+                win32_objects: Win32Objects::Window,
             })
         }
     }
 
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, (Error, Surface)> {
-        let local_egl_config = self.context_descriptor_to_egl_config(&surface.context_descriptor);
+                                  -> Result<SurfaceTexture, Error> {
+        let share_handle = match surface.win32_objects {
+            Win32Objects::Window => return Err(Error::WidgetAttached),
+            Win32Objects::Pbuffer { share_handle, .. } => share_handle,
+        };
 
+        let local_egl_config = self.context_descriptor_to_egl_config(&surface.context_descriptor);
         unsafe {
             // First, create an EGL surface local to this thread.
             let pbuffer_attributes = [
@@ -140,12 +199,12 @@ impl Device {
             let local_egl_surface =
                 egl::CreatePbufferFromClientBuffer(self.native_display.egl_display(),
                                                    EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                                                   surface.share_handle,
+                                                   share_handle,
                                                    local_egl_config,
                                                    pbuffer_attributes.as_ptr());
             if local_egl_surface == egl::NO_SURFACE {
                 let windowing_api_error = egl::GetError().to_windowing_api_error();
-                return Err((Error::SurfaceImportFailed(windowing_api_error), surface));
+                return Err(Error::SurfaceImportFailed(windowing_api_error));
             }
 
             let mut local_keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
@@ -177,8 +236,7 @@ impl Device {
                                     local_egl_surface,
                                     egl::BACK_BUFFER as GLint) == egl::FALSE {
                     let windowing_api_error = egl::GetError().to_windowing_api_error();
-                    return Err((Error::SurfaceTextureCreationFailed(windowing_api_error),
-                                surface));
+                    return Err(Error::SurfaceTextureCreationFailed(windowing_api_error));
                 }
 
                 // Initialize the texture, for convenience.
@@ -269,5 +327,17 @@ impl SurfaceTexture {
     #[inline]
     pub fn gl_texture(&self) -> GLuint {
         self.gl_texture
+    }
+}
+
+impl NativeWidget {
+    #[cfg(feature = "sm-winit")]
+    #[inline]
+    pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
+        unsafe {
+            NativeWidget {
+                window_handle: window.get_hwnd().expect("Where's the HWND?"),
+            }
+        }
     }
 }
