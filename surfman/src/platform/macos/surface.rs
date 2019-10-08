@@ -318,6 +318,11 @@ impl Surface {
         SurfaceID(self.io_surface.as_concrete_TypeRef() as usize)
     }
 
+    #[inline]
+    pub fn context_id(&self) -> ContextID {
+        self.context_id
+    }
+
     // Assumes the context is current.
     pub(crate) fn present(&mut self) -> Result<(), Error> {
         GL_FUNCTIONS.with(|gl| {

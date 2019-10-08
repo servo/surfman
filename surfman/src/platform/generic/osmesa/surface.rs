@@ -128,6 +128,11 @@ impl Surface {
             SurfaceID((*self.pixels.get()).as_ptr() as usize)
         }
     }
+
+    #[inline]
+    pub fn context_id(&self) -> ContextID {
+        self.context_id
+    }
 }
 
 impl SurfaceTexture {

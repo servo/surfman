@@ -341,6 +341,11 @@ impl Surface {
     }
 
     #[inline]
+    pub fn context_id(&self) -> ContextID {
+        self.context_id
+    }
+
+    #[inline]
     pub(crate) fn uses_keyed_mutex(&self) -> bool {
         match self.win32_objects {
             Win32Objects::Pbuffer { keyed_mutex: Some(_), .. } => true,

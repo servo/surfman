@@ -316,6 +316,11 @@ impl Surface {
             SurfaceObjects::Window { egl_surface } => SurfaceID(egl_surface as usize),
         }
     }
+
+    #[inline]
+    pub fn context_id(&self) -> ContextID {
+        self.context_id
+    }
 }
 
 impl SurfaceTexture {

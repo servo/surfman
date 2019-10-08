@@ -349,6 +349,11 @@ impl Surface {
             SurfaceDrawables::Window { window } => SurfaceID(window as usize),
         }
     }
+
+    #[inline]
+    pub fn context_id(&self) -> ContextID {
+        self.context_id
+    }
 }
 
 impl SurfaceTexture {
