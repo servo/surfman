@@ -304,8 +304,6 @@ impl Device {
                         return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
                     }
 
-                    gl.Viewport(0, 0, size.width, size.height);
-
                     Ok(())
                 }
             })

@@ -128,9 +128,6 @@ impl Device {
                 debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
                                  gl::FRAMEBUFFER_COMPLETE);
 
-                // Set the viewport so that the application doesn't have to do so explicitly.
-                gl.Viewport(0, 0, size.width, size.height);
-
                 Ok(Surface {
                     size: *size,
                     context_id: context.id,

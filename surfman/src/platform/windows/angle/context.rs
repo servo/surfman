@@ -259,8 +259,6 @@ impl Device {
                 return Err(Error::MakeCurrentFailed(err));
             }
 
-            GL_FUNCTIONS.with(|gl| gl.Viewport(0, 0, size.width, size.height));
-
             Ok(())
         }
     }
