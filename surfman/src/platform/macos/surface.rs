@@ -119,7 +119,7 @@ impl Device {
 
                 let mut framebuffer_object = 0;
                 gl.GenFramebuffers(1, &mut framebuffer_object);
-                gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+                let _guard = self.temporarily_bind_framebuffer(framebuffer_object);
 
                 gl.FramebufferTexture2D(gl::FRAMEBUFFER,
                                         gl::COLOR_ATTACHMENT0,
@@ -253,9 +253,20 @@ impl Device {
 
         GL_FUNCTIONS.with(|gl| {
             unsafe {
-                gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+                // Unbind the framebuffer if currently bound.
+                let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
+                gl.GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut current_draw_framebuffer);
+                gl.GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut current_read_framebuffer);
+                if current_draw_framebuffer as GLuint == surface.framebuffer_object {
+                    gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
+                }
+                if current_read_framebuffer as GLuint == surface.framebuffer_object {
+                    gl.BindFramebuffer(gl::READ_FRAMEBUFFER, 0);
+                }
+
                 gl.DeleteFramebuffers(1, &surface.framebuffer_object);
                 surface.framebuffer_object = 0;
+
                 surface.renderbuffers.destroy();
                 gl.DeleteTextures(1, &surface.texture_object);
                 surface.texture_object = 0;
@@ -304,6 +315,21 @@ impl Device {
 
             io_surface::new(&properties)
         }
+    }
+
+    fn temporarily_bind_framebuffer(&self, new_framebuffer: GLuint) -> FramebufferGuard {
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
+                gl.GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut current_draw_framebuffer);
+                gl.GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut current_read_framebuffer);
+                gl.BindFramebuffer(gl::FRAMEBUFFER, new_framebuffer);
+                FramebufferGuard {
+                    draw: current_draw_framebuffer as GLuint,
+                    read: current_read_framebuffer as GLuint,
+                }
+            }
+        })
     }
 }
 
@@ -398,6 +424,23 @@ impl Drop for ViewInfo {
             // Drop the reference that the callback was holding onto.
             mem::transmute_copy::<Arc<VblankCond>, Arc<VblankCond>>(&self.next_vblank);
         }
+    }
+}
+
+#[must_use]
+struct FramebufferGuard {
+    draw: GLuint,
+    read: GLuint,
+}
+
+impl Drop for FramebufferGuard {
+    fn drop(&mut self) {
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                gl.BindFramebuffer(gl::READ_FRAMEBUFFER, self.read);
+                gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.draw);
+            }
+        })
     }
 }
 
