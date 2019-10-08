@@ -11,7 +11,7 @@ use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, S
 use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
-use super::surface::{Surface, SurfaceTexture};
+use super::surface::{Surface, SurfaceTexture, SurfaceType, Win32Objects};
 
 use euclid::default::Size2D;
 use std::ffi::CString;
@@ -175,7 +175,7 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
                           -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
@@ -206,7 +206,7 @@ impl Device {
             };
             next_context_id.0 += 1;
 
-            let initial_surface = self.create_surface(&context, size)?;
+            let initial_surface = self.create_surface(&context, surface_type)?;
             self.attach_surface(&mut context, initial_surface);
 
             Ok(context)
@@ -292,12 +292,20 @@ impl Device {
         }
     }
 
-    #[inline]
     fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
         match context.framebuffer {
             Framebuffer::None => unreachable!(),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(surface),
+        }
+    }
+
+    fn context_surface_mut<'c>(&self, context: &'c mut Context)
+                               -> Result<&'c mut Surface, Error> {
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref mut surface) => Ok(surface),
         }
     }
 
@@ -375,6 +383,13 @@ impl Device {
     }
 
     #[inline]
+    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
+        self.context_surface_mut(context).and_then(|surface| {
+            self.present_surface_without_context(surface)
+        })
+    }
+
+    #[inline]
     pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
         get_proc_address(symbol_name)
     }
@@ -406,11 +421,14 @@ impl Device {
             _ => panic!("Tried to attach a surface, but there was already a surface present!"),
         }
 
-        if let Some(ref keyed_mutex) = surface.keyed_mutex {
-            unsafe {
-                let result = keyed_mutex.AcquireSync(0, INFINITE);
-                assert_eq!(result, S_OK);
+        match surface.win32_objects {
+            Win32Objects::Pbuffer { keyed_mutex: Some(ref keyed_mutex), .. } => {
+                unsafe {
+                    let result = keyed_mutex.AcquireSync(0, INFINITE);
+                    assert_eq!(result, S_OK);
+                }
             }
+            _ => {}
         }
 
         context.framebuffer = Framebuffer::Surface(surface);
@@ -422,11 +440,14 @@ impl Device {
             Framebuffer::None | Framebuffer::External => return None,
         };
 
-        if let Some(ref keyed_mutex) = surface.keyed_mutex {
-            unsafe {
-                let result = keyed_mutex.ReleaseSync(0);
-                assert_eq!(result, S_OK);
+        match surface.win32_objects {
+            Win32Objects::Pbuffer { keyed_mutex: Some(ref keyed_mutex), .. } => {
+                unsafe {
+                    let result = keyed_mutex.ReleaseSync(0);
+                    assert_eq!(result, S_OK);
+                }
             }
+            _ => {}
         }
 
         Some(surface)

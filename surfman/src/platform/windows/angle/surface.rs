@@ -6,7 +6,7 @@ use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributeFlags, Error, SurfaceID};
+use crate::{ContextAttributeFlags, Error, HiDPIMode, SurfaceID};
 use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 
@@ -19,10 +19,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use winapi::shared::dxgi::IDXGIKeyedMutex;
+use winapi::shared::windef::{HWND, RECT};
 use winapi::shared::winerror::{self, S_OK};
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::HANDLE;
+use winapi::um::winuser;
 use wio::com::ComPtr;
 
 #[cfg(feature = "sm-winit")]
@@ -88,11 +90,13 @@ pub struct NativeWidget {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, type: &SurfaceType)
+    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
                           -> Result<Surface, Error> {
-        match *type {
+        match *surface_type {
             SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size),
-            SurfaceType::Widget { ref widget } => self.create_window_surface(context, widget),
+            SurfaceType::Widget { ref native_widget } => {
+                self.create_window_surface(context, native_widget)
+            }
         }
     }
 
@@ -158,13 +162,13 @@ impl Device {
 
         unsafe {
             let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-            let ok = GetWindowRect(native_widget.window_handle, &mut rect);
+            let ok = winuser::GetWindowRect(native_widget.window_handle, &mut rect);
             assert_ne!(ok, 0);
 
             let attributes = [egl::NONE as EGLint];
             let egl_surface = egl::CreateWindowSurface(self.native_display.egl_display(),
                                                        egl_config,
-                                                       native_widget.window_handle,
+                                                       native_widget.window_handle as _,
                                                        attributes.as_ptr());
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
@@ -303,6 +307,25 @@ impl Device {
     pub fn surface_gl_texture_target(&self) -> GLenum {
         SURFACE_GL_TEXTURE_TARGET
     }
+
+    #[inline]
+    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
+        self.present_surface_without_context(surface)
+    }
+
+    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
+                                                  -> Result<(), Error> {
+        match surface.win32_objects {
+            Win32Objects::Window { .. } => {}
+            _ => return Err(Error::NoWidgetAttached),
+        }
+
+        unsafe {
+            let ok = egl::SwapBuffers(self.native_display.egl_display(), surface.egl_surface);
+            assert_ne!(ok, egl::FALSE);
+            Ok(())
+        }
+    }
 }
 
 impl Surface {
@@ -314,12 +337,15 @@ impl Surface {
 
     #[inline]
     pub fn id(&self) -> SurfaceID {
-        SurfaceID(self.share_handle as usize)
+        SurfaceID(self.egl_surface as usize)
     }
 
     #[inline]
     pub(crate) fn uses_keyed_mutex(&self) -> bool {
-        self.keyed_mutex.is_some()
+        match self.win32_objects {
+            Win32Objects::Pbuffer { keyed_mutex: Some(_), .. } => true,
+            Win32Objects::Pbuffer { keyed_mutex: None, .. } | Win32Objects::Window => false,
+        }
     }
 }
 
@@ -335,9 +361,7 @@ impl NativeWidget {
     #[inline]
     pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
         unsafe {
-            NativeWidget {
-                window_handle: window.get_hwnd().expect("Where's the HWND?"),
-            }
+            NativeWidget { window_handle: window.get_hwnd() as HWND }
         }
     }
 }
