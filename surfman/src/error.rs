@@ -20,6 +20,8 @@ pub enum Error {
     MakeCurrentFailed(WindowingApiError),
     /// The system OpenGL library couldn't be located.
     NoGLLibraryFound,
+    /// An extension necessary for this library to function isn't supported.
+    RequiredExtensionUnavailable,
     /// Looking up an OpenGL function address failed.
     GLFunctionNotFound,
     /// This context renders to an externally-managed render target.

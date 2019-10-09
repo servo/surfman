@@ -72,7 +72,6 @@ pub(crate) trait NativeDisplay {
 }
 
 impl Device {
-    #[inline]
     pub fn new(adapter: &Adapter) -> Result<Device, Error> {
         let d3d_driver_type = adapter.d3d_driver_type;
         unsafe {
@@ -120,7 +119,6 @@ impl Device {
         }
     }
 
-    #[inline]
     pub fn adapter(&self) -> Adapter {
         unsafe {
             let mut dxgi_device: *mut IDXGIDevice = ptr::null_mut();
