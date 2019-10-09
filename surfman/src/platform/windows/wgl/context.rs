@@ -1,11 +1,26 @@
+// surfman/src/platform/windows/wgl/context.rs
+//
 //! Wrapper for WGL contexts on Windows.
 
-use gl::types::{GLenum, GLint, GLuint};
+use crate::gl::types::{GLenum, GLint, GLuint};
+use std::borrow::Cow;
 use std::ffi::CStr;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
+use std::thread;
+use winapi::shared::minwindef::{self, BOOL, FALSE, FLOAT, LPARAM, LPVOID, LRESULT, UINT};
+use winapi::shared::minwindef::{WORD, WPARAM};
+use winapi::shared::ntdef::{HANDLE, LPCSTR};
+use winapi::shared::windef::{HBRUSH, HDC, HGLRC, HWND};
+use winapi::um::libloaderapi;
+use winapi::um::wingdi::{self, PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_MAIN_PLANE};
+use winapi::um::wingdi::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
+use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetProcAddress, wglMakeCurrent};
+use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CREATE, WM_DESTROY};
+use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW, WS_VISIBLE};
 
+#[allow(non_snake_case)]
 #[derive(Default)]
 pub(crate) struct WGLExtensionFunctions {
     ChoosePixelFormatARB: Option<extern "C" fn(hDC: HDC,
@@ -23,6 +38,7 @@ pub(crate) struct WGLExtensionFunctions {
     dx_interop_functions: Option<WGLDXInteropExtensionFunctions>,
 }
 
+#[allow(non_snake_case)]
 pub(crate) struct WGLDXInteropExtensionFunctions {
     DXCloseDeviceNV: extern "C" fn(hDevice: HANDLE) -> BOOL,
     DXLockObjectsNV: extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE) -> BOOL,
@@ -43,50 +59,48 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
 lazy_static! {
     pub(crate) static ref WGL_EXTENSION_FUNCTIONS: WGLExtensionFunctions = {
         thread::spawn(extension_loader_thread).join().unwrap()
-    }
-};
-
     };
 }
 
 fn extension_loader_thread() -> WGLExtensionFunctions {
     unsafe {
-        let instance = GetModuleHandle(ptr::null_mut());
+        let instance = libloaderapi::GetModuleHandleA(ptr::null_mut());
         let window_class = WNDCLASSA {
             style: CS_OWNDC,
-            lpfnWndProc: extension_loader_window_proc,
+            lpfnWndProc: Some(extension_loader_window_proc),
             cbClsExtra: 0,
             cbWndExtra: 0,
             hInstance: instance,
             hIcon: ptr::null_mut(),
             hCursor: ptr::null_mut(),
-            hbrBackground: COLOR_BACKGROUND,
+            hbrBackground: COLOR_BACKGROUND as HBRUSH,
             lpszMenuName: ptr::null_mut(),
-            lpszClassName: &b"SurfmanFalseWindow\0"[0],
+            lpszClassName: &b"SurfmanFalseWindow\0"[0] as *const u8 as LPCSTR,
         };
-        let window_class_atom = RegisterClassA(&window_class);
+        let window_class_atom = winuser::RegisterClassA(&window_class);
         assert_ne!(window_class_atom, 0);
 
         let mut extension_functions = WGLExtensionFunctions::default();
 
-        let window = CreateWindowExA(0,
-                                     window_class_atom,
-                                     &b"SurfmanFalseWindow\0"[0],
-                                     WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                     0,
-                                     0,
-                                     640,
-                                     480,
-                                     0,
-                                     ptr::null_mut(),
-                                     instance,
-                                     &mut extension_functions as LPVOID);
+        let window = winuser::CreateWindowExA(
+            0,
+            window_class_atom as LPCSTR,
+            &b"SurfmanFalseWindow\0"[0] as *const u8 as LPCSTR,
+            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            0,
+            0,
+            640,
+            480,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            instance,
+            &mut extension_functions as *mut WGLExtensionFunctions as LPVOID);
 
         let mut msg: MSG = mem::zeroed();
-        while (GetMessage(&mut msg, window, 0, 0) != FALSE) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-            if LOWORD(msg.message) == WM_DESTROY {
+        while winuser::GetMessageA(&mut msg, window, 0, 0) != FALSE {
+            winuser::TranslateMessage(&msg);
+            winuser::DispatchMessageA(&msg);
+            if minwindef::LOWORD(msg.message) as UINT == WM_DESTROY {
                 break;
             }
         }
@@ -95,8 +109,12 @@ fn extension_loader_thread() -> WGLExtensionFunctions {
     }
 }
 
-extern "C" fn extension_loader_window_proc(hwnd: HWND, uMsg: UINT, wParam: WPARAM, lParam: LPARAM)
-                                           -> LRESULT {
+#[allow(non_snake_case)]
+extern "system" fn extension_loader_window_proc(hwnd: HWND,
+                                                uMsg: UINT,
+                                                wParam: WPARAM,
+                                                lParam: LPARAM)
+                                                -> LRESULT {
     unsafe {
         match uMsg {
             WM_CREATE => {
@@ -130,8 +148,8 @@ extern "C" fn extension_loader_window_proc(hwnd: HWND, uMsg: UINT, wParam: WPARA
                 };
 
                 // Create a false GL context.
-                let dc = GetDC(hwnd);
-                let mut pixel_format = ChoosePixelFormat(dc, &pixel_format_descriptor);
+                let dc = winuser::GetDC(hwnd);
+                let mut pixel_format = wingdi::ChoosePixelFormat(dc, &pixel_format_descriptor);
                 assert_ne!(pixel_format, 0);
                 let gl_context = wglCreateContext(dc);
                 assert!(!gl_context.is_null());
@@ -139,9 +157,9 @@ extern "C" fn extension_loader_window_proc(hwnd: HWND, uMsg: UINT, wParam: WPARA
                 assert_ne!(ok, FALSE);
 
                 // Detect extensions.
-                let wgl_extension_functions = lparam as *mut WGLExtensionFunctions;
-                (*wgl_extension_functions).GetExtensionsStringARB =
-                    mem::transmute(wglGetProcAddress(&b"wglGetExtensionsStringARB\0"[0]));
+                let wgl_extension_functions = lParam as *mut WGLExtensionFunctions;
+                (*wgl_extension_functions).GetExtensionsStringARB = mem::transmute(
+                    wglGetProcAddress(&b"wglGetExtensionsStringARB\0"[0] as *const u8 as LPCSTR));
                 let extensions = match (*wgl_extension_functions).GetExtensionsStringARB {
                     Some(wglGetExtensionsStringARB) => {
                         CStr::from_ptr(wglGetExtensionsStringARB(dc)).to_string_lossy()
@@ -152,42 +170,45 @@ extern "C" fn extension_loader_window_proc(hwnd: HWND, uMsg: UINT, wParam: WPARA
                 // Load function pointers.
                 for extension in extensions.split(' ') {
                     if extension == "WGL_ARB_pixel_format" {
-                        (*wgl_extension_functions).ChoosePixelFormatARB =
-                            mem::transmute(wglGetProcAddress(&b"wglChoosePixelFormatARB\0"[0]));
+                        (*wgl_extension_functions).ChoosePixelFormatARB = mem::transmute(
+                            wglGetProcAddress(&b"wglChoosePixelFormatARB\0"[0] as *const u8 as
+                            LPCSTR));
                         continue;
                     }
                     if extension == "WGL_ARB_create_context" {
-                        (*wgl_extension_functions).CreateContextAttribsARB =
-                            mem::transmute(wglGetProcAddress(&b"wglCreateContextAttribsARB\0"[0]));
+                        (*wgl_extension_functions).CreateContextAttribsARB = mem::transmute(
+                            wglGetProcAddress(&b"wglCreateContextAttribsARB\0"[0] as *const u8 as
+                            LPCSTR));
                         continue;
                     }
                     if extension == "WGL_NV_DX_interop" {
                         (*wgl_extension_functions).dx_interop_functions =
                             Some(WGLDXInteropExtensionFunctions {
-                                DXCloseDeviceNV: mem::transmute(
-                                    wglGetProcAddress(&"wglDXCloseDeviceNV\0"[0])),
-                                DXLockObjectsNV: mem::transmute(
-                                    wglGetProcAddress(&"wglDXLockObjectsNV\0"[0])),
-                                DXOpenDeviceNV: mem::transmute(
-                                    wglGetProcAddress(&"wglDXOpenDeviceNV\0"[0])),
-                                DXRegisterObjectNV: mem::transmute(
-                                    wglGetProcAddress(&"wglDXRegisterObjectNV\0"[0])),
-                                DXSetResourceShareHandleNV: mem::transmute(
-                                    wglGetProcAddress(&"wglDXSetResourceShareHandleNV\0"[0])),
-                                DXUnlockObjectsNV: mem::transmute(
-                                    wglGetProcAddress(&"wglDXUnlockObjectsNV\0"[0])),
-                                DXUnregisterObjectNV: mem::transmute(
-                                    wglGetProcAddress(&"wglDXUnregisterObjectNV\0"[0])),
+                                DXCloseDeviceNV: mem::transmute(wglGetProcAddress(
+                                    &b"wglDXCloseDeviceNV\0"[0] as *const u8 as LPCSTR)),
+                                DXLockObjectsNV: mem::transmute(wglGetProcAddress(
+                                    &b"wglDXLockObjectsNV\0"[0] as *const u8 as LPCSTR)),
+                                DXOpenDeviceNV: mem::transmute(wglGetProcAddress(
+                                    &b"wglDXOpenDeviceNV\0"[0] as *const u8 as LPCSTR)),
+                                DXRegisterObjectNV: mem::transmute(wglGetProcAddress(
+                                    &b"wglDXRegisterObjectNV\0"[0] as *const u8 as LPCSTR)),
+                                DXSetResourceShareHandleNV: mem::transmute(wglGetProcAddress(
+                                    &b"wglDXSetResourceShareHandleNV\0"[0] as *const u8 as
+                                    LPCSTR)),
+                                DXUnlockObjectsNV: mem::transmute(wglGetProcAddress(
+                                    &b"wglDXUnlockObjectsNV\0"[0] as *const u8 as LPCSTR)),
+                                DXUnregisterObjectNV: mem::transmute(wglGetProcAddress(
+                                    &b"wglDXUnregisterObjectNV\0"[0] as *const u8 as LPCSTR)),
                             });
                         continue;
                     }
                 }
 
                 wglDeleteContext(gl_context);
-                DestroyWindow(hwnd);
+                winuser::DestroyWindow(hwnd);
                 0
             }
-            _ => DefWindowProc(hwnd, uMsg, wParam, lParam),
+            _ => winuser::DefWindowProcA(hwnd, uMsg, wParam, lParam),
         }
     }
 }
