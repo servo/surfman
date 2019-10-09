@@ -35,14 +35,14 @@ pub(crate) struct WGLExtensionFunctions {
                                                   attribList: *const c_int)
                                                   -> HGLRC>,
     GetExtensionsStringARB: Option<extern "C" fn(hdc: HDC) -> *const c_char>,
-    dx_interop_functions: Option<WGLDXInteropExtensionFunctions>,
+    pub(crate) dx_interop_functions: Option<WGLDXInteropExtensionFunctions>,
 }
 
 #[allow(non_snake_case)]
 pub(crate) struct WGLDXInteropExtensionFunctions {
-    DXCloseDeviceNV: extern "C" fn(hDevice: HANDLE) -> BOOL,
+    pub(crate) DXCloseDeviceNV: extern "C" fn(hDevice: HANDLE) -> BOOL,
     DXLockObjectsNV: extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE) -> BOOL,
-    DXOpenDeviceNV: extern "C" fn(dxDevice: *mut c_void) -> HANDLE,
+    pub(crate) DXOpenDeviceNV: extern "C" fn(dxDevice: *mut c_void) -> HANDLE,
     DXRegisterObjectNV: extern "C" fn(hDevice: HANDLE,
                                       dxResource: *mut c_void,
                                       name: GLuint,
