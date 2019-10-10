@@ -2,18 +2,16 @@
 //
 //! Wrapper for WGL contexts on Windows.
 
-use super::context::HiddenWindow;
-use super::device::Device;
+use crate::{ContextAttributeFlags, ContextAttributes, Error, WindowingApiError};
+use super::device::{Device, HiddenWindow};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
-use euclid::default::Size2D;
 use std::borrow::Cow;
 use std::ffi::CStr;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use winapi::shared::minwindef::{self, BOOL, FALSE, FLOAT, LPARAM, LPVOID, LRESULT, UINT};
 use winapi::shared::minwindef::{WORD, WPARAM};
@@ -26,41 +24,53 @@ use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetProcAddress, 
 use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CREATE, WM_DESTROY};
 use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW, WS_VISIBLE};
 
-const HIDDEN_WINDOW_SIZE: c_int = 16;
+const WGL_DRAW_TO_WINDOW_ARB:    GLenum = 0x2001;
+const WGL_ACCELERATION_ARB:      GLenum = 0x2003;
+const WGL_SUPPORT_OPENGL_ARB:    GLenum = 0x2010;
+const WGL_DOUBLE_BUFFER_ARB:     GLenum = 0x2011;
+const WGL_PIXEL_TYPE_ARB:        GLenum = 0x2013;
+const WGL_COLOR_BITS_ARB:        GLenum = 0x2014;
+const WGL_ALPHA_BITS_ARB:        GLenum = 0x201b;
+const WGL_DEPTH_BITS_ARB:        GLenum = 0x2022;
+const WGL_STENCIL_BITS_ARB:      GLenum = 0x2023;
+const WGL_FULL_ACCELERATION_ARB: GLenum = 0x2027;
+const WGL_TYPE_RGBA_ARB:         GLenum = 0x202b;
 
 #[allow(non_snake_case)]
 #[derive(Default)]
 pub(crate) struct WGLExtensionFunctions {
-    ChoosePixelFormatARB: Option<extern "C" fn(hDC: HDC,
-                                               piAttribIList: *const c_int,
-                                               pfAttribFList: *const FLOAT,
-                                               nMaxFormats: UINT,
-                                               piFormats: *mut c_int,
-                                               nNumFormats: *mut UINT)
-                                               -> BOOL>,
-    CreateContextAttribsARB: Option<extern "C" fn(hDC: HDC,
-                                                  shareContext: HGLRC,
-                                                  attribList: *const c_int)
-                                                  -> HGLRC>,
-    GetExtensionsStringARB: Option<extern "C" fn(hdc: HDC) -> *const c_char>,
+    ChoosePixelFormatARB: Option<unsafe extern "C" fn(hDC: HDC,
+                                                      piAttribIList: *const c_int,
+                                                      pfAttribFList: *const FLOAT,
+                                                      nMaxFormats: UINT,
+                                                      piFormats: *mut c_int,
+                                                      nNumFormats: *mut UINT)
+                                                      -> BOOL>,
+    CreateContextAttribsARB: Option<unsafe extern "C" fn(hDC: HDC,
+                                                         shareContext: HGLRC,
+                                                         attribList: *const c_int)
+                                                         -> HGLRC>,
+    GetExtensionsStringARB: Option<unsafe extern "C" fn(hdc: HDC) -> *const c_char>,
     pub(crate) dx_interop_functions: Option<WGLDXInteropExtensionFunctions>,
 }
 
 #[allow(non_snake_case)]
 pub(crate) struct WGLDXInteropExtensionFunctions {
-    pub(crate) DXCloseDeviceNV: extern "C" fn(hDevice: HANDLE) -> BOOL,
-    DXLockObjectsNV: extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE) -> BOOL,
-    pub(crate) DXOpenDeviceNV: extern "C" fn(dxDevice: *mut c_void) -> HANDLE,
-    DXRegisterObjectNV: extern "C" fn(hDevice: HANDLE,
-                                      dxResource: *mut c_void,
-                                      name: GLuint,
-                                      object_type: GLenum,
-                                      access: GLenum)
-                                      -> HANDLE,
-    DXSetResourceShareHandleNV: extern "C" fn(dxResource: *mut c_void, shareHandle: HANDLE)
-                                              -> BOOL,
-    DXUnlockObjectsNV: extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE) -> BOOL,
-    DXUnregisterObjectNV: extern "C" fn(hObject: HANDLE) -> BOOL,
+    pub(crate) DXCloseDeviceNV: unsafe extern "C" fn(hDevice: HANDLE) -> BOOL,
+    DXLockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE)
+                                          -> BOOL,
+    pub(crate) DXOpenDeviceNV: unsafe extern "C" fn(dxDevice: *mut c_void) -> HANDLE,
+    DXRegisterObjectNV: unsafe extern "C" fn(hDevice: HANDLE,
+                                             dxResource: *mut c_void,
+                                             name: GLuint,
+                                             object_type: GLenum,
+                                             access: GLenum)
+                                             -> HANDLE,
+    DXSetResourceShareHandleNV: unsafe extern "C" fn(dxResource: *mut c_void, shareHandle: HANDLE)
+                                                     -> BOOL,
+    DXUnlockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE)
+                                            -> BOOL,
+    DXUnregisterObjectNV: unsafe extern "C" fn(hObject: HANDLE) -> BOOL,
 
 }
 
@@ -81,6 +91,7 @@ lazy_static! {
 }
 
 impl Device {
+    #[allow(non_snake_case)]
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         let flags = attributes.flags;
@@ -89,27 +100,32 @@ impl Device {
         let stencil_bits = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
 
         let attrib_i_list = [
-            WGL_DRAW_TO_WINDOW_ARB, gl::TRUE,
-            WGL_SUPPORT_OPENGL_ARB, gl::TRUE,
-            WGL_DOUBLE_BUFFER_ARB,  gl::TRUE,
-            WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
-            WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
-            WGL_COLOR_BITS_ARB,     32,
-            WGL_ALPHA_BITS_ARB,     alpha_bits,
-            WGL_DEPTH_BITS_ARB,     depth_bits,
-            WGL_STENCIL_BITS_ARB,   stencil_bits,
+            WGL_DRAW_TO_WINDOW_ARB as c_int, gl::TRUE as c_int,
+            WGL_SUPPORT_OPENGL_ARB as c_int, gl::TRUE as c_int,
+            WGL_DOUBLE_BUFFER_ARB as c_int,  gl::TRUE as c_int,
+            WGL_PIXEL_TYPE_ARB as c_int,     WGL_TYPE_RGBA_ARB as c_int,
+            WGL_ACCELERATION_ARB as c_int,   WGL_FULL_ACCELERATION_ARB as c_int,
+            WGL_COLOR_BITS_ARB as c_int,     32,
+            WGL_ALPHA_BITS_ARB as c_int,     alpha_bits,
+            WGL_DEPTH_BITS_ARB as c_int,     depth_bits,
+            WGL_STENCIL_BITS_ARB as c_int,   stencil_bits,
             0,
         ];
 
-        let dc = self.hidden_window.get_dc();
+        let wglChoosePixelFormatARB = match WGL_EXTENSION_FUNCTIONS.ChoosePixelFormatARB {
+            None => return Err(Error::RequiredExtensionUnavailable),
+            Some(wglChoosePixelFormatARB) => wglChoosePixelFormatARB,
+        };
+
+        let hidden_window_dc = self.hidden_window.get_dc();
         unsafe {
             let (mut pixel_format, mut pixel_format_count) = (0, 0);
-            let ok = (WGL_EXTENSION_FUNCTIONS.ChoosePixelFormatARB)(dc,
-                                                                    attrib_i_list.as_ptr(),
-                                                                    ptr::null(),
-                                                                    1,
-                                                                    &mut pixel_format,
-                                                                    &mut pixel_format_count);
+            let ok = wglChoosePixelFormatARB(hidden_window_dc.dc,
+                                             attrib_i_list.as_ptr(),
+                                             ptr::null(),
+                                             1,
+                                             &mut pixel_format,
+                                             &mut pixel_format_count);
             if ok == FALSE {
                 return Err(Error::PixelFormatSelectionFailed(WindowingApiError::Failed));
             }
@@ -226,9 +242,9 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
 
                 // Create a false GL context.
                 let dc = winuser::GetDC(hwnd);
-                let mut pixel_format = wingdi::ChoosePixelFormat(dc, &pixel_format_descriptor);
+                let pixel_format = wingdi::ChoosePixelFormat(dc, &pixel_format_descriptor);
                 assert_ne!(pixel_format, 0);
-                let mut ok = SetPixelFormat(dc, pixel_format, &pixel_format_descriptor);
+                let mut ok = wingdi::SetPixelFormat(dc, pixel_format, &pixel_format_descriptor);
                 assert_ne!(ok, FALSE);
                 let gl_context = wglCreateContext(dc);
                 assert!(!gl_context.is_null());

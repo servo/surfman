@@ -4,18 +4,28 @@
 
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
-use super::context::WGL_EXTENSION_FUNCTIONS;
+use super::context::{WGLExtensionFunctions, WGL_EXTENSION_FUNCTIONS};
 
-use std::os::raw::c_void;
+use std::mem;
+use std::os::raw::{c_int, c_void};
 use std::ptr;
-use std::sync::mpsc;
-use winapi::shared::minwindef;
-use winapi::shared::ntdef::HANDLE;
+use std::sync::mpsc::{self, Sender};
+use std::thread::{self, JoinHandle};
+use winapi::shared::minwindef::{self, FALSE, LPVOID, UINT};
+use winapi::shared::ntdef::{HANDLE, LPCSTR};
+use winapi::shared::windef::{HBRUSH, HDC, HWND};
 use winapi::shared::winerror;
 use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device, ID3D11DeviceContext};
 use winapi::um::d3dcommon::D3D_DRIVER_TYPE_HARDWARE;
-use winapi::um::winuser;
+use winapi::um::libloaderapi;
+use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_DESTROY, WNDCLASSA, WS_OVERLAPPEDWINDOW};
 use wio::com::ComPtr;
+
+pub(crate) const HIDDEN_WINDOW_SIZE: c_int = 16;
+
+struct SendableHWND(HWND);
+
+unsafe impl Send for SendableHWND {}
 
 #[allow(dead_code)]
 pub struct Device {
@@ -65,7 +75,9 @@ impl Device {
                 (dx_interop_functions.DXOpenDeviceNV)(d3d11_device.as_raw() as *mut c_void);
             assert!(!gl_dx_interop_device.is_null());
 
-            Ok(Device { d3d11_device, d3d11_device_context, gl_dx_interop_device })
+            let hidden_window = HiddenWindow::new();
+
+            Ok(Device { d3d11_device, d3d11_device_context, gl_dx_interop_device, hidden_window })
         }
     }
 
@@ -82,10 +94,10 @@ impl Device {
 
 pub(crate) struct HiddenWindow {
     window: HWND,
-    join_handle: JoinHandle<()>,
+    join_handle: Option<JoinHandle<()>>,
 }
 
-pub(crate) struct DC<'a> {
+pub(crate) struct HiddenWindowDC<'a> {
     pub(crate) dc: HDC,
     hidden_window: &'a HiddenWindow,
 }
@@ -93,45 +105,49 @@ pub(crate) struct DC<'a> {
 impl Drop for HiddenWindow {
     fn drop(&mut self) {
         unsafe {
-            winuser::DestroyWindow(hwnd);
-            self.join_handle.join();
+            winuser::DestroyWindow(self.window);
+            if let Some(join_handle) = self.join_handle.take() {
+                drop(join_handle.join());
+            }
         }
     }
 }
 
-impl Drop for DC {
+impl<'a> Drop for HiddenWindowDC<'a> {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            ReleaseDC(self.hidden_window.window, self.0);
+            winuser::ReleaseDC(self.hidden_window.window, self.dc);
         }
     }
 }
 
 impl HiddenWindow {
     pub(crate) fn new() -> HiddenWindow {
-        let (receiver, sender) = mpsc::channel();
+        let (sender, receiver) = mpsc::channel();
         let join_handle = thread::spawn(|| HiddenWindow::thread(sender));
-        let window = receiver.recv().unwrap();
-        HiddenWindow { window, join_handle }
+        let window = receiver.recv().unwrap().0;
+        HiddenWindow { window, join_handle: Some(join_handle) }
     }
 
     #[inline]
-    pub(crate) fn get_dc(&self) -> DC {
-        let dc = GetDC(self.window);
-        DC { dc, hidden_window: self }
+    pub(crate) fn get_dc(&self) -> HiddenWindowDC {
+        unsafe {
+            let dc = winuser::GetDC(self.window);
+            HiddenWindowDC { dc, hidden_window: self }
+        }
     }
 
     // The thread that creates the window for off-screen contexts.
-    fn thread(sender: Sender<HWND>) {
+    fn thread(sender: Sender<SendableHWND>) {
         unsafe {
             let instance = libloaderapi::GetModuleHandleA(ptr::null_mut());
             let window_class_name = &b"SurfmanHiddenWindow"[0] as *const u8 as LPCSTR;
             let mut window_class = mem::zeroed();
-            if GetClassInfoA(instance, window_class_name, &mut window_class) == FALSE {
+            if winuser::GetClassInfoA(instance, window_class_name, &mut window_class) == FALSE {
                 window_class = WNDCLASSA {
                     style: CS_OWNDC,
-                    lpfnWndProc: Some(DefWindowProc),
+                    lpfnWndProc: Some(winuser::DefWindowProcA),
                     cbClsExtra: 0,
                     cbWndExtra: 0,
                     hInstance: instance,
@@ -145,21 +161,20 @@ impl HiddenWindow {
                 assert_ne!(window_class_atom, 0);
             }
 
-            let window = winuser::CreateWindowExA(
-                0,
-                window_class_atom as LPCSTR,
-                window_class_name,
-                WS_OVERLAPPEDWINDOW,
-                0,
-                0,
-                HIDDEN_WINDOW_SIZE,
-                HIDDEN_WINDOW_SIZE,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                instance,
-                &mut extension_functions as *mut WGLExtensionFunctions as LPVOID);
+            let window = winuser::CreateWindowExA(0,
+                                                  window_class_name,
+                                                  window_class_name,
+                                                  WS_OVERLAPPEDWINDOW,
+                                                  0,
+                                                  0,
+                                                  HIDDEN_WINDOW_SIZE,
+                                                  HIDDEN_WINDOW_SIZE,
+                                                  ptr::null_mut(),
+                                                  ptr::null_mut(),
+                                                  instance,
+                                                  ptr::null_mut());
 
-            sender.send(window).unwrap();
+            sender.send(SendableHWND(window)).unwrap();
             
             let mut msg: MSG = mem::zeroed();
             while winuser::GetMessageA(&mut msg, window, 0, 0) != FALSE {
