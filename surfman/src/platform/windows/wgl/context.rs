@@ -2,12 +2,18 @@
 //
 //! Wrapper for WGL contexts on Windows.
 
+use super::context::HiddenWindow;
+use super::device::Device;
+
 use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::gl;
+use euclid::default::Size2D;
 use std::borrow::Cow;
 use std::ffi::CStr;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use winapi::shared::minwindef::{self, BOOL, FALSE, FLOAT, LPARAM, LPVOID, LRESULT, UINT};
 use winapi::shared::minwindef::{WORD, WPARAM};
@@ -19,6 +25,8 @@ use winapi::um::wingdi::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTO
 use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetProcAddress, wglMakeCurrent};
 use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CREATE, WM_DESTROY};
 use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW, WS_VISIBLE};
+
+const HIDDEN_WINDOW_SIZE: c_int = 16;
 
 #[allow(non_snake_case)]
 #[derive(Default)]
@@ -56,15 +64,85 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
 
 }
 
+#[derive(Clone)]
+pub struct ContextDescriptor {
+    pixel_format: c_int,
+}
+
+pub struct Context {
+    glrc: HGLRC,
+    hidden_window: Option<HiddenWindow>,
+}
+
 lazy_static! {
     pub(crate) static ref WGL_EXTENSION_FUNCTIONS: WGLExtensionFunctions = {
         thread::spawn(extension_loader_thread).join().unwrap()
     };
 }
 
+impl Device {
+    pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
+                                     -> Result<ContextDescriptor, Error> {
+        let flags = attributes.flags;
+        let alpha_bits   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
+        let depth_bits   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
+        let stencil_bits = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
+
+        let attrib_i_list = [
+            WGL_DRAW_TO_WINDOW_ARB, gl::TRUE,
+            WGL_SUPPORT_OPENGL_ARB, gl::TRUE,
+            WGL_DOUBLE_BUFFER_ARB,  gl::TRUE,
+            WGL_PIXEL_TYPE_ARB,     WGL_TYPE_RGBA_ARB,
+            WGL_ACCELERATION_ARB,   WGL_FULL_ACCELERATION_ARB,
+            WGL_COLOR_BITS_ARB,     32,
+            WGL_ALPHA_BITS_ARB,     alpha_bits,
+            WGL_DEPTH_BITS_ARB,     depth_bits,
+            WGL_STENCIL_BITS_ARB,   stencil_bits,
+            0,
+        ];
+
+        let dc = self.hidden_window.get_dc();
+        unsafe {
+            let (mut pixel_format, mut pixel_format_count) = (0, 0);
+            let ok = (WGL_EXTENSION_FUNCTIONS.ChoosePixelFormatARB)(dc,
+                                                                    attrib_i_list.as_ptr(),
+                                                                    ptr::null(),
+                                                                    1,
+                                                                    &mut pixel_format,
+                                                                    &mut pixel_format_count);
+            if ok == FALSE {
+                return Err(Error::PixelFormatSelectionFailed(WindowingApiError::Failed));
+            }
+            if pixel_format_count == 0 {
+                return Err(Error::NoPixelFormatFound);
+            }
+
+            Ok(ContextDescriptor { pixel_format })
+        }
+    }
+
+    fn create_context() {
+        // TODO(pcwalton)
+        /*
+            let dc = GetDC(window);
+            let mut pixel_format_descriptor = mem::zeroed();
+            let pixel_format_count = DescribePixelFormat(dc,
+                                                        context_descriptor.pixel_format,
+                                                        mem::size_of::<PIXELFORMATDESCRIPTOR>(),
+                                                        &mut pixel_format_descriptor);
+            assert_ne!(pixel_format_count, 0);
+            let ok = SetPixelFormat(dc,
+                                    context_descriptor.pixel_format,
+                                    &mut pixel_format_descriptor);
+            assert_ne!(ok, FALSE);
+        */
+    }
+}
+
 fn extension_loader_thread() -> WGLExtensionFunctions {
     unsafe {
         let instance = libloaderapi::GetModuleHandleA(ptr::null_mut());
+        let window_class_name = &b"SurfmanFalseWindow\0"[0] as *const u8 as LPCSTR;
         let window_class = WNDCLASSA {
             style: CS_OWNDC,
             lpfnWndProc: Some(extension_loader_window_proc),
@@ -75,17 +153,16 @@ fn extension_loader_thread() -> WGLExtensionFunctions {
             hCursor: ptr::null_mut(),
             hbrBackground: COLOR_BACKGROUND as HBRUSH,
             lpszMenuName: ptr::null_mut(),
-            lpszClassName: &b"SurfmanFalseWindow\0"[0] as *const u8 as LPCSTR,
+            lpszClassName: window_class_name,
         };
         let window_class_atom = winuser::RegisterClassA(&window_class);
         assert_ne!(window_class_atom, 0);
 
         let mut extension_functions = WGLExtensionFunctions::default();
-
         let window = winuser::CreateWindowExA(
             0,
             window_class_atom as LPCSTR,
-            &b"SurfmanFalseWindow\0"[0] as *const u8 as LPCSTR,
+            window_class_name,
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             0,
             0,
@@ -151,9 +228,11 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
                 let dc = winuser::GetDC(hwnd);
                 let mut pixel_format = wingdi::ChoosePixelFormat(dc, &pixel_format_descriptor);
                 assert_ne!(pixel_format, 0);
+                let mut ok = SetPixelFormat(dc, pixel_format, &pixel_format_descriptor);
+                assert_ne!(ok, FALSE);
                 let gl_context = wglCreateContext(dc);
                 assert!(!gl_context.is_null());
-                let ok = wglMakeCurrent(dc, gl_context);
+                ok = wglMakeCurrent(dc, gl_context);
                 assert_ne!(ok, FALSE);
 
                 // Detect extensions.
@@ -212,3 +291,4 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
         }
     }
 }
+
