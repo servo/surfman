@@ -71,7 +71,6 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
     DXUnlockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE)
                                             -> BOOL,
     DXUnregisterObjectNV: unsafe extern "C" fn(hObject: HANDLE) -> BOOL,
-
 }
 
 #[derive(Clone)]
@@ -307,4 +306,3 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
         }
     }
 }
-

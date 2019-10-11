@@ -18,7 +18,8 @@ use winapi::shared::winerror;
 use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device, ID3D11DeviceContext};
 use winapi::um::d3dcommon::D3D_DRIVER_TYPE_HARDWARE;
 use winapi::um::libloaderapi;
-use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_DESTROY, WNDCLASSA, WS_OVERLAPPEDWINDOW};
+use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_DESTROY};
+use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW};
 use wio::com::ComPtr;
 
 pub(crate) const HIDDEN_WINDOW_SIZE: c_int = 16;
