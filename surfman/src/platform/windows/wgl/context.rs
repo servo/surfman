@@ -2,11 +2,11 @@
 //
 //! Wrapper for WGL contexts on Windows.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, WindowingApiError};
 use super::device::{Device, HiddenWindow};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
-use crate::gl;
+use crate::gl::{self, Gl};
 use std::borrow::Cow;
 use std::ffi::CStr;
 use std::mem;
@@ -60,14 +60,15 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
     DXLockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE)
                                           -> BOOL,
     pub(crate) DXOpenDeviceNV: unsafe extern "C" fn(dxDevice: *mut c_void) -> HANDLE,
-    DXRegisterObjectNV: unsafe extern "C" fn(hDevice: HANDLE,
-                                             dxResource: *mut c_void,
-                                             name: GLuint,
-                                             object_type: GLenum,
-                                             access: GLenum)
-                                             -> HANDLE,
-    DXSetResourceShareHandleNV: unsafe extern "C" fn(dxResource: *mut c_void, shareHandle: HANDLE)
-                                                     -> BOOL,
+    pub(crate) DXRegisterObjectNV: unsafe extern "C" fn(hDevice: HANDLE,
+                                                        dxResource: *mut c_void,
+                                                        name: GLuint,
+                                                        object_type: GLenum,
+                                                        access: GLenum)
+                                                        -> HANDLE,
+    pub(crate) DXSetResourceShareHandleNV: unsafe extern "C" fn(dxResource: *mut c_void,
+                                                                shareHandle: HANDLE)
+                                                                -> BOOL,
     DXUnlockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE)
                                             -> BOOL,
     DXUnregisterObjectNV: unsafe extern "C" fn(hObject: HANDLE) -> BOOL,
@@ -79,7 +80,9 @@ pub struct ContextDescriptor {
 }
 
 pub struct Context {
+    pub(crate) id: ContextID,
     glrc: HGLRC,
+    pub(crate) gl: Gl,
     hidden_window: Option<HiddenWindow>,
 }
 
@@ -151,6 +154,24 @@ impl Device {
                                     &mut pixel_format_descriptor);
             assert_ne!(ok, FALSE);
         */
+    }
+
+    pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        unimplemented!()
+    }
+
+    pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
+                                         -> ContextAttributes {
+        unimplemented!()
+    }
+
+    pub(crate) fn temporarily_bind_framebuffer(&self, framebuffer: GLuint) {
+        unimplemented!()
+    }
+
+    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
+                                                   -> Result<(), Error> {
+        unimplemented!()
     }
 }
 
