@@ -52,7 +52,7 @@ pub(crate) enum Win32Objects {
         renderbuffers: Renderbuffers,
     },
     Widget {
-        native_widget: HWND,
+        window_handle: HWND,
     },
 }
 
@@ -207,7 +207,9 @@ impl Device {
                 size: Size2D::new(widget_rect.right - widget_rect.left,
                                   widget_rect.bottom - widget_rect.top),
                 context_id: context.id,
-                win32_objects: Win32Objects::Widget { window_handle: native_widget.window_handle },
+                win32_objects: Win32Objects::Widget {
+                    window_handle: native_widget.window_handle,
+                },
                 destroyed: false,
             })
         }

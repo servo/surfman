@@ -2,15 +2,17 @@
 //
 //! Wrapper for WGL contexts on Windows.
 
-use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, WindowingApiError};
+use crate::context::CREATE_CONTEXT_MUTEX;
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error};
+use crate::{GLVersion, WindowingApiError};
 use super::device::{Device, HiddenWindow};
-use super::surface::SurfaceType;
+use super::surface::{Surface, SurfaceType};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
 use crate::surface::Framebuffer;
 use std::borrow::Cow;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
@@ -22,21 +24,26 @@ use winapi::shared::windef::{HBRUSH, HDC, HGLRC, HWND};
 use winapi::um::libloaderapi;
 use winapi::um::wingdi::{self, PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_MAIN_PLANE};
 use winapi::um::wingdi::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
-use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetProcAddress, wglMakeCurrent};
+use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetCurrentContext, wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
 use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CREATE, WM_DESTROY};
 use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW, WS_VISIBLE};
 
-const WGL_DRAW_TO_WINDOW_ARB:    GLenum = 0x2001;
-const WGL_ACCELERATION_ARB:      GLenum = 0x2003;
-const WGL_SUPPORT_OPENGL_ARB:    GLenum = 0x2010;
-const WGL_DOUBLE_BUFFER_ARB:     GLenum = 0x2011;
-const WGL_PIXEL_TYPE_ARB:        GLenum = 0x2013;
-const WGL_COLOR_BITS_ARB:        GLenum = 0x2014;
-const WGL_ALPHA_BITS_ARB:        GLenum = 0x201b;
-const WGL_DEPTH_BITS_ARB:        GLenum = 0x2022;
-const WGL_STENCIL_BITS_ARB:      GLenum = 0x2023;
-const WGL_FULL_ACCELERATION_ARB: GLenum = 0x2027;
-const WGL_TYPE_RGBA_ARB:         GLenum = 0x202b;
+const WGL_DRAW_TO_WINDOW_ARB:        GLenum = 0x2001;
+const WGL_ACCELERATION_ARB:          GLenum = 0x2003;
+const WGL_SUPPORT_OPENGL_ARB:        GLenum = 0x2010;
+const WGL_DOUBLE_BUFFER_ARB:         GLenum = 0x2011;
+const WGL_PIXEL_TYPE_ARB:            GLenum = 0x2013;
+const WGL_COLOR_BITS_ARB:            GLenum = 0x2014;
+const WGL_ALPHA_BITS_ARB:            GLenum = 0x201b;
+const WGL_DEPTH_BITS_ARB:            GLenum = 0x2022;
+const WGL_STENCIL_BITS_ARB:          GLenum = 0x2023;
+const WGL_FULL_ACCELERATION_ARB:     GLenum = 0x2027;
+const WGL_TYPE_RGBA_ARB:             GLenum = 0x202b;
+const WGL_CONTEXT_MAJOR_VERSION_ARB: GLenum = 0x2091;
+const WGL_CONTEXT_MINOR_VERSION_ARB: GLenum = 0x2092;
+const WGL_CONTEXT_PROFILE_MASK_ARB:  GLenum = 0x9126;
+
+const WGL_CONTEXT_CORE_PROFILE_BIT_ARB: GLenum = 0x00000001;
 
 #[allow(non_snake_case)]
 #[derive(Default)]
@@ -150,55 +157,68 @@ impl Device {
             Some(wglCreateContextAttribsARB) => wglCreateContextAttribsARB,
         };
 
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         unsafe {
+            let (glrc, gl);
+
             // Get a suitable DC.
             let hidden_window = match *surface_type {
                 SurfaceType::Widget { ref native_widget } => None,
                 SurfaceType::Generic { .. } => Some(HiddenWindow::new()),
             };
-            let hidden_window_dc = match hidden_window {
-                None => None,
-                Some(ref hidden_window) => hidden_window.get_dc(),
-            };
-            let dc = match *surface_type {
-                SurfaceType::Widget { ref native_widget } => winuser::GetDC(native_widget),
-                SurfaceType::Generic { .. } => hidden_window_dc.as_ref().unwrap().dc,
-            };
 
-            // Set the pixel format on the DC.
-            let mut pixel_format_descriptor = mem::zeroed();
-            let pixel_format_count = DescribePixelFormat(dc,
-                                                         context_descriptor.pixel_format,
-                                                         mem::size_of::<PIXELFORMATDESCRIPTOR>(),
-                                                         &mut pixel_format_descriptor);
-            assert_ne!(pixel_format_count, 0);
-            let ok = SetPixelFormat(dc,
-                                    context_descriptor.pixel_format,
-                                    &mut pixel_format_descriptor);
-            assert_ne!(ok, FALSE);
+            {
+                let hidden_window_dc = match hidden_window {
+                    None => None,
+                    Some(ref hidden_window) => Some(hidden_window.get_dc()),
+                };
+                let dc = match *surface_type {
+                    SurfaceType::Widget { ref native_widget } => {
+                        winuser::GetDC(native_widget.window_handle)
+                    }
+                    SurfaceType::Generic { .. } => hidden_window_dc.as_ref().unwrap().dc,
+                };
 
-            // Make the context.
-            let wgl_attributes = [
-                WGL_CONTEXT_MAJOR_VERSION_ARB,  descriptor.gl_version.major,
-                WGL_CONTEXT_MINOR_VERSION_ARB,  descriptor.gl_version.minor,
-                WGL_CONTEXT_PROFILE_MASK_ARB,   WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
-                0,
-            ];
-            let glrc = wglCreateContextAttribsARB(dc, 0, wgl_attributes.as_ptr());
-            if glrc.is_null() {
-                return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
+                // Set the pixel format on the DC.
+                let mut pixel_format_descriptor = mem::zeroed();
+                let pixel_format_count =
+                    wingdi::DescribePixelFormat(dc,
+                                                descriptor.pixel_format,
+                                                mem::size_of::<PIXELFORMATDESCRIPTOR>() as UINT,
+                                                &mut pixel_format_descriptor);
+                assert_ne!(pixel_format_count, 0);
+                let ok = wingdi::SetPixelFormat(dc,
+                                                descriptor.pixel_format,
+                                                &mut pixel_format_descriptor);
+                assert_ne!(ok, FALSE);
+
+                // Make the context.
+                let wgl_attributes = [
+                    WGL_CONTEXT_MAJOR_VERSION_ARB as c_int, descriptor.gl_version.major as c_int,
+                    WGL_CONTEXT_MINOR_VERSION_ARB as c_int, descriptor.gl_version.minor as c_int,
+                    WGL_CONTEXT_PROFILE_MASK_ARB as c_int,
+                        WGL_CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                    0,
+                ];
+                glrc = wglCreateContextAttribsARB(dc, ptr::null_mut(), wgl_attributes.as_ptr());
+                if glrc.is_null() {
+                    return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
+                }
+
+                // Temporarily make the context current.
+                let _guard = CurrentContextGuard::new();
+                let ok = wglMakeCurrent(dc, glrc);
+                assert_ne!(ok, FALSE);
+
+                // Load the GL functions.
+                gl = Gl::load_with(get_proc_address);
             }
 
-            // Temporarily make the context current.
-            let _guard = CurrentContextGuard::new();
-            let ok = wglMakeCurrent(dc, glrc);
-            assert_ne!(ok, FALSE);
-
-            // Create the initial comment.
+            // Create the initial context.
             let mut context = Context {
                 id: *next_context_id,
                 glrc,
-                gl: Gl::load_with(|symbol_name| wglGetProcAddress(symbol_name)),
+                gl,
                 hidden_window,
                 framebuffer: Framebuffer::None,
             };
@@ -382,3 +402,38 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
         }
     }
 }
+
+#[must_use]
+struct CurrentContextGuard {
+    old_dc: HDC,
+    old_glrc: HGLRC,
+}
+
+impl Drop for CurrentContextGuard {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            wglMakeCurrent(self.old_dc, self.old_glrc);
+        }
+    }
+}
+
+impl CurrentContextGuard {
+    #[inline]
+    fn new() -> CurrentContextGuard {
+        unsafe {
+            CurrentContextGuard {
+                old_dc: wglGetCurrentDC(),
+                old_glrc: wglGetCurrentContext(),
+            }
+        }
+    }
+}
+
+fn get_proc_address(symbol_name: &str) -> *const c_void {
+    unsafe {
+        let symbol_name: CString = CString::new(symbol_name).unwrap();
+        wglGetProcAddress(symbol_name.as_ptr() as *const u8 as LPCSTR) as *const c_void
+    }
+}
+
