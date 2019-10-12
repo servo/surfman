@@ -66,8 +66,10 @@ pub(crate) struct WGLExtensionFunctions {
 #[allow(non_snake_case)]
 pub(crate) struct WGLDXInteropExtensionFunctions {
     pub(crate) DXCloseDeviceNV: unsafe extern "C" fn(hDevice: HANDLE) -> BOOL,
-    DXLockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE)
-                                          -> BOOL,
+    pub(crate) DXLockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE,
+                                                     count: GLint,
+                                                     hObjects: *mut HANDLE)
+                                                     -> BOOL,
     pub(crate) DXOpenDeviceNV: unsafe extern "C" fn(dxDevice: *mut c_void) -> HANDLE,
     pub(crate) DXRegisterObjectNV: unsafe extern "C" fn(hDevice: HANDLE,
                                                         dxResource: *mut c_void,
@@ -226,6 +228,7 @@ impl Device {
 
             // Build the initial framebuffer.
             let surface = self.create_surface(&context, surface_type)?;
+            self.lock_surface(&surface);
             context.framebuffer = Framebuffer::Surface(surface);
             Ok(context)
         }
@@ -436,4 +439,3 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
         wglGetProcAddress(symbol_name.as_ptr() as *const u8 as LPCSTR) as *const c_void
     }
 }
-

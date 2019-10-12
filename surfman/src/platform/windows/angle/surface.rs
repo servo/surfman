@@ -334,7 +334,6 @@ impl Surface {
         self.size
     }
 
-
     #[inline]
     pub fn id(&self) -> SurfaceID {
         SurfaceID(self.egl_surface as usize)

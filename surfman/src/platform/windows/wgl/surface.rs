@@ -8,7 +8,7 @@ use crate::{ContextID, Error, SurfaceID};
 use super::context::{Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
-use crate::gl::types::{GLenum, GLuint};
+use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
@@ -33,6 +33,7 @@ use wio::com::ComPtr;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
+const WGL_ACCESS_READ_ONLY_NV:  GLenum = 0x0000;
 const WGL_ACCESS_READ_WRITE_NV: GLenum = 0x0001;
 
 pub struct Surface {
@@ -54,6 +55,14 @@ pub(crate) enum Win32Objects {
     Widget {
         window_handle: HWND,
     },
+}
+
+pub struct SurfaceTexture {
+    pub(crate) surface: Surface,
+    pub(crate) local_d3d11_texture: ComPtr<ID3D11Texture2D>,
+    local_gl_dx_interop_object: HANDLE,
+    pub(crate) gl_texture: GLuint,
+    pub(crate) phantom: PhantomData<*const ()>,
 }
 
 unsafe impl Send for Surface {}
@@ -178,6 +187,9 @@ impl Device {
             let renderbuffers = Renderbuffers::new(&size, &context_attributes);
             renderbuffers.bind_to_current_framebuffer();
 
+            // FIXME(pcwalton): Do we need to acquire the keyed mutex, or does the GL driver do
+            // that?
+
             Ok(Surface {
                 size: *size,
                 context_id: context.id,
@@ -214,6 +226,101 @@ impl Device {
             })
         }
     }
+
+    pub fn create_surface_texture(&self, context: &mut Context, mut surface: Surface)
+                                  -> Result<SurfaceTexture, Error> {
+        let dxgi_share_handle = match surface.win32_objects {
+            Win32Objects::Widget { .. } => {
+                surface.destroyed = true;
+                return Err(Error::WidgetAttached);
+            }
+            Win32Objects::Texture { dxgi_share_handle, .. } => dxgi_share_handle,
+        };
+
+        let dx_interop_functions =
+            WGL_EXTENSION_FUNCTIONS.dx_interop_functions
+                                   .as_ref()
+                                   .expect("How did you make a surface without DX interop?");
+
+        let _guard = self.temporarily_make_context_current(context)?;
+
+        unsafe {
+            // Create a new texture wrapping the shared handle.
+            let mut local_d3d11_texture = ptr::null_mut();
+            let result = self.d3d11_device.OpenSharedResource(dxgi_share_handle,
+                                                              ID3D11Texture2D::uuidof(),
+                                                              &mut local_d3d11_texture);
+            if !winerror::SUCCEEDED(result) {
+                surface.destroyed = true;
+                return Err(Error::SurfaceImportFailed(WindowingApiError::Failed));
+            }
+            let local_d3d11_texture = ComPtr::from_raw(local_d3d11_texture);
+
+            // Make GL aware of the connection between the share handle and the texture.
+            let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
+                local_d3d11_texture.as_raw(),
+                dxgi_share_handle);
+            assert_ne!(ok, FALSE);
+
+            // Create a GL texture.
+            let mut gl_texture = 0;
+            context.gl.GenTextures(1, &mut gl_texture);
+
+            // Register that texture with GL.
+            let local_gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
+                self.gl_dx_interop_device,
+                local_d3d11_texture.as_raw() as *mut c_void,
+                gl_texture,
+                gl::TEXTURE_2D,
+                WGL_ACCESS_READ_ONLY_NV);
+
+            // Lock the texture so that we can use it.
+            let ok = (dx_interop_functions.DXLockObjectsNV)(self.gl_dx_interop_device,
+                                                            1,
+                                                            &local_gl_dx_interop_object);
+            assert_ne!(ok, FALSE);
+
+            // Initialize the texture, for convenience.
+            // FIXME(pcwalton): We should probably reset the bound texture after this.
+            context.gl.BindTexture(gl::TEXTURE_2D, gl_texture);
+            context.gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+            context.gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+            context.gl.TexParameteri(gl::TEXTURE_2D,
+                                     gl::TEXTURE_WRAP_S,
+                                     gl::CLAMP_TO_EDGE as GLint);
+            context.gl.TexParameteri(gl::TEXTURE_2D,
+                                     gl::TEXTURE_WRAP_T,
+                                     gl::CLAMP_TO_EDGE as GLint);
+
+            // Finish up.
+            SurfaceTexture {
+                surface,
+                local_d3d11_texture,
+                local_gl_dx_interop_object,
+                gl_texture,
+                phantom: PhantomData,
+            }
+        }
+    }
+
+    pub(crate) fn lock_surface(&self, surface: &Surface) {
+        let mut gl_dx_interop_object = match surface.win32_objects {
+            Win32Objects::Widget { .. } => return,
+            Win32Objects::Texture { gl_dx_interop_object, .. } => gl_dx_interop_object,
+        };
+
+        let dx_interop_functions =
+            WGL_EXTENSION_FUNCTIONS.dx_interop_functions
+                                   .as_ref()
+                                   .expect("How did you make a surface without DX interop?");
+
+        unsafe {
+            let ok = (dx_interop_functions.DXLockObjectsNV)(self.gl_dx_interop_device,
+                                                            1,
+                                                            &mut gl_dx_interop_object);
+            assert_ne!(ok, FALSE);
+        }
+    }
 }
 
 impl Surface {
@@ -226,4 +333,3 @@ impl Surface {
         }
     }
 }
-

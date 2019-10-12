@@ -34,4 +34,3 @@ impl Adapter {
         Err(Error::NoSoftwareAdapters)
     }
 }
-
