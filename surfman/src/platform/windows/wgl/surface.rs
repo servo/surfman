@@ -12,6 +12,7 @@ use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
+use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
@@ -248,17 +249,18 @@ impl Device {
             // Create a new texture wrapping the shared handle.
             let mut local_d3d11_texture = ptr::null_mut();
             let result = self.d3d11_device.OpenSharedResource(dxgi_share_handle,
-                                                              ID3D11Texture2D::uuidof(),
+                                                              &ID3D11Texture2D::uuidof(),
                                                               &mut local_d3d11_texture);
-            if !winerror::SUCCEEDED(result) {
+            if !winerror::SUCCEEDED(result) || local_d3d11_texture.is_null() {
                 surface.destroyed = true;
                 return Err(Error::SurfaceImportFailed(WindowingApiError::Failed));
             }
-            let local_d3d11_texture = ComPtr::from_raw(local_d3d11_texture);
+            let local_d3d11_texture =
+                ComPtr::from_raw(local_d3d11_texture as *mut ID3D11Texture2D);
 
             // Make GL aware of the connection between the share handle and the texture.
             let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
-                local_d3d11_texture.as_raw(),
+                local_d3d11_texture.as_raw() as *mut c_void,
                 dxgi_share_handle);
             assert_ne!(ok, FALSE);
 
@@ -267,7 +269,7 @@ impl Device {
             context.gl.GenTextures(1, &mut gl_texture);
 
             // Register that texture with GL.
-            let local_gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
+            let mut local_gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
                 self.gl_dx_interop_device,
                 local_d3d11_texture.as_raw() as *mut c_void,
                 gl_texture,
@@ -277,7 +279,7 @@ impl Device {
             // Lock the texture so that we can use it.
             let ok = (dx_interop_functions.DXLockObjectsNV)(self.gl_dx_interop_device,
                                                             1,
-                                                            &local_gl_dx_interop_object);
+                                                            &mut local_gl_dx_interop_object);
             assert_ne!(ok, FALSE);
 
             // Initialize the texture, for convenience.
@@ -293,13 +295,13 @@ impl Device {
                                      gl::CLAMP_TO_EDGE as GLint);
 
             // Finish up.
-            SurfaceTexture {
+            Ok(SurfaceTexture {
                 surface,
                 local_d3d11_texture,
                 local_gl_dx_interop_object,
                 gl_texture,
                 phantom: PhantomData,
-            }
+            })
         }
     }
 
