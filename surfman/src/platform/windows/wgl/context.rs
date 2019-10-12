@@ -4,9 +4,11 @@
 
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, WindowingApiError};
 use super::device::{Device, HiddenWindow};
+use super::surface::SurfaceType;
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
+use crate::surface::Framebuffer;
 use std::borrow::Cow;
 use std::ffi::CStr;
 use std::mem;
@@ -77,6 +79,7 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
 #[derive(Clone)]
 pub struct ContextDescriptor {
     pixel_format: c_int,
+    gl_version: GLVersion,
 }
 
 pub struct Context {
@@ -84,6 +87,7 @@ pub struct Context {
     glrc: HGLRC,
     pub(crate) gl: Gl,
     hidden_window: Option<HiddenWindow>,
+    framebuffer: Framebuffer<Surface>,
 }
 
 lazy_static! {
@@ -135,25 +139,76 @@ impl Device {
                 return Err(Error::NoPixelFormatFound);
             }
 
-            Ok(ContextDescriptor { pixel_format })
+            Ok(ContextDescriptor { pixel_format, gl_version: attributes.version })
         }
     }
 
-    fn create_context() {
-        // TODO(pcwalton)
-        /*
-            let dc = GetDC(window);
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
+                          -> Result<Context, Error> {
+        let wglCreateContextAttribsARB = match WGL_EXTENSION_FUNCTIONS.CreateContextAttribsARB {
+            None => return Err(Error::RequiredExtensionUnavailable),
+            Some(wglCreateContextAttribsARB) => wglCreateContextAttribsARB,
+        };
+
+        unsafe {
+            // Get a suitable DC.
+            let hidden_window = match *surface_type {
+                SurfaceType::Widget { ref native_widget } => None,
+                SurfaceType::Generic { .. } => Some(HiddenWindow::new()),
+            };
+            let hidden_window_dc = match hidden_window {
+                None => None,
+                Some(ref hidden_window) => hidden_window.get_dc(),
+            };
+            let dc = match *surface_type {
+                SurfaceType::Widget { ref native_widget } => winuser::GetDC(native_widget),
+                SurfaceType::Generic { .. } => hidden_window_dc.as_ref().unwrap().dc,
+            };
+
+            // Set the pixel format on the DC.
             let mut pixel_format_descriptor = mem::zeroed();
             let pixel_format_count = DescribePixelFormat(dc,
-                                                        context_descriptor.pixel_format,
-                                                        mem::size_of::<PIXELFORMATDESCRIPTOR>(),
-                                                        &mut pixel_format_descriptor);
+                                                         context_descriptor.pixel_format,
+                                                         mem::size_of::<PIXELFORMATDESCRIPTOR>(),
+                                                         &mut pixel_format_descriptor);
             assert_ne!(pixel_format_count, 0);
             let ok = SetPixelFormat(dc,
                                     context_descriptor.pixel_format,
                                     &mut pixel_format_descriptor);
             assert_ne!(ok, FALSE);
-        */
+
+            // Make the context.
+            let wgl_attributes = [
+                WGL_CONTEXT_MAJOR_VERSION_ARB,  descriptor.gl_version.major,
+                WGL_CONTEXT_MINOR_VERSION_ARB,  descriptor.gl_version.minor,
+                WGL_CONTEXT_PROFILE_MASK_ARB,   WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
+                0,
+            ];
+            let glrc = wglCreateContextAttribsARB(dc, 0, wgl_attributes.as_ptr());
+            if glrc.is_null() {
+                return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
+            }
+
+            // Temporarily make the context current.
+            let _guard = CurrentContextGuard::new();
+            let ok = wglMakeCurrent(dc, glrc);
+            assert_ne!(ok, FALSE);
+
+            // Create the initial comment.
+            let mut context = Context {
+                id: *next_context_id,
+                glrc,
+                gl: Gl::load_with(|symbol_name| wglGetProcAddress(symbol_name)),
+                hidden_window,
+                framebuffer: Framebuffer::None,
+            };
+            next_context_id.0 += 1;
+
+            // Build the initial framebuffer.
+            let surface = self.create_surface(&context, surface_type)?;
+            context.framebuffer = Framebuffer::Surface(surface);
+            Ok(context)
+        }
     }
 
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {

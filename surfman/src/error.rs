@@ -56,6 +56,8 @@ pub enum Error {
     NoWidgetAttached,
     /// The surface has a window attachement.
     WidgetAttached,
+    /// The native widget is invalid.
+    InvalidNativeWidget,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.

@@ -12,6 +12,7 @@ use crate::gl::types::{GLenum, GLuint};
 use crate::gl::{self, Gl};
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
+use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
@@ -27,6 +28,7 @@ use winapi::um::d3d11::{D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE};
 use winapi::um::d3d11::{D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX, D3D11_TEXTURE2D_DESC};
 use winapi::um::d3d11::{D3D11_USAGE_DEFAULT, ID3D11Texture2D};
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use winapi::um::winuser;
 use wio::com::ComPtr;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
@@ -49,7 +51,9 @@ pub(crate) enum Win32Objects {
         gl_framebuffer: GLuint,
         renderbuffers: Renderbuffers,
     },
-    Widget,
+    Widget {
+        native_widget: HWND,
+    },
 }
 
 unsafe impl Send for Surface {}
@@ -192,7 +196,21 @@ impl Device {
 
     fn create_widget_surface(&mut self, context: &Context, native_widget: &NativeWidget)
                               -> Result<Surface, Error> {
-        unimplemented!()
+        unsafe {
+            let mut widget_rect = mem::zeroed();
+            let ok = winuser::GetWindowRect(native_widget.window_handle, &mut widget_rect);
+            if ok == FALSE {
+                return Err(Error::InvalidNativeWidget);
+            }
+
+            Ok(Surface {
+                size: Size2D::new(widget_rect.right - widget_rect.left,
+                                  widget_rect.bottom - widget_rect.top),
+                context_id: context.id,
+                win32_objects: Win32Objects::Widget { window_handle: native_widget.window_handle },
+                destroyed: false,
+            })
+        }
     }
 }
 
@@ -202,7 +220,7 @@ impl Surface {
             Win32Objects::Texture { ref d3d11_texture, .. } => {
                 SurfaceID((*d3d11_texture).as_raw() as usize)
             }
-            Win32Objects::Widget => unimplemented!(),
+            Win32Objects::Widget { window_handle } => SurfaceID(window_handle as usize),
         }
     }
 }
