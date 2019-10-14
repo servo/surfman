@@ -102,7 +102,7 @@ pub(crate) struct HiddenWindow {
 pub(crate) struct DCGuard<'a> {
     pub(crate) dc: HDC,
     window: Option<HWND>,
-    phantom: PhantomData<'a>,
+    phantom: PhantomData<&'a HWND>,
 }
 
 impl Drop for HiddenWindow {

@@ -5,7 +5,7 @@
 use crate::context::CREATE_CONTEXT_MUTEX;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error};
 use crate::{GLVersion, WindowingApiError};
-use super::device::{Device, HiddenWindow};
+use super::device::{DCGuard, Device, HiddenWindow};
 use super::surface::{Surface, SurfaceType, Win32Objects};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
@@ -144,9 +144,9 @@ impl Device {
             0,
         ];
 
-        let wglChoosePixelFormatARB = match WGL_EXTENSION_FUNCTIONS.ChoosePixelFormatARB {
+        let wglChoosePixelFormatARB = match WGL_EXTENSION_FUNCTIONS.pixel_format_functions {
             None => return Err(Error::RequiredExtensionUnavailable),
-            Some(wglChoosePixelFormatARB) => wglChoosePixelFormatARB,
+            Some(ref pixel_format_functions) => pixel_format_functions.ChoosePixelFormatARB,
         };
 
         let hidden_window_dc = self.hidden_window.get_dc();
@@ -253,11 +253,11 @@ impl Device {
 
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            let dc = self.get_context_dc(context);
-            let pixel_format = wingdi::GetPixelFormat(dc);
+            let dc_guard = self.get_context_dc(context);
+            let pixel_format = wingdi::GetPixelFormat(dc_guard.dc);
 
             let _guard = self.temporarily_make_context_current(context);
-            let version_string = context.gl.GetString(gl::VERSION);
+            let version_string = context.gl.GetString(gl::VERSION) as *const c_char;
             let version_string = CStr::from_ptr(version_string).to_string_lossy();
             let mut version_string_iter = version_string.split(".");
             let major_version: u8 =
@@ -284,7 +284,7 @@ impl Device {
 
     pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
                                    -> Result<Surface, Error> {
-        if let Framebuffer::External = context.framebuffer {
+        if let Framebuffer::External { .. } = context.framebuffer {
             return Err(Error::ExternalRenderTarget)
         }
 
@@ -316,6 +316,25 @@ impl Device {
         unimplemented!()
     }
 
+    pub(crate) fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+        unsafe {
+            let dc_guard = self.get_context_dc(context);
+            let ok = wglMakeCurrent(dc_guard.dc, context.glrc);
+            if ok != FALSE {
+                Ok(())
+            } else {
+                Err(Error::MakeCurrentFailed(WindowingApiError::Failed))
+            }
+        }
+    }
+
+    #[inline]
+    fn context_is_current(&self, context: &Context) -> bool {
+        unsafe {
+            wglGetCurrentContext() == context.glrc
+        }
+    }
+
     fn attach_surface(&self, context: &mut Context, surface: Surface) {
         match context.framebuffer {
             Framebuffer::None => context.framebuffer = Framebuffer::Surface(surface),
@@ -326,7 +345,7 @@ impl Device {
     fn release_surface(&self, context: &mut Context) -> Option<Surface> {
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => Some(surface),
-            Framebuffer::None | Framebuffer::External => None,
+            Framebuffer::None | Framebuffer::External { .. } => None,
         }
     }
 
@@ -337,15 +356,15 @@ impl Device {
                 Framebuffer::External { dc } => DCGuard::new(dc, None),
                 Framebuffer::Surface(ref surface) => {
                     match surface.win32_objects {
-                        Win32Objects::Window { window } => {
-                            DCGuard::new(winuser::GetDC(window), Some(window))
+                        Win32Objects::Widget { window_handle } => {
+                            DCGuard::new(winuser::GetDC(window_handle), Some(window_handle))
                         }
                         Win32Objects::Texture { .. } => {
                             context.hidden_window.as_ref().unwrap().get_dc()
                         }
                     }
                 }
-            };
+            }
         }
     }
 }
