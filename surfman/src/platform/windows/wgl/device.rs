@@ -6,6 +6,7 @@ use crate::{Error, GLApi};
 use super::adapter::Adapter;
 use super::context::{WGLExtensionFunctions, WGL_EXTENSION_FUNCTIONS};
 
+use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_int, c_void};
 use std::ptr;
@@ -98,9 +99,10 @@ pub(crate) struct HiddenWindow {
     join_handle: Option<JoinHandle<()>>,
 }
 
-pub(crate) struct HiddenWindowDC<'a> {
+pub(crate) struct DCGuard<'a> {
     pub(crate) dc: HDC,
-    hidden_window: &'a HiddenWindow,
+    window: Option<HWND>,
+    phantom: PhantomData<'a>,
 }
 
 impl Drop for HiddenWindow {
@@ -114,11 +116,13 @@ impl Drop for HiddenWindow {
     }
 }
 
-impl<'a> Drop for HiddenWindowDC<'a> {
+impl<'a> Drop for DCGuard<'a> {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            winuser::ReleaseDC(self.hidden_window.window, self.dc);
+            if let Some(window) = self.window {
+                winuser::ReleaseDC(window, self.dc);
+            }
         }
     }
 }
@@ -132,10 +136,9 @@ impl HiddenWindow {
     }
 
     #[inline]
-    pub(crate) fn get_dc(&self) -> HiddenWindowDC {
+    pub(crate) fn get_dc(&self) -> DCGuard {
         unsafe {
-            let dc = winuser::GetDC(self.window);
-            HiddenWindowDC { dc, hidden_window: self }
+            DCGuard::new(winuser::GetDC(self.window), Some(self.window))
         }
     }
 
@@ -186,5 +189,11 @@ impl HiddenWindow {
                 }
             }
         }
+    }
+}
+
+impl<'a> DCGuard<'a> {
+    pub(crate) fn new(dc: HDC, window: Option<HWND>) -> DCGuard<'a> {
+        DCGuard { dc, window, phantom: PhantomData }
     }
 }

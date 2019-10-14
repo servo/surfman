@@ -6,11 +6,10 @@ use crate::context::CREATE_CONTEXT_MUTEX;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error};
 use crate::{GLVersion, WindowingApiError};
 use super::device::{Device, HiddenWindow};
-use super::surface::{Surface, SurfaceType};
+use super::surface::{Surface, SurfaceType, Win32Objects};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
-use crate::surface::Framebuffer;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 use std::mem;
@@ -48,19 +47,31 @@ const WGL_CONTEXT_CORE_PROFILE_BIT_ARB: GLenum = 0x00000001;
 #[allow(non_snake_case)]
 #[derive(Default)]
 pub(crate) struct WGLExtensionFunctions {
-    ChoosePixelFormatARB: Option<unsafe extern "C" fn(hDC: HDC,
-                                                      piAttribIList: *const c_int,
-                                                      pfAttribFList: *const FLOAT,
-                                                      nMaxFormats: UINT,
-                                                      piFormats: *mut c_int,
-                                                      nNumFormats: *mut UINT)
-                                                      -> BOOL>,
     CreateContextAttribsARB: Option<unsafe extern "C" fn(hDC: HDC,
                                                          shareContext: HGLRC,
                                                          attribList: *const c_int)
                                                          -> HGLRC>,
     GetExtensionsStringARB: Option<unsafe extern "C" fn(hdc: HDC) -> *const c_char>,
+    pub(crate) pixel_format_functions: Option<WGLPixelFormatExtensionFunctions>,
     pub(crate) dx_interop_functions: Option<WGLDXInteropExtensionFunctions>,
+}
+
+#[allow(non_snake_case)]
+pub(crate) struct WGLPixelFormatExtensionFunctions {
+    ChoosePixelFormatARB: unsafe extern "C" fn(hdc: HDC,
+                                               piAttribIList: *const c_int,
+                                               pfAttribFList: *const FLOAT,
+                                               nMaxFormats: UINT,
+                                               piFormats: *mut c_int,
+                                               nNumFormats: *mut UINT)
+                                               -> BOOL,
+    GetPixelFormatAttribivARB: unsafe extern "C" fn(hdc: HDC,
+                                                    iPixelFormat: c_int,
+                                                    iLayerPlane: c_int,
+                                                    nAttributes: UINT,
+                                                    piAttributes: *const c_int,
+                                                    piValues: *mut c_int)
+                                                    -> BOOL,
 }
 
 #[allow(non_snake_case)]
@@ -96,13 +107,19 @@ pub struct Context {
     glrc: HGLRC,
     pub(crate) gl: Gl,
     hidden_window: Option<HiddenWindow>,
-    framebuffer: Framebuffer<Surface>,
+    framebuffer: Framebuffer,
 }
 
 lazy_static! {
     pub(crate) static ref WGL_EXTENSION_FUNCTIONS: WGLExtensionFunctions = {
         thread::spawn(extension_loader_thread).join().unwrap()
     };
+}
+
+enum Framebuffer {
+    None,
+    External { dc: HDC },
+    Surface(Surface),
 }
 
 impl Device {
@@ -235,12 +252,59 @@ impl Device {
     }
 
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        unimplemented!()
+        unsafe {
+            let dc = self.get_context_dc(context);
+            let pixel_format = wingdi::GetPixelFormat(dc);
+
+            let _guard = self.temporarily_make_context_current(context);
+            let version_string = context.gl.GetString(gl::VERSION);
+            let version_string = CStr::from_ptr(version_string).to_string_lossy();
+            let mut version_string_iter = version_string.split(".");
+            let major_version: u8 =
+                version_string_iter.next()
+                                   .expect("Where's the major GL version?")
+                                   .parse()
+                                   .expect("Couldn't parse the major GL version!");
+            let minor_version: u8 =
+                version_string_iter.next()
+                                   .expect("Where's the minor GL version?")
+                                   .parse()
+                                   .expect("Couldn't parse the minor GL version!");
+            ContextDescriptor {
+                pixel_format,
+                gl_version: GLVersion::new(major_version, minor_version),
+            }
+        }
     }
 
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
         unimplemented!()
+    }
+
+    pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
+                                   -> Result<Surface, Error> {
+        if let Framebuffer::External = context.framebuffer {
+            return Err(Error::ExternalRenderTarget)
+        }
+
+        if context.id != new_surface.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
+        unsafe {
+            let is_current = self.context_is_current(context);
+
+            let old_surface = self.release_surface(context).expect("Where's our surface?");
+            self.attach_surface(context, new_surface);
+
+            if is_current {
+                // We need to make ourselves current again, because the surface changed.
+                self.make_context_current(context)?;
+            }
+
+            Ok(old_surface)
+        }
     }
 
     pub(crate) fn temporarily_bind_framebuffer(&self, framebuffer: GLuint) {
@@ -250,6 +314,39 @@ impl Device {
     pub(crate) fn temporarily_make_context_current(&self, context: &Context)
                                                    -> Result<(), Error> {
         unimplemented!()
+    }
+
+    fn attach_surface(&self, context: &mut Context, surface: Surface) {
+        match context.framebuffer {
+            Framebuffer::None => context.framebuffer = Framebuffer::Surface(surface),
+            _ => panic!("Tried to attach a surface, but there was already a surface present!"),
+        }
+    }
+
+    fn release_surface(&self, context: &mut Context) -> Option<Surface> {
+        match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            Framebuffer::Surface(surface) => Some(surface),
+            Framebuffer::None | Framebuffer::External => None,
+        }
+    }
+
+    fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
+        unsafe {
+            match context.framebuffer {
+                Framebuffer::None => unreachable!(),
+                Framebuffer::External { dc } => DCGuard::new(dc, None),
+                Framebuffer::Surface(ref surface) => {
+                    match surface.win32_objects {
+                        Win32Objects::Window { window } => {
+                            DCGuard::new(winuser::GetDC(window), Some(window))
+                        }
+                        Win32Objects::Texture { .. } => {
+                            context.hidden_window.as_ref().unwrap().get_dc()
+                        }
+                    }
+                }
+            };
+        }
     }
 }
 
@@ -363,9 +460,13 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
                 // Load function pointers.
                 for extension in extensions.split(' ') {
                     if extension == "WGL_ARB_pixel_format" {
-                        (*wgl_extension_functions).ChoosePixelFormatARB = mem::transmute(
-                            wglGetProcAddress(&b"wglChoosePixelFormatARB\0"[0] as *const u8 as
-                            LPCSTR));
+                        (*wgl_extension_functions).pixel_format_functions =
+                            Some(WGLPixelFormatExtensionFunctions {
+                                ChoosePixelFormatARB: mem::transmute(wglGetProcAddress(
+                                    &b"wglChoosePixelFormatARB\0"[0] as *const u8 as LPCSTR)),
+                                GetPixelFormatAttribivARB: mem::transmute(wglGetProcAddress(
+                                    &b"wglGetPixelFormatAttribivARB\0"[0] as *const u8 as LPCSTR)),
+                            });
                         continue;
                     }
                     if extension == "WGL_ARB_create_context" {
