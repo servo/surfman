@@ -2,6 +2,7 @@
 
 use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::gl_utils;
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, HiDPIMode, SurfaceID, gl};
 use super::context::{Context, GL_FUNCTIONS};
@@ -248,23 +249,12 @@ impl Device {
             // Leak the surface, and return an error.
             surface.framebuffer_object = 0;
             surface.renderbuffers.leak();
-            return Err(Error::IncompatibleSurface)
+            return Err(Error::IncompatibleSurface);
         }
 
         GL_FUNCTIONS.with(|gl| {
             unsafe {
-                // Unbind the framebuffer if currently bound.
-                let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
-                gl.GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut current_draw_framebuffer);
-                gl.GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut current_read_framebuffer);
-                if current_draw_framebuffer as GLuint == surface.framebuffer_object {
-                    gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
-                }
-                if current_read_framebuffer as GLuint == surface.framebuffer_object {
-                    gl.BindFramebuffer(gl::READ_FRAMEBUFFER, 0);
-                }
-
-                gl.DeleteFramebuffers(1, &surface.framebuffer_object);
+                gl_utils::destroy_framebuffer(gl, surface.framebuffer_object);
                 surface.framebuffer_object = 0;
 
                 surface.renderbuffers.destroy();

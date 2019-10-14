@@ -33,6 +33,7 @@ pub use crate::info::{GLApi, GLVersion};
 mod surface;
 pub use crate::surface::{HiDPIMode, SurfaceID};
 
+mod gl_utils;
 mod renderbuffers;
 
 mod gl {

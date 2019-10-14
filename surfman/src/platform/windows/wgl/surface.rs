@@ -228,6 +228,52 @@ impl Device {
         }
     }
 
+    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+                           -> Result<(), Error> {
+        let dx_interop_functions =
+            WGL_EXTENSION_FUNCTIONS.dx_interop_functions
+                                   .as_ref()
+                                   .expect("How did you make a surface without DX interop?");
+
+        if context.id != surface.context_id {
+            // Leak the surface, and return an error.
+            surface.renderbuffers.leak();
+            surface.destroyed = true;
+            return Err(Error::IncompatibleSurface);
+        }
+
+        let _guard = self.temporarily_make_context_current(context)?;
+
+        unsafe {
+            match surface.win32_objects {
+                Win32Objects::Texture {
+                    ref mut gl_dx_interop_object,
+                    ref mut gl_texture,
+                    ref mut gl_framebuffer,
+                    ref mut renderbuffers,
+                    d3d11_texture: _,
+                    dxgi_share_handle: _,
+                } => {
+                    renderbuffers.destroy();
+
+                    gl_utils::destroy_framebuffer(&context.gl, *gl_framebuffer);
+                    *gl_framebuffer = 0;
+
+                    gl.DeleteTextures(1, gl_texture);
+                    *gl_texture = 0;
+
+                    let ok = (dx_interop_functions.DXUnregisterObjectNV)(self.gl_dx_interop_device,
+                                                                         *gl_dx_interop_object);
+                    assert_ne!(ok, FALSE);
+                    *gl_dx_interop_object = INVALID_HANDLE_VALUE;
+                }
+                Win32Objects::Widget { window_handle: _ } => {}
+            }
+
+            surface.destroyed = true;
+        }
+    }
+
     pub fn create_surface_texture(&self, context: &mut Context, mut surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
         let dxgi_share_handle = match surface.win32_objects {
