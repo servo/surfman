@@ -78,7 +78,7 @@ static BACKGROUND_COLOR: [f32; 4] = [
 
 fn main() {
     let adapter = Adapter::default().unwrap();
-    let device = Device::new(&adapter).unwrap();
+    let mut device = Device::new(&adapter).unwrap();
 
     let logical_size = LogicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
     let mut event_loop = EventsLoop::new();
@@ -97,7 +97,7 @@ fn main() {
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
-    let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
+    let context = device.create_context(&context_descriptor, &surface_type).unwrap();
     device.make_context_current(&context).unwrap();
 
     let mut app = App::new(adapter, device, context);
@@ -134,7 +134,9 @@ struct App {
 }
 
 impl App {
-    fn new(adapter: Adapter, mut device: Device, mut context: Context) -> App {
+    fn new(adapter: Adapter, device: Device, mut context: Context) -> App {
+        let context_descriptor = device.context_descriptor(&context);
+
         gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
 
         // Set up communication channels, and spawn our worker thread.

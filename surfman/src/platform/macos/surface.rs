@@ -131,8 +131,8 @@ impl Device {
                 let context_descriptor = self.context_descriptor(context);
                 let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
-                let renderbuffers = Renderbuffers::new(&size, &context_attributes);
-                renderbuffers.bind_to_current_framebuffer();
+                let renderbuffers = Renderbuffers::new(gl, &size, &context_attributes);
+                renderbuffers.bind_to_current_framebuffer(gl);
 
                 debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
                                  gl::FRAMEBUFFER_COMPLETE);
@@ -245,25 +245,25 @@ impl Device {
 
     pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
                            -> Result<(), Error> {
-        if context.id != surface.context_id {
-            // Leak the surface, and return an error.
-            surface.framebuffer_object = 0;
-            surface.renderbuffers.leak();
-            return Err(Error::IncompatibleSurface);
-        }
-
         GL_FUNCTIONS.with(|gl| {
+            if context.id != surface.context_id {
+                // Leak the surface, and return an error.
+                surface.framebuffer_object = 0;
+                surface.renderbuffers.leak(gl);
+                return Err(Error::IncompatibleSurface);
+            }
+
             unsafe {
                 gl_utils::destroy_framebuffer(gl, surface.framebuffer_object);
                 surface.framebuffer_object = 0;
 
-                surface.renderbuffers.destroy();
+                surface.renderbuffers.destroy(gl);
                 gl.DeleteTextures(1, &surface.texture_object);
                 surface.texture_object = 0;
             }
-        });
 
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
