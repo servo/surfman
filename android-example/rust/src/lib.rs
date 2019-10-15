@@ -15,7 +15,7 @@ thread_local! {
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsRenderer_init(
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_init(
     env: JNIEnv,
     class: JClass,
     activity: JObject,
@@ -30,7 +30,7 @@ pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThre
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsRenderer_tick(
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_tick(
     env: JNIEnv,
     class: JClass,
 ) {
