@@ -283,8 +283,7 @@ impl Device {
 
             // Build the initial framebuffer.
             let surface = self.create_surface(&context, surface_type)?;
-            self.lock_surface(&surface);
-            context.framebuffer = Framebuffer::Surface(surface);
+            self.attach_surface(&mut context, surface);
             Ok(context)
         }
     }
@@ -294,8 +293,7 @@ impl Device {
             return Ok(());
         }
 
-        if let Framebuffer::Surface(surface) = mem::replace(&mut context.framebuffer,
-                                                            Framebuffer::None) {
+        if let Some(surface) = self.release_surface(context) {
             self.destroy_surface(context, surface)?;
         }
 
@@ -445,6 +443,36 @@ impl Device {
         }
     }
 
+    pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
+        let surface = self.context_surface(context)?;
+        match surface.win32_objects {
+            Win32Objects::Texture { gl_framebuffer, .. } => Ok(gl_framebuffer),
+            Win32Objects::Widget { .. } => Ok(0),
+        }
+    }
+
+    #[inline]
+    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
+        self.context_surface(context).map(|surface| surface.size())
+    }
+
+    #[inline]
+    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
+        self.context_surface(context).map(|surface| surface.id())
+    }
+
+    #[inline]
+    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
+        self.context_surface_mut(context).and_then(|surface| {
+            self.present_surface_without_context(surface)
+        })
+    }
+
+    #[inline]
+    pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
+        get_proc_address(symbol_name)
+    }
+
     #[inline]
     fn context_is_current(&self, context: &Context) -> bool {
         unsafe {
@@ -452,16 +480,38 @@ impl Device {
         }
     }
 
+    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(surface),
+        }
+    }
+
+    fn context_surface_mut<'c>(&self, context: &'c mut Context) -> Result<&'c mut Surface, Error> {
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(surface),
+        }
+    }
+
     fn attach_surface(&self, context: &mut Context, surface: Surface) {
         match context.framebuffer {
-            Framebuffer::None => context.framebuffer = Framebuffer::Surface(surface),
+            Framebuffer::None => {
+                self.lock_surface(&surface);
+                context.framebuffer = Framebuffer::Surface(surface);
+            }
             _ => panic!("Tried to attach a surface, but there was already a surface present!"),
         }
     }
 
     fn release_surface(&self, context: &mut Context) -> Option<Surface> {
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => Some(surface),
+            Framebuffer::Surface(surface) => {
+                self.unlock_surface(&surface);
+                Some(surface)
+            }
             Framebuffer::None | Framebuffer::External { .. } => None,
         }
     }

@@ -321,7 +321,7 @@ impl Device {
             let mut gl_texture = 0;
             context.gl.GenTextures(1, &mut gl_texture);
 
-            // Register that texture with GL.
+            // Register that texture with GL/DX interop.
             let mut local_gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
                 self.gl_dx_interop_device,
                 local_d3d11_texture.as_raw() as *mut c_void,
@@ -358,6 +358,39 @@ impl Device {
         }
     }
 
+    pub fn destroy_surface_texture(&self,
+                                   context: &mut Context,
+                                   mut surface_texture: SurfaceTexture)
+                                   -> Result<Surface, Error> {
+        let dx_interop_functions =
+            WGL_EXTENSION_FUNCTIONS.dx_interop_functions
+                                   .as_ref()
+                                   .expect("How did you make a surface without DX interop?");
+
+        let _guard = self.temporarily_make_context_current(context)?;
+
+        unsafe {
+            // Unlock the texture.
+            let ok = (dx_interop_functions.DXUnlockObjectsNV)(
+                self.gl_dx_interop_device,
+                1,
+                &mut surface_texture.local_gl_dx_interop_object);
+            assert_ne!(ok, FALSE);
+
+            // Unregister the texture from GL/DX interop.
+            let mut local_gl_dx_interop_object = (dx_interop_functions.DXUnregisterObjectNV)(
+                self.gl_dx_interop_device,
+                surface_texture.local_gl_dx_interop_object);
+            surface_texture.local_gl_dx_interop_object = INVALID_HANDLE_VALUE;
+
+            // Destroy the GL texture.
+            context.gl.DeleteTextures(1, &surface_texture.gl_texture);
+            surface_texture.gl_texture = 0;
+        }
+
+        Ok(surface_texture.surface)
+    }
+
     pub(crate) fn lock_surface(&self, surface: &Surface) {
         let mut gl_dx_interop_object = match surface.win32_objects {
             Win32Objects::Widget { .. } => return,
@@ -377,9 +410,44 @@ impl Device {
         }
     }
 
+    pub(crate) fn unlock_surface(&self, surface: &Surface) {
+        let mut gl_dx_interop_object = match surface.win32_objects {
+            Win32Objects::Widget { .. } => return,
+            Win32Objects::Texture { gl_dx_interop_object, .. } => gl_dx_interop_object,
+        };
+
+        let dx_interop_functions =
+            WGL_EXTENSION_FUNCTIONS.dx_interop_functions
+                                   .as_ref()
+                                   .expect("How did you make a surface without DX interop?");
+
+        unsafe {
+            let ok = (dx_interop_functions.DXUnlockObjectsNV)(self.gl_dx_interop_device,
+                                                              1,
+                                                              &mut gl_dx_interop_object);
+            assert_ne!(ok, FALSE);
+        }
+    }
+
     #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         gl::TEXTURE_2D
+    }
+
+    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
+                                                  -> Result<(), Error> {
+        let window_handle = match surface.win32_objects {
+            Win32Objects::Widget { .. } => {}
+            _ => return Err(Error::NoWidgetAttached),
+        }
+
+        unsafe {
+            let mut dc = winuser::GetDC(window_handle);
+            let ok = wingdi::SwapBuffers(dc);
+            assert_ne!(ok, egl::FALSE);
+            winuser::ReleaseDC(dc);
+            Ok(())
+        }
     }
 }
 
