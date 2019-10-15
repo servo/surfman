@@ -374,12 +374,39 @@ impl Device {
 }
 
 impl Surface {
+    #[inline]
+    pub fn size(&self) -> Size2D<i32> {
+        self.size
+    }
+
     pub fn id(&self) -> SurfaceID {
         match self.win32_objects {
             Win32Objects::Texture { ref d3d11_texture, .. } => {
                 SurfaceID((*d3d11_texture).as_raw() as usize)
             }
             Win32Objects::Widget { window_handle } => SurfaceID(window_handle as usize),
+        }
+    }
+
+    #[inline]
+    pub fn context_id(&self) -> ContextID {
+        self.context_id
+    }
+}
+
+impl SurfaceTexture {
+    #[inline]
+    pub fn gl_texture(&self) -> GLuint {
+        self.gl_texture
+    }
+}
+
+impl NativeWidget {
+    #[cfg(feature = "sm-winit")]
+    #[inline]
+    pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
+        unsafe {
+            NativeWidget { window_handle: window.get_hwnd() as HWND }
         }
     }
 }

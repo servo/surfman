@@ -403,13 +403,20 @@ impl Device {
         }
     }
 
-    pub(crate) fn temporarily_bind_framebuffer(&self, framebuffer: GLuint) {
-        unimplemented!()
+    pub(crate) fn temporarily_bind_framebuffer(&self, context: &Context, framebuffer: GLuint)
+                                               -> FramebufferGuard {
+        unsafe {
+            let guard = FramebufferGuard::new(context);
+            context.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+            guard
+        }
     }
 
     pub(crate) fn temporarily_make_context_current(&self, context: &Context)
-                                                   -> Result<(), Error> {
-        unimplemented!()
+                                                   -> Result<CurrentContextGuard, Error> {
+        let guard = CurrentContextGuard::new();
+        self.make_context_current(context)?;
+        Ok(guard)
     }
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
@@ -679,6 +686,39 @@ impl NativeContext for UnsafeGLRCRef {
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
         self.glrc = ptr::null_mut();
+    }
+}
+
+#[must_use]
+struct FramebufferGuard<'a> {
+    context: &'a Context,
+    old_read_framebuffer: GLuint,
+    old_draw_framebuffer: GLuint,
+}
+
+impl<'a> Drop for FramebufferGuard<'a> {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            context.gl.BindFramebuffer(gl::READ_FRAMEBUFFER, self.old_read_framebuffer);
+            context.gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.old_draw_framebuffer);
+        }
+    }
+}
+
+impl<'a> FramebufferGuard<'a> {
+    fn new(context: &'a Context) -> FramebufferGuard<'a> {
+        unsafe {
+            let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
+            context.gl.GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut current_draw_framebuffer);
+            context.gl.GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut current_read_framebuffer);
+
+            FramebufferGuard {
+                context,
+                old_draw_framebuffer: current_draw_framebuffer,
+                old_read_framebuffer: current_read_framebuffer,
+            }
+        }
     }
 }
 
