@@ -4,7 +4,7 @@
 
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, SurfaceID};
+use crate::{ContextID, Error, HiDPIMode, SurfaceID};
 use super::context::{Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
@@ -32,6 +32,11 @@ use winapi::um::d3d11::{D3D11_USAGE_DEFAULT, ID3D11Texture2D};
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winuser;
 use wio::com::ComPtr;
+
+#[cfg(feature = "sm-winit")]
+use winit::Window;
+#[cfg(feature = "sm-winit")]
+use winit::os::windows::WindowExt;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
@@ -174,7 +179,7 @@ impl Device {
             // Build our FBO.
             let mut gl_framebuffer = 0;
             context.gl.GenFramebuffers(1, &mut gl_framebuffer);
-            let _guard = self.temporarily_bind_framebuffer(gl_framebuffer);
+            let _guard = self.temporarily_bind_framebuffer(context, gl_framebuffer);
 
             // Attach the reflected D3D11 texture to that FBO.
             context.gl.FramebufferTexture2D(gl::FRAMEBUFFER,
@@ -186,8 +191,8 @@ impl Device {
             // Create renderbuffers as appropriate, and attach them.
             let context_descriptor = self.context_descriptor(context);
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-            let renderbuffers = Renderbuffers::new(&size, &context_attributes);
-            renderbuffers.bind_to_current_framebuffer();
+            let renderbuffers = Renderbuffers::new(&context.gl, &size, &context_attributes);
+            renderbuffers.bind_to_current_framebuffer(&context.gl);
 
             // FIXME(pcwalton): Do we need to acquire the keyed mutex, or does the GL driver do
             // that?
@@ -254,7 +259,7 @@ impl Device {
                     d3d11_texture: _,
                     dxgi_share_handle: _,
                 } => {
-                    renderbuffers.destroy();
+                    renderbuffers.destroy(&context.gl);
 
                     gl_utils::destroy_framebuffer(&context.gl, *gl_framebuffer);
                     *gl_framebuffer = 0;
@@ -370,6 +375,11 @@ impl Device {
                                                             &mut gl_dx_interop_object);
             assert_ne!(ok, FALSE);
         }
+    }
+
+    #[inline]
+    pub fn surface_gl_texture_target(&self) -> GLenum {
+        gl::TEXTURE_2D
     }
 }
 

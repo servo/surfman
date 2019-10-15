@@ -1,12 +1,12 @@
 // surfman/src/platform/generic/mod.rs
 
-#[cfg(any(target_os = "android", target_os = "windows"))]
+#[cfg(any(target_os = "android", all(target_os = "windows", feature = "sm-angle")))]
 pub(crate) mod egl;
 
 #[cfg(feature = "sm-osmesa")]
 pub mod osmesa;
 
-#[cfg(all(feature = "sm-osmesa", not(target_os = "windows")))]
+#[cfg(all(feature = "sm-osmesa", not(all(target_os = "windows", feature = "sm-angle"))))]
 pub mod universal;
-#[cfg(target_os = "windows")]
+#[cfg(all(target_os = "windows", feature = "sm-angle"))]
 pub use crate::platform::windows::angle as universal;
