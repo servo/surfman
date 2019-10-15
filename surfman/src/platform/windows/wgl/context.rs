@@ -3,14 +3,15 @@
 //! Wrapper for WGL contexts on Windows.
 
 use crate::context::CREATE_CONTEXT_MUTEX;
-use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error};
-use crate::{GLVersion, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion};
+use crate::{SurfaceID, WindowingApiError};
 use super::adapter::Adapter;
 use super::device::{DCGuard, Device, HiddenWindow};
 use super::surface::{Surface, SurfaceType, Win32Objects};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
+use euclid::default::Size2D;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 use std::mem;
@@ -25,7 +26,8 @@ use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::libloaderapi;
 use winapi::um::wingdi::{self, PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_MAIN_PLANE};
 use winapi::um::wingdi::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
-use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetCurrentContext, wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
+use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetCurrentContext};
+use winapi::um::wingdi::{wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
 use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CREATE, WM_DESTROY};
 use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW, WS_VISIBLE};
 
@@ -93,8 +95,10 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
     pub(crate) DXSetResourceShareHandleNV: unsafe extern "C" fn(dxResource: *mut c_void,
                                                                 shareHandle: HANDLE)
                                                                 -> BOOL,
-    DXUnlockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE)
-                                            -> BOOL,
+    pub(crate) DXUnlockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE,
+                                                       count: GLint,
+                                                       hObjects: *mut HANDLE)
+                                                       -> BOOL,
     pub(crate) DXUnregisterObjectNV: unsafe extern "C" fn(hDevice: HANDLE, hObject: HANDLE)
                                                           -> BOOL,
 }
@@ -492,7 +496,7 @@ impl Device {
         match context.framebuffer {
             Framebuffer::None => unreachable!(),
             Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(surface),
+            Framebuffer::Surface(ref mut surface) => Ok(surface),
         }
     }
 

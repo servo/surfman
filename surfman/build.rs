@@ -10,7 +10,7 @@ fn main() {
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());
 
     if target.contains("android") ||
-            target.contains("windows") ||
+            (target.contains("windows") && cfg!(feature = "sm-angle")) ||
             cfg!(feature = "test_egl_in_linux") {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, [

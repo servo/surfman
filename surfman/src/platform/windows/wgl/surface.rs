@@ -30,6 +30,7 @@ use winapi::um::d3d11::{D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE};
 use winapi::um::d3d11::{D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX, D3D11_TEXTURE2D_DESC};
 use winapi::um::d3d11::{D3D11_USAGE_DEFAULT, ID3D11Texture2D};
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use winapi::um::wingdi;
 use winapi::um::winuser;
 use wio::com::ComPtr;
 
@@ -437,15 +438,15 @@ impl Device {
     pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
                                                   -> Result<(), Error> {
         let window_handle = match surface.win32_objects {
-            Win32Objects::Widget { .. } => {}
+            Win32Objects::Widget { window_handle } => window_handle,
             _ => return Err(Error::NoWidgetAttached),
-        }
+        };
 
         unsafe {
             let mut dc = winuser::GetDC(window_handle);
             let ok = wingdi::SwapBuffers(dc);
-            assert_ne!(ok, egl::FALSE);
-            winuser::ReleaseDC(dc);
+            assert_ne!(ok, FALSE);
+            winuser::ReleaseDC(window_handle, dc);
             Ok(())
         }
     }
