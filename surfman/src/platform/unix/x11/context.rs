@@ -35,7 +35,7 @@ thread_local! {
 lazy_static! {
     static ref GLX_GET_PROC_ADDRESS: unsafe extern "C" fn(*const GLubyte) -> *mut c_void = {
         unsafe {
-            let library_name = &b"libGLX.so\0"[0] as *const u8 as *const i8;
+            let library_name = &b"libGL.so\0"[0] as *const u8 as *const i8;
             let library = dlopen(library_name, RTLD_LAZY);
             assert!(!library.is_null());
 
