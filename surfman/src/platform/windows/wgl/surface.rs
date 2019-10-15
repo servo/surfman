@@ -10,6 +10,7 @@ use super::device::Device;
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
+use crate::gl_utils;
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
@@ -237,7 +238,6 @@ impl Device {
 
         if context.id != surface.context_id {
             // Leak the surface, and return an error.
-            surface.renderbuffers.leak();
             surface.destroyed = true;
             return Err(Error::IncompatibleSurface);
         }
@@ -259,7 +259,7 @@ impl Device {
                     gl_utils::destroy_framebuffer(&context.gl, *gl_framebuffer);
                     *gl_framebuffer = 0;
 
-                    gl.DeleteTextures(1, gl_texture);
+                    context.gl.DeleteTextures(1, gl_texture);
                     *gl_texture = 0;
 
                     let ok = (dx_interop_functions.DXUnregisterObjectNV)(self.gl_dx_interop_device,
@@ -272,6 +272,8 @@ impl Device {
 
             surface.destroyed = true;
         }
+
+        Ok(())
     }
 
     pub fn create_surface_texture(&self, context: &mut Context, mut surface: Surface)

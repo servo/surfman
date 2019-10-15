@@ -5,6 +5,7 @@
 use crate::context::CREATE_CONTEXT_MUTEX;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error};
 use crate::{GLVersion, WindowingApiError};
+use super::adapter::Adapter;
 use super::device::{DCGuard, Device, HiddenWindow};
 use super::surface::{Surface, SurfaceType, Win32Objects};
 
@@ -94,7 +95,8 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
                                                                 -> BOOL,
     DXUnlockObjectsNV: unsafe extern "C" fn(hDevice: HANDLE, count: GLint, hObjects: *mut HANDLE)
                                             -> BOOL,
-    DXUnregisterObjectNV: unsafe extern "C" fn(hObject: HANDLE) -> BOOL,
+    pub(crate) DXUnregisterObjectNV: unsafe extern "C" fn(hDevice: HANDLE, hObject: HANDLE)
+                                                          -> BOOL,
 }
 
 #[derive(Clone)]
@@ -199,7 +201,7 @@ impl Device {
                 hidden_window: None,
                 framebuffer: Framebuffer::External { dc: wglGetCurrentDC() },
             };
-            *next_context_id += 1;
+            next_context_id.0 += 1;
 
             Ok((device, context))
         }
@@ -271,7 +273,7 @@ impl Device {
 
             // Create the initial context.
             let mut context = Context {
-                native_context: OwnedGLRC { glrc },
+                native_context: Box::new(OwnedGLRC { glrc }),
                 id: *next_context_id,
                 gl,
                 hidden_window,
@@ -288,7 +290,7 @@ impl Device {
     }
 
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.glrc == INVALID_HANDLE_VALUE {
+        if context.native_context.is_destroyed() {
             return Ok(());
         }
 
@@ -332,7 +334,15 @@ impl Device {
 
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
-        let dc = self.get_dc();
+        let wglGetPixelFormatAttribivARB =
+            WGL_EXTENSION_FUNCTIONS.pixel_format_functions
+                                   .as_ref()
+                                   .expect("How did you make a context descriptor without \
+                                            pixel format extensions?")
+                                   .GetPixelFormatAttribivARB;
+
+        let dc_guard = self.hidden_window.get_dc();
+
         unsafe {
             let attrib_name_i_list = [
                 WGL_ALPHA_BITS_ARB as c_int,
@@ -340,7 +350,7 @@ impl Device {
                 WGL_STENCIL_BITS_ARB as c_int,
             ];
             let mut attrib_value_i_list = [0; 3];
-            let ok = wglGetPixelFormatAttribivARB(self.dc,
+            let ok = wglGetPixelFormatAttribivARB(dc_guard.dc,
                                                   context_descriptor.pixel_format,
                                                   0,
                                                   attrib_name_i_list.len() as UINT,
@@ -355,13 +365,13 @@ impl Device {
                 flags: ContextAttributeFlags::empty(),
             };
             if alpha_bits > 0 {
-                flags.insert(ContextAttributeFlags::ALPHA);
+                attributes.flags.insert(ContextAttributeFlags::ALPHA);
             }
             if depth_bits > 0 {
-                flags.insert(ContextAttributeFlags::DEPTH);
+                attributes.flags.insert(ContextAttributeFlags::DEPTH);
             }
             if stencil_bits > 0 {
-                flags.insert(ContextAttributeFlags::STENCIL);
+                attributes.flags.insert(ContextAttributeFlags::STENCIL);
             }
 
             attributes
@@ -405,7 +415,7 @@ impl Device {
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
             let dc_guard = self.get_context_dc(context);
-            let ok = wglMakeCurrent(dc_guard.dc, context.glrc);
+            let ok = wglMakeCurrent(dc_guard.dc, context.native_context.glrc());
             if ok != FALSE {
                 Ok(())
             } else {
@@ -417,7 +427,7 @@ impl Device {
     #[inline]
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
-            let ok = wglMakeCurrent(ptr::null(), ptr::null());
+            let ok = wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
             if ok != FALSE {
                 Ok(())
             } else {
@@ -429,7 +439,7 @@ impl Device {
     #[inline]
     fn context_is_current(&self, context: &Context) -> bool {
         unsafe {
-            wglGetCurrentContext() == context.glrc
+            wglGetCurrentContext() == context.native_context.glrc()
         }
     }
 
@@ -637,16 +647,16 @@ impl NativeContext for OwnedGLRC {
 
     #[inline]
     fn is_destroyed(&self) -> bool {
-        self.glrc == INVALID_HANDLE_VALUE
+        self.glrc.is_null()
     }
 
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
         if wglGetCurrentContext() == self.glrc {
-            wglMakeCurrent(ptr::null(), ptr::null());
+            wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
         }
         wglDeleteContext(self.glrc);
-        self.glrc = INVALID_HANDLE_VALUE;
+        self.glrc = ptr::null_mut();
     }
 }
 
@@ -663,12 +673,12 @@ impl NativeContext for UnsafeGLRCRef {
 
     #[inline]
     fn is_destroyed(&self) -> bool {
-        self.glrc == INVALID_HANDLE_VALUE
+        self.glrc.is_null()
     }
 
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
-        self.glrc = INVALID_HANDLE_VALUE;
+        self.glrc = ptr::null_mut();
     }
 }
 

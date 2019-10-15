@@ -78,7 +78,6 @@ impl Device {
             assert!(!gl_dx_interop_device.is_null());
 
             let hidden_window = HiddenWindow::new();
-
             Ok(Device { d3d11_device, d3d11_device_context, gl_dx_interop_device, hidden_window })
         }
     }
