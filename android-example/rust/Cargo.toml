@@ -1,0 +1,11 @@
+[package]
+name = "surfman_android_threads"
+version = "0.1.0"
+authors = ["Patrick Walton <pcwalton@mimiga.net>"]
+edition = "2018"
+
+[lib]
+crate_type = ["cdylib"]
+
+[dependencies]
+jni = "0.11"

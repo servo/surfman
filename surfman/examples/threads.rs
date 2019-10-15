@@ -89,7 +89,18 @@ fn main() {
     window.show();
 
     let native_widget = NativeWidget::from_winit_window(&window, HiDPIMode::Off);
-    let mut app = App::new(adapter, device, native_widget);
+
+    let context_attributes = ContextAttributes {
+        version: GLVersion::new(3, 3),
+        flags: ContextAttributeFlags::ALPHA,
+    };
+    let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
+
+    let surface_type = SurfaceType::Widget { native_widget };
+    let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
+    device.make_context_current(&context).unwrap();
+
+    let mut app = App::new(adapter, device, context);
     let mut exit = false;
 
     while !exit {
@@ -123,16 +134,7 @@ struct App {
 }
 
 impl App {
-    fn new(adapter: Adapter, mut device: Device, native_widget: NativeWidget) -> App {
-        let context_attributes = ContextAttributes {
-            version: GLVersion::new(3, 3),
-            flags: ContextAttributeFlags::ALPHA,
-        };
-        let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
-
-        let surface_type = SurfaceType::Widget { native_widget };
-        let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
-        device.make_context_current(&context).unwrap();
+    fn new(adapter: Adapter, mut device: Device, mut context: Context) -> App {
         gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
 
         // Set up communication channels, and spawn our worker thread.
