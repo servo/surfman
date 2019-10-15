@@ -1,4 +1,4 @@
-package mozilla.org.surfmanthreadsexample;
+package org.mozilla.surfmanthreadsexample;
 
 import org.junit.Test;
 

@@ -1,4 +1,4 @@
-package mozilla.org.surfmanthreadsexample;
+package org.mozilla.surfmanthreadsexample;
 
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
