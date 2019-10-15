@@ -19,7 +19,7 @@ use winapi::shared::winerror;
 use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device, ID3D11DeviceContext};
 use winapi::um::d3dcommon::D3D_DRIVER_TYPE_HARDWARE;
 use winapi::um::libloaderapi;
-use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_DESTROY};
+use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CLOSE, WM_DESTROY};
 use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW};
 use wio::com::ComPtr;
 
@@ -107,7 +107,7 @@ pub(crate) struct DCGuard<'a> {
 impl Drop for HiddenWindow {
     fn drop(&mut self) {
         unsafe {
-            winuser::DestroyWindow(self.window);
+            winuser::SendMessageA(self.window, WM_CLOSE, 0, 0);
             if let Some(join_handle) = self.join_handle.take() {
                 drop(join_handle.join());
             }
@@ -183,7 +183,7 @@ impl HiddenWindow {
             while winuser::GetMessageA(&mut msg, window, 0, 0) != FALSE {
                 winuser::TranslateMessage(&msg);
                 winuser::DispatchMessageA(&msg);
-                if minwindef::LOWORD(msg.message) as UINT == WM_DESTROY {
+                if minwindef::LOWORD(msg.message) as UINT == WM_CLOSE {
                     break;
                 }
             }

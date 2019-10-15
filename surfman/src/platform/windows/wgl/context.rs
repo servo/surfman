@@ -574,14 +574,7 @@ fn extension_loader_thread() -> WGLExtensionFunctions {
             instance,
             &mut extension_functions as *mut WGLExtensionFunctions as LPVOID);
 
-        let mut msg: MSG = mem::zeroed();
-        while winuser::GetMessageA(&mut msg, window, 0, 0) != FALSE {
-            winuser::TranslateMessage(&msg);
-            winuser::DispatchMessageA(&msg);
-            if minwindef::LOWORD(msg.message) as UINT == WM_DESTROY {
-                break;
-            }
-        }
+        winuser::DestroyWindow(window);
 
         extension_functions
     }
@@ -689,7 +682,6 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
                 }
 
                 wglDeleteContext(gl_context);
-                winuser::DestroyWindow(hwnd);
                 0
             }
             _ => winuser::DefWindowProcA(hwnd, uMsg, wParam, lParam),
