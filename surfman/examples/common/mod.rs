@@ -68,7 +68,7 @@ impl Shader {
                 gl::GetShaderInfoLog(shader,
                                      info_log_length,
                                      ptr::null_mut(),
-                                     info_log.as_mut_ptr() as *mut i8);
+                                     info_log.as_mut_ptr() as *mut _);
                 eprintln!("Failed to compile shader:\n{}", String::from_utf8_lossy(&info_log));
                 panic!("Shader compilation failed!");
             }

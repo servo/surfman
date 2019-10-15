@@ -2,7 +2,7 @@
 //
 // This example demonstrates how to create a multithreaded OpenGL application using `surfman`.
 
-use crate::common::{Buffer, Program, Shader, ShaderKind, ck};
+use self::common::{Buffer, Program, Shader, ShaderKind, ck};
 
 use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
@@ -10,8 +10,12 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use surfman::{Adapter, Context, ContextAttributeFlags, ContextAttributes, ContextDescriptor};
 use surfman::{Device, GLVersion, HiDPIMode, NativeWidget, Surface, SurfaceTexture, SurfaceType};
+
+#[cfg(not(target_os = "android"))]
 use winit::dpi::LogicalSize;
+#[cfg(not(target_os = "android"))]
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
+#[cfg(not(target_os = "android"))]
 use winit::{WindowBuilder, WindowEvent};
 
 mod common;
@@ -76,6 +80,7 @@ static BACKGROUND_COLOR: [f32; 4] = [
     1.0,
 ];
 
+#[cfg(not(target_os = "android"))]
 fn main() {
     let adapter = Adapter::default().unwrap();
     let mut device = Device::new(&adapter).unwrap();
@@ -122,7 +127,7 @@ fn main() {
     }
 }
 
-struct App {
+pub struct App {
     main_from_worker_receiver: Receiver<Frame>,
     main_to_worker_sender: Sender<Surface>,
     grid_vertex_array: GridVertexArray,
@@ -134,7 +139,7 @@ struct App {
 }
 
 impl App {
-    fn new(adapter: Adapter, device: Device, mut context: Context) -> App {
+    pub fn new(adapter: Adapter, device: Device, mut context: Context) -> App {
         let context_descriptor = device.context_descriptor(&context);
 
         gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
@@ -171,7 +176,7 @@ impl App {
         }
     }
 
-    fn tick(&mut self) {
+    pub fn tick(&mut self) {
         // Send back our old surface.
         let surface = self.device
                           .destroy_surface_texture(&mut self.context, self.texture.take().unwrap())

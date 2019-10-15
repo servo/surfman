@@ -122,8 +122,8 @@ impl Device {
                 let context_descriptor = self.context_descriptor(context);
                 let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
-                let renderbuffers = Renderbuffers::new(size, &context_attributes);
-                renderbuffers.bind_to_current_framebuffer();
+                let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
+                renderbuffers.bind_to_current_framebuffer(gl);
 
                 debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
                                  gl::FRAMEBUFFER_COMPLETE);
@@ -254,7 +254,7 @@ impl Device {
                         gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
                         gl.DeleteFramebuffers(1, framebuffer_object);
                         *framebuffer_object = 0;
-                        renderbuffers.destroy();
+                        renderbuffers.destroy(gl);
 
                         let result = egl::DestroyImageKHR(self.native_display.egl_display(),
                                                           *egl_image);

@@ -8,4 +8,12 @@ edition = "2018"
 crate_type = ["cdylib"]
 
 [dependencies]
-jni = "0.11"
+gl = "0.13"
+jni = "0.13"
+
+[dependencies.euclid]
+version = "0.20"
+features = []
+
+[dependencies.surfman]
+path = "../../surfman"
