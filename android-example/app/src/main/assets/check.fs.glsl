@@ -1,0 +1,1 @@
+../../../../../surfman/resources/examples/check.fs.glsl

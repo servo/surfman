@@ -35,7 +35,11 @@ pub struct Shader {
 }
 
 impl Shader {
-    pub fn new(name: &str, kind: ShaderKind, gl_texture_target: GLenum) -> Shader {
+    pub fn new(name: &str,
+               kind: ShaderKind,
+               gl_texture_target: GLenum,
+               resource_loader: &dyn ResourceLoader)
+               -> Shader {
         let mut source = vec![];
         match Device::gl_api() {
             GLApi::GL => source.extend_from_slice(b"#version 330\n"),
@@ -46,11 +50,8 @@ impl Shader {
             gl::TEXTURE_RECTANGLE => source.extend_from_slice(b"#define SAMPLER_RECT\n"),
             _ => {}
         }
+        resource_loader.slurp(&mut source, &format!("{}.{}.glsl", name, kind.extension()));
 
-        let path = format!("resources/examples/{}.{}.glsl", name, kind.extension());
-        File::open(&path).expect("Failed to open shader source!")
-                         .read_to_end(&mut source)
-                         .unwrap();
         unsafe {
             let shader = gl::CreateShader(kind.to_gl()); ck();
             gl::ShaderSource(shader,
@@ -117,6 +118,19 @@ impl ShaderKind {
             ShaderKind::Vertex => gl::VERTEX_SHADER,
             ShaderKind::Fragment => gl::FRAGMENT_SHADER,
         }
+    }
+}
+
+pub trait ResourceLoader {
+    fn slurp(&self, dest: &mut Vec<u8>, filename: &str);
+}
+
+pub struct FilesystemResourceLoader;
+
+impl ResourceLoader for FilesystemResourceLoader {
+    fn slurp(&self, dest: &mut Vec<u8>, filename: &str) {
+        let path = format!("resources/examples/{}", filename);
+        File::open(&path).expect("Failed to open file!").read_to_end(dest).unwrap();
     }
 }
 

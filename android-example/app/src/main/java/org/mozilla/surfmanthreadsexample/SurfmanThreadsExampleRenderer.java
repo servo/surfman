@@ -5,11 +5,19 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
 public class SurfmanThreadsExampleRenderer implements Renderer {
-    private static native void init(int width, int height);
+    private static native void init(SurfmanThreadsExampleResourceLoader resourceLoader,
+                                    int width,
+                                    int height);
     private static native void tick();
+
+    private final MainActivity mActivity;
 
     static {
         System.loadLibrary("surfman_android_threads");
+    }
+
+    SurfmanThreadsExampleRenderer(MainActivity activity) {
+        mActivity = activity;
     }
 
     @Override
@@ -18,7 +26,7 @@ public class SurfmanThreadsExampleRenderer implements Renderer {
 
     @Override
     public void onSurfaceChanged(GL10 gl10, int width, int height) {
-        init(width, height);
+        init(new SurfmanThreadsExampleResourceLoader(mActivity.getAssets()), width, height);
     }
 
     @Override

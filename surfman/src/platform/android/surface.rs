@@ -12,7 +12,6 @@ use crate::{Error, SurfaceID, egl, gl};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 
-use android_ndk_sys::{ANativeWindow, ANativeWindow_getHeight, ANativeWindow_getWidth};
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
@@ -325,4 +324,15 @@ impl SurfaceTexture {
     pub fn gl_texture(&self) -> GLuint {
         self.texture_object
     }
+}
+
+#[repr(C)]
+pub struct ANativeWindow {
+    opaque: i32,
+}
+
+#[link(name = "android")]
+extern {
+    fn ANativeWindow_getWidth(window: *mut ANativeWindow) -> i32;
+    fn ANativeWindow_getHeight(window: *mut ANativeWindow) -> i32;
 }
