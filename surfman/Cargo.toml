@@ -17,7 +17,8 @@ gl_generator = "0.11"
 
 [features]
 default = ["sm-winit"]
-sm-angle = ["mozangle"]
+sm-angle = []
+sm-angle-builtin = ["mozangle"]
 sm-angle-default = ["sm-angle"]
 sm-osmesa = ["osmesa-sys"]
 sm-osmesa-default = ["sm-osmesa"]
