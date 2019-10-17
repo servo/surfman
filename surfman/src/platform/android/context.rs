@@ -10,7 +10,7 @@ use super::device::{Device, UnsafeEGLDisplayRef};
 use super::surface::{Surface, SurfaceObjects, SurfaceType};
 
 use euclid::default::Size2D;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
@@ -135,10 +135,6 @@ impl Device {
         let egl_draw_surface = egl::GetCurrentSurface(egl::DRAW as EGLint);
         let egl_read_surface = egl::GetCurrentSurface(egl::READ as EGLint);
 
-        let extensions = egl::QueryString(egl_display, egl::EXTENSIONS as EGLint);
-        let extensions = CStr::from_ptr(extensions).to_string_lossy();
-        error!("display: {:?} extensions: {}", egl_display as usize, extensions);
-
         // Create the device wrapper.
         let device = Device { native_display: Box::new(UnsafeEGLDisplayRef { egl_display }) };
 
@@ -161,17 +157,12 @@ impl Device {
 
     pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
                           -> Result<Context, Error> {
-        error!("create_context() point a");
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        error!("create_context() point b");
         let egl_config = self.context_descriptor_to_egl_config(descriptor);
-        error!("create_context() point c");
         let egl_context_client_version = descriptor.egl_context_client_version;
 
-        error!("create_context() point d");
         let egl_display = self.native_display.egl_display();
-        error!("... egl display={:x}", egl_display as usize);
         unsafe {
             // Create the EGL context. Include some extra zeroes in the attribute list to work
             // around broken implementations.
@@ -182,21 +173,17 @@ impl Device {
                 egl::NONE as EGLint, 0,
                 0, 0,
             ];
-            error!("create_context() point e");
             let egl_context = egl::CreateContext(egl_display,
                                                  egl_config,
                                                  egl::NO_CONTEXT,
                                                  egl_context_attributes.as_ptr());
-            error!("create_context() point f");
             if egl_context == egl::NO_CONTEXT {
                 let err = egl::GetError().to_windowing_api_error();
                 return Err(Error::ContextCreationFailed(err));
             }
 
             // Create a dummy pbuffer.
-            error!("create_context() point g");
             let pbuffer = create_pbuffer(egl_display, egl_config);
-            error!("create_context() point h");
 
             // Wrap up the EGL context.
             let mut context = Context {
@@ -209,7 +196,6 @@ impl Device {
 
             // Build the initial framebuffer.
             let target = self.create_surface(&context, surface_type)?;
-            error!("create_context() point i");
             context.framebuffer = Framebuffer::Surface(target);
             Ok(context)
         }
@@ -269,12 +255,10 @@ impl Device {
                 }) | Framebuffer::None => (context.pbuffer, context.pbuffer),
             };
 
-            error!("make_context_current() point a: display={:x}", egl_display as usize);
             let result = egl::MakeCurrent(egl_display,
                                           egl_draw_surface,
                                           egl_read_surface,
                                           egl_context);
-            error!("make_context_current() point b");
             if result == egl::FALSE {
                 let err = egl::GetError().to_windowing_api_error();
                 return Err(Error::MakeCurrentFailed(err));
@@ -474,11 +458,9 @@ fn create_pbuffer(egl_display: EGLDisplay, egl_config: EGLConfig) -> EGLSurface 
             egl::NONE as EGLint,    0,
             0,                      0,
         ];
-        error!("create_context() point g");
         let pbuffer = egl::CreatePbufferSurface(egl_display,
                                                 egl_config,
                                                 pbuffer_attributes.as_ptr());
-        error!("create_context() point h");
         assert_ne!(pbuffer, egl::NO_SURFACE);
         pbuffer
     }
@@ -536,12 +518,12 @@ pub(crate) struct CurrentContextGuard {
 impl Drop for CurrentContextGuard {
     fn drop(&mut self) {
         unsafe {
-            error!("CurrentContextGuard::drop() point a");
-            egl::MakeCurrent(self.egl_display,
-                             self.old_egl_draw_surface,
-                             self.old_egl_read_surface,
-                             self.old_egl_context);
-            error!("CurrentContextGuard::drop() point b");
+            if self.egl_display != egl::NO_DISPLAY {
+                egl::MakeCurrent(self.egl_display,
+                                 self.old_egl_draw_surface,
+                                 self.old_egl_read_surface,
+                                 self.old_egl_context);
+            }
         }
     }
 }

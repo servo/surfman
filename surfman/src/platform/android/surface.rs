@@ -4,8 +4,7 @@
 //! EGL.
 
 use crate::context::ContextID;
-use crate::egl::types::{EGLClientBuffer, EGLImageKHR, EGLSurface, EGLenum, EGLint};
-use crate::gl::Gl;
+use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceID, WindowingApiError, egl, gl};
@@ -96,13 +95,12 @@ impl Device {
 
     fn create_generic_surface(&mut self, context: &Context, size: &Size2D<i32>)
                               -> Result<Surface, Error> {
-        error!("create_generic_surface() point a, size={:?}", size);
         let _guard = self.temporarily_make_context_current(context)?;
 
         GL_FUNCTIONS.with(|gl| {
             unsafe {
                 // Create a native hardware buffer.
-                let mut hardware_buffer_desc = AHardwareBuffer_Desc {
+                let hardware_buffer_desc = AHardwareBuffer_Desc {
                     format: AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
                     height: size.height as u32,
                     width: size.width as u32,
@@ -116,23 +114,18 @@ impl Device {
                         AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
                 };
                 let mut hardware_buffer = ptr::null_mut();
-                error!("create_generic_surface() point b");
                 let result = AHardwareBuffer_allocate(&hardware_buffer_desc, &mut hardware_buffer);
-                error!("create_generic_surface() point c");
                 if result != 0 {
                     return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
                 }
 
                 // Create an EGL image, and bind it to a texture.
-                error!("create_generic_surface() point d");
                 let egl_image = self.create_egl_image(context, hardware_buffer);
 
                 // Initialize and bind the image to the texture.
-                error!("create_generic_surface() point e");
                 let texture_object = self.bind_to_gl_texture(egl_image);
 
                 // Create the framebuffer, and bind the texture to it.
-                error!("create_generic_surface() point f");
                 let mut framebuffer_object = 0;
                 gl.GenFramebuffers(1, &mut framebuffer_object);
                 gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
@@ -142,20 +135,14 @@ impl Device {
                                         texture_object,
                                         0);
 
-                error!("create_generic_surface() point g");
                 let context_descriptor = self.context_descriptor(context);
-                error!("create_generic_surface() point h");
                 let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-                error!("create_generic_surface() point i");
 
                 let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
-                error!("create_generic_surface() point j");
                 renderbuffers.bind_to_current_framebuffer(gl);
-                error!("create_generic_surface() point k");
 
                 debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
                                  gl::FRAMEBUFFER_COMPLETE);
-                error!("create_generic_surface() point l");
 
                 Ok(Surface {
                     size: *size,
@@ -234,7 +221,7 @@ impl Device {
         }
     }
 
-    unsafe fn create_egl_image(&self, context: &Context, hardware_buffer: *mut AHardwareBuffer)
+    unsafe fn create_egl_image(&self, _: &Context, hardware_buffer: *mut AHardwareBuffer)
                                -> EGLImageKHR {
         // Get the native client buffer.
         let client_buffer =
@@ -246,17 +233,11 @@ impl Device {
             egl::IMAGE_PRESERVED_KHR as EGLint, egl::TRUE as EGLint,
             egl::NONE as EGLint,                0,
         ];
-        error!("calling eglCreateImageKHR: context={:x} current={:x}",
-               context.native_context.egl_context() as usize,
-               egl::GetCurrentContext() as usize);
         let egl_image = egl::CreateImageKHR(self.native_display.egl_display(),
                                             egl::NO_CONTEXT,
                                             EGL_NATIVE_BUFFER_ANDROID,
                                             client_buffer,
                                             egl_image_attributes.as_ptr());
-        if egl_image == egl::NO_IMAGE_KHR {
-            error!("*** failed to create EGL image: {:x}!", egl::GetError());
-        }
         assert_ne!(egl_image, egl::NO_IMAGE_KHR);
         egl_image
     }

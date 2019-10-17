@@ -5,6 +5,7 @@
 use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
 
+#[allow(dead_code)]
 pub(crate) fn destroy_framebuffer(gl: &Gl, framebuffer_object: GLuint) {
     unsafe {
         // Unbind the framebuffer if currently bound.

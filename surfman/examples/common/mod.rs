@@ -53,10 +53,6 @@ impl Shader {
         resource_loader.slurp(&mut source, &format!("{}.{}.glsl", name, kind.extension()));
 
         unsafe {
-            error!("calling glGetString()");
-            gl::GetString(gl::VENDOR);
-            error!("glGetString() ok");
-
             let shader = gl::CreateShader(kind.to_gl()); ck();
             gl::ShaderSource(shader,
                              1,
@@ -129,6 +125,7 @@ pub trait ResourceLoader {
     fn slurp(&self, dest: &mut Vec<u8>, filename: &str);
 }
 
+#[allow(dead_code)]
 pub struct FilesystemResourceLoader;
 
 impl ResourceLoader for FilesystemResourceLoader {
