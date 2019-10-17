@@ -22,5 +22,8 @@ pub use unix::x11 as default;
 
 #[cfg(target_os = "windows")]
 pub mod windows;
-#[cfg(all(target_os = "windows", not(feature = "sm-osmesa-default")))]
+#[cfg(all(target_os = "windows", feature = "sm-angle-default"))]
 pub use windows::angle as default;
+#[cfg(all(target_os = "windows",
+          not(any(feature = "sm-osmesa-default", feature = "sm-angle-default"))))]
+pub use windows::wgl as default;

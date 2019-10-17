@@ -12,7 +12,6 @@ use crate::{Error, SurfaceID, egl, gl};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 
-use android_ndk_sys::{ANativeWindow, ANativeWindow_getHeight, ANativeWindow_getWidth};
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
@@ -122,8 +121,8 @@ impl Device {
                 let context_descriptor = self.context_descriptor(context);
                 let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
-                let renderbuffers = Renderbuffers::new(size, &context_attributes);
-                renderbuffers.bind_to_current_framebuffer();
+                let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
+                renderbuffers.bind_to_current_framebuffer(gl);
 
                 debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
                                  gl::FRAMEBUFFER_COMPLETE);
@@ -254,7 +253,7 @@ impl Device {
                         gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
                         gl.DeleteFramebuffers(1, framebuffer_object);
                         *framebuffer_object = 0;
-                        renderbuffers.destroy();
+                        renderbuffers.destroy(gl);
 
                         let result = egl::DestroyImageKHR(self.native_display.egl_display(),
                                                           *egl_image);
@@ -325,4 +324,15 @@ impl SurfaceTexture {
     pub fn gl_texture(&self) -> GLuint {
         self.texture_object
     }
+}
+
+#[repr(C)]
+pub struct ANativeWindow {
+    opaque: i32,
+}
+
+#[link(name = "android")]
+extern {
+    fn ANativeWindow_getWidth(window: *mut ANativeWindow) -> i32;
+    fn ANativeWindow_getHeight(window: *mut ANativeWindow) -> i32;
 }

@@ -17,6 +17,8 @@ gl_generator = "0.11"
 
 [features]
 default = ["sm-winit"]
+sm-angle = ["mozangle"]
+sm-angle-default = ["sm-angle"]
 sm-osmesa = ["osmesa-sys"]
 sm-osmesa-default = ["sm-osmesa"]
 sm-winit = ["winit"]
@@ -53,9 +55,6 @@ display-link = "0.2"
 io-surface = "0.12"
 objc = "0.2"
 
-[target.'cfg(target_os = "android")'.dependencies]
-android-ndk-sys = "0.2"
-
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
 version = "2.3.0"
 features = ["xlib"]
@@ -66,8 +65,10 @@ version = "2.3.0"
 features = ["xlib"]
 
 # Ensure that we have a static libEGL.lib present for linking with EGL bindings.
-[target.'cfg(target_os = "windows")'.dev-dependencies]
-mozangle = { version = "0.2", features = ["egl"] }
+[target.'cfg(target_os = "windows")'.dependencies.mozangle]
+version = "0.2"
+features = ["egl"]
+optional = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 wio = "0.2"

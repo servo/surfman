@@ -1,0 +1,1 @@
+../../../../../surfman/resources/examples/tri.fs.glsl

@@ -1,0 +1,1 @@
+../../../../../surfman/resources/examples/blit.fs.glsl

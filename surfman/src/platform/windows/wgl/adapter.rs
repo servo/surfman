@@ -1,6 +1,8 @@
-// surfman/src/platform/src/macos/adapter.rs
+// surfman/src/platform/src/windows/wgl/adapter.rs
 //
-//! A wrapper for Core OpenGL adapters.
+//! A no-op adapter type for WGL.
+//!
+//! TODO(pcwalton): Try using one of the multi-GPU extensions for this.
 
 use crate::Error;
 
@@ -23,8 +25,10 @@ impl Adapter {
 
     /// Returns the "best" software adapter on this system.
     ///
-    /// The macOS backend has no software support, so this returns an error. You can use the
+    /// The WGL backend has no software support, so this returns an error. You can use the
     /// universal backend to get a software adapter.
+    ///
+    /// FIXME(pcwalton): Does it really?
     #[inline]
     pub fn software() -> Result<Adapter, Error> {
         Err(Error::NoSoftwareAdapters)

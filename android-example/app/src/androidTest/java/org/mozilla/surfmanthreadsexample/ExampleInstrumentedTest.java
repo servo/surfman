@@ -1,4 +1,4 @@
-package mozilla.org.surfmanthreadsexample;
+package org.mozilla.surfmanthreadsexample;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getTargetContext();
 
-        assertEquals("mozilla.org.surfmanthreadsexample", appContext.getPackageName());
+        assertEquals("org.mozilla.surfmanthreadsexample", appContext.getPackageName());
     }
 }
