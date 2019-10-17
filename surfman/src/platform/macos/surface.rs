@@ -249,7 +249,7 @@ impl Device {
             if context.id != surface.context_id {
                 // Leak the surface, and return an error.
                 surface.framebuffer_object = 0;
-                surface.renderbuffers.leak(gl);
+                surface.renderbuffers.leak();
                 return Err(Error::IncompatibleSurface);
             }
 

@@ -9,7 +9,7 @@ use super::context::{Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
 use crate::gl::types::{GLenum, GLint, GLuint};
-use crate::gl::{self, Gl};
+use crate::gl;
 use crate::gl_utils;
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
@@ -67,6 +67,7 @@ pub(crate) enum Win32Objects {
 
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
+    #[allow(dead_code)]
     pub(crate) local_d3d11_texture: ComPtr<ID3D11Texture2D>,
     local_gl_dx_interop_object: HANDLE,
     pub(crate) gl_texture: GLuint,
@@ -379,9 +380,10 @@ impl Device {
             assert_ne!(ok, FALSE);
 
             // Unregister the texture from GL/DX interop.
-            let mut local_gl_dx_interop_object = (dx_interop_functions.DXUnregisterObjectNV)(
+            let ok = (dx_interop_functions.DXUnregisterObjectNV)(
                 self.gl_dx_interop_device,
                 surface_texture.local_gl_dx_interop_object);
+            assert_ne!(ok, FALSE);
             surface_texture.local_gl_dx_interop_object = INVALID_HANDLE_VALUE;
 
             // Destroy the GL texture.
@@ -443,7 +445,7 @@ impl Device {
         };
 
         unsafe {
-            let mut dc = winuser::GetDC(window_handle);
+            let dc = winuser::GetDC(window_handle);
             let ok = wingdi::SwapBuffers(dc);
             assert_ne!(ok, FALSE);
             winuser::ReleaseDC(window_handle, dc);
@@ -484,8 +486,6 @@ impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
     pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
-        unsafe {
-            NativeWidget { window_handle: window.get_hwnd() as HWND }
-        }
+        NativeWidget { window_handle: window.get_hwnd() as HWND }
     }
 }

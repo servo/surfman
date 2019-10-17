@@ -3,6 +3,7 @@
 use std::fmt::{self, Display, Formatter};
 
 // The default framebuffer for a context.
+#[allow(dead_code)]
 pub(crate) enum Framebuffer<S> {
     // No framebuffer has been attached to the context.
     None,

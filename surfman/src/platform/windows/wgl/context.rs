@@ -18,18 +18,17 @@ use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::thread;
-use winapi::shared::minwindef::{self, BOOL, FALSE, FLOAT, LPARAM, LPVOID, LRESULT, UINT};
+use winapi::shared::minwindef::{BOOL, FALSE, FLOAT, HMODULE, LPARAM, LPVOID, LRESULT, UINT};
 use winapi::shared::minwindef::{WORD, WPARAM};
 use winapi::shared::ntdef::{HANDLE, LPCSTR};
 use winapi::shared::windef::{HBRUSH, HDC, HGLRC, HWND};
-use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::libloaderapi;
 use winapi::um::wingdi::{self, PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_MAIN_PLANE};
 use winapi::um::wingdi::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
 use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetCurrentContext};
 use winapi::um::wingdi::{wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
-use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CREATE, WM_DESTROY};
-use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW, WS_VISIBLE};
+use winapi::um::winuser::{self, COLOR_BACKGROUND, CREATESTRUCTA, CS_OWNDC, WM_CREATE, WNDCLASSA};
+use winapi::um::winuser::{WS_OVERLAPPEDWINDOW, WS_VISIBLE};
 
 const WGL_DRAW_TO_WINDOW_ARB:        GLenum = 0x2001;
 const WGL_ACCELERATION_ARB:          GLenum = 0x2003;
@@ -114,7 +113,7 @@ pub struct Context {
     pub(crate) id: ContextID,
     pub(crate) gl: Gl,
     hidden_window: Option<HiddenWindow>,
-    framebuffer: Framebuffer,
+    pub(crate) framebuffer: Framebuffer,
 }
 
 pub(crate) trait NativeContext {
@@ -123,13 +122,21 @@ pub(crate) trait NativeContext {
     unsafe fn destroy(&mut self);
 }
 
+thread_local! {
+    static OPENGL_LIBRARY: HMODULE = {
+        unsafe {
+            libloaderapi::LoadLibraryA(&b"opengl32.dll\0"[0] as *const u8 as LPCSTR)
+        }
+    };
+}
+
 lazy_static! {
     pub(crate) static ref WGL_EXTENSION_FUNCTIONS: WGLExtensionFunctions = {
         thread::spawn(extension_loader_thread).join().unwrap()
     };
 }
 
-enum Framebuffer {
+pub(crate) enum Framebuffer {
     None,
     External { dc: HDC },
     Surface(Surface),
@@ -197,20 +204,20 @@ impl Device {
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         let device = Device::new(&Adapter::default()?)?;
-        unsafe {
-            let context = Context {
-                native_context: Box::new(UnsafeGLRCRef { glrc: wglGetCurrentContext() }),
-                id: *next_context_id,
-                gl: Gl::load_with(get_proc_address),
-                hidden_window: None,
-                framebuffer: Framebuffer::External { dc: wglGetCurrentDC() },
-            };
-            next_context_id.0 += 1;
 
-            Ok((device, context))
-        }
+        let context = Context {
+            native_context: Box::new(UnsafeGLRCRef { glrc: wglGetCurrentContext() }),
+            id: *next_context_id,
+            gl: Gl::load_with(get_proc_address),
+            hidden_window: None,
+            framebuffer: Framebuffer::External { dc: wglGetCurrentDC() },
+        };
+        next_context_id.0 += 1;
+
+        Ok((device, context))
     }
 
+    #[allow(non_snake_case)]
     pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
                           -> Result<Context, Error> {
         let wglCreateContextAttribsARB = match WGL_EXTENSION_FUNCTIONS.CreateContextAttribsARB {
@@ -224,7 +231,7 @@ impl Device {
 
             // Get a suitable DC.
             let hidden_window = match *surface_type {
-                SurfaceType::Widget { ref native_widget } => None,
+                SurfaceType::Widget { .. } => None,
                 SurfaceType::Generic { .. } => Some(HiddenWindow::new()),
             };
 
@@ -334,6 +341,7 @@ impl Device {
         }
     }
 
+    #[allow(non_snake_case)]
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
         let wglGetPixelFormatAttribivARB =
@@ -390,19 +398,17 @@ impl Device {
             return Err(Error::IncompatibleSurface);
         }
 
-        unsafe {
-            let is_current = self.context_is_current(context);
+        let is_current = self.context_is_current(context);
 
-            let old_surface = self.release_surface(context).expect("Where's our surface?");
-            self.attach_surface(context, new_surface);
+        let old_surface = self.release_surface(context).expect("Where's our surface?");
+        self.attach_surface(context, new_surface);
 
-            if is_current {
-                // We need to make ourselves current again, because the surface changed.
-                self.make_context_current(context)?;
-            }
-
-            Ok(old_surface)
+        if is_current {
+            // We need to make ourselves current again, because the surface changed.
+            self.make_context_current(context)?;
         }
+
+        Ok(old_surface)
     }
 
     pub(crate) fn temporarily_bind_framebuffer<'a>(&self,
@@ -523,18 +529,15 @@ impl Device {
     fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
         unsafe {
             match context.framebuffer {
-                Framebuffer::None => unreachable!(),
                 Framebuffer::External { dc } => DCGuard::new(dc, None),
-                Framebuffer::Surface(ref surface) => {
-                    match surface.win32_objects {
-                        Win32Objects::Widget { window_handle } => {
-                            DCGuard::new(winuser::GetDC(window_handle), Some(window_handle))
-                        }
-                        Win32Objects::Texture { .. } => {
-                            context.hidden_window.as_ref().unwrap().get_dc()
-                        }
-                    }
-                }
+                Framebuffer::Surface(Surface {
+                    win32_objects: Win32Objects::Widget { window_handle },
+                    ..
+                }) => DCGuard::new(winuser::GetDC(window_handle), Some(window_handle)),
+                Framebuffer::Surface (Surface {
+                    win32_objects: Win32Objects::Texture { .. },
+                    ..
+                }) | Framebuffer::None => context.hidden_window.as_ref().unwrap().get_dc(),
             }
         }
     }
@@ -630,7 +633,9 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
                 assert_ne!(ok, FALSE);
 
                 // Detect extensions.
-                let wgl_extension_functions = lParam as *mut WGLExtensionFunctions;
+                let create_struct = lParam as *mut CREATESTRUCTA;
+                let wgl_extension_functions = (*create_struct).lpCreateParams as
+                    *mut WGLExtensionFunctions;
                 (*wgl_extension_functions).GetExtensionsStringARB = mem::transmute(
                     wglGetProcAddress(&b"wglGetExtensionsStringARB\0"[0] as *const u8 as LPCSTR));
                 let extensions = match (*wgl_extension_functions).GetExtensionsStringARB {
@@ -799,7 +804,15 @@ impl CurrentContextGuard {
 
 fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
+        // https://www.khronos.org/opengl/wiki/Load_OpenGL_Functions#Windows
         let symbol_name: CString = CString::new(symbol_name).unwrap();
-        wglGetProcAddress(symbol_name.as_ptr() as *const u8 as LPCSTR) as *const c_void
+        let symbol_ptr = symbol_name.as_ptr() as *const u8 as LPCSTR;
+        let addr = wglGetProcAddress(symbol_ptr) as *const c_void;
+        if !addr.is_null() {
+            return addr;
+        }
+        OPENGL_LIBRARY.with(|opengl_library| {
+            libloaderapi::GetProcAddress(*opengl_library, symbol_ptr) as *const c_void
+        })
     }
 }

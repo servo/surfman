@@ -4,7 +4,7 @@
 
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
-use super::context::{WGLExtensionFunctions, WGL_EXTENSION_FUNCTIONS};
+use super::context::WGL_EXTENSION_FUNCTIONS;
 
 use std::marker::PhantomData;
 use std::mem;
@@ -12,14 +12,14 @@ use std::os::raw::{c_int, c_void};
 use std::ptr;
 use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
-use winapi::shared::minwindef::{self, FALSE, LPVOID, UINT};
+use winapi::shared::minwindef::{self, FALSE, UINT};
 use winapi::shared::ntdef::{HANDLE, LPCSTR};
 use winapi::shared::windef::{HBRUSH, HDC, HWND};
 use winapi::shared::winerror;
 use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device, ID3D11DeviceContext};
 use winapi::um::d3dcommon::D3D_DRIVER_TYPE_HARDWARE;
 use winapi::um::libloaderapi;
-use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CLOSE, WM_DESTROY};
+use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CLOSE};
 use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW};
 use wio::com::ComPtr;
 
