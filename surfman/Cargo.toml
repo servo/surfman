@@ -29,6 +29,7 @@ sm-x11 = ["x11"]
 bitflags = "1.1"
 lazy_static = "1"
 libc = "0.2"
+log = "0.4"
 
 [dependencies.euclid]
 version = "0.20"

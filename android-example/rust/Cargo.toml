@@ -7,6 +7,12 @@ edition = "2018"
 [lib]
 crate_type = ["cdylib"]
 
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
 [dependencies]
 gl = "0.13"
 jni = "0.13"

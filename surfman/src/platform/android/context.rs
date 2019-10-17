@@ -5,7 +5,6 @@ use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::gl::Gl;
 use crate::gl::types::GLuint;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceID, egl};
 use super::device::{Device, UnsafeEGLDisplayRef};
 use super::surface::{Surface, SurfaceObjects, SurfaceType};
@@ -24,7 +23,8 @@ thread_local! {
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
     pub(crate) id: ContextID,
-    framebuffer: Framebuffer<ContextSurfaces>,
+    pub(crate) pbuffer: EGLSurface,
+    framebuffer: Framebuffer,
 }
 
 pub(crate) trait NativeContext {
@@ -42,15 +42,19 @@ impl Drop for Context {
     }
 }
 
+pub(crate) enum Framebuffer {
+    None,
+    External {
+        egl_draw_surface: EGLSurface,
+        egl_read_surface: EGLSurface,
+    },
+    Surface(Surface),
+}
+
 #[derive(Clone)]
 pub struct ContextDescriptor {
     egl_config_id: EGLint,
     egl_context_client_version: EGLint,
-}
-
-struct ContextSurfaces {
-    pbuffer: EGLSurface,
-    target: Surface,
 }
 
 impl Device {
@@ -127,14 +131,24 @@ impl Device {
         }
         let native_context = Box::new(UnsafeEGLContextRef { egl_context });
 
+        // Get the current surface.
+        let egl_draw_surface = egl::GetCurrentSurface(egl::DRAW as EGLint);
+        let egl_read_surface = egl::GetCurrentSurface(egl::READ as EGLint);
+
         // Create the device wrapper.
         let device = Device { native_display: Box::new(UnsafeEGLDisplayRef { egl_display }) };
 
-        // Create the config.
+        // Create a dummy pbuffer.
+        let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
+        let egl_config = get_config_by_id(egl_display, egl_config_id);
+        let pbuffer = create_pbuffer(egl_display, egl_config);
+
+        // Create the context.
         let context = Context {
             native_context,
             id: *next_context_id,
-            framebuffer: Framebuffer::External,
+            pbuffer,
+            framebuffer: Framebuffer::External { egl_draw_surface, egl_read_surface },
         };
         next_context_id.0 += 1;
 
@@ -168,29 +182,21 @@ impl Device {
                 return Err(Error::ContextCreationFailed(err));
             }
 
+            // Create a dummy pbuffer.
+            let pbuffer = create_pbuffer(egl_display, egl_config);
+
             // Wrap up the EGL context.
             let mut context = Context {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
                 id: *next_context_id,
+                pbuffer,
                 framebuffer: Framebuffer::None,
             };
             next_context_id.0 += 1;
 
-            // Create a dummy pbuffer.
-            let pbuffer_attributes = [
-                egl::WIDTH as EGLint,   16,
-                egl::HEIGHT as EGLint,  16,
-                egl::NONE as EGLint,    0,
-                0,                      0,
-            ];
-            let pbuffer = egl::CreatePbufferSurface(egl_display,
-                                                    egl_config,
-                                                    pbuffer_attributes.as_ptr());
-            assert_ne!(pbuffer, egl::NO_SURFACE);
-
             // Build the initial framebuffer.
             let target = self.create_surface(&context, surface_type)?;
-            context.framebuffer = Framebuffer::Surface(ContextSurfaces { pbuffer, target });
+            context.framebuffer = Framebuffer::Surface(target);
             Ok(context)
         }
     }
@@ -201,13 +207,15 @@ impl Device {
         }
 
         unsafe {
-            if let Framebuffer::Surface(ContextSurfaces { pbuffer, target }) =
-                    mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            if let Framebuffer::Surface(target) = mem::replace(&mut context.framebuffer,
+                                                               Framebuffer::None) {
                 self.destroy_surface(context, target)?;
 
-                let result = egl::DestroySurface(self.native_display.egl_display(), pbuffer);
-                assert_ne!(result, egl::FALSE);
             }
+
+            let result = egl::DestroySurface(self.native_display.egl_display(), context.pbuffer);
+            assert_ne!(result, egl::FALSE);
+            context.pbuffer = egl::NO_SURFACE;
 
             context.native_context.destroy(self);
         }
@@ -233,19 +241,24 @@ impl Device {
             let egl_display = self.native_display.egl_display();
             let egl_context = context.native_context.egl_context();
 
-            let egl_surface = match context.framebuffer {
-                Framebuffer::Surface(ContextSurfaces { pbuffer, ref target }) => {
-                    match target.objects {
-                        SurfaceObjects::Window { egl_surface } => egl_surface,
-                        SurfaceObjects::EGLImage { .. } => pbuffer,
-                    }
+            let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
+                Framebuffer::Surface(Surface {
+                    objects: SurfaceObjects::Window { egl_surface },
+                    ..
+                }) => (egl_surface, egl_surface),
+                Framebuffer::External { egl_draw_surface, egl_read_surface } => {
+                    (egl_draw_surface, egl_read_surface)
                 }
-                Framebuffer::None | Framebuffer::External => {
-                    return Err(Error::ExternalRenderTarget)
-                }
+                Framebuffer::Surface(Surface {
+                    objects: SurfaceObjects::HardwareBuffer { .. },
+                    ..
+                }) | Framebuffer::None => (context.pbuffer, context.pbuffer),
             };
 
-            let result = egl::MakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
+            let result = egl::MakeCurrent(egl_display,
+                                          egl_draw_surface,
+                                          egl_read_surface,
+                                          egl_context);
             if result == egl::FALSE {
                 let err = egl::GetError().to_windowing_api_error();
                 return Err(Error::MakeCurrentFailed(err));
@@ -271,30 +284,29 @@ impl Device {
 
     #[inline]
     pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        self.context_surface_mut(context).and_then(|surface| {
-            self.present_surface_without_context(surface)
-        })
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::External { egl_draw_surface, .. } => {
+                unsafe {
+                    egl::SwapBuffers(self.native_display.egl_display(), egl_draw_surface);
+                }
+                Ok(())
+            }
+            Framebuffer::Surface(ref mut surface) => self.present_surface_without_context(surface),
+        }
     }
 
     fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
         match context.framebuffer {
             Framebuffer::None => unreachable!(),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ContextSurfaces { ref target, .. }) => Ok(target),
-        }
-    }
-
-    fn context_surface_mut<'c>(&self, context: &'c mut Context) -> Result<&'c mut Surface, Error> {
-        match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ContextSurfaces { ref mut target, .. }) => Ok(target),
+            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref target) => Ok(target),
         }
     }
 
     pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
                                    -> Result<Surface, Error> {
-        if let Framebuffer::External = context.framebuffer {
+        if let Framebuffer::External { .. }= context.framebuffer {
             return Err(Error::ExternalRenderTarget)
         }
 
@@ -313,20 +325,23 @@ impl Device {
         });
 
         let target_slot = match context.framebuffer {
-            Framebuffer::None | Framebuffer::External => unreachable!(),
-            Framebuffer::Surface(ContextSurfaces { ref mut target, .. }) => target,
+            Framebuffer::None | Framebuffer::External { .. } => unreachable!(),
+            Framebuffer::Surface(ref mut target) => target,
         };
         Ok(mem::replace(target_slot, new_surface))
     }
 
     #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        self.context_surface(context).map(|surface| {
-            match surface.objects {
-                SurfaceObjects::EGLImage { framebuffer_object, .. } => framebuffer_object,
-                SurfaceObjects::Window { .. } => 0,
-            }
-        })
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::Surface(Surface {
+                objects: SurfaceObjects::HardwareBuffer { framebuffer_object, .. },
+                ..
+            }) => Ok(framebuffer_object),
+            Framebuffer::Surface(Surface { objects: SurfaceObjects::Window { .. }, .. }) |
+            Framebuffer::External { .. } => Ok(0),
+        }
     }
 
     #[inline]
@@ -373,22 +388,15 @@ impl Device {
     pub(crate) fn context_descriptor_to_egl_config(&self, context_descriptor: &ContextDescriptor)
                                                    -> EGLConfig {
         unsafe {
-            let config_attributes = [
-                egl::CONFIG_ID as EGLint,   context_descriptor.egl_config_id,
-                egl::NONE as EGLint,        0,
-                0,                          0,
-            ];
-
-            let (mut config, mut config_count) = (ptr::null(), 0);
-            let result = egl::ChooseConfig(self.native_display.egl_display(),
-                                           config_attributes.as_ptr(),
-                                           &mut config,
-                                           1,
-                                           &mut config_count);
-            assert_ne!(result, egl::FALSE);
-            assert!(config_count > 0);
-            config
+            get_config_by_id(self.native_display.egl_display(), context_descriptor.egl_config_id)
         }
+    }
+
+    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
+                                                   -> Result<CurrentContextGuard, Error> {
+        let guard = CurrentContextGuard::new();
+        self.make_context_current(context)?;
+        Ok(guard)
     }
 }
 
@@ -440,6 +448,24 @@ impl NativeContext for UnsafeEGLContextRef {
     }
 }
 
+// Creates and returns a dummy pbuffer surface. This is used as the default framebuffer when
+// rendering to an `EGLImage`.
+fn create_pbuffer(egl_display: EGLDisplay, egl_config: EGLConfig) -> EGLSurface {
+    unsafe {
+        let pbuffer_attributes = [
+            egl::WIDTH as EGLint,   16,
+            egl::HEIGHT as EGLint,  16,
+            egl::NONE as EGLint,    0,
+            0,                      0,
+        ];
+        let pbuffer = egl::CreatePbufferSurface(egl_display,
+                                                egl_config,
+                                                pbuffer_attributes.as_ptr());
+        assert_ne!(pbuffer, egl::NO_SURFACE);
+        pbuffer
+    }
+}
+
 pub(crate) unsafe fn get_config_attr(egl_display: EGLDisplay, egl_config: EGLConfig, attr: EGLint)
                                      -> EGLint {
     let mut value = 0;
@@ -456,9 +482,61 @@ unsafe fn get_context_attr(egl_display: EGLDisplay, egl_context: EGLContext, att
     value
 }
 
+unsafe fn get_config_by_id(egl_display: EGLDisplay, egl_config_id: EGLint) -> EGLConfig {
+    let config_attributes = [
+        egl::CONFIG_ID as EGLint,   egl_config_id,
+        egl::NONE as EGLint,        0,
+        0,                          0,
+    ];
+
+    let (mut config, mut config_count) = (ptr::null(), 0);
+    let result = egl::ChooseConfig(egl_display,
+                                   config_attributes.as_ptr(),
+                                   &mut config,
+                                   1,
+                                   &mut config_count);
+    assert_ne!(result, egl::FALSE);
+    assert!(config_count > 0);
+    config
+}
+
 pub fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
         egl::GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as *const c_void
+    }
+}
+
+#[must_use]
+pub(crate) struct CurrentContextGuard {
+    egl_display: EGLDisplay,
+    old_egl_draw_surface: EGLSurface,
+    old_egl_read_surface: EGLSurface,
+    old_egl_context: EGLContext,
+}
+
+impl Drop for CurrentContextGuard {
+    fn drop(&mut self) {
+        unsafe {
+            if self.egl_display != egl::NO_DISPLAY {
+                egl::MakeCurrent(self.egl_display,
+                                 self.old_egl_draw_surface,
+                                 self.old_egl_read_surface,
+                                 self.old_egl_context);
+            }
+        }
+    }
+}
+
+impl CurrentContextGuard {
+    fn new() -> CurrentContextGuard {
+        unsafe {
+            CurrentContextGuard {
+                egl_display: egl::GetCurrentDisplay(),
+                old_egl_draw_surface: egl::GetCurrentSurface(egl::DRAW as EGLint),
+                old_egl_read_surface: egl::GetCurrentSurface(egl::READ as EGLint),
+                old_egl_context: egl::GetCurrentContext(),
+            }
+        }
     }
 }

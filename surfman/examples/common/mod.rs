@@ -125,6 +125,7 @@ pub trait ResourceLoader {
     fn slurp(&self, dest: &mut Vec<u8>, filename: &str);
 }
 
+#[allow(dead_code)]
 pub struct FilesystemResourceLoader;
 
 impl ResourceLoader for FilesystemResourceLoader {

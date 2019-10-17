@@ -2,16 +2,19 @@
 //
 // This example demonstrates how to create a multithreaded OpenGL application using `surfman`.
 
-use self::common::{Buffer, FilesystemResourceLoader, Program, ResourceLoader, Shader};
-use self::common::{ShaderKind, ck};
+use self::common::{Buffer, Program, ResourceLoader, Shader, ShaderKind, ck};
 
 use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, Context, ContextAttributeFlags, ContextAttributes, ContextDescriptor};
-use surfman::{Device, GLVersion, HiDPIMode, NativeWidget, Surface, SurfaceTexture, SurfaceType};
+use surfman::{Adapter, Context, ContextDescriptor, Device, Surface, SurfaceTexture, SurfaceType};
 
+#[cfg(not(target_os = "android"))]
+use self::common::FilesystemResourceLoader;
+
+#[cfg(not(target_os = "android"))]
+use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion, HiDPIMode, NativeWidget};
 #[cfg(not(target_os = "android"))]
 use winit::dpi::LogicalSize;
 #[cfg(not(target_os = "android"))]
@@ -110,7 +113,7 @@ fn main() {
     let mut exit = false;
 
     while !exit {
-        app.tick();
+        app.tick(true);
 
         event_loop.poll_events(|event| {
             match event {
@@ -166,7 +169,12 @@ impl App {
         });
 
         // Fetch our initial surface.
-        let mut frame = main_from_worker_receiver.recv().unwrap();
+        let mut frame = match main_from_worker_receiver.recv() {
+            Err(_) => {
+                panic!();
+            }
+            Ok(frame) => frame,
+        };
         let texture = Some(device.create_surface_texture(&mut context,
                                                          frame.surface.take().unwrap())
                                  .unwrap());
@@ -183,7 +191,7 @@ impl App {
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self, present: bool) {
         // Send back our old surface.
         let surface = self.device
                           .destroy_surface_texture(&mut self.context, self.texture.take().unwrap())
@@ -277,7 +285,9 @@ impl App {
             gl::Disable(gl::BLEND);
         }
 
-        self.device.present_context_surface(&mut self.context).unwrap();
+        if present {
+            self.device.present_context_surface(&mut self.context).unwrap();
+        }
     }
 }
 
