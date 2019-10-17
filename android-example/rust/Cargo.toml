@@ -7,6 +7,12 @@ edition = "2018"
 [lib]
 crate_type = ["cdylib"]
 
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
 [dependencies]
 android_logger = "0.8"
 gl = "0.13"

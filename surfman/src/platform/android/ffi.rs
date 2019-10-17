@@ -2,7 +2,7 @@
 
 use std::os::raw::{c_int, c_void};
 
-pub(crate) const AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM:     u32 = 0;
+pub(crate) const AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM:     u32 = 1;
 pub(crate) const AHARDWAREBUFFER_FORMAT_R8G8B8X8_UNORM:     u32 = 2;
 pub(crate) const AHARDWAREBUFFER_FORMAT_R8G8B8_UNORM:       u32 = 3;
 pub(crate) const AHARDWAREBUFFER_FORMAT_R5G6B5_UNORM:       u32 = 4;

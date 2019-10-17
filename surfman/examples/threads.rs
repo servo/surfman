@@ -2,8 +2,8 @@
 //
 // This example demonstrates how to create a multithreaded OpenGL application using `surfman`.
 
-#[macro_use]
-extern crate log;
+//#[macro_use]
+//extern crate log;
 
 use self::common::{Buffer, FilesystemResourceLoader, Program, ResourceLoader, Shader};
 use self::common::{ShaderKind, ck};
@@ -113,7 +113,7 @@ fn main() {
     let mut exit = false;
 
     while !exit {
-        app.tick();
+        app.tick(true);
 
         event_loop.poll_events(|event| {
             match event {
@@ -192,7 +192,7 @@ impl App {
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self, present: bool) {
         // Send back our old surface.
         let surface = self.device
                           .destroy_surface_texture(&mut self.context, self.texture.take().unwrap())
@@ -286,7 +286,9 @@ impl App {
             gl::Disable(gl::BLEND);
         }
 
-        self.device.present_context_surface(&mut self.context).unwrap();
+        if present {
+            self.device.present_context_surface(&mut self.context).unwrap();
+        }
     }
 }
 
@@ -306,8 +308,6 @@ fn worker_thread(adapter: Adapter,
     error!("worker_thread point b");
     device.make_context_current(&context).unwrap();
     error!("worker_thread point c");
-
-    error!("worker_thread point d");
 
     // Set up GL objects and state.
     let vertex_array = CheckVertexArray::new(device.surface_gl_texture_target(),
