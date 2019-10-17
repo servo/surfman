@@ -10,5 +10,6 @@ install:
   - cargo -V
 build: false
 test_script:
-  - cargo build --verbose
+  - cargo build --verbose --features sm-angle-builtin
+  - cargo build --verbose --features "sm-no-wgl sm-angle-builtin"
 
