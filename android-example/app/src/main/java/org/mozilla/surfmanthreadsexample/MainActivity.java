@@ -12,6 +12,7 @@ public class MainActivity extends AppCompatActivity {
         this.setContentView(R.layout.activity_main);
 
         GLSurfaceView surfaceView = this.findViewById(R.id.surface_view);
+        surfaceView.setEGLContextClientVersion(3);
         surfaceView.setRenderer(new SurfmanThreadsExampleRenderer(this));
     }
 }

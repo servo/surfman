@@ -1,10 +1,15 @@
 // surfman/android-example/rust/src/lib.rs
 
+#[macro_use]
+extern crate log;
+
 use crate::threads::App;
 use crate::threads::common::ResourceLoader;
 
+use android_logger::Config;
 use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JString, JValue};
 use jni::{JNIEnv, JavaVM};
+use log::Level;
 use std::cell::RefCell;
 use surfman::{Adapter, Device};
 
@@ -23,6 +28,11 @@ pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThre
     width: i32,
     height: i32,
 ) {
+    android_logger::init_once(Config::default().with_tag("SurfmanThreadsExample")
+                                               .with_min_level(Level::Trace));
+
+    error!("init()");
+
     let adapter = Adapter::default().unwrap();
     let (device, context) = Device::from_current_context().unwrap();
 
@@ -37,6 +47,7 @@ pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThre
     env: JNIEnv,
     class: JClass,
 ) {
+    error!("tick()");
     APP.with(|app| app.borrow_mut().as_mut().unwrap().tick());
 }
 

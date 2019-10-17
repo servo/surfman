@@ -143,11 +143,15 @@ impl Device {
 
     pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
                           -> Result<Context, Error> {
+        error!("create_context() point a");
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
+        error!("create_context() point b");
         let egl_config = self.context_descriptor_to_egl_config(descriptor);
+        error!("create_context() point c");
         let egl_context_client_version = descriptor.egl_context_client_version;
 
+        error!("create_context() point d");
         let egl_display = self.native_display.egl_display();
         unsafe {
             // Create the EGL context. Include some extra zeroes in the attribute list to work
@@ -159,10 +163,12 @@ impl Device {
                 egl::NONE as EGLint, 0,
                 0, 0,
             ];
+            error!("create_context() point e");
             let egl_context = egl::CreateContext(egl_display,
                                                  egl_config,
                                                  egl::NO_CONTEXT,
                                                  egl_context_attributes.as_ptr());
+            error!("create_context() point f");
             if egl_context == egl::NO_CONTEXT {
                 let err = egl::GetError().to_windowing_api_error();
                 return Err(Error::ContextCreationFailed(err));
@@ -183,13 +189,16 @@ impl Device {
                 egl::NONE as EGLint,    0,
                 0,                      0,
             ];
+            error!("create_context() point g");
             let pbuffer = egl::CreatePbufferSurface(egl_display,
                                                     egl_config,
                                                     pbuffer_attributes.as_ptr());
+            error!("create_context() point h");
             assert_ne!(pbuffer, egl::NO_SURFACE);
 
             // Build the initial framebuffer.
             let target = self.create_surface(&context, surface_type)?;
+            error!("create_context() point i");
             context.framebuffer = Framebuffer::Surface(ContextSurfaces { pbuffer, target });
             Ok(context)
         }
@@ -237,7 +246,7 @@ impl Device {
                 Framebuffer::Surface(ContextSurfaces { pbuffer, ref target }) => {
                     match target.objects {
                         SurfaceObjects::Window { egl_surface } => egl_surface,
-                        SurfaceObjects::EGLImage { .. } => pbuffer,
+                        SurfaceObjects::HardwareBuffer { .. } => pbuffer,
                     }
                 }
                 Framebuffer::None | Framebuffer::External => {
@@ -323,7 +332,7 @@ impl Device {
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
         self.context_surface(context).map(|surface| {
             match surface.objects {
-                SurfaceObjects::EGLImage { framebuffer_object, .. } => framebuffer_object,
+                SurfaceObjects::HardwareBuffer { framebuffer_object, .. } => framebuffer_object,
                 SurfaceObjects::Window { .. } => 0,
             }
         })
@@ -389,6 +398,13 @@ impl Device {
             assert!(config_count > 0);
             config
         }
+    }
+
+    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
+                                                   -> Result<CurrentContextGuard, Error> {
+        let guard = CurrentContextGuard::new();
+        self.make_context_current(context)?;
+        Ok(guard)
     }
 }
 
@@ -457,8 +473,41 @@ unsafe fn get_context_attr(egl_display: EGLDisplay, egl_context: EGLContext, att
 }
 
 pub fn get_proc_address(symbol_name: &str) -> *const c_void {
+    error!("getProcAddress({})", symbol_name);
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
         egl::GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as *const c_void
+    }
+}
+
+#[must_use]
+pub(crate) struct CurrentContextGuard {
+    egl_display: EGLDisplay,
+    old_egl_draw_surface: EGLSurface,
+    old_egl_read_surface: EGLSurface,
+    old_egl_context: EGLContext,
+}
+
+impl Drop for CurrentContextGuard {
+    fn drop(&mut self) {
+        unsafe {
+            egl::MakeCurrent(self.egl_display,
+                             self.old_egl_draw_surface,
+                             self.old_egl_read_surface,
+                             self.old_egl_context);
+        }
+    }
+}
+
+impl CurrentContextGuard {
+    fn new() -> CurrentContextGuard {
+        unsafe {
+            CurrentContextGuard {
+                egl_display: egl::GetCurrentDisplay(),
+                old_egl_draw_surface: egl::GetCurrentSurface(egl::DRAW as EGLint),
+                old_egl_read_surface: egl::GetCurrentSurface(egl::READ as EGLint),
+                old_egl_context: egl::GetCurrentContext(),
+            }
+        }
     }
 }

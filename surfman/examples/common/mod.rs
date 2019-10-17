@@ -53,6 +53,10 @@ impl Shader {
         resource_loader.slurp(&mut source, &format!("{}.{}.glsl", name, kind.extension()));
 
         unsafe {
+            error!("calling glGetString()");
+            gl::GetString(gl::VENDOR);
+            error!("glGetString() ok");
+
             let shader = gl::CreateShader(kind.to_gl()); ck();
             gl::ShaderSource(shader,
                              1,

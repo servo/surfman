@@ -145,6 +145,7 @@ impl App {
                mut context: Context,
                resource_loader: Box<dyn ResourceLoader + Send>)
                -> App {
+        error!("App::new()");
         let context_descriptor = device.context_descriptor(&context);
 
         gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
@@ -166,7 +167,12 @@ impl App {
         });
 
         // Fetch our initial surface.
-        let mut frame = main_from_worker_receiver.recv().unwrap();
+        let mut frame = match main_from_worker_receiver.recv() {
+            Err(_) => {
+                panic!();
+            }
+            Ok(frame) => frame,
+        };
         let texture = Some(device.create_surface_texture(&mut context,
                                                          frame.surface.take().unwrap())
                                  .unwrap());
@@ -286,18 +292,26 @@ fn worker_thread(adapter: Adapter,
                  resource_loader: Box<dyn ResourceLoader>,
                  worker_to_main_sender: Sender<Frame>,
                  worker_from_main_receiver: Receiver<Surface>) {
+    error!("start worker_thread");
+
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
     let surface_type = SurfaceType::Generic { size };
     let mut device = Device::new(&adapter).unwrap();
+    error!("worker_thread point a");
     let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
+    error!("worker_thread point b");
     device.make_context_current(&context).unwrap();
+    error!("worker_thread point c");
+
+    error!("worker_thread point d");
 
     // Set up GL objects and state.
     let vertex_array = CheckVertexArray::new(device.surface_gl_texture_target(),
                                              &*resource_loader);
 
     // Initialize our origin and size.
+    error!("worker_thread point e");
     let ball_origin = Point2D::new(WINDOW_WIDTH as f32 * 0.5 - BALL_WIDTH as f32 * 0.5,
                                    WINDOW_HEIGHT as f32 * 0.65 - BALL_HEIGHT as f32 * 0.5);
     let ball_size = Size2D::new(BALL_WIDTH as f32, BALL_HEIGHT as f32);
@@ -307,11 +321,13 @@ fn worker_thread(adapter: Adapter,
                             Point2D::new(BALL_WIDTH as f32, BALL_HEIGHT as f32)) * 0.5;
 
     // Initialize our rotation.
+    error!("worker_thread point f");
     let mut theta_x = INITIAL_ROTATION_X;
     let mut theta_y = INITIAL_ROTATION_Y;
     let mut theta_z = INITIAL_ROTATION_Z;
 
     // Send an initial surface back to the main thread.
+    error!("worker_thread point g");
     let surface = Some(device.create_surface(&context, &surface_type).unwrap());
     worker_to_main_sender.send(Frame {
         surface,
@@ -319,6 +335,7 @@ fn worker_thread(adapter: Adapter,
         sphere_position: ball_rect.center(),
     }).unwrap();
 
+    error!("worker_thread point h");
     loop {
         // Render to the surface.
         unsafe {
