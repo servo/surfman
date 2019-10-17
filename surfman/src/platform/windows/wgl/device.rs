@@ -145,7 +145,7 @@ impl HiddenWindow {
     fn thread(sender: Sender<SendableHWND>) {
         unsafe {
             let instance = libloaderapi::GetModuleHandleA(ptr::null_mut());
-            let window_class_name = &b"SurfmanHiddenWindow"[0] as *const u8 as LPCSTR;
+            let window_class_name = &b"SurfmanHiddenWindow\0"[0] as *const u8 as LPCSTR;
             let mut window_class = mem::zeroed();
             if winuser::GetClassInfoA(instance, window_class_name, &mut window_class) == FALSE {
                 window_class = WNDCLASSA {
