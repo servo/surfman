@@ -2,6 +2,9 @@
 //
 // This example demonstrates how to create a multithreaded OpenGL application using `surfman`.
 
+#[macro_use]
+extern crate log;
+
 use self::common::{Buffer, FilesystemResourceLoader, Program, ResourceLoader, Shader};
 use self::common::{ShaderKind, ck};
 
