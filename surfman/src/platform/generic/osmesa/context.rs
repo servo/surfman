@@ -7,6 +7,7 @@ use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceID, WindowingApiError};
 use super::device::Device;
 use super::surface::Surface;
+use super::surface::SurfaceType;
 
 use euclid::default::Size2D;
 use osmesa_sys::{self, OSMESA_CONTEXT_MAJOR_VERSION, OSMESA_CONTEXT_MINOR_VERSION};
@@ -107,7 +108,7 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, size: &Size2D<i32>)
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
                           -> Result<Context, Error> {
         // Take a lock.
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
@@ -126,7 +127,7 @@ impl Device {
             };
             next_context_id.0 += 1;
 
-            let initial_surface = self.create_surface(&context, size)?;
+            let initial_surface = self.create_surface(&context, surface_type)?;
             self.attach_surface(&mut context, initial_surface);
             self.make_context_current(&context)?;
 
