@@ -108,8 +108,8 @@ impl Device {
                     rfu0: 0,
                     rfu1: 0,
                     stride: 10,
-                    usage: super::ffi::AHARDWAREBUFFER_USAGE_CPU_READ_RARELY |
-                        super::ffi::AHARDWAREBUFFER_USAGE_CPU_WRITE_RARELY |
+                    usage: AHARDWAREBUFFER_USAGE_CPU_READ_NEVER |
+                        AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER |
                         AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER |
                         AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
                 };

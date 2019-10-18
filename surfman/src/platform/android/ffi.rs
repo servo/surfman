@@ -5,9 +5,7 @@ use std::os::raw::c_int;
 pub(crate) const AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM:     u32 = 1;
 
 pub(crate) const AHARDWAREBUFFER_USAGE_CPU_READ_NEVER:      u64 = 0;
-pub(crate) const AHARDWAREBUFFER_USAGE_CPU_READ_RARELY:     u64 = 2;
 pub(crate) const AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER:     u64 = 0 << 4;
-pub(crate) const AHARDWAREBUFFER_USAGE_CPU_WRITE_RARELY:    u64 = 2 << 4;
 pub(crate) const AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE:   u64 = 1 << 8;
 pub(crate) const AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER:     u64 = 1 << 9;
 
