@@ -27,6 +27,13 @@ pub struct SurfaceTexture {
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
+pub enum SurfaceType {
+    Generic { size: Size2D<i32> },
+}
+
+pub enum NativeWidget {
+}
+
 unsafe impl Send for Surface {}
 
 impl Debug for Surface {
