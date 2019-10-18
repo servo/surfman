@@ -27,6 +27,14 @@ pub struct SurfaceTexture {
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum SurfaceType {
+    Generic { size: Size2D<i32> },
+}
+
+pub enum NativeWidget {
+}
+
 unsafe impl Send for Surface {}
 
 impl Debug for Surface {
@@ -47,8 +55,9 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
+    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
                           -> Result<Surface, Error> {
+        let SurfaceType::Generic { ref size } = *surface_type;
         let pixels = UnsafeCell::new(vec![0; size.width as usize * size.height as usize * 4]);
         Ok(Surface { pixels, size: *size, context_id: context.id })
     }

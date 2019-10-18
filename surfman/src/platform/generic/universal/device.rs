@@ -5,7 +5,6 @@ use crate::platform::default::device::Device as HWDevice;
 use crate::platform::generic::osmesa::device::Device as OSMesaDevice;
 use super::adapter::Adapter;
 
-#[derive(Clone)]
 pub enum Device {
     Hardware(HWDevice),
     Software(OSMesaDevice),

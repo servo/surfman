@@ -1,7 +1,7 @@
 //! A surface abstraction that can switch between hardware and software rendering.
 
 use crate::gl::types::{GLenum, GLuint};
-use crate::platform::default::surface::{Surface as HWSurface, SurfaceTexture as HWSurfaceTexture};
+use crate::platform::default::surface::{Surface as HWSurface, SurfaceTexture as HWSurfaceTexture, SurfaceType as HWSurfaceType};
 use crate::platform::generic::osmesa::surface::Surface as OSMesaSurface;
 use crate::platform::generic::osmesa::surface::SurfaceTexture as OSMesaSurfaceTexture;
 use crate::{Error, SurfaceID};
@@ -9,6 +9,9 @@ use super::context::Context;
 use super::device::Device;
 
 use euclid::default::Size2D;
+
+pub use crate::platform::generic::osmesa::surface::SurfaceType;
+pub use crate::platform::generic::osmesa::surface::NativeWidget;
 
 #[derive(Debug)]
 pub enum Surface {
@@ -22,14 +25,15 @@ pub enum SurfaceTexture {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, size: &Size2D<i32>)
+    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
                           -> Result<Surface, Error> {
         match (&mut *self, context) {
             (&mut Device::Hardware(ref mut device), &Context::Hardware(ref context)) => {
-                device.create_surface(context, size).map(Surface::Hardware)
+                let ref surface_type = HWSurfaceType::from(*surface_type);
+                device.create_surface(context, surface_type).map(Surface::Hardware)
             }
             (&mut Device::Software(ref mut device), &Context::Software(ref context)) => {
-                device.create_surface(context, size).map(Surface::Software)
+                device.create_surface(context, surface_type).map(Surface::Software)
             }
             _ => Err(Error::IncompatibleContext),
         }
@@ -137,5 +141,13 @@ impl SurfaceTexture {
             SurfaceTexture::Hardware(ref surface_texture) => surface_texture.gl_texture(),
             SurfaceTexture::Software(ref surface_texture) => surface_texture.gl_texture(),
         }
+    }
+}
+
+#[cfg(not(feature = "sm-osmesa-default"))]
+impl From<SurfaceType> for HWSurfaceType {
+    fn from(surface_type: SurfaceType) -> HWSurfaceType {
+        let SurfaceType::Generic { size } = surface_type;
+        HWSurfaceType::Generic { size }
     }
 }
