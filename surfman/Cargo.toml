@@ -41,7 +41,7 @@ version = "0.1"
 optional = true
 
 [dependencies.winit]
-version = "0.19"
+version = "<0.19.4" # 0.19.4 causes build errors https://github.com/rust-windowing/winit/pull/1105
 optional = true
 
 [dev-dependencies]
