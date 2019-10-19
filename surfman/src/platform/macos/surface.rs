@@ -396,7 +396,7 @@ impl Drop for NativeWidget {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            msg_send![self.view.0, release];
+            msg_send![self.view.0, release]
         }
     }
 }
