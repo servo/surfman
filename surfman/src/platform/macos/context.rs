@@ -3,12 +3,12 @@
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::Gl;
 use crate::gl::types::GLuint;
-use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceID};
+use crate::surface::{Framebuffer, SurfaceType};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess, SurfaceID};
 use super::adapter::Adapter;
 use super::device::Device;
 use super::error::ToWindowingApiError;
-use super::surface::{Surface, SurfaceType};
+use super::surface::{NativeWidget, Surface, SurfaceDataGuard};
 
 use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
 use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
@@ -174,7 +174,10 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
+    pub fn create_context(&mut self,
+                          descriptor: &ContextDescriptor,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Context, Error> {
         // Take a lock so that we're only creating one context at a time. This serves two purposes:
         //
@@ -208,7 +211,7 @@ impl Device {
             next_context_id.0 += 1;
 
             // Build the initial framebuffer.
-            let surface = self.create_surface(&context, surface_type)?;
+            let surface = self.create_surface(&context, surface_access, surface_type)?;
             context.framebuffer = Framebuffer::Surface(surface);
             Ok(context)
         }
@@ -297,6 +300,12 @@ impl Device {
     pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
         let _guard = self.temporarily_make_context_current(context);
         self.context_surface_mut(context).and_then(|surface| surface.present())
+    }
+
+    #[inline]
+    pub fn lock_context_surface_data<'s>(&self, context: &'s mut Context)
+                                         -> Result<SurfaceDataGuard<'s>, Error> {
+        self.context_surface_mut(context).and_then(|surface| surface.lock_data())
     }
 
     #[inline]

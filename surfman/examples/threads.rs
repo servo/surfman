@@ -14,7 +14,7 @@ use surfman::{Adapter, Context, ContextDescriptor, Device, Surface, SurfaceTextu
 use self::common::FilesystemResourceLoader;
 
 #[cfg(not(target_os = "android"))]
-use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion, HiDPIMode, NativeWidget};
+use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion, NativeWidget};
 #[cfg(not(target_os = "android"))]
 use winit::dpi::LogicalSize;
 #[cfg(not(target_os = "android"))]
@@ -89,15 +89,17 @@ fn main() {
     let adapter = Adapter::default().unwrap();
     let mut device = Device::new(&adapter).unwrap();
 
-    let logical_size = LogicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
     let mut event_loop = EventsLoop::new();
+    let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
+    let logical_size =
+        PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical(dpi);
     let window = WindowBuilder::new().with_title("Multithreaded example")
                                      .with_dimensions(logical_size)
                                      .build(&event_loop)
                                      .unwrap();
     window.show();
 
-    let native_widget = NativeWidget::from_winit_window(&window, HiDPIMode::Off);
+    let native_widget = NativeWidget::from_winit_window(&window);
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 3),

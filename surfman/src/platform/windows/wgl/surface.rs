@@ -4,7 +4,7 @@
 
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, HiDPIMode, SurfaceID};
+use crate::{ContextID, Error, SurfaceID};
 use super::context::{Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
@@ -485,7 +485,7 @@ impl SurfaceTexture {
 impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
+    pub fn from_winit_window(window: &Window) -> NativeWidget {
         NativeWidget { window_handle: window.get_hwnd() as HWND }
     }
 }

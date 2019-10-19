@@ -6,7 +6,7 @@ use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributeFlags, Error, HiDPIMode, SurfaceID};
+use crate::{ContextAttributeFlags, Error, SurfaceID};
 use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 
@@ -363,7 +363,7 @@ impl SurfaceTexture {
 impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
+    pub fn from_winit_window(window: &Window) -> NativeWidget {
         unsafe {
             NativeWidget { window_handle: window.get_hwnd() as HWND }
         }

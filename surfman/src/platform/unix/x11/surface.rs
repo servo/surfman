@@ -6,7 +6,7 @@ use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
 use crate::glx::types::Display as GlxDisplay;
 use crate::{gl, glx};
-use crate::{Error, HiDPIMode, SurfaceID, WindowingApiError};
+use crate::{Error, SurfaceID, WindowingApiError};
 use super::context::{Context, GLX_FUNCTIONS, GL_FUNCTIONS};
 use super::device::{Device, Quirks};
 use super::error;
@@ -366,11 +366,9 @@ impl SurfaceTexture {
 impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn from_winit_window(window: &WinitWindow, _: HiDPIMode) -> NativeWidget {
+    pub fn from_winit_window(window: &WinitWindow) -> NativeWidget {
         unsafe {
-            NativeWidget {
-                window: window.get_xlib_window().expect("Where's the X11 window?"),
-            }
+            NativeWidget { window: window.get_xlib_window().expect("Where's the X11 window?") }
         }
     }
 }

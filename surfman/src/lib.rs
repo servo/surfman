@@ -19,7 +19,7 @@ pub mod platform;
 pub use platform::default::adapter::Adapter;
 pub use platform::default::context::{Context, ContextDescriptor};
 pub use platform::default::device::Device;
-pub use platform::default::surface::{NativeWidget, Surface, SurfaceTexture, SurfaceType};
+pub use platform::default::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture};
 
 pub mod error;
 pub use crate::error::{Error, WindowingApiError};
@@ -31,7 +31,7 @@ mod info;
 pub use crate::info::{GLApi, GLVersion};
 
 mod surface;
-pub use crate::surface::{HiDPIMode, SurfaceID};
+pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceType};
 
 mod gl_utils;
 mod renderbuffers;
