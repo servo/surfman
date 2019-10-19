@@ -34,7 +34,7 @@ impl NativeGLContext {
 impl Drop for NativeGLContext {
     fn drop(&mut self) {
         unsafe {
-            msg_send![self.0, release];
+            let () = msg_send![self.0, release];
         }
     }
 }
