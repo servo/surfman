@@ -321,6 +321,11 @@ impl Device {
         self.present_surface_without_context(surface)
     }
 
+    #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+    }
+
     pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
                                                   -> Result<(), Error> {
         unsafe {

@@ -95,6 +95,7 @@ pub struct NativeWidget {
 
 pub struct SurfaceDataGuard<'a> {
     surface: &'a mut Surface,
+    stride: usize,
     ptr: *mut u8,
     len: usize,
 }
@@ -426,6 +427,9 @@ impl SurfaceTexture {
 }
 
 impl<'a> SurfaceDataGuard<'a> {
+    #[inline]
+    pub fn stride(&self) -> usize { self.stride }
+
     #[inline]
     pub fn data(&mut self) -> &mut [u8] {
         unsafe {
