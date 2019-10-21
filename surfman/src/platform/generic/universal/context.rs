@@ -107,14 +107,13 @@ impl Device {
     }
 
     pub fn make_no_context_current(&self) -> Result<(), Error> {
-        match (self, context) {
-            (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
+        match self {
+            &Device::Hardware(ref device) => {
                 device.make_no_context_current()
             }
-            (&Device::Software(ref device), &Context::Software(ref context)) => {
+            &Device::Software(ref device) => {
                 device.make_no_context_current()
             }
-            _ => Err(Error::IncompatibleContext),
         }
     }
 
