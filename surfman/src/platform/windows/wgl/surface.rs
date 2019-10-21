@@ -4,7 +4,7 @@
 
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, HiDPIMode, SurfaceID};
+use crate::{ContextID, Error, SurfaceID};
 use super::context::{Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
@@ -433,6 +433,12 @@ impl Device {
     }
 
     #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
+    }
+
+    #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         gl::TEXTURE_2D
     }
@@ -485,7 +491,11 @@ impl SurfaceTexture {
 impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
+    pub fn from_winit_window(window: &Window) -> NativeWidget {
         NativeWidget { window_handle: window.get_hwnd() as HWND }
     }
+}
+
+pub struct SurfaceDataGuard<'a> {
+    phantom: PhantomData<&'a ()>,
 }

@@ -9,6 +9,7 @@ use super::context::Context;
 use super::device::Device;
 
 use euclid::default::Size2D;
+use std::marker::PhantomData;
 
 pub use crate::platform::generic::osmesa::surface::SurfaceType;
 pub use crate::platform::generic::osmesa::surface::NativeWidget;
@@ -114,6 +115,12 @@ impl Device {
             Device::Software(ref device) => device.surface_gl_texture_target(),
         }
     }
+
+    #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
+    }
 }
 
 impl Surface {
@@ -150,4 +157,8 @@ impl From<SurfaceType> for HWSurfaceType {
         let SurfaceType::Generic { size } = surface_type;
         HWSurfaceType::Generic { size }
     }
+}
+
+pub struct SurfaceDataGuard<'a> {
+    phantom: PhantomData<&'a ()>,
 }

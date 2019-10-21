@@ -1,5 +1,6 @@
 //! Information related to hardware surfaces.
 
+use euclid::default::Size2D;
 use std::fmt::{self, Display, Formatter};
 
 // The default framebuffer for a context.
@@ -23,7 +24,44 @@ impl Display for SurfaceID {
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum HiDPIMode {
-    Off,
-    On,
+pub enum SurfaceAccess {
+    /// The surface data is accessible by the GPU only.
+    /// 
+    /// The `lock_surface_data()` method will return the `SurfaceDataInaccessible` error when
+    /// called on this surface.
+    GPUOnly,
+
+    /// The surface data is accessible by the GPU and CPU.
+    GPUCPU,
+
+    /// The surface data is accessible by the GPU and CPU, and the CPU will send surface data over
+    /// the bus to the GPU using write-combining if available.
+    /// 
+    /// Specifically, what this means is that data transfer will be optimized for the following
+    /// patterns:
+    /// 
+    /// 1. Writing, not reading.
+    /// 
+    /// 2. Writing sequentially, filling every byte in a range.
+    /// 
+    /// This flag has no effect on correctness (at least on x86), but not following the rules
+    /// above may result in severe performance consequences.
+    /// 
+    /// The driver is free to treat this as identical to `GPUCPU`.
+    GPUCPUWriteCombined,
+}
+
+pub enum SurfaceType<NativeWidget> {
+    Generic { size: Size2D<i32> },
+    Widget { native_widget: NativeWidget },
+}
+
+impl SurfaceAccess {
+    #[inline]
+    pub(crate) fn cpu_access_allowed(self) -> bool {
+        match self {
+            SurfaceAccess::GPUOnly => false,
+            SurfaceAccess::GPUCPU | SurfaceAccess::GPUCPUWriteCombined => true,
+        }
+    }
 }

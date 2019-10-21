@@ -8,15 +8,16 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, Context, ContextDescriptor, Device, Surface, SurfaceTexture, SurfaceType};
+use surfman::{Adapter, Context, ContextDescriptor, Device, Surface, SurfaceAccess};
+use surfman::{SurfaceTexture, SurfaceType};
 
 #[cfg(not(target_os = "android"))]
 use self::common::FilesystemResourceLoader;
 
 #[cfg(not(target_os = "android"))]
-use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion, HiDPIMode, NativeWidget};
+use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion, NativeWidget};
 #[cfg(not(target_os = "android"))]
-use winit::dpi::LogicalSize;
+use winit::dpi::PhysicalSize;
 #[cfg(not(target_os = "android"))]
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 #[cfg(not(target_os = "android"))]
@@ -89,15 +90,17 @@ fn main() {
     let adapter = Adapter::default().unwrap();
     let mut device = Device::new(&adapter).unwrap();
 
-    let logical_size = LogicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64);
     let mut event_loop = EventsLoop::new();
+    let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
+    let logical_size =
+        PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical(dpi);
     let window = WindowBuilder::new().with_title("Multithreaded example")
                                      .with_dimensions(logical_size)
                                      .build(&event_loop)
                                      .unwrap();
     window.show();
 
-    let native_widget = NativeWidget::from_winit_window(&window, HiDPIMode::Off);
+    let native_widget = NativeWidget::from_winit_window(&window);
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 3),
@@ -106,7 +109,8 @@ fn main() {
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
-    let context = device.create_context(&context_descriptor, &surface_type).unwrap();
+    let context = device.create_context(&context_descriptor, SurfaceAccess::GPUOnly, &surface_type)
+                        .unwrap();
     device.make_context_current(&context).unwrap();
 
     let mut app = App::new(adapter, device, context, Box::new(FilesystemResourceLoader));
@@ -300,7 +304,8 @@ fn worker_thread(adapter: Adapter,
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
     let surface_type = SurfaceType::Generic { size };
     let mut device = Device::new(&adapter).unwrap();
-    let mut context = device.create_context(&context_descriptor, &surface_type).unwrap();
+    let mut context =
+        device.create_context(&context_descriptor, SurfaceAccess::GPUOnly, &surface_type).unwrap();
     device.make_context_current(&context).unwrap();
 
     // Set up GL objects and state.
@@ -322,7 +327,8 @@ fn worker_thread(adapter: Adapter,
     let mut theta_z = INITIAL_ROTATION_Z;
 
     // Send an initial surface back to the main thread.
-    let surface = Some(device.create_surface(&context, &surface_type).unwrap());
+    let surface = Some(device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type)
+                             .unwrap());
     worker_to_main_sender.send(Frame {
         surface,
         viewport_origin: ball_rect.origin - subscreen_offset,

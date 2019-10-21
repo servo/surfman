@@ -4,12 +4,16 @@ use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
 use crate::renderbuffers::Renderbuffers;
-use crate::{Error, HiDPIMode, SurfaceID, gl};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, gl};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
+use super::ffi::{IOSurfaceGetAllocSize, IOSurfaceGetBaseAddress, IOSurfaceGetBytesPerRow};
+use super::ffi::{IOSurfaceLock, IOSurfaceUnlock, kCVPixelFormatType_32BGRA, kIOMapDefaultCache};
+use super::ffi::{kIOMapWriteCombineCache, kCVReturnSuccess};
 
 use cocoa::appkit::{NSScreen, NSView as NSViewMethods, NSWindow};
 use cocoa::base::{YES, id};
+use cocoa::foundation::{NSPoint, NSRect, NSSize};
 use cocoa::quartzcore::{CALayer, CATransform3D, transaction};
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
@@ -19,11 +23,13 @@ use core_graphics::geometry::{CGRect, CGSize, CG_ZERO_POINT};
 use display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use euclid::default::Size2D;
 use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
-use io_surface::{kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
+use io_surface::{kIOSurfaceCacheMode, kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
+use mach::kern_return::KERN_SUCCESS;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
+use std::slice;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
@@ -36,14 +42,10 @@ const BYTES_PER_PIXEL: i32 = 4;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
 
-const BGRA: i32 = 0x42475241;   // 'BGRA'
-
-#[allow(non_upper_case_globals)]
-const kCVReturnSuccess: i32 = 0;
-
 pub struct Surface {
     pub(crate) io_surface: IOSurface,
     pub(crate) size: Size2D<i32>,
+    access: SurfaceAccess,
     pub(crate) context_id: ContextID,
     pub(crate) framebuffer_object: GLuint,
     pub(crate) texture_object: GLuint,
@@ -85,20 +87,24 @@ struct VblankCond {
     cond: Condvar,
 }
 
-pub enum SurfaceType {
-    Generic { size: Size2D<i32> },
-    Widget { native_widget: NativeWidget },
-}
-
 pub struct NSView(id);
 
 pub struct NativeWidget {
     pub view: NSView,
-    pub hidpi_mode: HiDPIMode,
+}
+
+pub struct SurfaceDataGuard<'a> {
+    surface: &'a mut Surface,
+    stride: usize,
+    ptr: *mut u8,
+    len: usize,
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         let _guard = self.temporarily_make_context_current(context);
         GL_FUNCTIONS.with(|gl| {
@@ -107,15 +113,12 @@ impl Device {
                     SurfaceType::Generic { size } => size,
                     SurfaceType::Widget { ref native_widget } => {
                         let window: id = msg_send![native_widget.view.0, window];
-                        let mut bounds = native_widget.view.0.bounds();
-                        if native_widget.hidpi_mode == HiDPIMode::On {
-                            bounds = window.convertRectToBacking(bounds);
-                        }
+                        let bounds = window.convertRectToBacking(native_widget.view.0.bounds());
                         Size2D::new(bounds.size.width.round(), bounds.size.height.round()).to_i32()
                     }
                 };
 
-                let io_surface = self.create_io_surface(&size);
+                let io_surface = self.create_io_surface(&size, access);
                 let texture_object = self.bind_to_gl_texture(&io_surface, &size);
 
                 let mut framebuffer_object = 0;
@@ -140,13 +143,14 @@ impl Device {
                 let view_info = match *surface_type {
                     SurfaceType::Generic { .. } => None,
                     SurfaceType::Widget { ref native_widget, .. } => {
-                        Some(self.create_view_info(&size, native_widget))
+                        Some(self.create_view_info(&size, access, native_widget))
                     }
                 };
 
                 Ok(Surface {
                     io_surface,
                     size,
+                    access,
                     context_id: context.id,
                     framebuffer_object,
                     texture_object,
@@ -157,9 +161,12 @@ impl Device {
         })
     }
 
-    unsafe fn create_view_info(&mut self, size: &Size2D<i32>, native_widget: &NativeWidget)
+    unsafe fn create_view_info(&mut self,
+                               size: &Size2D<i32>,
+                               surface_access: SurfaceAccess,
+                               native_widget: &NativeWidget)
                                -> ViewInfo {
-        let front_surface = self.create_io_surface(&size);
+        let front_surface = self.create_io_surface(&size, surface_access);
 
         let window: id = msg_send![native_widget.view.0, window];
         let device_description: CFDictionary<CFString, CFNumber> =
@@ -179,13 +186,21 @@ impl Device {
         native_widget.view.0.setLayer(superlayer.id());
         native_widget.view.0.setWantsLayer(YES);
 
+        // Compute logical size.
+        let window: id = msg_send![native_widget.view.0, window];
+        let logical_rect: NSRect = msg_send![window, convertRectFromBacking:NSRect {
+            origin: NSPoint { x: 0.0, y: 0.0 },
+            size: NSSize { width: size.width as f64, height: size.height as f64 },
+        }];
+        let logical_size = logical_rect.size;
+
         // Flip contents right-side-up.
         let sublayer_transform =
-            CATransform3D::from_scale(1.0, -1.0, 1.0).translate(0.0, -size.height as f64, 0.0);
+            CATransform3D::from_scale(1.0, -1.0, 1.0).translate(0.0, -logical_size.height, 0.0);
         superlayer.set_sublayer_transform(sublayer_transform);
 
         let layer = CALayer::new();
-        let layer_size = CGSize::new(size.width as f64, size.height as f64);
+        let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
         layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
         layer.set_contents(front_surface.obj as id);
         layer.set_opaque(true);
@@ -288,7 +303,18 @@ impl Device {
         surface.present()
     }
 
-    fn create_io_surface(&self, size: &Size2D<i32>) -> IOSurface {
+    #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        surface.lock_data()
+    }
+
+    fn create_io_surface(&self, size: &Size2D<i32>, access: SurfaceAccess) -> IOSurface {
+        let cache_mode = match access {
+            SurfaceAccess::GPUCPUWriteCombined => kIOMapWriteCombineCache,
+            SurfaceAccess::GPUOnly | SurfaceAccess::GPUCPU => kIOMapDefaultCache,
+        };
+
         unsafe {
             let properties = CFDictionary::from_CFType_pairs(&[
                 (CFString::wrap_under_get_rule(kIOSurfaceWidth),
@@ -300,7 +326,9 @@ impl Device {
                 (CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
                  CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType()),
                 (CFString::wrap_under_get_rule(kIOSurfacePixelFormat),
-                 CFNumber::from(BGRA).as_CFType()),
+                 CFNumber::from(kCVPixelFormatType_32BGRA).as_CFType()),
+                (CFString::wrap_under_get_rule(kIOSurfaceCacheMode),
+                 CFNumber::from(cache_mode).as_CFType()),
             ]);
 
             io_surface::new(&properties)
@@ -370,6 +398,26 @@ impl Surface {
             }
         })
     }
+
+    pub(crate) fn lock_data(&mut self) -> Result<SurfaceDataGuard, Error> {
+        if !self.access.cpu_access_allowed() {
+            return Err(Error::SurfaceDataInaccessible);
+        }
+
+        unsafe {
+            let mut seed = 0;
+            let result = IOSurfaceLock(self.io_surface.as_concrete_TypeRef(), 0, &mut seed);
+            if result != KERN_SUCCESS {
+                return Err(Error::SurfaceLockFailed);
+            }
+
+            let ptr = IOSurfaceGetBaseAddress(self.io_surface.as_concrete_TypeRef()) as *mut u8;
+            let len = IOSurfaceGetAllocSize(self.io_surface.as_concrete_TypeRef());
+            let stride = IOSurfaceGetBytesPerRow(self.io_surface.as_concrete_TypeRef());
+
+            Ok(SurfaceDataGuard { surface: &mut *self, stride, ptr, len })
+        }
+    }
 }
 
 impl SurfaceTexture {
@@ -379,15 +427,34 @@ impl SurfaceTexture {
     }
 }
 
+impl<'a> SurfaceDataGuard<'a> {
+    #[inline]
+    pub fn stride(&self) -> usize { self.stride }
+
+    #[inline]
+    pub fn data(&mut self) -> &mut [u8] {
+        unsafe {
+            slice::from_raw_parts_mut(self.ptr, self.len)
+        }
+    }
+}
+
+impl<'a> Drop for SurfaceDataGuard<'a> {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            let mut seed = 0;
+            IOSurfaceUnlock(self.surface.io_surface.as_concrete_TypeRef(), 0, &mut seed);
+        }
+    }
+}
+
 impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn from_winit_window(window: &Window, hidpi_mode: HiDPIMode) -> NativeWidget {
+    pub fn from_winit_window(window: &Window) -> NativeWidget {
         unsafe {
-            NativeWidget {
-                view: NSView(msg_send![window.get_nsview() as id, retain]),
-                hidpi_mode,
-            }
+            NativeWidget { view: NSView(msg_send![window.get_nsview() as id, retain]) }
         }
     }
 }
@@ -396,7 +463,7 @@ impl Drop for NativeWidget {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            msg_send![self.view.0, release]
+            let () = msg_send![self.view.0, release];
         }
     }
 }

@@ -6,7 +6,7 @@ use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributeFlags, Error, HiDPIMode, SurfaceID};
+use crate::{ContextAttributeFlags, Error, SurfaceID};
 use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 
@@ -313,6 +313,12 @@ impl Device {
         self.present_surface_without_context(surface)
     }
 
+    #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
+    }
+
     pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
                                                   -> Result<(), Error> {
         match surface.win32_objects {
@@ -363,9 +369,13 @@ impl SurfaceTexture {
 impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn from_winit_window(window: &Window, _: HiDPIMode) -> NativeWidget {
+    pub fn from_winit_window(window: &Window) -> NativeWidget {
         unsafe {
             NativeWidget { window_handle: window.get_hwnd() as HWND }
         }
     }
+}
+
+pub struct SurfaceDataGuard<'a> {
+    phantom: PhantomData<&'a ()>,
 }

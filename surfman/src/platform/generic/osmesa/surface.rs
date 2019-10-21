@@ -120,6 +120,12 @@ impl Device {
     }
 
     #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
+    }
+
+    #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         SURFACE_GL_TEXTURE_TARGET
     }
@@ -149,4 +155,8 @@ impl SurfaceTexture {
     pub fn gl_texture(&self) -> GLuint {
         self.gl_texture
     }
+}
+
+pub struct SurfaceDataGuard<'a> {
+    phantom: PhantomData<&'a ()>,
 }

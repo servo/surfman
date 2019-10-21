@@ -6,6 +6,8 @@ pub enum Error {
     Failed,
     /// The platform doesn't support this method.
     UnsupportedOnThisPlatform,
+    /// The platform supports this method in theory, but the functionality isn't implemented yet.
+    Unimplemented,
     /// The system doesn't support the requested OpenGL API type (OpenGL or OpenGL ES).
     UnsupportedGLType,
     /// Choosing an OpenGL pixel format failed.
@@ -58,6 +60,11 @@ pub enum Error {
     WidgetAttached,
     /// The native widget is invalid.
     InvalidNativeWidget,
+    /// The surface was not created with the `CPU_READ_WRITE` flag, so it cannot be accessed from
+    /// the CPU.
+    SurfaceDataInaccessible,
+    /// The surface could not be locked for CPU reading due to an OS error.
+    SurfaceLockFailed,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
