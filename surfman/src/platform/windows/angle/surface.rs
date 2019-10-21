@@ -275,7 +275,7 @@ impl Device {
             // If the surface is currently bound, unbind it.
             if egl::GetCurrentSurface(egl::READ as EGLint) == surface.egl_surface ||
                     egl::GetCurrentSurface(egl::DRAW as EGLint) == surface.egl_surface {
-                self.make_no_context_current()?;
+                self.make_context_not_current(context)?;
             }
 
             egl::DestroySurface(self.native_display.egl_display(), surface.egl_surface);
