@@ -9,6 +9,7 @@ use super::context::Context;
 use super::device::Device;
 
 use euclid::default::Size2D;
+use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub enum Surface {
@@ -110,6 +111,12 @@ impl Device {
             Device::Software(ref device) => device.surface_gl_texture_target(),
         }
     }
+
+    #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
+    }
 }
 
 impl Surface {
@@ -138,4 +145,8 @@ impl SurfaceTexture {
             SurfaceTexture::Software(ref surface_texture) => surface_texture.gl_texture(),
         }
     }
+}
+
+pub struct SurfaceDataGuard<'a> {
+    phantom: PhantomData<&'a ()>,
 }

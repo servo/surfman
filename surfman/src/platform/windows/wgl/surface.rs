@@ -433,6 +433,12 @@ impl Device {
     }
 
     #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
+    }
+
+    #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         gl::TEXTURE_2D
     }
@@ -488,4 +494,8 @@ impl NativeWidget {
     pub fn from_winit_window(window: &Window) -> NativeWidget {
         NativeWidget { window_handle: window.get_hwnd() as HWND }
     }
+}
+
+pub struct SurfaceDataGuard<'a> {
+    phantom: PhantomData<&'a ()>,
 }

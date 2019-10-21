@@ -7,8 +7,8 @@ use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, gl};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
-use super::ffi::{IOSurfaceGetAllocSize, IOSurfaceGetBaseAddress, IOSurfaceLock, IOSurfaceUnlock};
-use super::ffi::{kCVPixelFormatType_32BGRA, kIOMapDefaultCache};
+use super::ffi::{IOSurfaceGetAllocSize, IOSurfaceGetBaseAddress, IOSurfaceGetBytesPerRow};
+use super::ffi::{IOSurfaceLock, IOSurfaceUnlock, kCVPixelFormatType_32BGRA, kIOMapDefaultCache};
 use super::ffi::{kIOMapWriteCombineCache, kCVReturnSuccess};
 
 use cocoa::appkit::{NSScreen, NSView as NSViewMethods, NSWindow};
@@ -413,8 +413,9 @@ impl Surface {
 
             let ptr = IOSurfaceGetBaseAddress(self.io_surface.as_concrete_TypeRef()) as *mut u8;
             let len = IOSurfaceGetAllocSize(self.io_surface.as_concrete_TypeRef());
+            let stride = IOSurfaceGetBytesPerRow(self.io_surface.as_concrete_TypeRef());
 
-            Ok(SurfaceDataGuard { surface: &mut *self, ptr, len })
+            Ok(SurfaceDataGuard { surface: &mut *self, stride, ptr, len })
         }
     }
 }

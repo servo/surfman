@@ -3,7 +3,7 @@
 // This example demonstrates how to create an off-screen context and render into it using `surfman`
 // alone, without any other windowing libraries.
 
-use crate::common::{Buffer, Program, Shader, ShaderKind, ck};
+use crate::common::{Buffer, FilesystemResourceLoader, Program, Shader, ShaderKind, ck};
 
 use clap::{App, Arg};
 use euclid::default::Size2D;
@@ -14,7 +14,8 @@ use std::fs::File;
 use std::mem;
 use std::path::Path;
 use std::slice;
-use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLVersion, SurfaceType};
+use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLVersion};
+use surfman::{SurfaceAccess, SurfaceType};
 
 mod common;
 
@@ -71,7 +72,9 @@ fn main() {
         flags: ContextAttributeFlags::empty(),
     };
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
-    let mut context = device.create_context(&context_descriptor, &SurfaceType::Generic {
+    let mut context = device.create_context(&context_descriptor,
+                                            SurfaceAccess::GPUOnly,
+                                            &SurfaceType::Generic {
         size: Size2D::new(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT),
     }).unwrap();
 
@@ -159,8 +162,14 @@ struct TriProgram {
 
 impl TriProgram {
     fn new(gl_texture_target: GLenum) -> TriProgram {
-        let vertex_shader = Shader::new("tri", ShaderKind::Vertex, gl_texture_target);
-        let fragment_shader = Shader::new("tri", ShaderKind::Fragment, gl_texture_target);
+        let vertex_shader = Shader::new("tri",
+                                        ShaderKind::Vertex,
+                                        gl_texture_target,
+                                        &FilesystemResourceLoader);
+        let fragment_shader = Shader::new("tri",
+                                          ShaderKind::Fragment,
+                                          gl_texture_target,
+                                          &FilesystemResourceLoader);
         let program = Program::new(vertex_shader, fragment_shader);
         unsafe {
             let position_attribute =

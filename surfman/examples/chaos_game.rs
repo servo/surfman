@@ -7,7 +7,7 @@ use euclid::default::Point2D;
 use rand::{self, Rng};
 use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLVersion, NativeWidget};
 use surfman::{SurfaceAccess, SurfaceType};
-use winit::dpi::{LogicalSize, PhysicalSize};
+use winit::dpi::PhysicalSize;
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 use winit::{WindowBuilder, WindowEvent};
 

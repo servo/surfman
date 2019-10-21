@@ -313,6 +313,12 @@ impl Device {
         self.present_surface_without_context(surface)
     }
 
+    #[inline]
+    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
+    }
+
     pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
                                                   -> Result<(), Error> {
         match surface.win32_objects {
@@ -368,4 +374,8 @@ impl NativeWidget {
             NativeWidget { window_handle: window.get_hwnd() as HWND }
         }
     }
+}
+
+pub struct SurfaceDataGuard<'a> {
+    phantom: PhantomData<&'a ()>,
 }

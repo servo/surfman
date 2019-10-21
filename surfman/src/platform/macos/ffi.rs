@@ -6,7 +6,7 @@
 
 use io_surface::IOSurfaceRef;
 use mach::kern_return::kern_return_t;
-use std::os::raw::{c_int, c_void};
+use std::os::raw::c_void;
 
 pub(crate) const kCVPixelFormatType_32BGRA: i32 = 0x42475241;   // 'BGRA'
 
@@ -24,6 +24,7 @@ pub(crate) type IOSurfaceLockOptions = u32;
 extern {
     pub(crate) fn IOSurfaceGetAllocSize(buffer: IOSurfaceRef) -> usize;
     pub(crate) fn IOSurfaceGetBaseAddress(buffer: IOSurfaceRef) -> *mut c_void;
+    pub(crate) fn IOSurfaceGetBytesPerRow(buffer: IOSurfaceRef) -> usize;
     pub(crate) fn IOSurfaceLock(buffer: IOSurfaceRef,
                                 options: IOSurfaceLockOptions,
                                 seed: *mut u32)
