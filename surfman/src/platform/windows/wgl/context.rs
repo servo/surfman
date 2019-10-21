@@ -442,7 +442,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn make_context_not_current(&self, _context: &Context) -> Result<(), Error> {
+    pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
             let ok = wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
             if ok != FALSE {
