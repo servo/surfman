@@ -268,7 +268,7 @@ impl Device {
         }
     }
 
-    pub fn make_context_not_current(&self, _: &Context) -> Result<(), Error> {
+    pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
             let result = egl::MakeCurrent(self.native_display.egl_display(),
                                           egl::NO_SURFACE,

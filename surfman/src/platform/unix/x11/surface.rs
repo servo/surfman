@@ -265,7 +265,7 @@ impl Device {
             return Err(Error::IncompatibleSurface)
         }
 
-        self.make_context_not_current(context)?;
+        self.make_no_context_current()?;
 
         match surface.drawables {
             SurfaceDrawables::Pixmap { ref mut glx_pixmap, pixmap: _, pixels: _ } => {

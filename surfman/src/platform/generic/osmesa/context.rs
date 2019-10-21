@@ -225,7 +225,7 @@ impl Device {
         })
     }
 
-    pub fn make_context_not_current(&self, _: &Context) -> Result<(), Error> {
+    pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
             let ok = OSMesaMakeCurrent(ptr::null_mut(), ptr::null_mut(), 0, 0, 0);
             if ok == gl::FALSE {
