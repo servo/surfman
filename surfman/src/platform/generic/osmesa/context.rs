@@ -11,7 +11,7 @@ use super::surface::SurfaceType;
 
 use euclid::default::Size2D;
 use osmesa_sys::{self, OSMESA_CONTEXT_MAJOR_VERSION, OSMESA_CONTEXT_MINOR_VERSION};
-use osmesa_sys::{OSMESA_CORE_PROFILE, OSMESA_DEPTH_BITS, OSMESA_FORMAT, OSMESA_PROFILE};
+use osmesa_sys::{OSMESA_COMPAT_PROFILE, OSMESA_CORE_PROFILE, OSMESA_DEPTH_BITS, OSMESA_FORMAT, OSMESA_PROFILE};
 use osmesa_sys::{OSMESA_STENCIL_BITS, OSMesaContext, OSMesaCreateContextAttribs};
 use osmesa_sys::{OSMesaDestroyContext, OSMesaGetCurrentContext, OSMesaGetDepthBuffer};
 use osmesa_sys::{OSMesaGetIntegerv, OSMesaGetProcAddress, OSMesaMakeCurrent};
@@ -59,14 +59,14 @@ impl Device {
         let flags = attributes.flags;
         let format = if flags.contains(ContextAttributeFlags::ALPHA) { gl::RGBA } else { gl::RGB };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
-        let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
-
+        let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 }; 
+        let profile = if attributes.version.major < 3 { OSMESA_COMPAT_PROFILE } else { OSMESA_CORE_PROFILE };
         Ok(ContextDescriptor {
             attributes: Arc::new(vec![
                 OSMESA_FORMAT,                  format as i32,
                 OSMESA_DEPTH_BITS,              depth_size,
                 OSMESA_STENCIL_BITS,            stencil_size,
-                OSMESA_PROFILE,                 OSMESA_CORE_PROFILE,
+                OSMESA_PROFILE,                 profile,
                 OSMESA_CONTEXT_MAJOR_VERSION,   attributes.version.major as c_int,
                 OSMESA_CONTEXT_MINOR_VERSION,   attributes.version.minor as c_int,
                 0,
@@ -179,6 +179,8 @@ impl Device {
                     depth_byte_size = 0;
                 }
 
+                let profile = if major_gl_version < 3 { OSMESA_COMPAT_PROFILE } else { OSMESA_CORE_PROFILE };
+
                 // Create a set of attributes.
                 //
                 // FIXME(pcwalton): I don't see a way to get the current stencil size in the OSMesa
@@ -189,7 +191,7 @@ impl Device {
                         OSMESA_FORMAT,                  format,
                         OSMESA_DEPTH_BITS,              depth_byte_size * 8,
                         OSMESA_STENCIL_BITS,            8,
-                        OSMESA_PROFILE,                 OSMESA_CORE_PROFILE,
+                        OSMESA_PROFILE,                 profile,
                         OSMESA_CONTEXT_MAJOR_VERSION,   major_gl_version,
                         OSMESA_CONTEXT_MINOR_VERSION,   minor_gl_version,
                         0,
