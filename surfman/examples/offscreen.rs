@@ -3,7 +3,7 @@
 // This example demonstrates how to create an off-screen context and render into it using `surfman`
 // alone, without any other windowing libraries.
 
-use crate::common::{Buffer, Program, Shader, ShaderKind, ck};
+use crate::common::{Buffer, FilesystemResourceLoader, Program, Shader, ShaderKind, ck};
 
 use clap::{App, Arg};
 use euclid::default::Size2D;
@@ -159,8 +159,14 @@ struct TriProgram {
 
 impl TriProgram {
     fn new(gl_texture_target: GLenum) -> TriProgram {
-        let vertex_shader = Shader::new("tri", ShaderKind::Vertex, gl_texture_target);
-        let fragment_shader = Shader::new("tri", ShaderKind::Fragment, gl_texture_target);
+        let vertex_shader = Shader::new("tri",
+                                        ShaderKind::Vertex,
+                                        gl_texture_target,
+                                        &FilesystemResourceLoader);
+        let fragment_shader = Shader::new("tri",
+                                          ShaderKind::Fragment,
+                                          gl_texture_target,
+                                          &FilesystemResourceLoader);
         let program = Program::new(vertex_shader, fragment_shader);
         unsafe {
             let position_attribute =
