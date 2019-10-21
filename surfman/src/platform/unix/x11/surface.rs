@@ -324,6 +324,7 @@ impl Device {
     #[inline]
     pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
     }
 
     pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
@@ -376,6 +377,10 @@ impl NativeWidget {
             NativeWidget { window: window.get_xlib_window().expect("Where's the X11 window?") }
         }
     }
+}
+
+pub struct SurfaceDataGuard<'a> {
+    phantom: PhantomData<&'a ()>,
 }
 
 unsafe fn get_depth_of_visual_with_id(display: *mut Display, visual_id: VisualID)

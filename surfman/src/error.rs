@@ -6,6 +6,8 @@ pub enum Error {
     Failed,
     /// The platform doesn't support this method.
     UnsupportedOnThisPlatform,
+    /// The platform supports this method in theory, but the functionality isn't implemented yet.
+    Unimplemented,
     /// The system doesn't support the requested OpenGL API type (OpenGL or OpenGL ES).
     UnsupportedGLType,
     /// Choosing an OpenGL pixel format failed.
