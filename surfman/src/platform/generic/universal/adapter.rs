@@ -4,7 +4,7 @@ use crate::Error;
 use crate::platform::default::adapter::Adapter as HWAdapter;
 use crate::platform::generic::osmesa::adapter::Adapter as OSMesaAdapter;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Adapter {
     Hardware(HWAdapter),
     Software(OSMesaAdapter),
