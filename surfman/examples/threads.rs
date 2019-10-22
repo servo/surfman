@@ -8,14 +8,14 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, Context, ContextDescriptor, Device, Surface, SurfaceAccess};
+use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, Surface, SurfaceAccess};
 use surfman::{SurfaceTexture, SurfaceType};
 
 #[cfg(not(target_os = "android"))]
 use self::common::FilesystemResourceLoader;
 
 #[cfg(not(target_os = "android"))]
-use surfman::{Connection, ContextAttributeFlags, ContextAttributes, GLVersion, NativeWidget};
+use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion, NativeWidget};
 #[cfg(not(target_os = "android"))]
 use winit::dpi::PhysicalSize;
 #[cfg(not(target_os = "android"))]
