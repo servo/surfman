@@ -4,7 +4,7 @@
 
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, SurfaceID};
+use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::{Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
@@ -90,17 +90,15 @@ impl Drop for Surface {
     }
 }
 
-pub enum SurfaceType {
-    Generic { size: Size2D<i32> },
-    Widget { native_widget: NativeWidget },
-}
-
 pub struct NativeWidget {
     pub(crate) window_handle: HWND,
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          _: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         match *surface_type {
             SurfaceType::Generic { ref size } => self.create_generic_surface(context, size),

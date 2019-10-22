@@ -6,7 +6,7 @@ use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributeFlags, Error, SurfaceID};
+use crate::{ContextAttributeFlags, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 
@@ -80,17 +80,15 @@ pub(crate) enum Win32Objects {
     }
 }
 
-pub enum SurfaceType {
-    Generic { size: Size2D<i32> },
-    Widget { native_widget: NativeWidget },
-}
-
 pub struct NativeWidget {
     pub(crate) window_handle: HWND,
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          _: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         match *surface_type {
             SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size),
