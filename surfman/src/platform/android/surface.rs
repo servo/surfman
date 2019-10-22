@@ -1,7 +1,6 @@
 // surfman/src/platform/android/surface.rs
 
-//! Surface management for Android using the `GraphicBuffer` class and
-//! EGL.
+//! Surface management for Android using the `GraphicBuffer` class and EGL.
 
 use crate::context::ContextID;
 use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};

@@ -15,9 +15,9 @@ pub struct Device {
 
 impl Device {
     #[inline]
-    pub fn new(adapter: &Adapter) -> Result<Device, Error> {
+    pub fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
         unsafe {
-            let native_display = egl::GetDisplay(adapter.native_adapter.wayland_display());
+            let native_display = egl::GetDisplay(connection.native_connection.wayland_display());
             if native_display == egl::NO_DISPLAY {
                 return Err(Error::DeviceOpenFailed);
             }

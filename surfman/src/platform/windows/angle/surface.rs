@@ -235,8 +235,8 @@ impl Device {
 
                 gl.BindTexture(gl::TEXTURE_2D, texture);
                 if egl::BindTexImage(self.native_display.egl_display(),
-                                    local_egl_surface,
-                                    egl::BACK_BUFFER as GLint) == egl::FALSE {
+                                     local_egl_surface,
+                                     egl::BACK_BUFFER as GLint) == egl::FALSE {
                     let windowing_api_error = egl::GetError().to_windowing_api_error();
                     return Err(Error::SurfaceTextureCreationFailed(windowing_api_error));
                 }

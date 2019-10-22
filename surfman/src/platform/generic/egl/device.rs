@@ -1,5 +1,5 @@
 // surfman/surfman/src/platform/generic/egl/device.rs
-
+//
 //! Functionality common to backends using EGL displays.
 
 use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
