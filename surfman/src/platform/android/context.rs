@@ -1,13 +1,17 @@
+// surfman/surfman/src/platform/android/context.rs
+//
 //! Wrapper for EGL contexts on Android.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
+use crate::egl;
 use crate::gl::Gl;
 use crate::gl::types::GLuint;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceID, egl};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
+use crate::{SurfaceID, SurfaceType};
 use super::device::{Device, UnsafeEGLDisplayRef};
-use super::surface::{Surface, SurfaceObjects, SurfaceType};
+use super::surface::{NativeWidget, Surface, SurfaceObjects};
 
 use euclid::default::Size2D;
 use std::ffi::CString;
@@ -155,7 +159,10 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
+    pub fn create_context(&mut self,
+                          descriptor: &ContextDescriptor,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
@@ -195,7 +202,7 @@ impl Device {
             next_context_id.0 += 1;
 
             // Build the initial framebuffer.
-            let target = self.create_surface(&context, surface_type)?;
+            let target = self.create_surface(&context, surface_access, surface_type)?;
             context.framebuffer = Framebuffer::Surface(target);
             Ok(context)
         }

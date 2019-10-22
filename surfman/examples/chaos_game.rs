@@ -5,8 +5,8 @@
 use euclid::default::Point2D;
 
 use rand::{self, Rng};
-use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLVersion, NativeWidget};
-use surfman::{SurfaceAccess, SurfaceType};
+use surfman::{Adapter, Connection, ContextAttributeFlags, ContextAttributes, Device, GLVersion};
+use surfman::{NativeWidget, SurfaceAccess, SurfaceType};
 use winit::dpi::PhysicalSize;
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 use winit::{WindowBuilder, WindowEvent};
@@ -27,8 +27,8 @@ static TRIANGLE_POINTS: [(f32, f32); 3] = [
 ];
 
 fn main() {
-    let adapter = Adapter::default().unwrap();
-    let mut device = Device::new(&adapter).unwrap();
+    let (connection, adapter) = (Connection::new().unwrap(), Adapter::default().unwrap());
+    let mut device = Device::new(&connection, &adapter).unwrap();
 
     let mut event_loop = EventsLoop::new();
     let dpi = event_loop.get_primary_monitor().get_hidpi_factor();

@@ -4,6 +4,7 @@
 
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
+use super::connection::Connection;
 use super::context::WGL_EXTENSION_FUNCTIONS;
 
 use std::marker::PhantomData;
@@ -47,7 +48,7 @@ impl Drop for Device {
 }
 
 impl Device {
-    pub fn new(_: &Adapter) -> Result<Device, Error> {
+    pub fn new(_: &Connection, _: &Adapter) -> Result<Device, Error> {
         let dx_interop_functions = match WGL_EXTENSION_FUNCTIONS.dx_interop_functions {
             Some(ref dx_interop_functions) => dx_interop_functions,
             None => return Err(Error::RequiredExtensionUnavailable),
@@ -80,6 +81,11 @@ impl Device {
             let hidden_window = HiddenWindow::new();
             Ok(Device { d3d11_device, d3d11_device_context, gl_dx_interop_device, hidden_window })
         }
+    }
+
+    #[inline]
+    pub fn connection(&self) -> Connection {
+        Connection
     }
 
     #[inline]

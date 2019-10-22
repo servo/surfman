@@ -8,7 +8,7 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, Context, ContextDescriptor, Device, Surface, SurfaceAccess};
+use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, Surface, SurfaceAccess};
 use surfman::{SurfaceTexture, SurfaceType};
 
 #[cfg(not(target_os = "android"))]
@@ -87,8 +87,8 @@ static BACKGROUND_COLOR: [f32; 4] = [
 
 #[cfg(not(target_os = "android"))]
 fn main() {
-    let adapter = Adapter::default().unwrap();
-    let mut device = Device::new(&adapter).unwrap();
+    let (connection, adapter) = (Connection::new().unwrap(), Adapter::default().unwrap());
+    let mut device = Device::new(&connection, &adapter).unwrap();
 
     let mut event_loop = EventsLoop::new();
     let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
@@ -113,7 +113,8 @@ fn main() {
                         .unwrap();
     device.make_context_current(&context).unwrap();
 
-    let mut app = App::new(adapter, device, context, Box::new(FilesystemResourceLoader));
+    let mut app =
+        App::new(connection, adapter, device, context, Box::new(FilesystemResourceLoader));
     let mut exit = false;
 
     while !exit {
@@ -147,7 +148,8 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(adapter: Adapter,
+    pub fn new(connection: Connection,
+               adapter: Adapter,
                device: Device,
                mut context: Context,
                resource_loader: Box<dyn ResourceLoader + Send>)
@@ -165,7 +167,8 @@ impl App {
         let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
         let (main_to_worker_sender, worker_from_main_receiver) = mpsc::channel();
         thread::spawn(move || {
-            worker_thread(adapter,
+            worker_thread(connection,
+                          adapter,
                           context_descriptor,
                           resource_loader,
                           worker_to_main_sender,
@@ -295,7 +298,8 @@ impl App {
     }
 }
 
-fn worker_thread(adapter: Adapter,
+fn worker_thread(connection: Connection,
+                 adapter: Adapter,
                  context_descriptor: ContextDescriptor,
                  resource_loader: Box<dyn ResourceLoader>,
                  worker_to_main_sender: Sender<Frame>,
@@ -303,7 +307,7 @@ fn worker_thread(adapter: Adapter,
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
     let surface_type = SurfaceType::Generic { size };
-    let mut device = Device::new(&adapter).unwrap();
+    let mut device = Device::new(&connection, &adapter).unwrap();
     let mut context =
         device.create_context(&context_descriptor, SurfaceAccess::GPUOnly, &surface_type).unwrap();
     device.make_context_current(&context).unwrap();

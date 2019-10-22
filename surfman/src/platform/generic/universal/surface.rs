@@ -1,18 +1,18 @@
 //! A surface abstraction that can switch between hardware and software rendering.
 
 use crate::gl::types::{GLenum, GLuint};
-use crate::platform::default::surface::{Surface as HWSurface, SurfaceTexture as HWSurfaceTexture, SurfaceType as HWSurfaceType};
+use crate::platform::default::surface::Surface as HWSurface;
+use crate::platform::default::surface::SurfaceTexture as HWSurfaceTexture;
 use crate::platform::generic::osmesa::surface::Surface as OSMesaSurface;
 use crate::platform::generic::osmesa::surface::SurfaceTexture as OSMesaSurfaceTexture;
-use crate::{Error, SurfaceID};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::Context;
 use super::device::Device;
 
 use euclid::default::Size2D;
 use std::marker::PhantomData;
 
-pub use crate::platform::generic::osmesa::surface::SurfaceType;
-pub use crate::platform::generic::osmesa::surface::NativeWidget;
+pub use crate::platform::default::surface::NativeWidget;
 
 #[derive(Debug)]
 pub enum Surface {
@@ -26,15 +26,26 @@ pub enum SurfaceTexture {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         match (&mut *self, context) {
             (&mut Device::Hardware(ref mut device), &Context::Hardware(ref context)) => {
-                let ref surface_type = HWSurfaceType::from(*surface_type);
-                device.create_surface(context, surface_type).map(Surface::Hardware)
+                device.create_surface(context, surface_access, surface_type).map(Surface::Hardware)
             }
             (&mut Device::Software(ref mut device), &Context::Software(ref context)) => {
-                device.create_surface(context, surface_type).map(Surface::Software)
+                let surface_type = match *surface_type {
+                    SurfaceType::Generic { size } => SurfaceType::Generic { size },
+                    SurfaceType::Widget { .. } => {
+                        // TODO(pcwalton): Allow rendering to native widgets using the universal
+                        // backend.
+                        return Err(Error::Unimplemented)
+                    }
+                };
+                device.create_surface(context, surface_access, &surface_type)
+                      .map(Surface::Software)
             }
             _ => Err(Error::IncompatibleContext),
         }
@@ -116,8 +127,9 @@ impl Device {
         }
     }
 
+    // TODO(pcwalton)
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+    pub fn lock_surface_data<'s>(&self, _surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
@@ -148,14 +160,6 @@ impl SurfaceTexture {
             SurfaceTexture::Hardware(ref surface_texture) => surface_texture.gl_texture(),
             SurfaceTexture::Software(ref surface_texture) => surface_texture.gl_texture(),
         }
-    }
-}
-
-#[cfg(not(feature = "sm-osmesa-default"))]
-impl From<SurfaceType> for HWSurfaceType {
-    fn from(surface_type: SurfaceType) -> HWSurfaceType {
-        let SurfaceType::Generic { size } = surface_type;
-        HWSurfaceType::Generic { size }
     }
 }
 

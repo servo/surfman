@@ -3,15 +3,17 @@
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay, EGLSurface};
 use crate::egl::types::{EGLenum, EGLint};
+use crate::egl;
 use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceID, egl};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
+use crate::{SurfaceID, SurfaceType};
 use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
-use super::surface::{Surface, SurfaceTexture, SurfaceType, Win32Objects};
+use super::surface::{NativeWidget, Surface, SurfaceTexture, Win32Objects};
 
 use euclid::default::Size2D;
 use std::ffi::CString;
@@ -176,7 +178,10 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
+    pub fn create_context(&mut self,
+                          descriptor: &ContextDescriptor,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
@@ -207,7 +212,7 @@ impl Device {
             };
             next_context_id.0 += 1;
 
-            let initial_surface = self.create_surface(&context, surface_type)?;
+            let initial_surface = self.create_surface(&context, surface_access, surface_type)?;
             self.attach_surface(&mut context, initial_surface);
 
             Ok(context)

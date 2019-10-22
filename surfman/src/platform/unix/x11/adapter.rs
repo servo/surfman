@@ -1,19 +1,21 @@
-//! A wrapper for X11 adapters (`DISPLAY` variables).
+// surfman/surfman/src/platform/unix/x11/adapter.rs
+//
+//! A wrapper for X11 adapters.
+//! 
+//! These are no-ops, since we don't support multi-GPU on X11 yet.
 
 use crate::Error;
 
 use std::ffi::CString;
 
 #[derive(Clone, Debug)]
-pub struct Adapter {
-    pub(crate) display_name: Option<CString>,
-}
+pub struct Adapter;
 
 impl Adapter {
     /// Returns the "best" adapter on this system.
     #[inline]
     pub fn default() -> Result<Adapter, Error> {
-        Ok(Adapter { display_name: None })
+        Ok(Adapter)
     }
 
     /// Returns the "best" hardware adapter on this system.

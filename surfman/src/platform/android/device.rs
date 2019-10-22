@@ -3,6 +3,7 @@
 use crate::egl::types::{EGLClientBuffer, EGLDisplay, EGLImageKHR, EGLenum};
 use crate::{Error, GLApi, egl};
 use super::adapter::Adapter;
+use super::connection::Connection;
 use super::ffi::AHardwareBuffer;
 
 use std::mem;
@@ -40,7 +41,7 @@ pub(crate) trait NativeDisplay {
 
 impl Device {
     #[inline]
-    pub fn new(_: &Adapter) -> Result<Device, Error> {
+    pub fn new(_: &Connection, _: &Adapter) -> Result<Device, Error> {
         unsafe {
             let egl_display = egl::GetDisplay(egl::DEFAULT_DISPLAY);
             assert_ne!(egl_display, egl::NO_DISPLAY);
@@ -55,6 +56,11 @@ impl Device {
 
             Ok(Device { native_display })
         }
+    }
+
+    #[inline]
+    pub fn connection(&self) -> Connection {
+        Connection
     }
 
     #[inline]

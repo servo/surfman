@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/windows/angle/device.rs
+//
 //! A thread-local handle to the device.
 
 use crate::context::ContextID;
@@ -6,6 +8,7 @@ use crate::egl::types::{EGLSurface, EGLenum, EGLint};
 use crate::platform::generic::egl::device::{NativeDisplay, OwnedEGLDisplay, UnsafeEGLDisplayRef};
 use crate::{Error, GLApi, egl};
 use super::adapter::Adapter;
+use super::connection::Connection;
 
 use std::mem;
 use std::os::raw::{c_char, c_void};
@@ -67,7 +70,7 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn new(adapter: &Adapter) -> Result<Device, Error> {
+    pub fn new(_: &Connection, adapter: &Adapter) -> Result<Device, Error> {
         let d3d_driver_type = adapter.d3d_driver_type;
         unsafe {
             let mut d3d11_device = ptr::null_mut();
@@ -112,6 +115,11 @@ impl Device {
 
             Ok(Device { native_display, egl_device, d3d11_device, d3d_driver_type })
         }
+    }
+
+    #[inline]
+    pub fn connection(&self) -> Connection {
+        Connection
     }
 
     pub fn adapter(&self) -> Adapter {

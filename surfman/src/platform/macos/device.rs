@@ -2,6 +2,7 @@
 
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
+use super::connection::Connection;
 
 use std::marker::PhantomData;
 
@@ -12,8 +13,13 @@ pub struct Device {
 
 impl Device {
     #[inline]
-    pub fn new(_: &Adapter) -> Result<Device, Error> {
+    pub fn new(_: &Connection, _: &Adapter) -> Result<Device, Error> {
         Ok(Device { phantom: PhantomData })
+    }
+
+    #[inline]
+    pub fn connection(&self) -> Connection {
+        Connection
     }
 
     #[inline]

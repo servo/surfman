@@ -65,6 +65,8 @@ pub enum Error {
     SurfaceDataInaccessible,
     /// The surface could not be locked for CPU reading due to an OS error.
     SurfaceLockFailed,
+    /// A connection to the window server is required to open a hardware device.
+    ConnectionRequired,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.

@@ -3,11 +3,12 @@
 //! Wrapper for WGL contexts on Windows.
 
 use crate::context::CREATE_CONTEXT_MUTEX;
-use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion};
-use crate::{SurfaceID, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion, SurfaceAccess};
+use crate::{SurfaceID, SurfaceType, WindowingApiError};
 use super::adapter::Adapter;
+use super::connection::Connection;
 use super::device::{DCGuard, Device, HiddenWindow};
-use super::surface::{Surface, SurfaceType, Win32Objects};
+use super::surface::{NativeWidget, Surface, Win32Objects};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
@@ -203,7 +204,7 @@ impl Device {
     /// called with a context object created via this method.
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-        let device = Device::new(&Adapter::default()?)?;
+        let device = Device::new(&Connection::new()?, &Adapter::default()?)?;
 
         let context = Context {
             native_context: Box::new(UnsafeGLRCRef { glrc: wglGetCurrentContext() }),
@@ -218,7 +219,10 @@ impl Device {
     }
 
     #[allow(non_snake_case)]
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
+    pub fn create_context(&mut self,
+                          descriptor: &ContextDescriptor,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Context, Error> {
         let wglCreateContextAttribsARB = match WGL_EXTENSION_FUNCTIONS.CreateContextAttribsARB {
             None => return Err(Error::RequiredExtensionUnavailable),
@@ -293,7 +297,7 @@ impl Device {
             next_context_id.0 += 1;
 
             // Build the initial framebuffer.
-            let surface = self.create_surface(&context, surface_type)?;
+            let surface = self.create_surface(&context, surface_access, surface_type)?;
             self.attach_surface(&mut context, surface);
             Ok(context)
         }

@@ -3,7 +3,7 @@
 use crate::context::ContextID;
 use crate::gl;
 use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
-use crate::{Error, SurfaceID};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 
@@ -27,13 +27,8 @@ pub struct SurfaceTexture {
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum SurfaceType {
-    Generic { size: Size2D<i32> },
-}
-
-pub enum NativeWidget {
-}
+/// TODO(pcwalton): Allow rendering to native widgets.
+pub enum NativeWidget {}
 
 unsafe impl Send for Surface {}
 
@@ -55,11 +50,17 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          _: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        let SurfaceType::Generic { ref size } = *surface_type;
+        let size = match *surface_type {
+            SurfaceType::Generic { ref size } => *size,
+            SurfaceType::Widget { .. } => unreachable!(),
+        };
         let pixels = UnsafeCell::new(vec![0; size.width as usize * size.height as usize * 4]);
-        Ok(Surface { pixels, size: *size, context_id: context.id })
+        Ok(Surface { pixels, size, context_id: context.id })
     }
 
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
@@ -119,8 +120,9 @@ impl Device {
         Ok(surface_texture.surface)
     }
 
+    // TODO(pcwalton)
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+    pub fn lock_surface_data<'s>(&self, _surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }

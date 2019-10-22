@@ -7,7 +7,8 @@ use crate::context::ContextID;
 use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::renderbuffers::Renderbuffers;
-use crate::{Error, SurfaceID, WindowingApiError, egl, gl};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
+use crate::{egl, gl};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 use super::ffi::{AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM, AHARDWAREBUFFER_USAGE_CPU_READ_NEVER};
@@ -71,17 +72,15 @@ impl Drop for Surface {
     }
 }
 
-pub enum SurfaceType {
-    Generic { size: Size2D<i32> },
-    Widget { native_widget: NativeWidget },
-}
-
 pub struct NativeWidget {
     pub(crate) native_window: *mut ANativeWindow,
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          _: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         match *surface_type {
             SurfaceType::Generic { ref size } => self.create_generic_surface(context, size),
