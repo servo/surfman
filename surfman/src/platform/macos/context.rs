@@ -6,6 +6,7 @@ use crate::gl::types::GLuint;
 use crate::surface::{Framebuffer, SurfaceType};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess, SurfaceID};
 use super::adapter::Adapter;
+use super::connection::Connection;
 use super::device::Device;
 use super::error::ToWindowingApiError;
 use super::surface::{NativeWidget, Surface, SurfaceDataGuard};
@@ -170,7 +171,7 @@ impl Device {
         };
         next_context_id.0 += 1;
 
-        let device = Device::new(&Adapter)?;
+        let device = Device::new(&Connection, &Adapter)?;
         Ok((device, context))
     }
 

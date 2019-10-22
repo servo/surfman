@@ -3,6 +3,7 @@
 use crate::glx::types::Display as GlxDisplay;
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
+use super::connection::Connection;
 
 use std::ffi::CStr;
 use std::os::raw::c_int;
@@ -28,9 +29,9 @@ bitflags! {
 
 impl Device {
     #[inline]
-    pub fn new(adapter: &Adapter) -> Result<Device, Error> {
+    pub fn new(connection: &Connection, _: &Adapter) -> Result<Device, Error> {
         unsafe {
-            let display_name = match adapter.display_name {
+            let display_name = match connection.display_name {
                 None => ptr::null(),
                 Some(ref display_name) => display_name.as_ptr(),
             };
@@ -47,10 +48,15 @@ impl Device {
 
     #[inline]
     pub fn adapter(&self) -> Adapter {
+        Adapter
+    }
+
+    #[inline]
+    pub fn connection(&self) -> Connection {
         unsafe {
             let display_name = XDisplayString(self.native_display.display());
             assert!(!display_name.is_null());
-            Adapter { display_name: Some(CStr::from_ptr(display_name).to_owned()) }
+            Connection { display_name: Some(CStr::from_ptr(display_name).to_owned()) }
         }
     }
 

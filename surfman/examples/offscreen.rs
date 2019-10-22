@@ -14,7 +14,7 @@ use std::fs::File;
 use std::mem;
 use std::path::Path;
 use std::slice;
-use surfman::{Adapter, ContextAttributeFlags, ContextAttributes, Device, GLVersion};
+use surfman::{Adapter, Connection, ContextAttributeFlags, ContextAttributes, Device, GLVersion};
 use surfman::{SurfaceAccess, SurfaceType};
 
 mod common;
@@ -54,6 +54,8 @@ fn main() {
                                                                  .help("Output PNG file"))
                                     .get_matches();
 
+    let connection = Connection::new().unwrap();
+
     let adapter = if matches.is_present("software") {
         Adapter::software().unwrap()
     } else if matches.is_present("hardware") {
@@ -65,7 +67,7 @@ fn main() {
     let output_path = Path::new(matches.value_of("OUTPUT").unwrap()).to_owned();
     let output_file = File::create(output_path).unwrap();
 
-    let mut device = Device::new(&adapter).unwrap();
+    let mut device = Device::new(&connection, &adapter).unwrap();
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 3),

@@ -17,6 +17,7 @@ extern crate objc;
 
 pub mod platform;
 pub use platform::default::adapter::Adapter;
+pub use platform::default::connection::Connection;
 pub use platform::default::context::{Context, ContextDescriptor};
 pub use platform::default::device::Device;
 pub use platform::default::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture};
