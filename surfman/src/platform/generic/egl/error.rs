@@ -1,4 +1,4 @@
-// surfman/src/platform/windows/angle/error.rs
+// surfman/surfman/src/platform/generic/egl/error.rs
 
 //! Translation of errors from the EGL API to `surfman` errors.
 

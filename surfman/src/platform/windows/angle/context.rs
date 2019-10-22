@@ -61,6 +61,7 @@ pub struct ContextDescriptor {
 }
 
 impl Device {
+    // TODO(pcwalton): Move to the generic EGL module.
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         let flags = attributes.flags;

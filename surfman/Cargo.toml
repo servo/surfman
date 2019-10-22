@@ -60,6 +60,10 @@ io-surface = "0.12"
 mach = "0.3"
 objc = "0.2"
 
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.wayland-sys]
+version = "0.24"
+features = ["client"]
+
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
 version = "2.3.0"
 features = ["xlib"]
