@@ -4,6 +4,10 @@
 //!
 //! FIXME(pcwalton): I think this should actually wrap the `Display`.
 
+use crate::error::Error;
+
+use std::ffi::CString;
+
 #[derive(Clone)]
 pub struct Connection {
     pub(crate) display_name: Option<CString>,

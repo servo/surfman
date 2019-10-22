@@ -6,7 +6,7 @@ use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
 use crate::glx::types::Display as GlxDisplay;
 use crate::{gl, glx};
-use crate::{Error, SurfaceID, WindowingApiError};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
 use super::context::{Context, GLX_FUNCTIONS, GL_FUNCTIONS};
 use super::device::{Device, Quirks};
 use super::error;
@@ -55,11 +55,6 @@ pub(crate) enum SurfaceDrawables {
     },
 }
 
-pub enum SurfaceType {
-    Generic { size: Size2D<i32> },
-    Widget { native_widget: NativeWidget },
-}
-
 pub struct NativeWidget {
     pub(crate) window: Window,
 }
@@ -87,7 +82,10 @@ pub(crate) enum SurfaceKind {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          _: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         match *surface_type {
             SurfaceType::Generic { ref size } => self.create_generic_surface(context, size),

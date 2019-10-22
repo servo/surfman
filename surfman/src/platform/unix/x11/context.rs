@@ -6,10 +6,10 @@ use crate::gl::{self, Gl};
 use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXFBConfig};
 use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
-use crate::{SurfaceID, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess, SurfaceID};
+use crate::{SurfaceType, WindowingApiError};
 use super::device::{Device, Quirks, UnsafeDisplayRef};
-use super::surface::{Surface, SurfaceDrawables, SurfaceKind, SurfaceType};
+use super::surface::{NativeWidget, Surface, SurfaceDrawables, SurfaceKind};
 
 use euclid::default::Size2D;
 use libc::{RTLD_DEFAULT, RTLD_LAZY, dlopen, dlsym};
@@ -20,8 +20,9 @@ use std::ptr;
 use std::slice;
 use std::thread;
 use x11::glx::{GLX_ALPHA_SIZE, GLX_BLUE_SIZE, GLX_DEPTH_SIZE, GLX_DOUBLEBUFFER, GLX_DRAWABLE_TYPE};
-use x11::glx::{GLX_FBCONFIG_ID, GLX_GREEN_SIZE, GLX_PIXMAP_BIT, GLX_RED_SIZE, GLX_RENDER_TYPE, GLX_RGBA_BIT, GLX_STENCIL_SIZE};
-use x11::glx::{GLX_STEREO, GLX_TRUE_COLOR, GLX_WINDOW_BIT, GLX_X_RENDERABLE, GLX_X_VISUAL_TYPE};
+use x11::glx::{GLX_FBCONFIG_ID, GLX_GREEN_SIZE, GLX_PIXMAP_BIT, GLX_RED_SIZE, GLX_RENDER_TYPE};
+use x11::glx::{GLX_RGBA_BIT, GLX_STENCIL_SIZE, GLX_STEREO, GLX_TRUE_COLOR, GLX_WINDOW_BIT};
+use x11::glx::{GLX_X_RENDERABLE, GLX_X_VISUAL_TYPE};
 use x11::xlib::{self, Display, XDefaultScreen, XFree, XID};
 
 thread_local! {
@@ -188,7 +189,10 @@ impl Device {
         })
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
+    pub fn create_context(&mut self,
+                          descriptor: &ContextDescriptor,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Context, Error> {
         // Take a lock.
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
@@ -227,7 +231,9 @@ impl Device {
                 };
                 next_context_id.0 += 1;
 
-                let initial_surface = self.create_surface(&context, &surface_type)?;
+                let initial_surface = self.create_surface(&context,
+                                                          surface_access,
+                                                          &surface_type)?;
                 self.attach_surface(&mut context, initial_surface);
                 self.make_context_current(&context)?;
 
