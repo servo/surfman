@@ -3,7 +3,7 @@
 use crate::context::ContextID;
 use crate::gl;
 use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
-use crate::{Error, SurfaceID};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 
@@ -25,11 +25,6 @@ pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum SurfaceType {
-    Generic { size: Size2D<i32> },
 }
 
 pub enum NativeWidget {
@@ -55,7 +50,10 @@ impl Drop for Surface {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          _: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         let SurfaceType::Generic { ref size } = *surface_type;
         let pixels = UnsafeCell::new(vec![0; size.width as usize * size.height as usize * 4]);

@@ -1,17 +1,19 @@
 //! A surface abstraction that can switch between hardware and software rendering.
 
 use crate::gl::types::{GLenum, GLuint};
-use crate::platform::default::surface::{Surface as HWSurface, SurfaceTexture as HWSurfaceTexture, SurfaceType as HWSurfaceType};
+use crate::platform::default::surface::NativeWidget;
+use crate::platform::default::surface::Surface as HWSurface;
+use crate::platform::default::surface::SurfaceTexture as HWSurfaceTexture;
+use crate::platform::default::surface::SurfaceType as HWSurfaceType;
 use crate::platform::generic::osmesa::surface::Surface as OSMesaSurface;
 use crate::platform::generic::osmesa::surface::SurfaceTexture as OSMesaSurfaceTexture;
-use crate::{Error, SurfaceID};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::Context;
 use super::device::Device;
 
 use euclid::default::Size2D;
 use std::marker::PhantomData;
 
-pub use crate::platform::generic::osmesa::surface::SurfaceType;
 pub use crate::platform::generic::osmesa::surface::NativeWidget;
 
 #[derive(Debug)]
@@ -26,15 +28,18 @@ pub enum SurfaceTexture {
 }
 
 impl Device {
-    pub fn create_surface(&mut self, context: &Context, surface_type: &SurfaceType)
+    pub fn create_surface(&mut self,
+                          context: &Context,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         match (&mut *self, context) {
             (&mut Device::Hardware(ref mut device), &Context::Hardware(ref context)) => {
                 let ref surface_type = HWSurfaceType::from(*surface_type);
-                device.create_surface(context, surface_type).map(Surface::Hardware)
+                device.create_surface(context, surface_access, surface_type).map(Surface::Hardware)
             }
             (&mut Device::Software(ref mut device), &Context::Software(ref context)) => {
-                device.create_surface(context, surface_type).map(Surface::Software)
+                device.create_surface(context, surface_access, surface_type).map(Surface::Software)
             }
             _ => Err(Error::IncompatibleContext),
         }

@@ -4,15 +4,15 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceID, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceAccess, SurfaceID};
+use crate::{SurfaceType, WindowingApiError};
 use super::device::Device;
-use super::surface::Surface;
-use super::surface::SurfaceType;
+use super::surface::{NativeWidget, Surface};
 
 use euclid::default::Size2D;
 use osmesa_sys::{self, OSMESA_CONTEXT_MAJOR_VERSION, OSMESA_CONTEXT_MINOR_VERSION};
-use osmesa_sys::{OSMESA_COMPAT_PROFILE, OSMESA_CORE_PROFILE, OSMESA_DEPTH_BITS, OSMESA_FORMAT, OSMESA_PROFILE};
-use osmesa_sys::{OSMESA_STENCIL_BITS, OSMesaContext, OSMesaCreateContextAttribs};
+use osmesa_sys::{OSMESA_COMPAT_PROFILE, OSMESA_CORE_PROFILE, OSMESA_DEPTH_BITS, OSMESA_FORMAT};
+use osmesa_sys::{OSMESA_PROFILE, OSMESA_STENCIL_BITS, OSMesaContext, OSMesaCreateContextAttribs};
 use osmesa_sys::{OSMesaDestroyContext, OSMesaGetCurrentContext, OSMesaGetDepthBuffer};
 use osmesa_sys::{OSMesaGetIntegerv, OSMesaGetProcAddress, OSMesaMakeCurrent};
 use std::ffi::CString;
@@ -108,7 +108,10 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
+    pub fn create_context(&mut self,
+                          descriptor: &ContextDescriptor,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Context, Error> {
         // Take a lock.
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
@@ -127,7 +130,7 @@ impl Device {
             };
             next_context_id.0 += 1;
 
-            let initial_surface = self.create_surface(&context, surface_type)?;
+            let initial_surface = self.create_surface(&context, surface_access, surface_type)?;
             self.attach_surface(&mut context, initial_surface);
             self.make_context_current(&context)?;
 

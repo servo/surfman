@@ -3,15 +3,15 @@
 use crate::gl::types::GLuint;
 use crate::platform::default::context::Context as HWContext;
 use crate::platform::default::context::ContextDescriptor as HWContextDescriptor;
+use crate::platform::default::surface::NativeWidget;
 use crate::platform::default::surface::SurfaceType as HWSurfaceType;
 use crate::platform::default::device::Device as HWDevice;
 use crate::platform::generic::osmesa::context::Context as OSMesaContext;
 use crate::platform::generic::osmesa::context::ContextDescriptor as OSMesaContextDescriptor;
 use crate::platform::generic::osmesa::device::Device as OSMesaDevice;
-use crate::{ContextAttributes, Error, SurfaceID};
+use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::device::Device;
 use super::surface::Surface;
-use super::surface::SurfaceType;
 
 use euclid::default::Size2D;
 use std::os::raw::c_void;
@@ -54,17 +54,22 @@ impl Device {
         })
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor, surface_type: &SurfaceType)
+    pub fn create_context(&mut self,
+                          descriptor: &ContextDescriptor,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Context, Error> {
         match (&mut *self, descriptor) {
             (&mut Device::Hardware(ref mut device),
              &ContextDescriptor::Hardware(ref descriptor)) => {
                  let ref surface_type = HWSurfaceType::from(*surface_type);
-                 device.create_context(descriptor, surface_type).map(Context::Hardware)
+                 device.create_context(descriptor, surface_access, surface_type)
+                       .map(Context::Hardware)
             }
             (&mut Device::Software(ref mut device),
              &ContextDescriptor::Software(ref descriptor)) => {
-                 device.create_context(descriptor, surface_type).map(Context::Software)
+                 device.create_context(descriptor, surface_access, surface_type)
+                       .map(Context::Software)
             }
             _ => Err(Error::IncompatibleContextDescriptor),
         }
