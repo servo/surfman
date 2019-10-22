@@ -4,7 +4,6 @@ use crate::gl::types::GLuint;
 use crate::platform::default::context::Context as HWContext;
 use crate::platform::default::context::ContextDescriptor as HWContextDescriptor;
 use crate::platform::default::surface::NativeWidget;
-use crate::platform::default::surface::SurfaceType as HWSurfaceType;
 use crate::platform::default::device::Device as HWDevice;
 use crate::platform::generic::osmesa::context::Context as OSMesaContext;
 use crate::platform::generic::osmesa::context::ContextDescriptor as OSMesaContextDescriptor;
@@ -62,14 +61,21 @@ impl Device {
         match (&mut *self, descriptor) {
             (&mut Device::Hardware(ref mut device),
              &ContextDescriptor::Hardware(ref descriptor)) => {
-                 let ref surface_type = HWSurfaceType::from(*surface_type);
                  device.create_context(descriptor, surface_access, surface_type)
                        .map(Context::Hardware)
             }
             (&mut Device::Software(ref mut device),
              &ContextDescriptor::Software(ref descriptor)) => {
-                 device.create_context(descriptor, surface_access, surface_type)
-                       .map(Context::Software)
+                let surface_type = match *surface_type {
+                    SurfaceType::Generic { size } => SurfaceType::Generic { size },
+                    SurfaceType::Widget { .. } => {
+                        // TODO(pcwalton): Allow rendering to native widgets using the universal
+                        // backend.
+                        return Err(Error::Unimplemented)
+                    }
+                };
+                device.create_context(descriptor, surface_access, &surface_type)
+                      .map(Context::Software)
             }
             _ => Err(Error::IncompatibleContextDescriptor),
         }

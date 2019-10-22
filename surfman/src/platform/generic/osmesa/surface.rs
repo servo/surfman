@@ -27,8 +27,8 @@ pub struct SurfaceTexture {
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
-pub enum NativeWidget {
-}
+/// TODO(pcwalton): Allow rendering to native widgets.
+pub enum NativeWidget {}
 
 unsafe impl Send for Surface {}
 
@@ -55,9 +55,12 @@ impl Device {
                           _: SurfaceAccess,
                           surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        let SurfaceType::Generic { ref size } = *surface_type;
+        let size = match *surface_type {
+            SurfaceType::Generic { ref size } => *size,
+            SurfaceType::Widget { .. } => unreachable!(),
+        };
         let pixels = UnsafeCell::new(vec![0; size.width as usize * size.height as usize * 4]);
-        Ok(Surface { pixels, size: *size, context_id: context.id })
+        Ok(Surface { pixels, size, context_id: context.id })
     }
 
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
@@ -117,8 +120,9 @@ impl Device {
         Ok(surface_texture.surface)
     }
 
+    // TODO(pcwalton)
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+    pub fn lock_surface_data<'s>(&self, _surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }

@@ -205,27 +205,25 @@ impl Device {
     }
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                let surface = match context.framebuffer {
-                    Framebuffer::Surface(ref surface) => surface,
-                    Framebuffer::None | Framebuffer::External => {
-                        return Err(Error::ExternalRenderTarget)
-                    }
-                };
-
-                let ok = OSMesaMakeCurrent(context.native_context.osmesa_context(),
-                                        (*surface.pixels.get()).as_mut_ptr() as *mut c_void,
-                                        gl::UNSIGNED_BYTE,
-                                        surface.size.width,
-                                        surface.size.height);
-                if ok == gl::FALSE {
-                    return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
+        unsafe {
+            let surface = match context.framebuffer {
+                Framebuffer::Surface(ref surface) => surface,
+                Framebuffer::None | Framebuffer::External => {
+                    return Err(Error::ExternalRenderTarget)
                 }
+            };
 
-                Ok(())
+            let ok = OSMesaMakeCurrent(context.native_context.osmesa_context(),
+                                       (*surface.pixels.get()).as_mut_ptr() as *mut c_void,
+                                       gl::UNSIGNED_BYTE,
+                                       surface.size.width,
+                                       surface.size.height);
+            if ok == gl::FALSE {
+                return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
             }
-        })
+
+            Ok(())
+        }
     }
 
     pub fn make_no_context_current(&self) -> Result<(), Error> {

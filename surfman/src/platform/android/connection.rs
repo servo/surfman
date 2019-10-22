@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/src/android/connection.rs
+// surfman/surfman/src/platform/android/connection.rs
 //
 //! A no-op connection for Android.
 //! 
