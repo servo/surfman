@@ -6,11 +6,12 @@ use crate::egl;
 use crate::glx::types::Display as GlxDisplay;
 use crate::platform::generic::egl::device::{NativeDisplay, OwnedEGLDisplay, UnsafeEGLDisplayRef};
 use crate::{Error, GLApi};
-use super::adapter::{Adapter, NativeAdapter};
+use super::adapter::Adapter;
+use super::connection::{Connection, NativeConnection};
 
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
-    pub(crate) native_adapter: Box<dyn NativeAdapter>,
+    pub(crate) native_connection: Box<dyn NativeConnection>,
 }
 
 impl Device {

@@ -1,39 +1,11 @@
-//! Wrapper for EGL contexts managed by ANGLE using Direct3D 11 as a backend on Windows.
+// surfman/surfman/src/platform/unix/wayland/context.rs
+//
+//! A wrapper around Wayland `EGLContext`s.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay, EGLSurface};
-use crate::egl::types::{EGLenum, EGLint};
-use crate::egl;
-use crate::gl::types::GLuint;
-use crate::gl::{self, Gl};
-use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
-use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
-use crate::platform::generic::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::context;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
-use crate::{SurfaceID, SurfaceType};
-use super::adapter::Adapter;
-use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
-use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
-use super::surface::{NativeWidget, Surface, SurfaceTexture, Win32Objects};
-
-use euclid::default::Size2D;
-use std::ffi::CString;
-use std::mem;
-use std::os::raw::{c_char, c_void};
-use std::ptr;
-use std::str::FromStr;
-use std::sync::Mutex;
-use std::thread;
-use winapi::shared::winerror::S_OK;
-use winapi::um::d3d11::ID3D11Device;
-use winapi::um::d3dcommon::D3D_DRIVER_TYPE_UNKNOWN;
-use winapi::um::winbase::INFINITE;
-use wio::com::ComPtr;
-
-pub use crate::platform::generic::egl::context::ContextDescriptor;
-
-const EGL_DEVICE_EXT: EGLenum = 0x322c;
+use super::surface::{Surface, WaylandObjects};
 
 thread_local! {
     pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
@@ -59,9 +31,7 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(self.native_display.egl_display(),
-                                   config_attributes,
-                                   &[egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint])
+            ContextDescriptor::new(self.native_display.egl_display(), config_attributes, &[])
         }
     }
 
@@ -90,35 +60,6 @@ impl Device {
             return Err(Error::NoCurrentContext);
         }
         let native_context = Box::new(UnsafeEGLContextRef { egl_context });
-
-        // Fetch the EGL device.
-        let mut egl_device = EGL_NO_DEVICE_EXT;
-        let result = (EGL_EXTENSION_FUNCTIONS.QueryDisplayAttribEXT)(
-            egl_display,
-            EGL_DEVICE_EXT as EGLint,
-            &mut egl_device as *mut EGLDeviceEXT as *mut EGLAttrib);
-        assert_ne!(result, egl::FALSE);
-        debug_assert_ne!(egl_device, EGL_NO_DEVICE_EXT);
-
-        // Fetch the D3D11 device.
-        let mut d3d11_device: *mut ID3D11Device = ptr::null_mut();
-        let result = (EGL_EXTENSION_FUNCTIONS.QueryDeviceAttribEXT)(
-            egl_device,
-            EGL_D3D11_DEVICE_ANGLE,
-            &mut d3d11_device as *mut *mut ID3D11Device as *mut EGLAttrib);
-        assert_ne!(result, egl::FALSE);
-        assert!(!d3d11_device.is_null());
-        let d3d11_device = ComPtr::from_raw(d3d11_device);
-
-        // Create the device wrapper.
-        // FIXME(pcwalton): Using `D3D_DRIVER_TYPE_UNKNOWN` is unfortunate. Perhaps we should
-        // detect the "Microsoft Basic" string and switch to `D3D_DRIVER_TYPE_WARP` as appropriate.
-        let device = Device {
-            native_display: Box::new(OwnedEGLDisplay { egl_display }),
-            egl_device,
-            d3d11_device,
-            d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
-        };
 
         // Create the context.
         let mut context = Context {
@@ -247,14 +188,6 @@ impl Device {
 
         unsafe {
             let is_current = self.context_is_current(context);
-
-            // If the surface does not use a DXGI keyed mutex, then finish.
-            // FIXME(pcwalton): Is this necessary and sufficient?
-            if !new_surface.uses_keyed_mutex() {
-                let guard = self.temporarily_make_context_current(context)?;
-                GL_FUNCTIONS.with(|gl| gl.Finish());
-            }
-
             let old_surface = self.release_surface(context).expect("Where's our surface?");
             self.attach_surface(context, new_surface);
 
@@ -269,7 +202,15 @@ impl Device {
 
     #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        Ok(0)
+        match context.framebuffer {
+            Framebuffer::None => unreachable!(),
+            Framebuffer::Surface(Surface {
+                wayland_objects: WaylandObjects::GBM { framebuffer_object, .. },
+                ..
+            }) => Ok(framebuffer_object),
+            Framebuffer::Surface(Surface { wayland_objects: WaylandObjects::Window { .. }, .. }) |
+            Framebuffer::External { .. } => Ok(0),
+        }
     }
 
     #[inline]
@@ -317,16 +258,6 @@ impl Device {
             _ => panic!("Tried to attach a surface, but there was already a surface present!"),
         }
 
-        match surface.win32_objects {
-            Win32Objects::Pbuffer { keyed_mutex: Some(ref keyed_mutex), .. } => {
-                unsafe {
-                    let result = keyed_mutex.AcquireSync(0, INFINITE);
-                    assert_eq!(result, S_OK);
-                }
-            }
-            _ => {}
-        }
-
         context.framebuffer = Framebuffer::Surface(surface);
     }
 
@@ -335,16 +266,6 @@ impl Device {
             Framebuffer::Surface(surface) => surface,
             Framebuffer::None | Framebuffer::External => return None,
         };
-
-        match surface.win32_objects {
-            Win32Objects::Pbuffer { keyed_mutex: Some(ref keyed_mutex), .. } => {
-                unsafe {
-                    let result = keyed_mutex.ReleaseSync(0);
-                    assert_eq!(result, S_OK);
-                }
-            }
-            _ => {}
-        }
 
         Some(surface)
     }

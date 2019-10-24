@@ -2,8 +2,24 @@
 //
 //! Various OpenGL utilities used by the different backends.
 
-use crate::gl::types::GLuint;
+use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
+
+#[allow(dead_code)]
+pub(crate) fn create_and_bind_framebuffer(gl: &Gl, texture_target: GLenum, texture_object: GLint)
+                                          -> GLuint {
+    unsafe {
+        let mut framebuffer_object = 0;
+        gl.GenFramebuffers(1, &mut framebuffer_object);
+        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl.FramebufferTexture2D(gl::FRAMEBUFFER,
+                                gl::COLOR_ATTACHMENT0,
+                                texture_target,
+                                texture_object,
+                                0);
+        framebuffer_object
+    }
+}
 
 #[allow(dead_code)]
 pub(crate) fn destroy_framebuffer(gl: &Gl, framebuffer_object: GLuint) {

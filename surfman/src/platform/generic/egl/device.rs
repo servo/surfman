@@ -56,3 +56,9 @@ impl NativeDisplay for UnsafeEGLDisplayRef {
         self.egl_display = egl::NO_DISPLAY;
     }
 }
+
+pub(crate) unsafe fn lookup_egl_extension<T>(name: &'static [u8]) -> T {
+    let f = egl::GetProcAddress(&name[0] as *const u8 as *const c_char);
+    assert_ne!(f as usize, 0);
+    mem::transmute(f)
+}

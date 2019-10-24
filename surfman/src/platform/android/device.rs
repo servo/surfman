@@ -2,6 +2,7 @@
 
 use crate::egl::types::{EGLClientBuffer, EGLDisplay, EGLImageKHR, EGLenum};
 use crate::{Error, GLApi, egl};
+use crate::platform::generic;
 use super::adapter::Adapter;
 use super::connection::Connection;
 use super::ffi::AHardwareBuffer;
@@ -13,17 +14,14 @@ use std::os::raw::{c_char, c_void};
 pub(crate) struct EGLExtensionFunctions {
     pub(crate) GetNativeClientBufferANDROID: extern "C" fn(buffer: *const AHardwareBuffer)
                                                            -> EGLClientBuffer,
-    pub(crate) ImageTargetTexture2DOES: extern "C" fn(target: EGLenum, image: EGLImageKHR),
 }
 
 lazy_static! {
     pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
+        let get = generic::egl::device::lookup_egl_extension;
         unsafe {
             EGLExtensionFunctions {
-                GetNativeClientBufferANDROID:
-                    mem::transmute(lookup_egl_extension(b"eglGetNativeClientBufferANDROID\0")),
-                ImageTargetTexture2DOES:
-                    mem::transmute(lookup_egl_extension(b"glEGLImageTargetTexture2DOES\0")),
+                GetNativeClientBufferANDROID: get(b"eglGetNativeClientBufferANDROID\0"),
             }
         }
     };
@@ -72,12 +70,6 @@ impl Device {
     pub fn gl_api() -> GLApi {
         GLApi::GLES
     }
-}
-
-unsafe fn lookup_egl_extension(name: &'static [u8]) -> *mut c_void {
-    let f = egl::GetProcAddress(&name[0] as *const u8 as *const c_char);
-    assert_ne!(f as usize, 0);
-    f as *mut c_void
 }
 
 pub(crate) struct OwnedEGLDisplay {

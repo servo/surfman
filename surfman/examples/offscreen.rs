@@ -1,7 +1,7 @@
-// surfman/examples/offscreen.rs
+// surfman/surfman/examples/offscreen.rs
 //
-// This example demonstrates how to create an off-screen context and render into it using `surfman`
-// alone, without any other windowing libraries.
+//! This example demonstrates how to create an off-screen context and render into it using
+//! `surfman` alone, without any other windowing libraries.
 
 use crate::common::{Buffer, FilesystemResourceLoader, Program, Shader, ShaderKind, ck};
 

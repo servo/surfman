@@ -1,10 +1,11 @@
-// surfman/src/platform/android/surface.rs
-
+// surfman/surfman/src/platform/android/surface.rs
+//
 //! Surface management for Android using the `GraphicBuffer` class and EGL.
 
 use crate::context::ContextID;
 use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::platform::generic;
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
 use crate::{egl, gl};
@@ -121,21 +122,18 @@ impl Device {
                 let egl_image = self.create_egl_image(context, hardware_buffer);
 
                 // Initialize and bind the image to the texture.
-                let texture_object = self.bind_to_gl_texture(egl_image);
+                let texture_object =
+                    generic::egl::surface::bind_egl_image_to_gl_texture(gl, egl_image);
 
                 // Create the framebuffer, and bind the texture to it.
-                let mut framebuffer_object = 0;
-                gl.GenFramebuffers(1, &mut framebuffer_object);
-                gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-                gl.FramebufferTexture2D(gl::FRAMEBUFFER,
-                                        gl::COLOR_ATTACHMENT0,
-                                        SURFACE_GL_TEXTURE_TARGET,
-                                        texture_object,
-                                        0);
+                let framebuffer_object =
+                    gl_utils::create_and_bind_framebuffer(gl,
+                                                          SURFACE_GL_TEXTURE_TARGET,
+                                                          texture_object);
 
+                // Bind renderbuffers as appropriate.
                 let context_descriptor = self.context_descriptor(context);
                 let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-
                 let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
                 renderbuffers.bind_to_current_framebuffer(gl);
 
@@ -188,14 +186,18 @@ impl Device {
             match surface.objects {
                 SurfaceObjects::Window { .. } => return Err(Error::WidgetAttached),
                 SurfaceObjects::HardwareBuffer { hardware_buffer, .. } => {
-                    let _guard = self.temporarily_make_context_current(context)?;
-                    let local_egl_image = self.create_egl_image(context, hardware_buffer);
-                    let texture_object = self.bind_to_gl_texture(local_egl_image);
-                    Ok(SurfaceTexture {
-                        surface,
-                        local_egl_image,
-                        texture_object,
-                        phantom: PhantomData,
+                    GL_FUNCTIONS.with(|gl| {
+                        let _guard = self.temporarily_make_context_current(context)?;
+                        let local_egl_image = self.create_egl_image(context, hardware_buffer);
+                        let texture_object = generic::egl::surface::bind_egl_image_to_gl_texture(
+                            gl,
+                            local_egl_image);
+                        Ok(SurfaceTexture {
+                            surface,
+                            local_egl_image,
+                            texture_object,
+                            phantom: PhantomData,
+                        })
                     })
                 }
             }
@@ -238,25 +240,6 @@ impl Device {
                                             egl_image_attributes.as_ptr());
         assert_ne!(egl_image, egl::NO_IMAGE_KHR);
         egl_image
-    }
-
-    unsafe fn bind_to_gl_texture(&self, egl_image: EGLImageKHR) -> GLuint {
-        GL_FUNCTIONS.with(|gl| {
-            let mut texture = 0;
-            gl.GenTextures(1, &mut texture);
-            debug_assert_ne!(texture, 0);
-
-            gl.BindTexture(gl::TEXTURE_2D, texture);
-            (EGL_EXTENSION_FUNCTIONS.ImageTargetTexture2DOES)(gl::TEXTURE_2D, egl_image);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-            gl.BindTexture(gl::TEXTURE_2D, 0);
-
-            debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
-            texture
-        })
     }
 
     pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)

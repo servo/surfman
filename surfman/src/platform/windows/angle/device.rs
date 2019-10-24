@@ -5,8 +5,10 @@
 use crate::context::ContextID;
 use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLSurface, EGLenum, EGLint};
+use crate::egl;
 use crate::platform::generic::egl::device::{NativeDisplay, OwnedEGLDisplay, UnsafeEGLDisplayRef};
-use crate::{Error, GLApi, egl};
+use crate::platform::generic;
+use crate::{Error, GLApi};
 use super::adapter::Adapter;
 use super::connection::Connection;
 
@@ -47,16 +49,13 @@ pub(crate) struct EGLExtensionFunctions {
 
 lazy_static! {
     pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
+        let get = generic::egl::device::lookup_egl_extension;
         unsafe {
             EGLExtensionFunctions {
-                CreateDeviceANGLE:
-                    mem::transmute(lookup_egl_extension(b"eglCreateDeviceANGLE\0")),
-                QueryDeviceAttribEXT:
-                    mem::transmute(lookup_egl_extension(b"eglQueryDeviceAttribEXT\0")),
-                QueryDisplayAttribEXT:
-                    mem::transmute(lookup_egl_extension(b"eglQueryDisplayAttribEXT\0")),
-                QuerySurfacePointerANGLE:
-                    mem::transmute(lookup_egl_extension(b"eglQuerySurfacePointerANGLE\0")),
+                CreateDeviceANGLE: get(b"eglCreateDeviceANGLE\0"),
+                QueryDeviceAttribEXT: get(b"eglQueryDeviceAttribEXT\0"),
+                QueryDisplayAttribEXT: get(b"eglQueryDisplayAttribEXT\0"),
+                QuerySurfacePointerANGLE: get(b"eglQuerySurfacePointerANGLE\0"),
             }
         }
     };
@@ -144,10 +143,4 @@ impl Device {
     pub fn gl_api() -> GLApi {
         GLApi::GLES
     }
-}
-
-unsafe fn lookup_egl_extension(name: &'static [u8]) -> *mut c_void {
-    let f = egl::GetProcAddress(&name[0] as *const u8 as *const c_char);
-    assert_ne!(f as usize, 0);
-    f as *mut c_void
 }
