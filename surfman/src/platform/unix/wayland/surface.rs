@@ -15,6 +15,11 @@ use std::marker::PhantomData;
 use wayland_sys::client::wl_proxy;
 use wayland_sys::egl::{wl_egl_window, wl_egl_window_create};
 
+#[cfg(feature = "sm-winit")]
+use winit::Window;
+#[cfg(feature = "sm-winit")]
+use winit::os::unix::WindowExt;
+
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
@@ -246,7 +251,7 @@ impl Device {
                         *drm_image_name = 0;
                     });
                 }
-                SurfaceObjects::Window { ref mut egl_surface } => {
+                WaylandObjects::Window { ref mut egl_surface } => {
                     egl::DestroySurface(self.native_display.egl_display(), *egl_surface);
                     *egl_surface = egl::NO_SURFACE;
                 }
@@ -317,4 +322,19 @@ impl SurfaceTexture {
 
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
+}
+
+impl NativeWidget {
+    #[cfg(feature = "sm-winit")]
+    #[inline]
+    pub fn from_winit_window(window: &Window) -> NativeWidget {
+        unsafe {
+            let hidpi_factor = window.get_hidpi_factor();
+            let window_size = window.get_inner_size().unwrap().to_physical(hidpi_factor);
+            NativeWidget {
+                wayland_surface: window.get_wayland_surface().unwrap() as *mut wl_proxy,
+                size: Size2D::new(window_size.width as i32, window_size.height as i32),
+            }
+        }
+    }
 }
