@@ -2,8 +2,7 @@
 //
 //! FFI-related functionality common to the various EGL backends.
 
-use crate::egl::{EGLImageKHR, EGLenum};
-use super::device;
+use crate::egl::types::{EGLImageKHR, EGLenum};
 
 #[allow(non_snake_case)]
 pub(crate) struct EGLExtensionFunctions {
@@ -12,10 +11,11 @@ pub(crate) struct EGLExtensionFunctions {
 
 lazy_static! {
     pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
-        let get = device::lookup_egl_extension;
+        use crate::platform::generic::egl::device::lookup_egl_extension as get;
+        use std::mem::transmute as cast;
         unsafe {
             EGLExtensionFunctions {
-                ImageTargetTexture2DOES: get(b"glEGLImageTargetTexture2DOES\0"),
+                ImageTargetTexture2DOES: cast(get(b"glEGLImageTargetTexture2DOES\0")),
             }
         }
     };

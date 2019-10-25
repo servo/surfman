@@ -3,9 +3,24 @@
 //! A wrapper around Wayland `EGLContext`s.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::platform::generic::egl::context;
+use crate::egl::types::{EGLConfig, EGLSurface};
+use crate::egl;
+use crate::gl::Gl;
+use crate::gl::types::GLuint;
+use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
+use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
+use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
-use super::surface::{Surface, WaylandObjects};
+use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use super::device::Device;
+use super::surface::{NativeWidget, Surface, WaylandObjects};
+
+use euclid::default::Size2D;
+use std::mem;
+use std::os::raw::c_void;
+use std::thread;
+
+pub use crate::platform::generic::egl::context::ContextDescriptor;
 
 thread_local! {
     pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
@@ -14,6 +29,7 @@ thread_local! {
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
     pub(crate) id: ContextID,
+    pub(crate) pbuffer: EGLSurface,
     framebuffer: Framebuffer<Surface>,
 }
 
@@ -31,7 +47,7 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(self.native_display.egl_display(), config_attributes, &[])
+            ContextDescriptor::new(self.native_display.egl_display(), attributes, &[])
         }
     }
 
@@ -47,7 +63,10 @@ impl Device {
     /// library will not modify or try to detect the render target. This means that any of the
     /// methods that query or replace the surface—e.g. `replace_context_surface`—will fail if
     /// called with a context object created via this method.
+    ///
+    /// TODO(pcwalton)
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
+        /*
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Grab the current EGL display and EGL context.
@@ -70,6 +89,8 @@ impl Device {
         next_context_id.0 += 1;
 
         Ok((device, context))
+        */
+        unimplemented!()
     }
 
     pub fn create_context(&mut self,
@@ -79,19 +100,27 @@ impl Device {
                           -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         unsafe {
-            let egl_context = context::create_context(self.native_display.egl_display(),
-                                                      descriptor)?;
+            // Create the context.
+            let egl_display = self.native_display.egl_display();
+            let egl_context = context::create_context(egl_display, descriptor)?;
 
+            // Create a dummy pbuffer.
+            let pbuffer = context::create_dummy_pbuffer(egl_display, egl_context);
+
+            // Wrap the context.
             let mut context = Context {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
                 id: *next_context_id,
+                pbuffer,
                 framebuffer: Framebuffer::None,
             };
             next_context_id.0 += 1;
 
+            // Build the initial surface.
             let initial_surface = self.create_surface(&context, surface_access, surface_type)?;
             self.attach_surface(&mut context, initial_surface);
 
+            // Return the context.
             Ok(context)
         }
     }
@@ -106,7 +135,11 @@ impl Device {
         }
 
         unsafe {
-            context.native_context.destroy(self);
+            let result = egl::DestroySurface(self.native_display.egl_display(), context.pbuffer);
+            assert_ne!(result, egl::FALSE);
+            context.pbuffer = egl::NO_SURFACE;
+
+            context.native_context.destroy(self.native_display.egl_display());
         }
 
         Ok(())
@@ -122,7 +155,16 @@ impl Device {
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
             let (egl_surface, size) = match context.framebuffer {
-                Framebuffer::Surface(ref surface) => (surface.egl_surface, surface.size),
+                Framebuffer::Surface(Surface {
+                    size,
+                    wayland_objects: WaylandObjects::Window { egl_surface, .. },
+                    ..
+                }) => (egl_surface, size),
+                Framebuffer::Surface(Surface {
+                    size,
+                    wayland_objects: WaylandObjects::GBM { .. },
+                    ..
+                }) => (context.pbuffer, size),
                 Framebuffer::None | Framebuffer::External => {
                     return Err(Error::ExternalRenderTarget)
                 }
@@ -142,12 +184,12 @@ impl Device {
 
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
-            context::make_no_context_current(self.native_display.egl_display()
+            context::make_no_context_current(self.native_display.egl_display())
         }
     }
 
-    fn temporarily_make_context_current(&self, context: &Context)
-                                        -> Result<CurrentContextGuard, Error> {
+    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
+                                                   -> Result<CurrentContextGuard, Error> {
         let guard = CurrentContextGuard::new();
         self.make_context_current(context)?;
         Ok(guard)

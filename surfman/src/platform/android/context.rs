@@ -96,11 +96,7 @@ impl Device {
         let device = Device { native_display: Box::new(UnsafeEGLDisplayRef { egl_display }) };
 
         // Create a dummy pbuffer.
-        let egl_config_id = context::get_context_attr(egl_display,
-                                                      egl_context,
-                                                      egl::CONFIG_ID as EGLint);
-        let egl_config = context::egl_config_from_id(egl_display, egl_config_id);
-        let pbuffer = create_pbuffer(egl_display, egl_config);
+        let pbuffer = context::create_dummy_pbuffer(egl_display, native_context.egl_context());
 
         // Create the context.
         let context = Context {
@@ -314,20 +310,3 @@ impl Device {
     }
 }
 
-// Creates and returns a dummy pbuffer surface. This is used as the default framebuffer when
-// rendering to an `EGLImage`.
-fn create_pbuffer(egl_display: EGLDisplay, egl_config: EGLConfig) -> EGLSurface {
-    unsafe {
-        let pbuffer_attributes = [
-            egl::WIDTH as EGLint,   16,
-            egl::HEIGHT as EGLint,  16,
-            egl::NONE as EGLint,    0,
-            0,                      0,
-        ];
-        let pbuffer = egl::CreatePbufferSurface(egl_display,
-                                                egl_config,
-                                                pbuffer_attributes.as_ptr());
-        assert_ne!(pbuffer, egl::NO_SURFACE);
-        pbuffer
-    }
-}

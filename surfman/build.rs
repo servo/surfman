@@ -12,6 +12,7 @@ fn main() {
 
     if (target_os == "android")
         || ((target_os == "windows") && cfg!(feature = "sm-angle"))
+        || (target_family == "unix")
         || cfg!(feature = "test_egl_in_linux")
     {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();

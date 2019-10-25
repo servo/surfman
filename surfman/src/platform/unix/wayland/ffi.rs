@@ -2,7 +2,8 @@
 //
 //! FFI definitions specific to the Wayland backend.
 
-use crate::egl::types::{EGLBoolean, EGLImageKHR, EGLenum, EGLint};
+use crate::egl::types::{EGLBoolean, EGLDisplay, EGLImageKHR, EGLenum, EGLint};
+use crate::platform::generic::egl::device;
 
 // EGL_MESA_drm_image
 
@@ -15,22 +16,23 @@ pub const EGL_DRM_BUFFER_STRIDE_MESA:        EGLenum = 0x31d4;
 #[allow(non_snake_case)]
 pub(crate) struct EGLExtensionFunctions {
     pub(crate) CreateDRMImageMESA: extern "C" fn(dpy: EGLDisplay, attrib_list: *const EGLint)
-                                                 -> EGLImageKHR;
+                                                 -> EGLImageKHR,
     pub(crate) ExportDRMImageMESA: extern "C" fn(dpy: EGLDisplay,
                                                  image: EGLImageKHR,
                                                  name: *mut EGLint,
                                                  handle: *mut EGLint,
                                                  stride: *mut EGLint)
-                                                 -> EGLBoolean;
+                                                 -> EGLBoolean,
 }
 
 lazy_static! {
     pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
-        let get = generic::egl::device::lookup_egl_extension;
+        use crate::platform::generic::egl::device::lookup_egl_extension as get;
+        use std::mem::transmute as cast;
         unsafe {
             EGLExtensionFunctions {
-                CreateDRMImageMESA: get(b"eglCreateDRMImageMESA\0"),
-                ExportDRMImageMESA: get(b"eglExportDRMImageMESA\0"),
+                CreateDRMImageMESA: cast(get(b"eglCreateDRMImageMESA\0")),
+                ExportDRMImageMESA: cast(get(b"eglExportDRMImageMESA\0")),
             }
         }
     };

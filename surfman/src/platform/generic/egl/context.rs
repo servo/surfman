@@ -2,9 +2,16 @@
 //
 //! Functionality common to backends using EGL contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error};
-use crate::egl::types::{EGLContext, EGLDisplay, EGLSurface, EGLint};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
+use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
+use super::error::ToWindowingApiError;
+
+use std::ffi::CString;
+use std::os::raw::{c_char, c_void};
+use std::ptr;
+
+const DUMMY_PBUFFER_SIZE: EGLint = 16;
 
 pub(crate) trait NativeContext {
     fn egl_context(&self) -> EGLContext;
@@ -96,7 +103,7 @@ impl ContextDescriptor {
 
     pub(crate) unsafe fn to_egl_config(&self, egl_display: EGLDisplay) -> EGLConfig {
         let config_attributes = [
-            egl::CONFIG_ID as EGLint,   context_descriptor.egl_config_id,
+            egl::CONFIG_ID as EGLint,   self.egl_config_id,
             egl::NONE as EGLint,        0,
             0,                          0,
         ];
@@ -113,7 +120,7 @@ impl ContextDescriptor {
     }
 
     pub(crate) unsafe fn attributes(&self, egl_display: EGLDisplay) -> ContextAttributes {
-        let egl_config = egl_config_from_id(egl_display, context_descriptor.egl_config_id);
+        let egl_config = egl_config_from_id(egl_display, self.egl_config_id);
 
         let alpha_size = get_config_attr(egl_display, egl_config, egl::ALPHA_SIZE as EGLint);
         let depth_size = get_config_attr(egl_display, egl_config, egl::DEPTH_SIZE as EGLint);
@@ -128,13 +135,13 @@ impl ContextDescriptor {
         // Create appropriate context attributes.
         ContextAttributes {
             flags: attribute_flags,
-            version: GLVersion::new(context_descriptor.egl_context_client_version as u8, 0),
+            version: GLVersion::new(self.egl_context_client_version as u8, 0),
         }
     }
 }
 
 impl CurrentContextGuard {
-    fn new() -> CurrentContextGuard {
+    pub(crate) fn new() -> CurrentContextGuard {
         unsafe {
             CurrentContextGuard {
                 egl_display: egl::GetCurrentDisplay(),
@@ -193,7 +200,7 @@ impl NativeContext for UnsafeEGLContextRef {
 
 pub(crate) unsafe fn create_context(egl_display: EGLDisplay, descriptor: &ContextDescriptor)
                                     -> Result<EGLContext, Error> {
-    let egl_config = egl_config_from_id(egl_display, context_descriptor.egl_config_id);
+    let egl_config = egl_config_from_id(egl_display, descriptor.egl_config_id);
     let egl_context_client_version = descriptor.egl_context_client_version;
 
     // Include some extra zeroes to work around broken implementations.
@@ -269,3 +276,22 @@ pub(crate) fn get_proc_address(symbol_name: &str) -> *const c_void {
         egl::GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as *const c_void
     }
 }
+// Creates and returns a dummy pbuffer surface for the given context. This is used as the default
+// framebuffer on some backends.
+pub(crate) unsafe fn create_dummy_pbuffer(egl_display: EGLDisplay, egl_context: EGLContext)
+                                          -> EGLSurface {
+    let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
+    let egl_config = egl_config_from_id(egl_display, egl_config_id);
+
+    let pbuffer_attributes = [
+        egl::WIDTH as EGLint,   DUMMY_PBUFFER_SIZE,
+        egl::HEIGHT as EGLint,  DUMMY_PBUFFER_SIZE,
+        egl::NONE as EGLint,    0,
+        0,                      0,
+    ];
+
+    let pbuffer = egl::CreatePbufferSurface(egl_display, egl_config, pbuffer_attributes.as_ptr());
+    assert_ne!(pbuffer, egl::NO_SURFACE);
+    pbuffer
+}
+

@@ -9,16 +9,23 @@ use crate::Error;
 use std::ffi::CString;
 use std::ptr;
 use std::sync::Arc;
-use wayland_sys::client::{wl_display, wl_display_connect, wl_display_destroy};
+use wayland_sys::client::{WAYLAND_CLIENT_HANDLE, wl_display};
 
-#[derive(Clone, Debug)]
 pub struct Connection {
     pub(crate) native_connection: Box<dyn NativeConnection>,
 }
 
-pub(crate) trait NativeConnection: Clone {
+pub(crate) trait NativeConnection {
     fn wayland_display(&self) -> *mut wl_display;
-    unsafe fn destroy(&mut self);
+    fn retain(&self) -> Box<dyn NativeConnection>;
+}
+
+unsafe impl Send for Connection {}
+
+impl Clone for Connection {
+    fn clone(&self) -> Connection {
+        Connection { native_connection: self.native_connection.retain() }
+    }
 }
 
 impl Connection {
@@ -26,14 +33,14 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         unsafe {
-            let wayland_display = wl_display_connect(ptr::null());
+            let wayland_display = (WAYLAND_CLIENT_HANDLE.wl_display_connect)(ptr::null());
             if wayland_display.is_null() {
-                return Err(Error::NoConnectionFound)
+                return Err(Error::ConnectionFailed);
             };
-            let wayland_display = Box::new(SharedConnection {
+            let native_connection = Box::new(SharedConnection {
                 wayland_display: Arc::new(WaylandDisplay(wayland_display)),
-            };
-            Ok(Connection { wayland_display })
+            });
+            Ok(Connection { native_connection })
         }
     }
 }
@@ -47,6 +54,10 @@ impl NativeConnection for SharedConnection {
     fn wayland_display(&self) -> *mut wl_display {
         self.wayland_display.0
     }
+
+    fn retain(&self) -> Box<dyn NativeConnection> {
+        Box::new((*self).clone())
+    }
 }
 
 struct WaylandDisplay(*mut wl_display);
@@ -54,7 +65,8 @@ struct WaylandDisplay(*mut wl_display);
 impl Drop for WaylandDisplay {
     fn drop(&mut self) {
         unsafe {
-            wl_display_destroy(self.0);
+            (WAYLAND_CLIENT_HANDLE.wl_display_disconnect)(self.0);
         }
     }
 }
+

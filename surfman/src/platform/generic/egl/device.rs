@@ -4,6 +4,10 @@
 
 use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay};
 use crate::egl::types::{EGLSurface, EGLenum, EGLint};
+use crate::egl;
+
+use std::mem;
+use std::os::raw::{c_char, c_void};
 
 pub(crate) trait NativeDisplay {
     fn egl_display(&self) -> EGLDisplay;
@@ -57,7 +61,7 @@ impl NativeDisplay for UnsafeEGLDisplayRef {
     }
 }
 
-pub(crate) unsafe fn lookup_egl_extension<T>(name: &'static [u8]) -> T {
+pub(crate) unsafe fn lookup_egl_extension(name: &'static [u8]) -> *mut c_void {
     let f = egl::GetProcAddress(&name[0] as *const u8 as *const c_char);
     assert_ne!(f as usize, 0);
     mem::transmute(f)

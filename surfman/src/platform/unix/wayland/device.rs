@@ -18,20 +18,26 @@ impl Device {
     #[inline]
     pub fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
         unsafe {
-            let native_display = egl::GetDisplay(connection.native_connection.wayland_display());
-            if native_display == egl::NO_DISPLAY {
+            let egl_display =
+                egl::GetDisplay(connection.native_connection.wayland_display() as *const _);
+            if egl_display == egl::NO_DISPLAY {
                 return Err(Error::DeviceOpenFailed);
             }
             Ok(Device {
                 native_display: Box::new(OwnedEGLDisplay { egl_display }),
-                native_adapter: adapter.native_adapter.clone(),
+                native_connection: connection.native_connection.retain(),
             })
         }
     }
 
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        Adapter { native_adapter: self.native_adapter.clone() }
+        Adapter
+    }
+
+    #[inline]
+    pub fn connection(&self) -> Connection {
+        Connection { native_connection: self.native_connection.retain() }
     }
 
     #[inline]

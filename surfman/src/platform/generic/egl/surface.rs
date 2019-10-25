@@ -2,10 +2,10 @@
 //
 //! Functionality common to backends using EGL surfaces.
 
-use crate::egl::types::{EGLConfig, EGLDisplay, EGLImageKHR, EGLint};
+use crate::egl::types::{EGLConfig, EGLDisplay, EGLImageKHR, EGLSurface, EGLint};
 use crate::egl;
-use crate::gl::Gl;
-use crate::gl::types::GLuint;
+use crate::gl::types::{GLint, GLuint};
+use crate::gl::{self, Gl};
 use super::ffi::EGL_EXTENSION_FUNCTIONS;
 
 use euclid::default::Size2D;
@@ -13,7 +13,7 @@ use euclid::default::Size2D;
 pub(crate) unsafe fn create_pbuffer_surface(egl_display: EGLDisplay,
                                             egl_config: EGLConfig,
                                             size: &Size2D<i32>)
-                                            -> Surface {
+                                            -> EGLSurface {
     let attributes = [
         egl::WIDTH as EGLint,           size.width as EGLint,
         egl::HEIGHT as EGLint,          size.height as EGLint,
@@ -23,9 +23,7 @@ pub(crate) unsafe fn create_pbuffer_surface(egl_display: EGLDisplay,
         0,                              0,
     ];
 
-    let egl_surface = egl::CreatePbufferSurface(self.native_display.egl_display(),
-                                                egl_config,
-                                                attributes.as_ptr());
+    let egl_surface = egl::CreatePbufferSurface(egl_display, egl_config, attributes.as_ptr());
     assert_ne!(egl_surface, egl::NO_SURFACE);
     egl_surface
 }
@@ -47,3 +45,4 @@ pub(crate) unsafe fn bind_egl_image_to_gl_texture(gl: &Gl, egl_image: EGLImageKH
     debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
     texture
 }
+
