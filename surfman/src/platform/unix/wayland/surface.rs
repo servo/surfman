@@ -2,16 +2,22 @@
 //
 //! A surface implementation using Wayland surfaces backed by GBM.
 
-use crate::egl::types::{EGLClientBuffer, EGLImageKHR, EGLSurface, EGLint};
+use crate::egl::types::{EGLSurface, EGLint};
 use crate::egl;
 use crate::gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use crate::gl;
 use crate::gl_utils;
 use crate::platform::generic::egl::surface;
+use crate::platform::generic::egl::ffi::EGLClientBuffer;
+use crate::platform::generic::egl::ffi::EGLImageKHR;
 use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_FORMAT_ARGB32_MESA;
 use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_FORMAT_MESA;
-use crate::platform::generic::egl::ffi::{EGL_DRM_BUFFER_MESA, EGL_DRM_BUFFER_STRIDE_MESA};
-use crate::platform::generic::egl::ffi::{EGL_DRM_BUFFER_USE_MESA, EGL_EXTENSION_FUNCTIONS};
+use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_MESA;
+use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_STRIDE_MESA;
+use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_USE_MESA;
+use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
+use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
 use crate::renderbuffers::Renderbuffers;
 use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
 use super::context::{Context, GL_FUNCTIONS};
@@ -113,7 +119,7 @@ impl Device {
                     EGL_EXTENSION_FUNCTIONS.CreateDRMImageMESA
                                            .expect("Where's the `EGL_MESA_drm_image` extension?");
                 let egl_image = eglCreateDRMImageMESA(egl_display, egl_drm_image_attribs.as_ptr());
-                if egl_image == egl::NO_IMAGE_KHR {
+                if egl_image == EGL_NO_IMAGE_KHR {
                     return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
                 }
 
@@ -205,7 +211,7 @@ impl Device {
             egl::HEIGHT as EGLint,                  surface.size.height,
             EGL_DRM_BUFFER_FORMAT_MESA as EGLint,   EGL_DRM_BUFFER_FORMAT_ARGB32_MESA as EGLint,
             EGL_DRM_BUFFER_STRIDE_MESA as EGLint,   drm_image_stride,
-            egl::IMAGE_PRESERVED_KHR as EGLint,     egl::FALSE as EGLint,
+            EGL_IMAGE_PRESERVED_KHR as EGLint,      egl::FALSE as EGLint,
             egl::NONE as EGLint,                    0,
         ];
 
@@ -259,10 +265,11 @@ impl Device {
                         gl.DeleteTextures(1, texture_object);
                         *texture_object = 0;
 
-                        let result = egl::DestroyImageKHR(self.native_display.egl_display(),
-                                                          *egl_image);
+                        let egl_display = self.native_display.egl_display();
+                        let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
+                                                                               *egl_image);
                         assert_ne!(result, egl::FALSE);
-                        *egl_image = egl::NO_IMAGE_KHR;
+                        *egl_image = EGL_NO_IMAGE_KHR;
 
                         *drm_image_name = 0;
                     });
@@ -291,10 +298,12 @@ impl Device {
                 gl.DeleteTextures(1, &surface_texture.texture_object);
                 surface_texture.texture_object = 0;
 
-                let result = egl::DestroyImageKHR(self.native_display.egl_display(),
-                                                  surface_texture.local_egl_image);
+                let egl_display = self.native_display.egl_display();
+                let result =
+                    (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
+                                                              surface_texture.local_egl_image);
                 assert_ne!(result, egl::FALSE);
-                surface_texture.local_egl_image = egl::NO_IMAGE_KHR;
+                surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
             }
 
             Ok(surface_texture.surface)

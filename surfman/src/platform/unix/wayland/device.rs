@@ -23,6 +23,11 @@ impl Device {
             if egl_display == egl::NO_DISPLAY {
                 return Err(Error::DeviceOpenFailed);
             }
+
+            let (mut egl_major_version, mut egl_minor_version) = (0, 0);
+            let ok = egl::Initialize(egl_display, &mut egl_major_version, &mut egl_minor_version);
+            assert_ne!(ok, egl::FALSE);
+
             Ok(Device {
                 native_display: Box::new(OwnedEGLDisplay { egl_display }),
                 native_connection: connection.native_connection.retain(),

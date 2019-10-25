@@ -2,11 +2,11 @@
 //
 //! Functionality common to backends using EGL surfaces.
 
-use crate::egl::types::{EGLConfig, EGLDisplay, EGLImageKHR, EGLSurface, EGLint};
+use crate::egl::types::{EGLConfig, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
 use crate::gl::types::{GLint, GLuint};
 use crate::gl::{self, Gl};
-use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
 
 use euclid::default::Size2D;
 

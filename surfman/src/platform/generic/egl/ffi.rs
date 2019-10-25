@@ -2,19 +2,21 @@
 //
 //! FFI-related functionality common to the various EGL backends.
 
-use crate::egl::types::{EGLAttrib, EGLBoolean, EGLContext, EGLDisplay, EGLenum, EGLint};
+use crate::egl::types::{EGLAttrib, EGLBoolean, EGLContext, EGLDisplay, EGLSurface};
+use crate::egl::types::{EGLenum, EGLint};
 
 use std::os::raw::c_void;
 
-enum EGLClientBufferOpaque {}
-pub type EGLClientBufferObject = *mut EGLClientBufferOpaque;
+pub enum EGLClientBufferOpaque {}
+pub type EGLClientBuffer = *mut EGLClientBufferOpaque;
 
-enum EGLDeviceEXTOpaque {}
+pub enum EGLDeviceEXTOpaque {}
 pub type EGLDeviceEXT = *mut EGLDeviceEXTOpaque;
 
-enum EGLImageKHROpaque {}
+pub enum EGLImageKHROpaque {}
 pub type EGLImageKHR = *mut EGLImageKHROpaque;
 
+pub const EGL_IMAGE_PRESERVED_KHR:               EGLenum = 0x30d2;
 pub const EGL_PLATFORM_DEVICE_EXT:               EGLenum = 0x313f;
 pub const EGL_NATIVE_BUFFER_ANDROID:             EGLenum = 0x3140;
 pub const EGL_DRM_BUFFER_FORMAT_MESA:            EGLenum = 0x31d0;
@@ -55,7 +57,7 @@ pub(crate) struct EGLExtensionFunctions {
                                                         handle: *mut EGLint,
                                                         stride: *mut EGLint)
                                                         -> EGLBoolean>,
-    pub(crate) GetNativeClientBufferANDROID: Option<extern "C" fn(buffer: *const AHardwareBuffer)
+    pub(crate) GetNativeClientBufferANDROID: Option<extern "C" fn(buffer: *const c_void)
                                                                   -> EGLClientBuffer>,
     pub(crate) QueryDeviceAttribEXT: Option<extern "C" fn(device: EGLDeviceEXT,
                                                           attribute: EGLint,
@@ -78,7 +80,7 @@ lazy_static! {
         use std::mem::transmute as cast;
         unsafe {
             EGLExtensionFunctions {
-                CreateImageKHR: cast(get(b"eglCreateImageKHR\0"))),
+                CreateImageKHR: cast(get(b"eglCreateImageKHR\0")),
                 DestroyImageKHR: cast(get(b"eglDestroyImageKHR\0")),
                 ImageTargetTexture2DOES: cast(get(b"glEGLImageTargetTexture2DOES\0")),
 
