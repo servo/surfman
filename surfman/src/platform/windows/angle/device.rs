@@ -127,6 +127,10 @@ impl Device {
         Connection
     }
 
+    pub fn d3d11_device(&self) -> ComPtr<ID3D11Device> {
+        self.d3d11_device.clone()
+    }
+
     pub fn adapter(&self) -> Adapter {
         unsafe {
             let mut dxgi_device: *mut IDXGIDevice = ptr::null_mut();
