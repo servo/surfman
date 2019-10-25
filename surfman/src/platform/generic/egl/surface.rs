@@ -6,7 +6,7 @@ use crate::egl::types::{EGLConfig, EGLDisplay, EGLImageKHR, EGLSurface, EGLint};
 use crate::egl;
 use crate::gl::types::{GLint, GLuint};
 use crate::gl::{self, Gl};
-use super::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 
 use euclid::default::Size2D;
 

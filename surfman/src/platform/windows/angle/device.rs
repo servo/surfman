@@ -7,6 +7,7 @@ use crate::egl::types::{EGLAttrib, EGLBoolean, EGLConfig, EGLContext, EGLDeviceE
 use crate::egl::types::{EGLSurface, EGLenum, EGLint};
 use crate::egl;
 use crate::platform::generic::egl::device::{NativeDisplay, OwnedEGLDisplay, UnsafeEGLDisplayRef};
+use crate::platform::generic::egl::ffi::{EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic;
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
@@ -21,45 +22,6 @@ use winapi::shared::winerror;
 use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device};
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE, D3D_FEATURE_LEVEL_9_3};
 use wio::com::ComPtr;
-
-pub(crate) const EGL_D3D11_DEVICE_ANGLE: EGLint = 0x33a1;
-pub(crate) const EGL_NO_DEVICE_EXT: EGLDeviceEXT = 0 as EGLDeviceEXT;
-
-const EGL_PLATFORM_DEVICE_EXT: EGLenum = 0x313f;
-
-pub(crate) struct EGLExtensionFunctions {
-    CreateDeviceANGLE: extern "C" fn(device_type: EGLint,
-                                     native_device: *mut c_void,
-                                     attrib_list: *const EGLAttrib)
-                                     -> EGLDeviceEXT,
-    pub(crate) QueryDeviceAttribEXT: extern "C" fn(device: EGLDeviceEXT,
-                                                   attribute: EGLint,
-                                                   value: *mut EGLAttrib)
-                                                   -> EGLBoolean,
-    pub(crate) QueryDisplayAttribEXT: extern "C" fn(dpy: EGLDisplay,
-                                                    attribute: EGLint,
-                                                    value: *mut EGLAttrib)
-                                                    -> EGLBoolean,
-    pub(crate) QuerySurfacePointerANGLE: extern "C" fn(dpy: EGLDisplay,
-                                                       surface: EGLSurface,
-                                                       attribute: EGLint,
-                                                       value: *mut *mut c_void)
-                                                       -> EGLBoolean,
-}
-
-lazy_static! {
-    pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
-        let get = generic::egl::device::lookup_egl_extension;
-        unsafe {
-            EGLExtensionFunctions {
-                CreateDeviceANGLE: get(b"eglCreateDeviceANGLE\0"),
-                QueryDeviceAttribEXT: get(b"eglQueryDeviceAttribEXT\0"),
-                QueryDisplayAttribEXT: get(b"eglQueryDisplayAttribEXT\0"),
-                QuerySurfacePointerANGLE: get(b"eglQuerySurfacePointerANGLE\0"),
-            }
-        }
-    };
-}
 
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
@@ -92,10 +54,13 @@ impl Device {
             let d3d11_device = ComPtr::from_raw(d3d11_device);
             let d3d11_device_context = ComPtr::from_raw(d3d11_device_context);
 
-            let egl_device = (EGL_EXTENSION_FUNCTIONS.CreateDeviceANGLE)(
-                EGL_D3D11_DEVICE_ANGLE,
-                d3d11_device.as_raw() as *mut c_void,
-                ptr::null_mut());
+            let eglCreateDeviceANGLE =
+                EGL_EXTENSION_FUNCTIONS.CreateDeviceANGLE
+                                       .expect("Where's the `EGL_ANGLE_device_creation` \
+                                                extension?");
+            let egl_device = eglCreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE,
+                                                  d3d11_device.as_raw() as *mut c_void,
+                                                  ptr::null_mut());
             assert_ne!(egl_device, EGL_NO_DEVICE_EXT);
 
             let attribs = [egl::NONE as EGLAttrib, egl::NONE as EGLAttrib, 0, 0];

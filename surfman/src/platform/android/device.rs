@@ -10,23 +10,6 @@ use super::ffi::AHardwareBuffer;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 
-#[allow(non_snake_case)]
-pub(crate) struct EGLExtensionFunctions {
-    pub(crate) GetNativeClientBufferANDROID: extern "C" fn(buffer: *const AHardwareBuffer)
-                                                           -> EGLClientBuffer,
-}
-
-lazy_static! {
-    pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
-        let get = generic::egl::device::lookup_egl_extension;
-        unsafe {
-            EGLExtensionFunctions {
-                GetNativeClientBufferANDROID: get(b"eglGetNativeClientBufferANDROID\0"),
-            }
-        }
-    };
-}
-
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
 }

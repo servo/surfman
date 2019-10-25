@@ -309,4 +309,3 @@ impl Device {
         Ok(guard)
     }
 }
-

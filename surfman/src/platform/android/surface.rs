@@ -5,12 +5,13 @@
 use crate::context::ContextID;
 use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::platform::generic::egl::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic;
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
 use crate::{egl, gl};
 use super::context::{Context, GL_FUNCTIONS};
-use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
+use super::device::Device;
 use super::ffi::{AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM, AHARDWAREBUFFER_USAGE_CPU_READ_NEVER};
 use super::ffi::{AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER, AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER};
 use super::ffi::{AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE, AHardwareBuffer, AHardwareBuffer_Desc};
@@ -26,8 +27,6 @@ use std::thread;
 
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
-
-const EGL_NATIVE_BUFFER_ANDROID: EGLenum = 0x3140;
 
 pub struct Surface {
     pub(crate) context_id: ContextID,
@@ -224,8 +223,11 @@ impl Device {
     unsafe fn create_egl_image(&self, _: &Context, hardware_buffer: *mut AHardwareBuffer)
                                -> EGLImageKHR {
         // Get the native client buffer.
-        let client_buffer =
-            (EGL_EXTENSION_FUNCTIONS.GetNativeClientBufferANDROID)(hardware_buffer);
+        let eglGetNativeClientBufferANDROID =
+            EGL_EXTENSION_FUNCTIONS.GetNativeClientBufferANDROID
+                                   .expect("Where's the `EGL_ANDROID_get_native_client_buffer` \
+                                            extension?");
+        let client_buffer = eglGetNativeClientBufferANDROID(hardware_buffer);
         assert!(!client_buffer.is_null());
 
         // Create the EGL image.
@@ -233,12 +235,12 @@ impl Device {
             egl::IMAGE_PRESERVED_KHR as EGLint, egl::TRUE as EGLint,
             egl::NONE as EGLint,                0,
         ];
-        let egl_image = egl::CreateImageKHR(self.native_display.egl_display(),
-                                            egl::NO_CONTEXT,
-                                            EGL_NATIVE_BUFFER_ANDROID,
-                                            client_buffer,
-                                            egl_image_attributes.as_ptr());
-        assert_ne!(egl_image, egl::NO_IMAGE_KHR);
+        let egl_image = (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(self.native_display.egl_display(),
+                                                                 egl::NO_CONTEXT,
+                                                                 EGL_NATIVE_BUFFER_ANDROID,
+                                                                 client_buffer,
+                                                                 egl_image_attributes.as_ptr());
+        assert_ne!(egl_image, EGL_NO_IMAGE_KHR);
         egl_image
     }
 
@@ -268,10 +270,11 @@ impl Device {
                         gl.DeleteTextures(1, texture_object);
                         *texture_object = 0;
 
-                        let result = egl::DestroyImageKHR(self.native_display.egl_display(),
-                                                          *egl_image);
+                        let egl_display = self.native_display.egl_display();
+                        let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
+                                                                               *egl_image);
                         assert_ne!(result, egl::FALSE);
-                        *egl_image = egl::NO_IMAGE_KHR;
+                        *egl_image = EGL_NO_IMAGE_KHR;
 
                         AHardwareBuffer_release(*hardware_buffer);
                         *hardware_buffer = ptr::null_mut();
@@ -298,10 +301,12 @@ impl Device {
                 gl.DeleteTextures(1, &surface_texture.texture_object);
                 surface_texture.texture_object = 0;
 
-                let result = egl::DestroyImageKHR(self.native_display.egl_display(),
-                                                  surface_texture.local_egl_image);
+                let egl_display = self.native_display.egl_display();
+                let result =
+                    EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
+                                                             surface_texture.local_egl_image);
                 assert_ne!(result, egl::FALSE);
-                surface_texture.local_egl_image = egl::NO_IMAGE_KHR;
+                surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
             }
 
             Ok(surface_texture.surface)

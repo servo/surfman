@@ -8,13 +8,14 @@ use crate::gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use crate::gl;
 use crate::gl_utils;
 use crate::platform::generic::egl::surface;
+use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_FORMAT_ARGB32_MESA;
+use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_FORMAT_MESA;
+use crate::platform::generic::egl::ffi::{EGL_DRM_BUFFER_MESA, EGL_DRM_BUFFER_STRIDE_MESA};
+use crate::platform::generic::egl::ffi::{EGL_DRM_BUFFER_USE_MESA, EGL_EXTENSION_FUNCTIONS};
 use crate::renderbuffers::Renderbuffers;
 use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
-use super::ffi::{EGL_DRM_BUFFER_FORMAT_ARGB32_MESA, EGL_DRM_BUFFER_FORMAT_MESA};
-use super::ffi::{EGL_DRM_BUFFER_MESA, EGL_DRM_BUFFER_STRIDE_MESA};
-use super::ffi::{EGL_DRM_BUFFER_USE_MESA, EGL_EXTENSION_FUNCTIONS};
 
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
@@ -108,20 +109,24 @@ impl Device {
             unsafe {
                 // Create our EGL image.
                 let egl_display = self.native_display.egl_display();
-                let egl_image = (EGL_EXTENSION_FUNCTIONS.CreateDRMImageMESA)(
-                    egl_display,
-                    egl_drm_image_attribs.as_ptr());
+                let eglCreateDRMImageMESA =
+                    EGL_EXTENSION_FUNCTIONS.CreateDRMImageMESA
+                                           .expect("Where's the `EGL_MESA_drm_image` extension?");
+                let egl_image = eglCreateDRMImageMESA(egl_display, egl_drm_image_attribs.as_ptr());
                 if egl_image == egl::NO_IMAGE_KHR {
                     return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
                 }
 
                 // Extract the DRM name and stride for that image.
                 let (mut drm_image_name, mut drm_image_stride) = (0, 0);
-                let ok = (EGL_EXTENSION_FUNCTIONS.ExportDRMImageMESA)(egl_display,
-                                                                      egl_image,
-                                                                      &mut drm_image_name,
-                                                                      ptr::null_mut(),
-                                                                      &mut drm_image_stride);
+                let eglExportDRMImageMESA =
+                    EGL_EXTENSION_FUNCTIONS.ExportDRMImageMESA
+                                           .expect("Where's the `EGL_MESA_drm_image` extension?");
+                let ok = eglExportDRMImageMESA(egl_display,
+                                               egl_image,
+                                               &mut drm_image_name,
+                                               ptr::null_mut(),
+                                               &mut drm_image_stride);
                 assert_ne!(ok, egl::FALSE);
 
                 // Initialize and bind the image to the texture.
@@ -209,11 +214,11 @@ impl Device {
                 let _guard = self.temporarily_make_context_current(context)?;
 
                 let local_egl_image =
-                    egl::CreateImageKHR(self.native_display.egl_display(),
-                                        context.native_context.egl_context(),
-                                        EGL_DRM_BUFFER_MESA,
-                                        drm_image_name as EGLClientBuffer,
-                                        local_egl_image_attribs.as_ptr());
+                    (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(self.native_display.egl_display(),
+                                                             context.native_context.egl_context(),
+                                                             EGL_DRM_BUFFER_MESA,
+                                                             drm_image_name as EGLClientBuffer,
+                                                             local_egl_image_attribs.as_ptr());
 
                 let texture_object = surface::bind_egl_image_to_gl_texture(gl, local_egl_image);
 

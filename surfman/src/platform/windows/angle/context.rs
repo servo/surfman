@@ -9,12 +9,14 @@ use crate::gl::{self, Gl};
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
 use crate::platform::generic::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::ffi::EGL_D3D11_DEVICE_ANGLE;
+use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_NO_DEVICE_EXT;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
 use crate::{SurfaceID, SurfaceType};
 use super::adapter::Adapter;
-use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
-use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
+use super::device::{Device, OwnedEGLDisplay};
 use super::surface::{NativeWidget, Surface, SurfaceTexture, Win32Objects};
 
 use euclid::default::Size2D;
@@ -93,7 +95,10 @@ impl Device {
 
         // Fetch the EGL device.
         let mut egl_device = EGL_NO_DEVICE_EXT;
-        let result = (EGL_EXTENSION_FUNCTIONS.QueryDisplayAttribEXT)(
+        let eglQueryDisplayAttribEXT =
+            EGL_EXTENSION_FUNCTIONS.QueryDisplayAttribEXT
+                                   .expect("Where's the `EGL_EXT_device_query` extension?");
+        let result = eglQueryDisplayAttribEXT(
             egl_display,
             EGL_DEVICE_EXT as EGLint,
             &mut egl_device as *mut EGLDeviceEXT as *mut EGLAttrib);
@@ -102,7 +107,10 @@ impl Device {
 
         // Fetch the D3D11 device.
         let mut d3d11_device: *mut ID3D11Device = ptr::null_mut();
-        let result = (EGL_EXTENSION_FUNCTIONS.QueryDeviceAttribEXT)(
+        let eglQueryDeviceAttribEXT =
+            EGL_EXTENSION_FUNCTIONS.QueryDeviceAttribEXT
+                                   .expect("Where's the `EGL_EXT_device_query` extension?");
+        let result = eglQueryDeviceAttribEXT(
             egl_device,
             EGL_D3D11_DEVICE_ANGLE,
             &mut d3d11_device as *mut *mut ID3D11Device as *mut EGLAttrib);

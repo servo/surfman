@@ -6,9 +6,12 @@ use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::platform::generic::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE;
+use crate::platform::generic::egl::ffi::EGL_DXGI_KEYED_MUTEX_ANGLE;
+use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 use crate::{ContextAttributeFlags, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
-use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
+use super::device::Device;
 
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
@@ -35,9 +38,6 @@ use winit::os::windows::WindowExt;
 const BYTES_PER_PIXEL: i32 = 4;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
-
-const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
-const EGL_DXGI_KEYED_MUTEX_ANGLE: EGLenum = 0x33a2;
 
 pub struct Surface {
     pub(crate) egl_surface: EGLSurface,
@@ -119,18 +119,22 @@ impl Device {
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
             let mut share_handle = INVALID_HANDLE_VALUE;
-            let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
-                self.native_display.egl_display(),
-                egl_surface,
-                EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
-                &mut share_handle);
+            let eglQuerySurfacePointerANGLE =
+                EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE
+                                       .expect("Where's the `EGL_ANGLE_query_surface_pointer` \
+                                                extension?");
+            let result =
+                eglQuerySurfacePointerANGLE(self.native_display.egl_display(),
+                                            egl_surface,
+                                            EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
+                                            &mut share_handle);
             assert_ne!(result, egl::FALSE);
             assert_ne!(share_handle, INVALID_HANDLE_VALUE);
 
             // `mozangle` builds ANGLE with keyed mutexes for sharing. Use the
             // `EGL_ANGLE_keyed_mutex` extension to fetch the keyed mutex so we can grab it.
             let mut keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
-            let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
+            let result = eglQuerySurfacePointerANGLE(
                 self.native_display.egl_display(),
                 egl_surface,
                 EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
