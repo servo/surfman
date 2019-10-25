@@ -69,6 +69,7 @@ impl Device {
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
+        let color_size = 8;
 
         unsafe {
             // Create config attributes.
@@ -76,9 +77,9 @@ impl Device {
                 egl::SURFACE_TYPE as EGLint,         egl::PBUFFER_BIT as EGLint,
                 egl::RENDERABLE_TYPE as EGLint,      egl::OPENGL_ES2_BIT as EGLint,
                 egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint,
-                egl::RED_SIZE as EGLint,             8,
-                egl::GREEN_SIZE as EGLint,           8,
-                egl::BLUE_SIZE as EGLint,            8,
+                egl::RED_SIZE as EGLint,             color_size,
+                egl::GREEN_SIZE as EGLint,           color_size,
+                egl::BLUE_SIZE as EGLint,            color_size,
                 egl::ALPHA_SIZE as EGLint,           alpha_size,
                 egl::DEPTH_SIZE as EGLint,           depth_size,
                 egl::STENCIL_SIZE as EGLint,         stencil_size,
@@ -86,20 +87,59 @@ impl Device {
                 0,                                   0,
             ];
 
-            // Pick a config.
-            let (mut config, mut config_count) = (ptr::null(), 0);
+            // Determine the number of available configs.
+            let mut config_count = 0;
             let result = egl::ChooseConfig(self.native_display.egl_display(),
                                            config_attributes.as_ptr(),
-                                           &mut config,
-                                           1,
+                                           ptr::null_mut(),
+                                           0,
                                            &mut config_count);
             if result == egl::FALSE {
                 let err = egl::GetError().to_windowing_api_error();
                 return Err(Error::PixelFormatSelectionFailed(err));
             }
-            if config_count == 0 || config.is_null() {
+            if config_count <= 0 {
                 return Err(Error::NoPixelFormatFound);
             }
+
+            // Pick a config.
+            let mut configs = vec![ptr::null(); config_count as usize];
+            let result = egl::ChooseConfig(self.native_display.egl_display(),
+                                           config_attributes.as_ptr(),
+                                           configs.as_mut_ptr(),
+                                           config_count,
+                                           &mut config_count);
+            assert_ne!(result, egl::FALSE);
+
+            let mut config = None;
+            for candidate in configs.into_iter() {
+                let attrs = [
+                    (egl::RED_SIZE, color_size),
+                    (egl::GREEN_SIZE, color_size),
+                    (egl::BLUE_SIZE, color_size),
+                    (egl::ALPHA_SIZE, alpha_size)
+                ];
+                let attrs_are_minimum_width = attrs.iter().all(|&(attr, size)| {
+                    if size == 0 {
+                        return true;
+                    }
+                    let component_size = get_config_attr(
+                        self.native_display.egl_display(),
+                        candidate,
+                        attr as EGLint,
+                    );
+                    component_size == size
+                });
+                if attrs_are_minimum_width {
+                    config = Some(candidate);
+                    break;
+                }
+            }
+
+            let config = match config {
+                Some(config) => config,
+                None => return Err(Error::NoPixelFormatFound),
+            };
 
             // Get the config ID and version.
             let egl_config_id = get_config_attr(self.native_display.egl_display(),
