@@ -5,23 +5,20 @@ use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDispl
 use crate::egl::types::{EGLenum, EGLint};
 use crate::egl;
 use crate::gl::types::GLuint;
-use crate::gl::{self, Gl};
+use crate::gl::Gl;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
 use crate::{SurfaceID, SurfaceType};
-use super::adapter::Adapter;
 use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
-use super::surface::{NativeWidget, Surface, SurfaceTexture, Win32Objects};
+use super::surface::{NativeWidget, Surface, Win32Objects};
 
 use euclid::default::Size2D;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
-use std::str::FromStr;
-use std::sync::Mutex;
 use std::thread;
 use winapi::shared::winerror::S_OK;
 use winapi::um::d3d11::ID3D11Device;
@@ -201,13 +198,12 @@ impl Device {
         // detect the "Microsoft Basic" string and switch to `D3D_DRIVER_TYPE_WARP` as appropriate.
         let device = Device {
             native_display: Box::new(OwnedEGLDisplay { egl_display }),
-            egl_device,
             d3d11_device,
             d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
         };
 
         // Create the config.
-        let mut context = Context {
+        let context = Context {
             native_context,
             id: *next_context_id,
             framebuffer: Framebuffer::External,
@@ -235,10 +231,10 @@ impl Device {
                 0, 0,
             ];
 
-            let mut egl_context = egl::CreateContext(self.native_display.egl_display(),
-                                                     egl_config,
-                                                     egl::NO_CONTEXT,
-                                                     egl_context_attributes.as_ptr());
+            let egl_context = egl::CreateContext(self.native_display.egl_display(),
+                                                 egl_config,
+                                                 egl::NO_CONTEXT,
+                                                 egl_context_attributes.as_ptr());
             if egl_context == egl::NO_CONTEXT {
                 let err = egl::GetError().to_windowing_api_error();
                 return Err(Error::ContextCreationFailed(err));
@@ -264,7 +260,7 @@ impl Device {
         }
 
         if let Some(surface) = self.release_surface(context) {
-            self.destroy_surface(context, surface);
+            self.destroy_surface(context, surface)?;
         }
 
         unsafe {
@@ -275,22 +271,20 @@ impl Device {
     }
 
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        unsafe {
-            let egl_config_id = get_context_attr(self.native_display.egl_display(),
-                                                 context.native_context.egl_context(),
-                                                 egl::CONFIG_ID as EGLint);
-            let egl_context_client_version =
-                get_context_attr(self.native_display.egl_display(),
-                                 context.native_context.egl_context(),
-                                 egl::CONTEXT_CLIENT_VERSION as EGLint);
-            ContextDescriptor { egl_config_id, egl_context_client_version }
-        }
+        let egl_config_id = get_context_attr(self.native_display.egl_display(),
+                                             context.native_context.egl_context(),
+                                             egl::CONFIG_ID as EGLint);
+        let egl_context_client_version =
+            get_context_attr(self.native_display.egl_display(),
+                             context.native_context.egl_context(),
+                             egl::CONTEXT_CLIENT_VERSION as EGLint);
+        ContextDescriptor { egl_config_id, egl_context_client_version }
     }
 
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let (egl_surface, size) = match context.framebuffer {
-                Framebuffer::Surface(ref surface) => (surface.egl_surface, surface.size),
+            let egl_surface = match context.framebuffer {
+                Framebuffer::Surface(ref surface) => surface.egl_surface,
                 Framebuffer::None | Framebuffer::External => {
                     return Err(Error::ExternalRenderTarget)
                 }
@@ -368,7 +362,7 @@ impl Device {
             // If the surface does not use a DXGI keyed mutex, then finish.
             // FIXME(pcwalton): Is this necessary and sufficient?
             if !new_surface.uses_keyed_mutex() {
-                let guard = self.temporarily_make_context_current(context)?;
+                let _guard = self.temporarily_make_context_current(context)?;
                 GL_FUNCTIONS.with(|gl| gl.Finish());
             }
 
@@ -385,7 +379,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
+    pub fn context_surface_framebuffer_object(&self, _context: &Context) -> Result<GLuint, Error> {
         Ok(0)
     }
 
@@ -404,24 +398,22 @@ impl Device {
         let egl_display = self.native_display.egl_display();
         let egl_config = self.context_descriptor_to_egl_config(context_descriptor);
 
-        unsafe {
-            let alpha_size = get_config_attr(egl_display, egl_config, egl::ALPHA_SIZE as EGLint);
-            let depth_size = get_config_attr(egl_display, egl_config, egl::DEPTH_SIZE as EGLint);
-            let stencil_size = get_config_attr(egl_display,
-                                               egl_config,
-                                               egl::STENCIL_SIZE as EGLint);
+        let alpha_size = get_config_attr(egl_display, egl_config, egl::ALPHA_SIZE as EGLint);
+        let depth_size = get_config_attr(egl_display, egl_config, egl::DEPTH_SIZE as EGLint);
+        let stencil_size = get_config_attr(egl_display,
+                                           egl_config,
+                                           egl::STENCIL_SIZE as EGLint);
 
-            // Convert to `surfman` context attribute flags.
-            let mut attribute_flags = ContextAttributeFlags::empty();
-            attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
-            attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
-            attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
+        // Convert to `surfman` context attribute flags.
+        let mut attribute_flags = ContextAttributeFlags::empty();
+        attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
+        attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
+        attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
 
-            // Create appropriate context attributes.
-            ContextAttributes {
-                flags: attribute_flags,
-                version: GLVersion::new(context_descriptor.egl_context_client_version as u8, 0),
-            }
+        // Create appropriate context attributes.
+        ContextAttributes {
+            flags: attribute_flags,
+            version: GLVersion::new(context_descriptor.egl_context_client_version as u8, 0),
         }
     }
 
@@ -539,7 +531,7 @@ impl NativeContext for UnsafeEGLContextRef {
         self.egl_context == egl::NO_CONTEXT
     }
 
-    unsafe fn destroy(&mut self, device: &Device) {
+    unsafe fn destroy(&mut self, _device: &Device) {
         assert!(!self.is_destroyed());
         self.egl_context = egl::NO_CONTEXT;
     }

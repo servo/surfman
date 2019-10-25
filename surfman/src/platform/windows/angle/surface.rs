@@ -1,13 +1,13 @@
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
 use crate::context::ContextID;
-use crate::egl::types::{EGLConfig, EGLSurface, EGLenum};
+use crate::egl::types::{EGLSurface, EGLenum};
 use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributeFlags, Error, SurfaceAccess, SurfaceID, SurfaceType};
-use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType};
+use super::context::{Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
 
 use euclid::default::Size2D;
@@ -15,12 +15,10 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use winapi::shared::dxgi::IDXGIKeyedMutex;
 use winapi::shared::windef::{HWND, RECT};
-use winapi::shared::winerror::{self, S_OK};
+use winapi::shared::winerror::S_OK;
 use winapi::um::d3d11;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winbase::INFINITE;
@@ -32,8 +30,6 @@ use wio::com::ComPtr;
 use winit::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::windows::WindowExt;
-
-const BYTES_PER_PIXEL: i32 = 4;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
@@ -345,7 +341,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+    pub fn lock_surface_data<'s>(&self, _surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
@@ -401,9 +397,7 @@ impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
     pub fn from_winit_window(window: &Window) -> NativeWidget {
-        unsafe {
-            NativeWidget { window_handle: window.get_hwnd() as HWND }
-        }
+        NativeWidget { window_handle: window.get_hwnd() as HWND }
     }
 }
 
