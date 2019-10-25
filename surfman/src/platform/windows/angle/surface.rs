@@ -21,6 +21,7 @@ use std::thread;
 use winapi::shared::dxgi::IDXGIKeyedMutex;
 use winapi::shared::windef::{HWND, RECT};
 use winapi::shared::winerror::{self, S_OK};
+use winapi::um::d3d11;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::HANDLE;
@@ -38,6 +39,7 @@ const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
 const EGL_DXGI_KEYED_MUTEX_ANGLE: EGLenum = 0x33a2;
+const EGL_D3D_TEXTURE_ANGLE: EGLenum = 0x33a3;
 
 pub struct Surface {
     pub(crate) egl_surface: EGLSurface,
@@ -75,9 +77,15 @@ impl Drop for Surface {
 pub(crate) enum Win32Objects {
     Window,
     Pbuffer {
-        share_handle: HANDLE,
+        share_handle: HandleOrTexture,
         keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
     }
+}
+
+#[derive(Copy, Clone)]
+pub(crate) enum HandleOrTexture {
+    Handle(HANDLE),
+    Texture(*mut d3d11::ID3D11Texture2D)
 }
 
 pub struct NativeWidget {
@@ -91,14 +99,14 @@ impl Device {
                           surface_type: &SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         match *surface_type {
-            SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size),
+            SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size, None),
             SurfaceType::Widget { ref native_widget } => {
                 self.create_window_surface(context, native_widget)
             }
         }
     }
 
-    fn create_pbuffer_surface(&mut self, context: &Context, size: &Size2D<i32>)
+    fn create_pbuffer_surface(&mut self, context: &Context, size: &Size2D<i32>, share_handle: Option<HandleOrTexture>)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -113,19 +121,28 @@ impl Device {
                 0,                              0,
             ];
 
-            let egl_surface = egl::CreatePbufferSurface(self.native_display.egl_display(),
-                                                        egl_config,
-                                                        attributes.as_ptr());
-            assert_ne!(egl_surface, egl::NO_SURFACE);
+            let egl_surface = if share_handle.is_some() {
+                egl::NO_SURFACE
+            } else {
+                egl::CreatePbufferSurface(self.native_display.egl_display(),
+                                          egl_config,
+                                          attributes.as_ptr())
+            };
+            assert!(egl_surface != egl::NO_SURFACE || share_handle.is_some());
 
-            let mut share_handle = INVALID_HANDLE_VALUE;
-            let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
-                self.native_display.egl_display(),
-                egl_surface,
-                EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
-                &mut share_handle);
-            assert_ne!(result, egl::FALSE);
-            assert_ne!(share_handle, INVALID_HANDLE_VALUE);
+            let share_handle = if let Some(share_handle) = share_handle {
+                share_handle
+            } else {
+                let mut share_handle = INVALID_HANDLE_VALUE;
+                let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
+                    self.native_display.egl_display(),
+                    egl_surface,
+                    EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
+                    &mut share_handle);
+                assert_ne!(result, egl::FALSE);
+                assert_ne!(share_handle, INVALID_HANDLE_VALUE);
+                HandleOrTexture::Handle(share_handle)
+            };
 
             // `mozangle` builds ANGLE with keyed mutexes for sharing. Use the
             // `EGL_ANGLE_keyed_mutex` extension to fetch the keyed mutex so we can grab it.
@@ -180,6 +197,15 @@ impl Device {
         }
     }
 
+    pub unsafe fn create_surface_from_texture(
+        &mut self,
+        context: &Context,
+        size: &Size2D<i32>,
+        texture: *mut d3d11::ID3D11Texture2D
+    ) -> Result<Surface, Error> {
+        self.create_pbuffer_surface(context, size, Some(HandleOrTexture::Texture(texture)))
+    }
+
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
         let share_handle = match surface.win32_objects {
@@ -198,12 +224,19 @@ impl Device {
                 egl::NONE as EGLint,            0,
                 0,                              0,
             ];
-            let local_egl_surface =
-                egl::CreatePbufferFromClientBuffer(self.native_display.egl_display(),
-                                                   EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                                                   share_handle,
-                                                   local_egl_config,
-                                                   pbuffer_attributes.as_ptr());
+            let (buffer_type, client_buffer) = match share_handle {
+                HandleOrTexture::Handle(share_handle) =>
+                    (EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, share_handle),
+                HandleOrTexture::Texture(texture) =>
+                    (EGL_D3D_TEXTURE_ANGLE, texture as _),
+            };
+            let local_egl_surface = egl::CreatePbufferFromClientBuffer(
+                self.native_display.egl_display(),
+                buffer_type,
+                client_buffer,
+                local_egl_config,
+                pbuffer_attributes.as_ptr(),
+            );
             if local_egl_surface == egl::NO_SURFACE {
                 let windowing_api_error = egl::GetError().to_windowing_api_error();
                 return Err(Error::SurfaceImportFailed(windowing_api_error));
