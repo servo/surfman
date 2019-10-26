@@ -12,7 +12,7 @@ use super::device::{Device, Quirks, UnsafeDisplayRef};
 use super::surface::{NativeWidget, Surface, SurfaceDrawables, SurfaceKind};
 
 use euclid::default::Size2D;
-use libc::{RTLD_DEFAULT, RTLD_LAZY, dlopen, dlsym};
+use libc::{RTLD_LAZY, dlopen, dlsym};
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_int, c_void};
@@ -285,34 +285,27 @@ impl Device {
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         let glx_display = self.glx_display();
         GLX_FUNCTIONS.with(|glx| {
-            GL_FUNCTIONS.with(|gl| {
-                unsafe {
-                    let (glx_drawable, size);
-                    match context.framebuffer {
-                        Framebuffer::Surface(ref surface) => {
-                            match surface.drawables {
-                                SurfaceDrawables::Pixmap { glx_pixmap, .. } => {
-                                    glx_drawable = glx_pixmap;
-                                }
-                                SurfaceDrawables::Window { window } => glx_drawable = window,
-                            };
-                            size = surface.size;
-                        }
-                        Framebuffer::None | Framebuffer::External => {
-                            return Err(Error::ExternalRenderTarget)
+            unsafe {
+                let glx_context = context.native_context.glx_context();
+                let glx_drawable = match context.framebuffer {
+                    Framebuffer::Surface(ref surface) => {
+                        match surface.drawables {
+                            SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
+                            SurfaceDrawables::Window { window } => window,
                         }
                     }
-
-                    let ok = glx.MakeCurrent(glx_display,
-                                             glx_drawable,
-                                             context.native_context.glx_context());
-                    if ok == xlib::False {
-                        return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
+                    Framebuffer::None | Framebuffer::External => {
+                        return Err(Error::ExternalRenderTarget)
                     }
+                };
 
-                    Ok(())
+                let ok = glx.MakeCurrent(glx_display, glx_drawable, glx_context);
+                if ok == xlib::False {
+                    return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
                 }
-            })
+
+                Ok(())
+            }
         })
     }
 

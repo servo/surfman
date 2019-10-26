@@ -87,9 +87,6 @@ static BACKGROUND_COLOR: [f32; 4] = [
 
 #[cfg(not(target_os = "android"))]
 fn main() {
-    let (connection, adapter) = (Connection::new().unwrap(), Adapter::default().unwrap());
-    let mut device = Device::new(&connection, &adapter).unwrap();
-
     let mut event_loop = EventsLoop::new();
     let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
     let logical_size =
@@ -100,7 +97,10 @@ fn main() {
                                      .unwrap();
     window.show();
 
+    let connection = Connection::from_winit_window(&window).unwrap();
     let native_widget = NativeWidget::from_winit_window(&window);
+    let adapter = Adapter::default().unwrap();
+    let mut device = Device::new(&connection, &adapter).unwrap();
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 3),
@@ -497,7 +497,7 @@ struct CheckVertexArray {
 }
 
 impl CheckVertexArray {
-    fn new(gl_texture_target: GLenum, resource_loader: &ResourceLoader) -> CheckVertexArray {
+    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> CheckVertexArray {
         let check_program = CheckProgram::new(gl_texture_target, resource_loader);
         unsafe {
             let mut vertex_array = 0;
@@ -668,7 +668,7 @@ struct CheckProgram {
 }
 
 impl CheckProgram {
-    fn new(gl_texture_target: GLenum, resource_loader: &ResourceLoader) -> CheckProgram {
+    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> CheckProgram {
         let vertex_shader = Shader::new("quad",
                                         ShaderKind::Vertex,
                                         gl_texture_target,

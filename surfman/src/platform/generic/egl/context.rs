@@ -11,6 +11,7 @@ use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 
+#[allow(dead_code)]
 const DUMMY_PBUFFER_SIZE: EGLint = 16;
 
 pub(crate) trait NativeContext {
@@ -58,8 +59,6 @@ impl ContextDescriptor {
 
         // Create config attributes.
         let mut config_attributes = vec![
-            egl::SURFACE_TYPE as EGLint,         egl::PBUFFER_BIT as EGLint,
-            egl::RENDERABLE_TYPE as EGLint,      egl::OPENGL_ES2_BIT as EGLint,
             egl::RED_SIZE as EGLint,             8,
             egl::GREEN_SIZE as EGLint,           8,
             egl::BLUE_SIZE as EGLint,            8,
@@ -101,6 +100,7 @@ impl ContextDescriptor {
         ContextDescriptor { egl_config_id, egl_context_client_version }
     }
 
+    #[allow(dead_code)]
     pub(crate) unsafe fn to_egl_config(&self, egl_display: EGLDisplay) -> EGLConfig {
         let config_attributes = [
             egl::CONFIG_ID as EGLint,   self.egl_config_id,
@@ -276,8 +276,10 @@ pub(crate) fn get_proc_address(symbol_name: &str) -> *const c_void {
         egl::GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as *const c_void
     }
 }
+
 // Creates and returns a dummy pbuffer surface for the given context. This is used as the default
 // framebuffer on some backends.
+#[allow(dead_code)]
 pub(crate) unsafe fn create_dummy_pbuffer(egl_display: EGLDisplay, egl_context: EGLContext)
                                           -> EGLSurface {
     let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);

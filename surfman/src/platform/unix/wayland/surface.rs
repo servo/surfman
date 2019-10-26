@@ -1,25 +1,18 @@
 // surfman/surfman/src/platform/unix/wayland/surface.rs
 //
-//! A surface implementation using Wayland surfaces backed by GBM.
+//! A surface implementation using Wayland surfaces backed by TextureImage.
 
 use crate::egl::types::{EGLSurface, EGLint};
 use crate::egl;
-use crate::gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
+use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::gl_utils;
 use crate::platform::generic::egl::surface;
-use crate::platform::generic::egl::ffi::EGLClientBuffer;
-use crate::platform::generic::egl::ffi::EGLImageKHR;
-use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_FORMAT_ARGB32_MESA;
-use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_FORMAT_MESA;
-use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_MESA;
-use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_STRIDE_MESA;
-use crate::platform::generic::egl::ffi::EGL_DRM_BUFFER_USE_MESA;
-use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
-use crate::platform::generic::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
-use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
+use crate::platform::generic::egl::ffi::{EGLClientBuffer, EGLImageKHR};
+use crate::platform::generic::egl::ffi::{EGL_EXTENSION_FUNCTIONS, EGL_GL_TEXTURE_2D_KHR};
+use crate::platform::generic::egl::ffi::{EGL_IMAGE_PRESERVED_KHR, EGL_NO_IMAGE_KHR};
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
+use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 
@@ -48,7 +41,6 @@ pub struct Surface {
 
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
-    pub(crate) local_egl_image: EGLImageKHR,
     pub(crate) texture_object: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
 }
@@ -59,9 +51,7 @@ pub struct NativeWidget {
 }
 
 pub(crate) enum WaylandObjects {
-    GBM {
-        drm_image_name: EGLint,
-        drm_image_stride: EGLint,
+    TextureImage {
         egl_image: EGLImageKHR,
         framebuffer_object: GLuint,
         texture_object: GLuint,
@@ -103,40 +93,35 @@ impl Device {
                               -> Result<Surface, Error> {
         let _guard = self.temporarily_make_context_current(context)?;
 
-        let egl_drm_image_attribs = [
-            egl::WIDTH as EGLint,                   size.width,
-            egl::HEIGHT as EGLint,                  size.height,
-            EGL_DRM_BUFFER_FORMAT_MESA as EGLint,   EGL_DRM_BUFFER_FORMAT_ARGB32_MESA as EGLint,
-            EGL_DRM_BUFFER_USE_MESA as EGLint,      0,
-            egl::NONE as EGLint,                    0,
+        let egl_image_attribs = [
+            EGL_IMAGE_PRESERVED_KHR as EGLint,  egl::FALSE as EGLint,
+            egl::NONE as EGLint,                0,
         ];
 
         GL_FUNCTIONS.with(|gl| {
             unsafe {
-                // Create our EGL image.
-                let egl_display = self.native_display.egl_display();
-                let eglCreateDRMImageMESA =
-                    EGL_EXTENSION_FUNCTIONS.CreateDRMImageMESA
-                                           .expect("Where's the `EGL_MESA_drm_image` extension?");
-                let egl_image = eglCreateDRMImageMESA(egl_display, egl_drm_image_attribs.as_ptr());
-                if egl_image == EGL_NO_IMAGE_KHR {
-                    return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-                }
+                // Create our texture.
+                let mut texture_object = 0;
+                gl.GenTextures(1, &mut texture_object);
+                gl.BindTexture(SURFACE_GL_TEXTURE_TARGET, texture_object);
+                gl.TexImage2D(SURFACE_GL_TEXTURE_TARGET,
+                              0,
+                              gl::RGBA as GLint,
+                              size.width,
+                              size.height,
+                              0,
+                              gl::RGBA,
+                              gl::UNSIGNED_BYTE,
+                              ptr::null());
 
-                // Extract the DRM name and stride for that image.
-                let (mut drm_image_name, mut drm_image_stride) = (0, 0);
-                let eglExportDRMImageMESA =
-                    EGL_EXTENSION_FUNCTIONS.ExportDRMImageMESA
-                                           .expect("Where's the `EGL_MESA_drm_image` extension?");
-                let ok = eglExportDRMImageMESA(egl_display,
-                                               egl_image,
-                                               &mut drm_image_name,
-                                               ptr::null_mut(),
-                                               &mut drm_image_stride);
-                assert_ne!(ok, egl::FALSE);
-
-                // Initialize and bind the image to the texture.
-                let texture_object = surface::bind_egl_image_to_gl_texture(gl, egl_image);
+                // Create our image.
+                let egl_display = self.native_connection.egl_display();
+                let egl_image =
+                    (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(egl_display,
+                                                             context.native_context.egl_context(),
+                                                             EGL_GL_TEXTURE_2D_KHR,
+                                                             texture_object as EGLClientBuffer,
+                                                             egl_image_attribs.as_ptr());
 
                 // Create the framebuffer, and bind the texture to it.
                 let framebuffer_object =
@@ -156,9 +141,7 @@ impl Device {
                 Ok(Surface {
                     size: *size,
                     context_id: context.id,
-                    wayland_objects: WaylandObjects::GBM {
-                        drm_image_name,
-                        drm_image_stride,
+                    wayland_objects: WaylandObjects::TextureImage {
                         egl_image,
                         framebuffer_object,
                         texture_object,
@@ -183,7 +166,7 @@ impl Device {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
-        let egl_surface = egl::CreateWindowSurface(self.native_display.egl_display(),
+        let egl_surface = egl::CreateWindowSurface(self.native_connection.egl_display(),
                                                    egl_config,
                                                    egl_window as *const c_void,
                                                    ptr::null());
@@ -199,41 +182,15 @@ impl Device {
 
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
-        let (drm_image_name, drm_image_stride) = match surface.wayland_objects {
-            WaylandObjects::Window { .. } => return Err(Error::WidgetAttached),
-            WaylandObjects::GBM { drm_image_name, drm_image_stride, .. } => {
-                (drm_image_name, drm_image_stride)
-            }
-        };
-
-        let local_egl_image_attribs = [
-            egl::WIDTH as EGLint,                   surface.size.width,
-            egl::HEIGHT as EGLint,                  surface.size.height,
-            EGL_DRM_BUFFER_FORMAT_MESA as EGLint,   EGL_DRM_BUFFER_FORMAT_ARGB32_MESA as EGLint,
-            EGL_DRM_BUFFER_STRIDE_MESA as EGLint,   drm_image_stride,
-            EGL_IMAGE_PRESERVED_KHR as EGLint,      egl::FALSE as EGLint,
-            egl::NONE as EGLint,                    0,
-        ];
-
         unsafe {
             GL_FUNCTIONS.with(|gl| {
                 let _guard = self.temporarily_make_context_current(context)?;
-
-                let local_egl_image =
-                    (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(self.native_display.egl_display(),
-                                                             context.native_context.egl_context(),
-                                                             EGL_DRM_BUFFER_MESA,
-                                                             drm_image_name as EGLClientBuffer,
-                                                             local_egl_image_attribs.as_ptr());
-
-                let texture_object = surface::bind_egl_image_to_gl_texture(gl, local_egl_image);
-
-                Ok(SurfaceTexture {
-                    surface,
-                    local_egl_image,
-                    texture_object,
-                    phantom: PhantomData,
-                })
+                let egl_image = match surface.wayland_objects {
+                    WaylandObjects::TextureImage { egl_image, .. } => egl_image,
+                    WaylandObjects::Window { .. } => return Err(Error::WidgetAttached),
+                };
+                let texture_object = surface::bind_egl_image_to_gl_texture(gl, egl_image);
+                Ok(SurfaceTexture { surface, texture_object, phantom: PhantomData })
             })
         }
     }
@@ -248,9 +205,7 @@ impl Device {
 
         unsafe {
             match surface.wayland_objects {
-                WaylandObjects::GBM {
-                    ref mut drm_image_name,
-                    drm_image_stride: _,
+                WaylandObjects::TextureImage {
                     ref mut egl_image,
                     ref mut framebuffer_object,
                     ref mut texture_object,
@@ -262,20 +217,18 @@ impl Device {
                         *framebuffer_object = 0;
                         renderbuffers.destroy(gl);
 
-                        gl.DeleteTextures(1, texture_object);
-                        *texture_object = 0;
-
-                        let egl_display = self.native_display.egl_display();
+                        let egl_display = self.native_connection.egl_display();
                         let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
                                                                                *egl_image);
                         assert_ne!(result, egl::FALSE);
                         *egl_image = EGL_NO_IMAGE_KHR;
 
-                        *drm_image_name = 0;
+                        gl.DeleteTextures(1, texture_object);
+                        *texture_object = 0;
                     });
                 }
                 WaylandObjects::Window { ref mut egl_surface, ref mut egl_window } => {
-                    egl::DestroySurface(self.native_display.egl_display(), *egl_surface);
+                    egl::DestroySurface(self.native_connection.egl_display(), *egl_surface);
                     *egl_surface = egl::NO_SURFACE;
 
                     (WAYLAND_EGL_HANDLE.wl_egl_window_destroy)(*egl_window);
@@ -297,16 +250,8 @@ impl Device {
             unsafe {
                 gl.DeleteTextures(1, &surface_texture.texture_object);
                 surface_texture.texture_object = 0;
-
-                let egl_display = self.native_display.egl_display();
-                let result =
-                    (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
-                                                              surface_texture.local_egl_image);
-                assert_ne!(result, egl::FALSE);
-                surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
+                Ok(surface_texture.surface)
             }
-
-            Ok(surface_texture.surface)
         })
     }
 
@@ -316,16 +261,16 @@ impl Device {
         unsafe {
             match surface.wayland_objects {
                 WaylandObjects::Window { egl_surface, .. } => {
-                    egl::SwapBuffers(self.native_display.egl_display(), egl_surface);
+                    egl::SwapBuffers(self.native_connection.egl_display(), egl_surface);
                     Ok(())
                 }
-                WaylandObjects::GBM { .. } => Err(Error::NoWidgetAttached),
+                WaylandObjects::TextureImage { .. } => Err(Error::NoWidgetAttached),
             }
         }
     }
 
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+    pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
@@ -344,7 +289,7 @@ impl Surface {
 
     pub fn id(&self) -> SurfaceID {
         match self.wayland_objects {
-            WaylandObjects::GBM { egl_image, .. } => SurfaceID(egl_image as usize),
+            WaylandObjects::TextureImage { egl_image, .. } => SurfaceID(egl_image as usize),
             WaylandObjects::Window { egl_surface, .. } => SurfaceID(egl_surface as usize),
         }
     }
@@ -368,15 +313,18 @@ pub struct SurfaceDataGuard<'a> {
 
 impl NativeWidget {
     #[cfg(feature = "sm-winit")]
-    #[inline]
     pub fn from_winit_window(window: &Window) -> NativeWidget {
-        unsafe {
-            let hidpi_factor = window.get_hidpi_factor();
-            let window_size = window.get_inner_size().unwrap().to_physical(hidpi_factor);
-            NativeWidget {
-                wayland_surface: window.get_wayland_surface().unwrap() as *mut wl_proxy,
-                size: Size2D::new(window_size.width as i32, window_size.height as i32),
-            }
+        // The window's DPI factor is 1.0 when nothing has been rendered to it yet. So use the DPI
+        // factor of the primary monitor instead, since that's where the window will presumably go
+        // when actually displayed. (The user might move it somewhere else later, of course.)
+        //
+        // FIXME(pcwalton): Is it true that the window will go the primary monitor first?
+        let hidpi_factor = window.get_primary_monitor().get_hidpi_factor();
+        let window_size = window.get_inner_size().unwrap().to_physical(hidpi_factor);
+
+        NativeWidget {
+            wayland_surface: window.get_wayland_surface().unwrap() as *mut wl_proxy,
+            size: Size2D::new(window_size.width as i32, window_size.height as i32),
         }
     }
 }

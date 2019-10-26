@@ -10,6 +10,7 @@ use crate::platform::generic::egl::ffi::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
 
 use euclid::default::Size2D;
 
+#[allow(dead_code)]
 pub(crate) unsafe fn create_pbuffer_surface(egl_display: EGLDisplay,
                                             egl_config: EGLConfig,
                                             size: &Size2D<i32>)

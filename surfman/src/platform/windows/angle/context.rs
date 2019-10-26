@@ -61,9 +61,11 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(self.native_display.egl_display(),
-                                   config_attributes,
-                                   &[egl::BIND_TO_TEXTURE_RGBA as EGLint, 1 as EGLint])
+            ContextDescriptor::new(self.native_display.egl_display(), config_attributes, &[
+                egl::BIND_TO_TEXTURE_RGBA as EGLint,    1 as EGLint,
+                egl::SURFACE_TYPE as EGLint,            egl::PBUFFER_BIT as EGLint,
+                egl::RENDERABLE_TYPE as EGLint,         egl::OPENGL_ES2_BIT as EGLint,
+            ])
         }
     }
 

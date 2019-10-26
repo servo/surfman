@@ -56,9 +56,11 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(self.native_display.egl_display(),
-                                   config_attributes,
-                                   &[egl::COLOR_BUFFER_TYPE as EGLint, egl::RGB_BUFFER as EGLint])
+            ContextDescriptor::new(self.native_display.egl_display(), config_attributes, &[
+                egl::COLOR_BUFFER_TYPE as EGLint,   egl::RGB_BUFFER as EGLint,
+                egl::SURFACE_TYPE as EGLint,        egl::PBUFFER_BIT as EGLint,
+                egl::RENDERABLE_TYPE as EGLint,     egl::OPENGL_ES2_BIT as EGLint,
+            ])
         }
     }
 

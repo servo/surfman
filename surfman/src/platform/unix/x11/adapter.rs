@@ -6,8 +6,6 @@
 
 use crate::Error;
 
-use std::ffi::CString;
-
 #[derive(Clone, Debug)]
 pub struct Adapter;
 
