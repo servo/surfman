@@ -431,7 +431,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+    pub fn lock_surface_data<'s>(&self, _surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
