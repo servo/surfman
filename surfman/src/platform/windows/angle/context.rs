@@ -9,9 +9,8 @@ use crate::gl::{self, Gl};
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::platform::generic::egl::ffi::EGL_D3D11_DEVICE_ANGLE;
-use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
-use crate::platform::generic::egl::ffi::EGL_NO_DEVICE_EXT;
+use crate::platform::generic::egl::ffi::{EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
+use crate::platform::generic::egl::ffi::{EGL_FUNCTIONS, EGL_NO_DEVICE_EXT};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
 use crate::{SurfaceID, SurfaceType};
@@ -85,11 +84,11 @@ impl Device {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Grab the current EGL display and EGL context.
-        let egl_display = egl::GetCurrentDisplay();
+        let egl_display = EGL_FUNCTIONS.GetCurrentDisplay();
         if egl_display == egl::NO_DISPLAY {
             return Err(Error::NoCurrentContext);
         }
-        let egl_context = egl::GetCurrentContext();
+        let egl_context = EGL_FUNCTIONS.GetCurrentContext();
         if egl_context == egl::NO_CONTEXT {
             return Err(Error::NoCurrentContext);
         }
@@ -196,12 +195,12 @@ impl Device {
                     return Err(Error::ExternalRenderTarget)
                 }
             };
-            let result = egl::MakeCurrent(self.native_display.egl_display(),
-                                          egl_surface,
-                                          egl_surface,
-                                          context.native_context.egl_context());
+            let result = EGL_FUNCTIONS.MakeCurrent(self.native_display.egl_display(),
+                                                   egl_surface,
+                                                   egl_surface,
+                                                   context.native_context.egl_context());
             if result == egl::FALSE {
-                let err = egl::GetError().to_windowing_api_error();
+                let err = EGL_FUNCTIONS.GetError().to_windowing_api_error();
                 return Err(Error::MakeCurrentFailed(err));
             }
 
@@ -224,7 +223,7 @@ impl Device {
 
     pub(crate) fn context_is_current(&self, context: &Context) -> bool {
         unsafe {
-            egl::GetCurrentContext() == context.native_context.egl_context()
+            EGL_FUNCTIONS.GetCurrentContext() == context.native_context.egl_context()
         }
     }
 

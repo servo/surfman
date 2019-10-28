@@ -8,8 +8,8 @@ use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::gl_utils;
 use crate::platform::generic::egl::surface;
-use crate::platform::generic::egl::ffi::{EGLClientBuffer, EGLImageKHR};
-use crate::platform::generic::egl::ffi::{EGL_EXTENSION_FUNCTIONS, EGL_GL_TEXTURE_2D_KHR};
+use crate::platform::generic::egl::ffi::{EGLClientBuffer, EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
+use crate::platform::generic::egl::ffi::{EGL_FUNCTIONS, EGL_GL_TEXTURE_2D_KHR};
 use crate::platform::generic::egl::ffi::{EGL_IMAGE_PRESERVED_KHR, EGL_NO_IMAGE_KHR};
 use crate::renderbuffers::Renderbuffers;
 use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
@@ -166,10 +166,10 @@ impl Device {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
-        let egl_surface = egl::CreateWindowSurface(self.native_connection.egl_display(),
-                                                   egl_config,
-                                                   egl_window as *const c_void,
-                                                   ptr::null());
+        let egl_surface = EGL_FUNCTIONS.CreateWindowSurface(self.native_connection.egl_display(),
+                                                            egl_config,
+                                                            egl_window as *const c_void,
+                                                            ptr::null());
         assert_ne!(egl_surface, egl::NO_SURFACE);
 
         Ok(Surface {
@@ -228,7 +228,8 @@ impl Device {
                     });
                 }
                 WaylandObjects::Window { ref mut egl_surface, ref mut egl_window } => {
-                    egl::DestroySurface(self.native_connection.egl_display(), *egl_surface);
+                    EGL_FUNCTIONS.DestroySurface(self.native_connection.egl_display(),
+                                                 *egl_surface);
                     *egl_surface = egl::NO_SURFACE;
 
                     (WAYLAND_EGL_HANDLE.wl_egl_window_destroy)(*egl_window);
@@ -261,7 +262,7 @@ impl Device {
         unsafe {
             match surface.wayland_objects {
                 WaylandObjects::Window { egl_surface, .. } => {
-                    egl::SwapBuffers(self.native_connection.egl_display(), egl_surface);
+                    EGL_FUNCTIONS.SwapBuffers(self.native_connection.egl_display(), egl_surface);
                     Ok(())
                 }
                 WaylandObjects::TextureImage { .. } => Err(Error::NoWidgetAttached),

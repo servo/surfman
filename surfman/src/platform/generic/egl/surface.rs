@@ -7,6 +7,7 @@ use crate::egl;
 use crate::gl::types::{GLint, GLuint};
 use crate::gl::{self, Gl};
 use crate::platform::generic::egl::ffi::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
+use super::ffi::EGL_FUNCTIONS;
 
 use euclid::default::Size2D;
 
@@ -24,7 +25,9 @@ pub(crate) unsafe fn create_pbuffer_surface(egl_display: EGLDisplay,
         0,                              0,
     ];
 
-    let egl_surface = egl::CreatePbufferSurface(egl_display, egl_config, attributes.as_ptr());
+    let egl_surface = EGL_FUNCTIONS.CreatePbufferSurface(egl_display,
+                                                         egl_config,
+                                                         attributes.as_ptr());
     assert_ne!(egl_surface, egl::NO_SURFACE);
     egl_surface
 }

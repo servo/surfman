@@ -6,6 +6,7 @@ use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
 use super::error::ToWindowingApiError;
+use super::ffi::EGL_FUNCTIONS;
 
 use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
@@ -38,10 +39,10 @@ impl Drop for CurrentContextGuard {
     fn drop(&mut self) {
         unsafe {
             if self.egl_display != egl::NO_DISPLAY {
-                egl::MakeCurrent(self.egl_display,
-                                 self.old_egl_draw_surface,
-                                 self.old_egl_read_surface,
-                                 self.old_egl_context);
+                EGL_FUNCTIONS.MakeCurrent(self.egl_display,
+                                          self.old_egl_draw_surface,
+                                          self.old_egl_read_surface,
+                                          self.old_egl_context);
             }
         }
     }
@@ -71,13 +72,13 @@ impl ContextDescriptor {
 
         // Pick a config.
         let (mut config, mut config_count) = (ptr::null(), 0);
-        let result = egl::ChooseConfig(egl_display,
-                                       config_attributes.as_ptr(),
-                                       &mut config,
-                                       1,
-                                       &mut config_count);
+        let result = EGL_FUNCTIONS.ChooseConfig(egl_display,
+                                                config_attributes.as_ptr(),
+                                                &mut config,
+                                                1,
+                                                &mut config_count);
         if result == egl::FALSE {
-            let err = egl::GetError().to_windowing_api_error();
+            let err = EGL_FUNCTIONS.GetError().to_windowing_api_error();
             return Err(Error::PixelFormatSelectionFailed(err));
         }
         if config_count == 0 || config.is_null() {
@@ -109,11 +110,11 @@ impl ContextDescriptor {
         ];
 
         let (mut config, mut config_count) = (ptr::null(), 0);
-        let result = egl::ChooseConfig(egl_display,
-                                       config_attributes.as_ptr(),
-                                       &mut config,
-                                       1,
-                                       &mut config_count);
+        let result = EGL_FUNCTIONS.ChooseConfig(egl_display,
+                                                config_attributes.as_ptr(),
+                                                &mut config,
+                                                1,
+                                                &mut config_count);
         assert_ne!(result, egl::FALSE);
         assert!(config_count > 0);
         config
@@ -144,10 +145,10 @@ impl CurrentContextGuard {
     pub(crate) fn new() -> CurrentContextGuard {
         unsafe {
             CurrentContextGuard {
-                egl_display: egl::GetCurrentDisplay(),
-                old_egl_draw_surface: egl::GetCurrentSurface(egl::DRAW as EGLint),
-                old_egl_read_surface: egl::GetCurrentSurface(egl::READ as EGLint),
-                old_egl_context: egl::GetCurrentContext(),
+                egl_display: EGL_FUNCTIONS.GetCurrentDisplay(),
+                old_egl_draw_surface: EGL_FUNCTIONS.GetCurrentSurface(egl::DRAW as EGLint),
+                old_egl_read_surface: EGL_FUNCTIONS.GetCurrentSurface(egl::READ as EGLint),
+                old_egl_context: EGL_FUNCTIONS.GetCurrentContext(),
             }
         }
     }
@@ -170,8 +171,8 @@ impl NativeContext for OwnedEGLContext {
 
     unsafe fn destroy(&mut self, egl_display: EGLDisplay) {
         assert!(!self.is_destroyed());
-        egl::MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl::NO_CONTEXT);
-        let result = egl::DestroyContext(egl_display, self.egl_context);
+        EGL_FUNCTIONS.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl::NO_CONTEXT);
+        let result = EGL_FUNCTIONS.DestroyContext(egl_display, self.egl_context);
         assert_ne!(result, egl::FALSE);
         self.egl_context = egl::NO_CONTEXT;
     }
@@ -212,12 +213,12 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay, descriptor: &Contex
         0, 0,
     ];
 
-    let egl_context = egl::CreateContext(egl_display,
-                                         egl_config,
-                                         egl::NO_CONTEXT,
-                                         egl_context_attributes.as_ptr());
+    let egl_context = EGL_FUNCTIONS.CreateContext(egl_display,
+                                                  egl_config,
+                                                  egl::NO_CONTEXT,
+                                                  egl_context_attributes.as_ptr());
     if egl_context == egl::NO_CONTEXT {
-        let err = egl::GetError().to_windowing_api_error();
+        let err = EGL_FUNCTIONS.GetError().to_windowing_api_error();
         return Err(Error::ContextCreationFailed(err));
     }
 
@@ -225,9 +226,12 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay, descriptor: &Contex
 }
 
 pub(crate) unsafe fn make_no_context_current(egl_display: EGLDisplay) -> Result<(), Error> {
-    let result = egl::MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl::NO_CONTEXT);
+    let result = EGL_FUNCTIONS.MakeCurrent(egl_display,
+                                           egl::NO_SURFACE,
+                                           egl::NO_SURFACE,
+                                           egl::NO_CONTEXT);
     if result == egl::FALSE {
-        let err = egl::GetError().to_windowing_api_error();
+        let err = EGL_FUNCTIONS.GetError().to_windowing_api_error();
         return Err(Error::MakeCurrentFailed(err));
     }
     Ok(())
@@ -236,7 +240,7 @@ pub(crate) unsafe fn make_no_context_current(egl_display: EGLDisplay) -> Result<
 pub(crate) unsafe fn get_config_attr(egl_display: EGLDisplay, egl_config: EGLConfig, attr: EGLint)
                                      -> EGLint {
     let mut value = 0;
-    let result = egl::GetConfigAttrib(egl_display, egl_config, attr, &mut value);
+    let result = EGL_FUNCTIONS.GetConfigAttrib(egl_display, egl_config, attr, &mut value);
     assert_ne!(result, egl::FALSE);
     value
 }
@@ -246,7 +250,7 @@ pub(crate) unsafe fn get_context_attr(egl_display: EGLDisplay,
                                       attr: EGLint)
                                       -> EGLint {
     let mut value = 0;
-    let result = egl::QueryContext(egl_display, egl_context, attr, &mut value);
+    let result = EGL_FUNCTIONS.QueryContext(egl_display, egl_context, attr, &mut value);
     assert_ne!(result, egl::FALSE);
     value
 }
@@ -260,11 +264,11 @@ pub(crate) unsafe fn egl_config_from_id(egl_display: EGLDisplay, egl_config_id: 
     ];
 
     let (mut config, mut config_count) = (ptr::null(), 0);
-    let result = egl::ChooseConfig(egl_display,
-                                   config_attributes.as_ptr(),
-                                   &mut config,
-                                   1,
-                                   &mut config_count);
+    let result = EGL_FUNCTIONS.ChooseConfig(egl_display,
+                                            config_attributes.as_ptr(),
+                                            &mut config,
+                                            1,
+                                            &mut config_count);
     assert_ne!(result, egl::FALSE);
     assert!(config_count > 0);
     config
@@ -273,7 +277,8 @@ pub(crate) unsafe fn egl_config_from_id(egl_display: EGLDisplay, egl_config_id: 
 pub(crate) fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
-        egl::GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as *const c_void
+        EGL_FUNCTIONS.GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as
+            *const c_void
     }
 }
 
@@ -292,7 +297,9 @@ pub(crate) unsafe fn create_dummy_pbuffer(egl_display: EGLDisplay, egl_context: 
         0,                      0,
     ];
 
-    let pbuffer = egl::CreatePbufferSurface(egl_display, egl_config, pbuffer_attributes.as_ptr());
+    let pbuffer = EGL_FUNCTIONS.CreatePbufferSurface(egl_display,
+                                                     egl_config,
+                                                     pbuffer_attributes.as_ptr());
     assert_ne!(pbuffer, egl::NO_SURFACE);
     pbuffer
 }

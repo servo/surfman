@@ -10,6 +10,7 @@ use crate::gl::types::GLuint;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
 use crate::platform::generic::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::ffi::EGL_FUNCTIONS;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
 use crate::{SurfaceID, SurfaceType};
 use super::device::{Device, UnsafeEGLDisplayRef};
@@ -80,19 +81,19 @@ impl Device {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Grab the current EGL display and EGL context.
-        let egl_display = egl::GetCurrentDisplay();
+        let egl_display = EGL_FUNCTIONS.GetCurrentDisplay();
         if egl_display == egl::NO_DISPLAY {
             return Err(Error::NoCurrentContext);
         }
-        let egl_context = egl::GetCurrentContext();
+        let egl_context = EGL_FUNCTIONS.GetCurrentContext();
         if egl_context == egl::NO_CONTEXT {
             return Err(Error::NoCurrentContext);
         }
         let native_context = Box::new(UnsafeEGLContextRef { egl_context });
 
         // Get the current surface.
-        let egl_draw_surface = egl::GetCurrentSurface(egl::DRAW as EGLint);
-        let egl_read_surface = egl::GetCurrentSurface(egl::READ as EGLint);
+        let egl_draw_surface = EGL_FUNCTIONS.GetCurrentSurface(egl::DRAW as EGLint);
+        let egl_read_surface = EGL_FUNCTIONS.GetCurrentSurface(egl::READ as EGLint);
 
         // Create the device wrapper.
         let device = Device { native_display: Box::new(UnsafeEGLDisplayRef { egl_display }) };
@@ -157,7 +158,8 @@ impl Device {
 
             }
 
-            let result = egl::DestroySurface(self.native_display.egl_display(), context.pbuffer);
+            let result = EGL_FUNCTIONS.DestroySurface(self.native_display.egl_display(),
+                                                      context.pbuffer);
             assert_ne!(result, egl::FALSE);
             context.pbuffer = egl::NO_SURFACE;
 
@@ -193,12 +195,12 @@ impl Device {
                 }) | Framebuffer::None => (context.pbuffer, context.pbuffer),
             };
 
-            let result = egl::MakeCurrent(egl_display,
-                                          egl_draw_surface,
-                                          egl_read_surface,
-                                          egl_context);
+            let result = EGL_FUNCTIONS.MakeCurrent(egl_display,
+                                                   egl_draw_surface,
+                                                   egl_read_surface,
+                                                   egl_context);
             if result == egl::FALSE {
-                let err = egl::GetError().to_windowing_api_error();
+                let err = EGL_FUNCTIONS.GetError().to_windowing_api_error();
                 return Err(Error::MakeCurrentFailed(err));
             }
 
@@ -218,7 +220,7 @@ impl Device {
             Framebuffer::None => unreachable!(),
             Framebuffer::External { egl_draw_surface, .. } => {
                 unsafe {
-                    egl::SwapBuffers(self.native_display.egl_display(), egl_draw_surface);
+                    EGL_FUNCTIONS.SwapBuffers(self.native_display.egl_display(), egl_draw_surface);
                 }
                 Ok(())
             }

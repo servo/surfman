@@ -5,6 +5,7 @@
 use crate::context::ContextID;
 use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::platform::generic::egl::ffi::EGL_FUNCTIONS;
 use crate::platform::generic::egl::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic;
 use crate::renderbuffers::Renderbuffers;
@@ -165,10 +166,10 @@ impl Device {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
-        let egl_surface = egl::CreateWindowSurface(self.native_display.egl_display(),
-                                                   egl_config,
-                                                   native_window as *const c_void,
-                                                   ptr::null());
+        let egl_surface = EGL_FUNCTIONS::CreateWindowSurface(self.native_display.egl_display(),
+                                                             egl_config,
+                                                             native_window as *const c_void,
+                                                             ptr::null());
         assert_ne!(egl_surface, egl::NO_SURFACE);
 
         Ok(Surface {
@@ -212,7 +213,7 @@ impl Device {
         unsafe {
             match surface.objects {
                 SurfaceObjects::Window { egl_surface } => {
-                    egl::SwapBuffers(self.native_display.egl_display(), egl_surface);
+                    EGL_FUNCTIONS.SwapBuffers(self.native_display.egl_display(), egl_surface);
                     Ok(())
                 }
                 SurfaceObjects::HardwareBuffer { .. } => Err(Error::NoWidgetAttached),
@@ -281,7 +282,7 @@ impl Device {
                     });
                 }
                 SurfaceObjects::Window { ref mut egl_surface } => {
-                    egl::DestroySurface(self.native_display.egl_display(), *egl_surface);
+                    EGL_FUNCTIONS.DestroySurface(self.native_display.egl_display(), *egl_surface);
                     *egl_surface = egl::NO_SURFACE;
                 }
             }

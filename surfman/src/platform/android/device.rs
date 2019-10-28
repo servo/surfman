@@ -24,15 +24,15 @@ impl Device {
     #[inline]
     pub fn new(_: &Connection, _: &Adapter) -> Result<Device, Error> {
         unsafe {
-            let egl_display = egl::GetDisplay(egl::DEFAULT_DISPLAY);
+            let egl_display = EGL_FUNCTIONS.GetDisplay(egl::DEFAULT_DISPLAY);
             assert_ne!(egl_display, egl::NO_DISPLAY);
             let native_display = Box::new(OwnedEGLDisplay { egl_display });
 
             // I don't think this should ever fail.
             let (mut major_version, mut minor_version) = (0, 0);
-            let result = egl::Initialize(native_display.egl_display(),
-                                         &mut major_version,
-                                         &mut minor_version);
+            let result = EGL_FUNCTIONS.Initialize(native_display.egl_display(),
+                                                  &mut major_version,
+                                                  &mut minor_version);
             assert_ne!(result, egl::FALSE);
 
             Ok(Device { native_display })
@@ -73,7 +73,7 @@ impl NativeDisplay for OwnedEGLDisplay {
 
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
-        let result = egl::Terminate(self.egl_display);
+        let result = EGL_FUNCTIONS.Terminate(self.egl_display);
         assert_ne!(result, egl::FALSE);
         self.egl_display = egl::NO_DISPLAY;
     }

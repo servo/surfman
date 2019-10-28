@@ -9,6 +9,7 @@ use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_DXGI_KEYED_MUTEX_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_FUNCTIONS;
 use crate::{ContextAttributeFlags, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::Device;
@@ -113,9 +114,9 @@ impl Device {
                 0,                              0,
             ];
 
-            let egl_surface = egl::CreatePbufferSurface(self.native_display.egl_display(),
-                                                        egl_config,
-                                                        attributes.as_ptr());
+            let egl_surface = EGL_FUNCTIONS.CreatePbufferSurface(self.native_display.egl_display(),
+                                                                 egl_config,
+                                                                 attributes.as_ptr());
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
             let mut share_handle = INVALID_HANDLE_VALUE;
@@ -168,10 +169,10 @@ impl Device {
             assert_ne!(ok, 0);
 
             let attributes = [egl::NONE as EGLint];
-            let egl_surface = egl::CreateWindowSurface(self.native_display.egl_display(),
-                                                       egl_config,
-                                                       native_widget.window_handle as _,
-                                                       attributes.as_ptr());
+            let egl_surface = EGL_FUNCTIONS.CreateWindowSurface(self.native_display.egl_display(),
+                                                                egl_config,
+                                                                native_widget.window_handle as _,
+                                                                attributes.as_ptr());
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
             Ok(Surface {
@@ -203,13 +204,13 @@ impl Device {
                 0,                              0,
             ];
             let local_egl_surface =
-                egl::CreatePbufferFromClientBuffer(self.native_display.egl_display(),
-                                                   EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                                                   share_handle,
-                                                   local_egl_config,
-                                                   pbuffer_attributes.as_ptr());
+                EGL_FUNCTIONS.CreatePbufferFromClientBuffer(self.native_display.egl_display(),
+                                                            EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
+                                                            share_handle,
+                                                            local_egl_config,
+                                                            pbuffer_attributes.as_ptr());
             if local_egl_surface == egl::NO_SURFACE {
-                let windowing_api_error = egl::GetError().to_windowing_api_error();
+                let windowing_api_error = EGL_FUNCTIONS.GetError().to_windowing_api_error();
                 return Err(Error::SurfaceImportFailed(windowing_api_error));
             }
 
@@ -238,10 +239,10 @@ impl Device {
                 debug_assert_ne!(texture, 0);
 
                 gl.BindTexture(gl::TEXTURE_2D, texture);
-                if egl::BindTexImage(self.native_display.egl_display(),
-                                     local_egl_surface,
-                                     egl::BACK_BUFFER as GLint) == egl::FALSE {
-                    let windowing_api_error = egl::GetError().to_windowing_api_error();
+                if EGL_FUNCTIONS.BindTexImage(self.native_display.egl_display(),
+                                              local_egl_surface,
+                                              egl::BACK_BUFFER as GLint) == egl::FALSE {
+                    let windowing_api_error = EGL_FUNCTIONS.GetError().to_windowing_api_error();
                     return Err(Error::SurfaceTextureCreationFailed(windowing_api_error));
                 }
 
@@ -275,12 +276,12 @@ impl Device {
 
         unsafe {
             // If the surface is currently bound, unbind it.
-            if egl::GetCurrentSurface(egl::READ as EGLint) == surface.egl_surface ||
-                    egl::GetCurrentSurface(egl::DRAW as EGLint) == surface.egl_surface {
+            if EGL_FUNCTIONS.GetCurrentSurface(egl::READ as EGLint) == surface.egl_surface ||
+                    EGL_FUNCTIONS.GetCurrentSurface(egl::DRAW as EGLint) == surface.egl_surface {
                 self.make_no_context_current()?;
             }
 
-            egl::DestroySurface(self.native_display.egl_display(), surface.egl_surface);
+            EGL_FUNCTIONS.DestroySurface(self.native_display.egl_display(), surface.egl_surface);
             surface.egl_surface = egl::NO_SURFACE;
         }
 
@@ -298,8 +299,8 @@ impl Device {
                 assert_eq!(result, S_OK);
             }
 
-            egl::DestroySurface(self.native_display.egl_display(),
-                                surface_texture.local_egl_surface);
+            EGL_FUNCTIONS.DestroySurface(self.native_display.egl_display(),
+                                         surface_texture.local_egl_surface);
         }
 
         Ok(surface_texture.surface)
@@ -329,7 +330,8 @@ impl Device {
         }
 
         unsafe {
-            let ok = egl::SwapBuffers(self.native_display.egl_display(), surface.egl_surface);
+            let ok = EGL_FUNCTIONS.SwapBuffers(self.native_display.egl_display(),
+                                               surface.egl_surface);
             assert_ne!(ok, egl::FALSE);
             Ok(())
         }
