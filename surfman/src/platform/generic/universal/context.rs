@@ -8,7 +8,7 @@ use crate::platform::default::device::Device as HWDevice;
 use crate::platform::generic::osmesa::context::Context as OSMesaContext;
 use crate::platform::generic::osmesa::context::ContextDescriptor as OSMesaContextDescriptor;
 use crate::platform::generic::osmesa::device::Device as OSMesaDevice;
-use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextAttributes, ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::device::Device;
 use super::surface::Surface;
 
@@ -24,6 +24,15 @@ pub enum Context {
 pub enum ContextDescriptor {
     Hardware(HWContextDescriptor),
     Software(OSMesaContextDescriptor),
+}
+
+impl Context {
+    pub fn id(&self) -> ContextID {
+        match *self {
+            Context::Hardware(ref ctx) => ctx.id(),
+            Context::Software(ref ctx) => ctx.id(),
+        }
+    }
 }
 
 impl Device {
