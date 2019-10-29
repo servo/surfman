@@ -220,7 +220,9 @@ impl Device {
                 }
 
                 let mut local_keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
-                let result = (EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE)(
+                let eglQuerySurfacePointerANGLE = EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE
+                                                                         .unwrap();
+                let result = eglQuerySurfacePointerANGLE(
                     self.native_display.egl_display(),
                     local_egl_surface,
                     EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
@@ -295,9 +297,8 @@ impl Device {
                 egl.DestroySurface(self.native_display.egl_display(), surface.egl_surface);
                 surface.egl_surface = egl::NO_SURFACE;
             }
-        });
-
-        Ok(())
+            Ok(())
+        })
     }
 
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)

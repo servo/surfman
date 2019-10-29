@@ -4,16 +4,13 @@
 
 #![allow(dead_code)]
 
-use crate::egl::types::{EGLAttrib, EGLBoolean, EGLContext, EGLDisplay, EGLSurface};
+use crate::egl::types::{EGLAttrib, EGLBoolean, EGLContext, EGLDeviceEXT, EGLDisplay, EGLSurface};
 use crate::egl::types::{EGLenum, EGLint};
 
 use std::os::raw::c_void;
 
 pub enum EGLClientBufferOpaque {}
 pub type EGLClientBuffer = *mut EGLClientBufferOpaque;
-
-pub enum EGLDeviceEXTOpaque {}
-pub type EGLDeviceEXT = *mut EGLDeviceEXTOpaque;
 
 pub enum EGLImageKHROpaque {}
 pub type EGLImageKHR = *mut EGLImageKHROpaque;

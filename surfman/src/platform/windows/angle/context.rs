@@ -8,14 +8,16 @@ use crate::gl::types::GLuint;
 use crate::gl::{self, Gl};
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
+use crate::platform::generic::egl::device::{EGL_FUNCTIONS, OwnedEGLDisplay};
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::platform::generic::egl::ffi::{EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
-use crate::platform::generic::egl::ffi::{EGL_FUNCTIONS, EGL_NO_DEVICE_EXT};
+use crate::platform::generic::egl::ffi::EGL_D3D11_DEVICE_ANGLE;
+use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_NO_DEVICE_EXT;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
 use crate::{SurfaceID, SurfaceType};
 use super::adapter::Adapter;
-use super::device::{Device, OwnedEGLDisplay};
+use super::device::Device;
 use super::surface::{NativeWidget, Surface, SurfaceTexture, Win32Objects};
 
 use euclid::default::Size2D;
@@ -60,7 +62,7 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(self.native_display.egl_display(), config_attributes, &[
+            ContextDescriptor::new(self.native_display.egl_display(), attributes, &[
                 egl::BIND_TO_TEXTURE_RGBA as EGLint,    1 as EGLint,
                 egl::SURFACE_TYPE as EGLint,            egl::PBUFFER_BIT as EGLint,
                 egl::RENDERABLE_TYPE as EGLint,         egl::OPENGL_ES2_BIT as EGLint,
@@ -114,7 +116,7 @@ impl Device {
                                     .expect("Where's the `EGL_EXT_device_query` extension?");
             let result = eglQueryDeviceAttribEXT(
                 egl_device,
-                EGL_D3D11_DEVICE_ANGLE,
+                EGL_D3D11_DEVICE_ANGLE as EGLint,
                 &mut d3d11_device as *mut *mut ID3D11Device as *mut EGLAttrib);
             assert_ne!(result, egl::FALSE);
             assert!(!d3d11_device.is_null());
@@ -177,7 +179,7 @@ impl Device {
         }
 
         unsafe {
-            context.native_context.destroy(self);
+            context.native_context.destroy(self.native_display.egl_display());
         }
 
         Ok(())
@@ -208,15 +210,14 @@ impl Device {
                     let err = egl.GetError().to_windowing_api_error();
                     return Err(Error::MakeCurrentFailed(err));
                 }
-            });
-
-            Ok(())
+                Ok(())
+            })
         }
     }
 
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
-            context::make_no_context_current(self.native_display.egl_display()
+            context::make_no_context_current(self.native_display.egl_display())
         }
     }
 
@@ -232,7 +233,7 @@ impl Device {
             unsafe {
                 egl.GetCurrentContext() == context.native_context.egl_context()
             }
-        )}
+        })
     }
 
     fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {

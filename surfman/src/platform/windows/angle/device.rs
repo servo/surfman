@@ -9,6 +9,7 @@ use crate::egl;
 use crate::platform::generic::egl::device::{EGL_FUNCTIONS, NativeDisplay};
 use crate::platform::generic::egl::device::{OwnedEGLDisplay, UnsafeEGLDisplayRef};
 use crate::platform::generic::egl::ffi::{EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
+use crate::platform::generic::egl::ffi::{EGL_NO_DEVICE_EXT, EGL_PLATFORM_DEVICE_EXT};
 use crate::platform::generic;
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
@@ -59,7 +60,7 @@ impl Device {
                 EGL_EXTENSION_FUNCTIONS.CreateDeviceANGLE
                                        .expect("Where's the `EGL_ANGLE_device_creation` \
                                                 extension?");
-            let egl_device = eglCreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE,
+            let egl_device = eglCreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE as EGLint,
                                                   d3d11_device.as_raw() as *mut c_void,
                                                   ptr::null_mut());
             assert_ne!(egl_device, EGL_NO_DEVICE_EXT);

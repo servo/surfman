@@ -10,6 +10,10 @@ use std::mem;
 use std::os::raw::{c_char, c_void};
 
 #[cfg(target_os = "windows")]
+use winapi::shared::minwindef::HMODULE;
+#[cfg(target_os = "windows")]
+use winapi::shared::ntdef::LPCSTR;
+#[cfg(target_os = "windows")]
 use winapi::um::libloaderapi;
 #[cfg(not(target_os = "windows"))]
 use libc::{RTLD_LAZY, dlopen, dlsym};
@@ -20,9 +24,10 @@ thread_local! {
 
 #[cfg(target_os = "windows")]
 lazy_static! {
-    static ref EGL_LIBRARY: HMODULE = {
+    static ref EGL_LIBRARY: EGLLibraryWrapper = {
         unsafe {
-            libloaderapi::LoadLibraryA(&b"libEGL.dll\0"[0] as *const u8 as LPCSTR)
+            let module = libloaderapi::LoadLibraryA(&b"libEGL.dll\0"[0] as *const u8 as LPCSTR);
+            EGLLibraryWrapper(module)
         }
     };
 }
@@ -36,11 +41,12 @@ lazy_static! {
     };
 }
 
+#[cfg(target_os = "windows")]
+struct EGLLibraryWrapper(HMODULE);
 #[cfg(not(target_os = "windows"))]
 struct EGLLibraryWrapper(*mut c_void);
-#[cfg(not(target_os = "windows"))]
+
 unsafe impl Send for EGLLibraryWrapper {}
-#[cfg(not(target_os = "windows"))]
 unsafe impl Sync for EGLLibraryWrapper {}
 
 pub(crate) trait NativeDisplay {
@@ -103,7 +109,7 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
         let symbol_ptr = symbol_name.as_ptr() as *const u8 as LPCSTR;
-        libloaderapi::GetProcAddress(*EGL_LIBRARY, symbol_ptr) as *const c_void
+        libloaderapi::GetProcAddress(EGL_LIBRARY.0, symbol_ptr) as *const c_void
     }
 }
 
