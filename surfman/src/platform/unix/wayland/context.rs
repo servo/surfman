@@ -72,26 +72,28 @@ impl Device {
         /*
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        // Grab the current EGL display and EGL context.
-        let egl_display = EGL_FUNCTIONS.GetCurrentDisplay();
-        if egl_display == egl::NO_DISPLAY {
-            return Err(Error::NoCurrentContext);
-        }
-        let egl_context = EGL_FUNCTIONS.GetCurrentContext();
-        if egl_context == egl::NO_CONTEXT {
-            return Err(Error::NoCurrentContext);
-        }
-        let native_context = Box::new(UnsafeEGLContextRef { egl_context });
+        EGL_FUNCTIONS.with(|egl| {
+            // Grab the current EGL display and EGL context.
+            let egl_display = egl.GetCurrentDisplay();
+            if egl_display == egl::NO_DISPLAY {
+                return Err(Error::NoCurrentContext);
+            }
+            let egl_context = egl.GetCurrentContext();
+            if egl_context == egl::NO_CONTEXT {
+                return Err(Error::NoCurrentContext);
+            }
+            let native_context = Box::new(UnsafeEGLContextRef { egl_context });
 
-        // Create the context.
-        let mut context = Context {
-            native_context,
-            id: *next_context_id,
-            framebuffer: Framebuffer::External,
-        };
-        next_context_id.0 += 1;
+            // Create the context.
+            let mut context = Context {
+                native_context,
+                id: *next_context_id,
+                framebuffer: Framebuffer::External,
+            };
+            next_context_id.0 += 1;
 
-        Ok((device, context))
+            Ok((device, context))
+        });
         */
         unimplemented!()
     }
@@ -171,14 +173,17 @@ impl Device {
                     return Err(Error::ExternalRenderTarget)
                 }
             };
-            let result = EGL_FUNCTIONS.MakeCurrent(self.native_connection.egl_display(),
-                                                   egl_surface,
-                                                   egl_surface,
-                                                   context.native_context.egl_context());
-            if result == egl::FALSE {
-                let err = EGL_FUNCTIONS.GetError().to_windowing_api_error();
-                return Err(Error::MakeCurrentFailed(err));
-            }
+
+            EGL_FUNCTIONS.with(|egl| {
+                let result = egl.MakeCurrent(self.native_connection.egl_display(),
+                                             egl_surface,
+                                             egl_surface,
+                                             context.native_context.egl_context());
+                if result == egl::FALSE {
+                    let err = egl.GetError().to_windowing_api_error();
+                    return Err(Error::MakeCurrentFailed(err));
+                }
+            });
 
             Ok(())
         }
@@ -198,9 +203,11 @@ impl Device {
     }
 
     pub(crate) fn context_is_current(&self, context: &Context) -> bool {
-        unsafe {
-            EGL_FUNCTIONS.GetCurrentContext() == context.native_context.egl_context()
-        }
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
+                egl.GetCurrentContext() == context.native_context.egl_context()
+            }
+        })
     }
 
     fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {

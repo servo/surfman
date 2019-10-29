@@ -210,15 +210,17 @@ impl Device {
 
     pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
                                                   -> Result<(), Error> {
-        unsafe {
-            match surface.objects {
-                SurfaceObjects::Window { egl_surface } => {
-                    EGL_FUNCTIONS.SwapBuffers(self.native_display.egl_display(), egl_surface);
-                    Ok(())
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
+                match surface.objects {
+                    SurfaceObjects::Window { egl_surface } => {
+                        egl.SwapBuffers(self.native_display.egl_display(), egl_surface);
+                        Ok(())
+                    }
+                    SurfaceObjects::HardwareBuffer { .. } => Err(Error::NoWidgetAttached),
                 }
-                SurfaceObjects::HardwareBuffer { .. } => Err(Error::NoWidgetAttached),
             }
-        }
+        })
     }
 
     unsafe fn create_egl_image(&self, _: &Context, hardware_buffer: *mut AHardwareBuffer)
@@ -282,8 +284,10 @@ impl Device {
                     });
                 }
                 SurfaceObjects::Window { ref mut egl_surface } => {
-                    EGL_FUNCTIONS.DestroySurface(self.native_display.egl_display(), *egl_surface);
-                    *egl_surface = egl::NO_SURFACE;
+                    EGL_FUNCTIONS.with(|egl| {
+                        egl.DestroySurface(self.native_display.egl_display(), *egl_surface);
+                        *egl_surface = egl::NO_SURFACE;
+                    })
                 }
             }
         }

@@ -63,21 +63,21 @@ impl Connection {
             return Err(Error::ConnectionFailed);
         }
 
-        let egl_display = EGL_FUNCTIONS.GetDisplay(wayland_display as *const _);
-        if egl_display == egl::NO_DISPLAY {
-            return Err(Error::DeviceOpenFailed);
-        }
+        EGL_FUNCTIONS.with(|egl| {
+            let egl_display = egl.GetDisplay(wayland_display as *const _);
+            if egl_display == egl::NO_DISPLAY {
+                return Err(Error::DeviceOpenFailed);
+            }
 
-        let (mut egl_major_version, mut egl_minor_version) = (0, 0);
-        let ok = EGL_FUNCTIONS.Initialize(egl_display,
-                                          &mut egl_major_version,
-                                          &mut egl_minor_version);
+            let (mut egl_major_version, mut egl_minor_version) = (0, 0);
+            let ok = egl.Initialize(egl_display, &mut egl_major_version, &mut egl_minor_version);
+            assert_ne!(ok, egl::FALSE);
 
-        assert_ne!(ok, egl::FALSE);
-        let native_connection = Box::new(SharedConnection {
-            display: Arc::new(Display { wayland: wayland_display, egl: egl_display }),
-        });
-        Ok(Connection { native_connection })
+            let native_connection = Box::new(SharedConnection {
+                display: Arc::new(Display { wayland: wayland_display, egl: egl_display }),
+            });
+            Ok(Connection { native_connection })
+        })
     }
 }
 

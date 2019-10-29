@@ -83,61 +83,64 @@ impl Device {
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        // Grab the current EGL display and EGL context.
-        let egl_display = EGL_FUNCTIONS.GetCurrentDisplay();
-        if egl_display == egl::NO_DISPLAY {
-            return Err(Error::NoCurrentContext);
-        }
-        let egl_context = EGL_FUNCTIONS.GetCurrentContext();
-        if egl_context == egl::NO_CONTEXT {
-            return Err(Error::NoCurrentContext);
-        }
-        let native_context = Box::new(UnsafeEGLContextRef { egl_context });
+        EGL_FUNCTIONS.with(|egl| {
+            // Grab the current EGL display and EGL context.
+            let egl_display = egl.GetCurrentDisplay();
+            if egl_display == egl::NO_DISPLAY {
+                return Err(Error::NoCurrentContext);
+            }
+            let egl_context = egl.GetCurrentContext();
+            if egl_context == egl::NO_CONTEXT {
+                return Err(Error::NoCurrentContext);
+            }
+            let native_context = Box::new(UnsafeEGLContextRef { egl_context });
 
-        // Fetch the EGL device.
-        let mut egl_device = EGL_NO_DEVICE_EXT;
-        let eglQueryDisplayAttribEXT =
-            EGL_EXTENSION_FUNCTIONS.QueryDisplayAttribEXT
-                                   .expect("Where's the `EGL_EXT_device_query` extension?");
-        let result = eglQueryDisplayAttribEXT(
-            egl_display,
-            EGL_DEVICE_EXT as EGLint,
-            &mut egl_device as *mut EGLDeviceEXT as *mut EGLAttrib);
-        assert_ne!(result, egl::FALSE);
-        debug_assert_ne!(egl_device, EGL_NO_DEVICE_EXT);
+            // Fetch the EGL device.
+            let mut egl_device = EGL_NO_DEVICE_EXT;
+            let eglQueryDisplayAttribEXT =
+                EGL_EXTENSION_FUNCTIONS.QueryDisplayAttribEXT
+                                    .expect("Where's the `EGL_EXT_device_query` extension?");
+            let result = eglQueryDisplayAttribEXT(
+                egl_display,
+                EGL_DEVICE_EXT as EGLint,
+                &mut egl_device as *mut EGLDeviceEXT as *mut EGLAttrib);
+            assert_ne!(result, egl::FALSE);
+            debug_assert_ne!(egl_device, EGL_NO_DEVICE_EXT);
 
-        // Fetch the D3D11 device.
-        let mut d3d11_device: *mut ID3D11Device = ptr::null_mut();
-        let eglQueryDeviceAttribEXT =
-            EGL_EXTENSION_FUNCTIONS.QueryDeviceAttribEXT
-                                   .expect("Where's the `EGL_EXT_device_query` extension?");
-        let result = eglQueryDeviceAttribEXT(
-            egl_device,
-            EGL_D3D11_DEVICE_ANGLE,
-            &mut d3d11_device as *mut *mut ID3D11Device as *mut EGLAttrib);
-        assert_ne!(result, egl::FALSE);
-        assert!(!d3d11_device.is_null());
-        let d3d11_device = ComPtr::from_raw(d3d11_device);
+            // Fetch the D3D11 device.
+            let mut d3d11_device: *mut ID3D11Device = ptr::null_mut();
+            let eglQueryDeviceAttribEXT =
+                EGL_EXTENSION_FUNCTIONS.QueryDeviceAttribEXT
+                                    .expect("Where's the `EGL_EXT_device_query` extension?");
+            let result = eglQueryDeviceAttribEXT(
+                egl_device,
+                EGL_D3D11_DEVICE_ANGLE,
+                &mut d3d11_device as *mut *mut ID3D11Device as *mut EGLAttrib);
+            assert_ne!(result, egl::FALSE);
+            assert!(!d3d11_device.is_null());
+            let d3d11_device = ComPtr::from_raw(d3d11_device);
 
-        // Create the device wrapper.
-        // FIXME(pcwalton): Using `D3D_DRIVER_TYPE_UNKNOWN` is unfortunate. Perhaps we should
-        // detect the "Microsoft Basic" string and switch to `D3D_DRIVER_TYPE_WARP` as appropriate.
-        let device = Device {
-            native_display: Box::new(OwnedEGLDisplay { egl_display }),
-            egl_device,
-            d3d11_device,
-            d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
-        };
+            // Create the device wrapper.
+            // FIXME(pcwalton): Using `D3D_DRIVER_TYPE_UNKNOWN` is unfortunate. Perhaps we should
+            // detect the "Microsoft Basic" string and switch to `D3D_DRIVER_TYPE_WARP` as
+            // appropriate.
+            let device = Device {
+                native_display: Box::new(OwnedEGLDisplay { egl_display }),
+                egl_device,
+                d3d11_device,
+                d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
+            };
 
-        // Create the context.
-        let mut context = Context {
-            native_context,
-            id: *next_context_id,
-            framebuffer: Framebuffer::External,
-        };
-        next_context_id.0 += 1;
+            // Create the context.
+            let mut context = Context {
+                native_context,
+                id: *next_context_id,
+                framebuffer: Framebuffer::External,
+            };
+            next_context_id.0 += 1;
 
-        Ok((device, context))
+            Ok((device, context))
+        })
     }
 
     pub fn create_context(&mut self,
@@ -195,14 +198,17 @@ impl Device {
                     return Err(Error::ExternalRenderTarget)
                 }
             };
-            let result = EGL_FUNCTIONS.MakeCurrent(self.native_display.egl_display(),
-                                                   egl_surface,
-                                                   egl_surface,
-                                                   context.native_context.egl_context());
-            if result == egl::FALSE {
-                let err = EGL_FUNCTIONS.GetError().to_windowing_api_error();
-                return Err(Error::MakeCurrentFailed(err));
-            }
+
+            EGL_FUNCTIONS.with(|egl| {
+                let result = egl.MakeCurrent(self.native_display.egl_display(),
+                                             egl_surface,
+                                             egl_surface,
+                                             context.native_context.egl_context());
+                if result == egl::FALSE {
+                    let err = egl.GetError().to_windowing_api_error();
+                    return Err(Error::MakeCurrentFailed(err));
+                }
+            });
 
             Ok(())
         }
@@ -222,9 +228,11 @@ impl Device {
     }
 
     pub(crate) fn context_is_current(&self, context: &Context) -> bool {
-        unsafe {
-            EGL_FUNCTIONS.GetCurrentContext() == context.native_context.egl_context()
-        }
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
+                egl.GetCurrentContext() == context.native_context.egl_context()
+            }
+        )}
     }
 
     fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {

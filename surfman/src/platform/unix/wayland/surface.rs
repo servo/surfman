@@ -166,17 +166,19 @@ impl Device {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
-        let egl_surface = EGL_FUNCTIONS.CreateWindowSurface(self.native_connection.egl_display(),
-                                                            egl_config,
-                                                            egl_window as *const c_void,
-                                                            ptr::null());
-        assert_ne!(egl_surface, egl::NO_SURFACE);
+        EGL_FUNCTIONS.with(|egl| {
+            let egl_surface = egl.CreateWindowSurface(self.native_connection.egl_display(),
+                                                      egl_config,
+                                                      egl_window as *const c_void,
+                                                      ptr::null());
+            assert_ne!(egl_surface, egl::NO_SURFACE);
 
-        Ok(Surface {
-            context_id: context.id,
-            size: *size,
-            wayland_objects: WaylandObjects::Window { egl_window, egl_surface },
-            destroyed: false,
+            Ok(Surface {
+                context_id: context.id,
+                size: *size,
+                wayland_objects: WaylandObjects::Window { egl_window, egl_surface },
+                destroyed: false,
+            })
         })
     }
 
@@ -228,9 +230,10 @@ impl Device {
                     });
                 }
                 WaylandObjects::Window { ref mut egl_surface, ref mut egl_window } => {
-                    EGL_FUNCTIONS.DestroySurface(self.native_connection.egl_display(),
-                                                 *egl_surface);
-                    *egl_surface = egl::NO_SURFACE;
+                    EGL_FUNCTIONS.with(|egl| {
+                        egl.DestroySurface(self.native_connection.egl_display(), *egl_surface);
+                        *egl_surface = egl::NO_SURFACE;
+                    });
 
                     (WAYLAND_EGL_HANDLE.wl_egl_window_destroy)(*egl_window);
                     *egl_window = ptr::null_mut();
@@ -262,7 +265,9 @@ impl Device {
         unsafe {
             match surface.wayland_objects {
                 WaylandObjects::Window { egl_surface, .. } => {
-                    EGL_FUNCTIONS.SwapBuffers(self.native_connection.egl_display(), egl_surface);
+                    EGL_FUNCTIONS.with(|egl| {
+                        egl.SwapBuffers(self.native_connection.egl_display(), egl_surface);
+                    });
                     Ok(())
                 }
                 WaylandObjects::TextureImage { .. } => Err(Error::NoWidgetAttached),

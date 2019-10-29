@@ -61,9 +61,12 @@ impl NativeDisplay for OwnedEGLDisplay {
 
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
-        let result = EGL_FUNCTIONS.Terminate(self.egl_display);
-        assert_ne!(result, egl::FALSE);
-        self.egl_display = egl::NO_DISPLAY;
+
+        EGL_FUNCTIONS.with(|egl| {
+            let result = egl.Terminate(self.egl_display);
+            assert_ne!(result, egl::FALSE);
+            self.egl_display = egl::NO_DISPLAY;
+        })
     }
 }
 

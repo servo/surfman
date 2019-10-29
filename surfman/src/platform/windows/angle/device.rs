@@ -65,21 +65,23 @@ impl Device {
                                                   ptr::null_mut());
             assert_ne!(egl_device, EGL_NO_DEVICE_EXT);
 
-            let attribs = [egl::NONE as EGLAttrib, egl::NONE as EGLAttrib, 0, 0];
-            let egl_display = EGL_FUNCTIONS.GetPlatformDisplay(EGL_PLATFORM_DEVICE_EXT,
-                                                               egl_device as *mut c_void,
-                                                               &attribs[0]);
-            assert_ne!(egl_display, egl::NO_DISPLAY);
-            let native_display = Box::new(OwnedEGLDisplay { egl_display });
+            EGL_FUNCTIONS.with(|egl| {
+                let attribs = [egl::NONE as EGLAttrib, egl::NONE as EGLAttrib, 0, 0];
+                let egl_display = egl.GetPlatformDisplay(EGL_PLATFORM_DEVICE_EXT,
+                                                         egl_device as *mut c_void,
+                                                         &attribs[0]);
+                assert_ne!(egl_display, egl::NO_DISPLAY);
+                let native_display = Box::new(OwnedEGLDisplay { egl_display });
 
-            // I don't think this should ever fail.
-            let (mut major_version, mut minor_version) = (0, 0);
-            let result = EGL_FUNCTIONS.Initialize(native_display.egl_display(),
-                                                  &mut major_version,
-                                                  &mut minor_version);
-            assert_ne!(result, egl::FALSE);
+                // I don't think this should ever fail.
+                let (mut major_version, mut minor_version) = (0, 0);
+                let result = egl.Initialize(native_display.egl_display(),
+                                            &mut major_version,
+                                            &mut minor_version);
+                assert_ne!(result, egl::FALSE);
 
-            Ok(Device { native_display, egl_device, d3d11_device, d3d_driver_type })
+                Ok(Device { native_display, egl_device, d3d11_device, d3d_driver_type })
+            })
         }
     }
 
