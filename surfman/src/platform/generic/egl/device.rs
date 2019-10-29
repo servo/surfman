@@ -4,7 +4,6 @@
 
 use crate::egl::types::EGLDisplay;
 use crate::egl::{self, Egl};
-use super::ffi::EGL_FUNCTIONS;
 
 use std::ffi::CString;
 use std::mem;
@@ -21,7 +20,7 @@ thread_local! {
 
 #[cfg(target_os = "windows")]
 lazy_static! {
-    static EGL_LIBRARY: HMODULE = {
+    static ref EGL_LIBRARY: HMODULE = {
         unsafe {
             libloaderapi::LoadLibraryA(&b"libEGL.dll\0"[0] as *const u8 as LPCSTR)
         }
@@ -30,12 +29,19 @@ lazy_static! {
 
 #[cfg(not(target_os = "windows"))]
 lazy_static! {
-    static EGL_LIBRARY: *mut c_void = {
+    static ref EGL_LIBRARY: EGLLibraryWrapper = {
         unsafe {
-            dlopen(&b"libEGL.so\0"[0], RTLD_LAZY)
+            EGLLibraryWrapper(dlopen(&b"libEGL.so\0"[0] as *const u8 as *const i8, RTLD_LAZY))
         }
     };
 }
+
+#[cfg(not(target_os = "windows"))]
+struct EGLLibraryWrapper(*mut c_void);
+#[cfg(not(target_os = "windows"))]
+unsafe impl Send for EGLLibraryWrapper {}
+#[cfg(not(target_os = "windows"))]
+unsafe impl Sync for EGLLibraryWrapper {}
 
 pub(crate) trait NativeDisplay {
     fn egl_display(&self) -> EGLDisplay;
@@ -93,23 +99,25 @@ impl NativeDisplay for UnsafeEGLDisplayRef {
 }
 
 #[cfg(target_os = "windows")]
-fn get_proc_address(symbol_name: &str) -> *mut c_void {
+fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
         let symbol_ptr = symbol_name.as_ptr() as *const u8 as LPCSTR;
-        libloaderapi::GetProcAddress(*EGL_LIBRARY, symbol_ptr) as *mut c_void
+        libloaderapi::GetProcAddress(*EGL_LIBRARY, symbol_ptr) as *const c_void
     }
 }
 
 #[cfg(not(target_os = "windows"))]
-fn get_proc_address(symbol_name: &str) -> *mut c_void {
+fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
         let symbol_ptr = symbol_name.as_ptr() as *const u8 as *const i8;
-        dlsym(library, symbol_ptr) as *mut c_void
+        dlsym(EGL_LIBRARY.0, symbol_ptr) as *const c_void
     }
 }
 
 pub(crate) unsafe fn lookup_egl_extension(name: &'static [u8]) -> *mut c_void {
-    mem::transmute(egl::GetProcAddress(&name[0] as *const u8 as *const c_char))
+    EGL_FUNCTIONS.with(|egl| {
+        mem::transmute(egl.GetProcAddress(&name[0] as *const u8 as *const c_char))
+    })
 }

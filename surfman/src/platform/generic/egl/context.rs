@@ -5,8 +5,8 @@
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
+use super::device::EGL_FUNCTIONS;
 use super::error::ToWindowingApiError;
-use super::ffi::EGL_FUNCTIONS;
 
 use std::ffi::CString;
 use std::os::raw::{c_char, c_void};
@@ -248,8 +248,8 @@ pub(crate) unsafe fn make_no_context_current(egl_display: EGLDisplay) -> Result<
             let err = egl.GetError().to_windowing_api_error();
             return Err(Error::MakeCurrentFailed(err));
         }
-    });
-    Ok(())
+        Ok(())
+    })
 }
 
 pub(crate) unsafe fn get_config_attr(egl_display: EGLDisplay, egl_config: EGLConfig, attr: EGLint)

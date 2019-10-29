@@ -1,13 +1,11 @@
 // surfman/surfman/src/platform/unix/wayland/connection.rs
 //
 //! A wrapper for Wayland connections (displays).
-//! 
-//! TODO(pcwalton): Looks like we'll need a `Connection::from_winit_window()`.
 
 use crate::Error;
 use crate::egl::types::EGLDisplay;
 use crate::egl;
-use crate::platform::generic::egl::ffi::EGL_FUNCTIONS;
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 
 use std::ptr;
 use std::sync::Arc;

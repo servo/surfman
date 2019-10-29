@@ -5,7 +5,7 @@
 use crate::context::ContextID;
 use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
-use crate::platform::generic::egl::ffi::EGL_FUNCTIONS;
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic;
 use crate::renderbuffers::Renderbuffers;

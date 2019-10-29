@@ -9,8 +9,8 @@ use crate::gl::Gl;
 use crate::gl::types::GLuint;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::platform::generic::egl::ffi::EGL_FUNCTIONS;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::device::Device;
@@ -183,9 +183,8 @@ impl Device {
                     let err = egl.GetError().to_windowing_api_error();
                     return Err(Error::MakeCurrentFailed(err));
                 }
-            });
-
-            Ok(())
+                Ok(())
+            })
         }
     }
 
