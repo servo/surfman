@@ -16,7 +16,12 @@ pub use macos as default;
 
 #[cfg(unix)]
 pub mod unix;
-#[cfg(all(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))),
+#[cfg(all(feature = "sm-wayland-default",
+          any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))),
+          not(feature = "sm-osmesa-default")))]
+pub use unix::wayland as default;
+#[cfg(all(not(feature = "sm-wayland-default"),
+          any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))),
           not(feature = "sm-osmesa-default")))]
 pub use unix::x11 as default;
 

@@ -1,8 +1,8 @@
-// surfman/surfman/src/platform/unix/x11/adapter.rs
+// surfman/surfman/src/platform/unix/wayland/adapter.rs
 //
-//! A wrapper for X11 adapters.
+//! A wrapper for Wayland adapters.
 //! 
-//! These are no-ops, since we don't support multi-GPU on X11 yet.
+//! These are no-ops, since we don't support multi-GPU on Wayland yet.
 
 use crate::Error;
 
@@ -24,7 +24,7 @@ impl Adapter {
 
     /// Returns the "best" software adapter on this system.
     ///
-    /// The X11 backend has no software support, so this returns an error. You can use the
+    /// The Wayland backend has no software support, so this returns an error. You can use the
     /// universal backend to get a software adapter.
     ///
     /// TODO(pcwalton): If Mesa is in use, maybe we could use `llvmpipe` somehow?

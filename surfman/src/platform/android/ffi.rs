@@ -1,4 +1,4 @@
-// surfman/src/platform/android/ffi.rs
+// surfman/surfman/src/platform/android/ffi.rs
 
 use std::os::raw::c_int;
 

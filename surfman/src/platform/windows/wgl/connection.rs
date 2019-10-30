@@ -6,6 +6,9 @@
 
 use crate::Error;
 
+#[cfg(feature = "sm-winit")]
+use winit::Window;
+
 /// A no-op connection.
 #[derive(Clone)]
 pub struct Connection;
@@ -15,5 +18,10 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         Ok(Connection)
+    }
+
+    #[cfg(feature = "sm-winit")]
+    pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
+        Connection::new()
     }
 }

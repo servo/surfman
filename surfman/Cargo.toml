@@ -23,6 +23,7 @@ sm-angle-default = ["sm-angle"]
 sm-osmesa = ["osmesa-sys"]
 sm-osmesa-default = ["sm-osmesa"]
 sm-no-wgl = ["sm-angle-default"]
+sm-wayland-default = []
 sm-winit = ["winit"]
 sm-x11 = ["x11"]
 
@@ -59,6 +60,10 @@ display-link = "0.2"
 io-surface = "0.12"
 mach = "0.3"
 objc = "0.2"
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.wayland-sys]
+version = "0.24"
+features = ["client", "dlopen", "egl"]
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
 version = "2.3.0"

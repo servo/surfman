@@ -320,7 +320,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
+    pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
@@ -371,9 +371,7 @@ impl NativeWidget {
     #[cfg(feature = "sm-winit")]
     #[inline]
     pub fn from_winit_window(window: &WinitWindow) -> NativeWidget {
-        unsafe {
-            NativeWidget { window: window.get_xlib_window().expect("Where's the X11 window?") }
-        }
+        NativeWidget { window: window.get_xlib_window().expect("Where's the X11 window?") }
     }
 }
 

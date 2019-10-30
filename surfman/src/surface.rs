@@ -57,6 +57,7 @@ pub enum SurfaceType<NativeWidget> {
 }
 
 impl SurfaceAccess {
+    #[allow(dead_code)]
     #[inline]
     pub(crate) fn cpu_access_allowed(self) -> bool {
         match self {

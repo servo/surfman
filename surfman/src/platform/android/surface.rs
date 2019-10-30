@@ -1,16 +1,23 @@
-// surfman/src/platform/android/surface.rs
-
-//! Surface management for Android using the `GraphicBuffer` class and
-//! EGL.
+// surfman/surfman/src/platform/android/surface.rs
+//
+//! Surface management for Android using the `GraphicBuffer` class and EGL.
 
 use crate::context::ContextID;
-use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};
-use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::egl::types::{EGLSurface, EGLint};
+use crate::gl::types::{GLenum, GLuint};
+use crate::gl_utils;
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGLImageKHR;
+use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
+use crate::platform::generic::egl::ffi::EGL_NATIVE_BUFFER_ANDROID;
+use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
+use crate::platform::generic;
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
 use crate::{egl, gl};
 use super::context::{Context, GL_FUNCTIONS};
-use super::device::{Device, EGL_EXTENSION_FUNCTIONS};
+use super::device::Device;
 use super::ffi::{AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM, AHARDWAREBUFFER_USAGE_CPU_READ_NEVER};
 use super::ffi::{AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER, AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER};
 use super::ffi::{AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE, AHardwareBuffer, AHardwareBuffer_Desc};
@@ -24,10 +31,10 @@ use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
 
+pub use crate::platform::generic::egl::context::ContextDescriptor;
+
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
-
-const EGL_NATIVE_BUFFER_ANDROID: EGLenum = 0x3140;
 
 pub struct Surface {
     pub(crate) context_id: ContextID,
@@ -122,21 +129,18 @@ impl Device {
                 let egl_image = self.create_egl_image(context, hardware_buffer);
 
                 // Initialize and bind the image to the texture.
-                let texture_object = self.bind_to_gl_texture(egl_image);
+                let texture_object =
+                    generic::egl::surface::bind_egl_image_to_gl_texture(gl, egl_image);
 
                 // Create the framebuffer, and bind the texture to it.
-                let mut framebuffer_object = 0;
-                gl.GenFramebuffers(1, &mut framebuffer_object);
-                gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-                gl.FramebufferTexture2D(gl::FRAMEBUFFER,
-                                        gl::COLOR_ATTACHMENT0,
-                                        SURFACE_GL_TEXTURE_TARGET,
-                                        texture_object,
-                                        0);
+                let framebuffer_object =
+                    gl_utils::create_and_bind_framebuffer(gl,
+                                                          SURFACE_GL_TEXTURE_TARGET,
+                                                          texture_object);
 
+                // Bind renderbuffers as appropriate.
                 let context_descriptor = self.context_descriptor(context);
                 let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-
                 let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
                 renderbuffers.bind_to_current_framebuffer(gl);
 
@@ -169,17 +173,19 @@ impl Device {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
-        let egl_surface = egl::CreateWindowSurface(self.native_display.egl_display(),
-                                                   egl_config,
-                                                   native_window as *const c_void,
-                                                   ptr::null());
-        assert_ne!(egl_surface, egl::NO_SURFACE);
+        EGL_FUNCTIONS.with(|egl| {
+            let egl_surface = egl.CreateWindowSurface(self.native_display.egl_display(),
+                                                      egl_config,
+                                                      native_window as *const c_void,
+                                                      ptr::null());
+            assert_ne!(egl_surface, egl::NO_SURFACE);
 
-        Ok(Surface {
-            context_id: context.id,
-            size: Size2D::new(width, height),
-            objects: SurfaceObjects::Window { egl_surface },
-            destroyed: false,
+            Ok(Surface {
+                context_id: context.id,
+                size: Size2D::new(width, height),
+                objects: SurfaceObjects::Window { egl_surface },
+                destroyed: false,
+            })
         })
     }
 
@@ -189,14 +195,18 @@ impl Device {
             match surface.objects {
                 SurfaceObjects::Window { .. } => return Err(Error::WidgetAttached),
                 SurfaceObjects::HardwareBuffer { hardware_buffer, .. } => {
-                    let _guard = self.temporarily_make_context_current(context)?;
-                    let local_egl_image = self.create_egl_image(context, hardware_buffer);
-                    let texture_object = self.bind_to_gl_texture(local_egl_image);
-                    Ok(SurfaceTexture {
-                        surface,
-                        local_egl_image,
-                        texture_object,
-                        phantom: PhantomData,
+                    GL_FUNCTIONS.with(|gl| {
+                        let _guard = self.temporarily_make_context_current(context)?;
+                        let local_egl_image = self.create_egl_image(context, hardware_buffer);
+                        let texture_object = generic::egl::surface::bind_egl_image_to_gl_texture(
+                            gl,
+                            local_egl_image);
+                        Ok(SurfaceTexture {
+                            surface,
+                            local_egl_image,
+                            texture_object,
+                            phantom: PhantomData,
+                        })
                     })
                 }
             }
@@ -209,55 +219,43 @@ impl Device {
 
     pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
                                                   -> Result<(), Error> {
-        unsafe {
-            match surface.objects {
-                SurfaceObjects::Window { egl_surface } => {
-                    egl::SwapBuffers(self.native_display.egl_display(), egl_surface);
-                    Ok(())
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
+                match surface.objects {
+                    SurfaceObjects::Window { egl_surface } => {
+                        egl.SwapBuffers(self.native_display.egl_display(), egl_surface);
+                        Ok(())
+                    }
+                    SurfaceObjects::HardwareBuffer { .. } => Err(Error::NoWidgetAttached),
                 }
-                SurfaceObjects::HardwareBuffer { .. } => Err(Error::NoWidgetAttached),
             }
-        }
+        })
     }
 
+    #[allow(non_snake_case)]
     unsafe fn create_egl_image(&self, _: &Context, hardware_buffer: *mut AHardwareBuffer)
                                -> EGLImageKHR {
         // Get the native client buffer.
+        let eglGetNativeClientBufferANDROID =
+            EGL_EXTENSION_FUNCTIONS.GetNativeClientBufferANDROID
+                                   .expect("Where's the `EGL_ANDROID_get_native_client_buffer` \
+                                            extension?");
         let client_buffer =
-            (EGL_EXTENSION_FUNCTIONS.GetNativeClientBufferANDROID)(hardware_buffer);
+            eglGetNativeClientBufferANDROID(hardware_buffer as *const AHardwareBuffer as *const _);
         assert!(!client_buffer.is_null());
 
         // Create the EGL image.
         let egl_image_attributes = [
-            egl::IMAGE_PRESERVED_KHR as EGLint, egl::TRUE as EGLint,
+            EGL_IMAGE_PRESERVED_KHR as EGLint,  egl::TRUE as EGLint,
             egl::NONE as EGLint,                0,
         ];
-        let egl_image = egl::CreateImageKHR(self.native_display.egl_display(),
-                                            egl::NO_CONTEXT,
-                                            EGL_NATIVE_BUFFER_ANDROID,
-                                            client_buffer,
-                                            egl_image_attributes.as_ptr());
-        assert_ne!(egl_image, egl::NO_IMAGE_KHR);
+        let egl_image = (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(self.native_display.egl_display(),
+                                                                 egl::NO_CONTEXT,
+                                                                 EGL_NATIVE_BUFFER_ANDROID,
+                                                                 client_buffer,
+                                                                 egl_image_attributes.as_ptr());
+        assert_ne!(egl_image, EGL_NO_IMAGE_KHR);
         egl_image
-    }
-
-    unsafe fn bind_to_gl_texture(&self, egl_image: EGLImageKHR) -> GLuint {
-        GL_FUNCTIONS.with(|gl| {
-            let mut texture = 0;
-            gl.GenTextures(1, &mut texture);
-            debug_assert_ne!(texture, 0);
-
-            gl.BindTexture(gl::TEXTURE_2D, texture);
-            (EGL_EXTENSION_FUNCTIONS.ImageTargetTexture2DOES)(gl::TEXTURE_2D, egl_image);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-            gl.BindTexture(gl::TEXTURE_2D, 0);
-
-            debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
-            texture
-        })
     }
 
     pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
@@ -286,18 +284,21 @@ impl Device {
                         gl.DeleteTextures(1, texture_object);
                         *texture_object = 0;
 
-                        let result = egl::DestroyImageKHR(self.native_display.egl_display(),
-                                                          *egl_image);
+                        let egl_display = self.native_display.egl_display();
+                        let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
+                                                                               *egl_image);
                         assert_ne!(result, egl::FALSE);
-                        *egl_image = egl::NO_IMAGE_KHR;
+                        *egl_image = EGL_NO_IMAGE_KHR;
 
                         AHardwareBuffer_release(*hardware_buffer);
                         *hardware_buffer = ptr::null_mut();
                     });
                 }
                 SurfaceObjects::Window { ref mut egl_surface } => {
-                    egl::DestroySurface(self.native_display.egl_display(), *egl_surface);
-                    *egl_surface = egl::NO_SURFACE;
+                    EGL_FUNCTIONS.with(|egl| {
+                        egl.DestroySurface(self.native_display.egl_display(), *egl_surface);
+                        *egl_surface = egl::NO_SURFACE;
+                    })
                 }
             }
         }
@@ -316,10 +317,12 @@ impl Device {
                 gl.DeleteTextures(1, &surface_texture.texture_object);
                 surface_texture.texture_object = 0;
 
-                let result = egl::DestroyImageKHR(self.native_display.egl_display(),
-                                                  surface_texture.local_egl_image);
+                let egl_display = self.native_display.egl_display();
+                let result =
+                    (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
+                                                              surface_texture.local_egl_image);
                 assert_ne!(result, egl::FALSE);
-                surface_texture.local_egl_image = egl::NO_IMAGE_KHR;
+                surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
             }
 
             Ok(surface_texture.surface)
