@@ -216,7 +216,7 @@ impl Device {
 
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
-            context::make_no_context_current(self.native_display.egl_display()
+            context::make_no_context_current(self.native_display.egl_display())
         }
     }
 

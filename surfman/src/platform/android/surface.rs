@@ -3,10 +3,11 @@
 //! Surface management for Android using the `GraphicBuffer` class and EGL.
 
 use crate::context::ContextID;
-use crate::egl::types::{EGLImageKHR, EGLSurface, EGLenum, EGLint};
+use crate::egl::types::{EGLSurface, EGLenum, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::gl_utils;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
-use crate::platform::generic::egl::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
+use crate::platform::generic::egl::ffi::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic;
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
@@ -25,6 +26,8 @@ use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
+
+pub use crate::platform::generic::egl::context::ContextDescriptor;
 
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
@@ -166,17 +169,19 @@ impl Device {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
-        let egl_surface = EGL_FUNCTIONS::CreateWindowSurface(self.native_display.egl_display(),
-                                                             egl_config,
-                                                             native_window as *const c_void,
-                                                             ptr::null());
-        assert_ne!(egl_surface, egl::NO_SURFACE);
+        EGL_FUNCTIONS.with(|egl| {
+            let egl_surface = egl.CreateWindowSurface(self.native_display.egl_display(),
+                                                      egl_config,
+                                                      native_window as *const c_void,
+                                                      ptr::null());
+            assert_ne!(egl_surface, egl::NO_SURFACE);
 
-        Ok(Surface {
-            context_id: context.id,
-            size: Size2D::new(width, height),
-            objects: SurfaceObjects::Window { egl_surface },
-            destroyed: false,
+            Ok(Surface {
+                context_id: context.id,
+                size: Size2D::new(width, height),
+                objects: SurfaceObjects::Window { egl_surface },
+                destroyed: false,
+            })
         })
     }
 
@@ -308,8 +313,8 @@ impl Device {
 
                 let egl_display = self.native_display.egl_display();
                 let result =
-                    EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
-                                                             surface_texture.local_egl_image);
+                    (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
+                                                              surface_texture.local_egl_image);
                 assert_ne!(result, egl::FALSE);
                 surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
             }
