@@ -19,11 +19,15 @@ impl Context {
 }
 
 bitflags! {
+    // These roughly correspond to:
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
+    //
+    // There are some extra `surfman`-specific flags as well.
     pub struct ContextAttributeFlags: u8 {
-        const ALPHA   = 0x01;
-        const DEPTH   = 0x02;
-        const STENCIL = 0x04;
+        const ALPHA                 = 0x01;
+        const DEPTH                 = 0x02;
+        const STENCIL               = 0x04;
+        const COMPATIBILITY_PROFILE = 0x08;
     }
 }
 

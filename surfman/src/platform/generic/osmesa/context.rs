@@ -66,7 +66,14 @@ impl Device {
         let format = if flags.contains(ContextAttributeFlags::ALPHA) { gl::RGBA } else { gl::RGB };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 }; 
-        let profile = if attributes.version.major < 3 { OSMESA_COMPAT_PROFILE } else { OSMESA_CORE_PROFILE };
+
+        let profile = if flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE) ||
+                attributes.version.major < 3 {
+            OSMESA_COMPAT_PROFILE
+        } else {
+            OSMESA_CORE_PROFILE
+        };
+
         Ok(ContextDescriptor {
             attributes: Arc::new(vec![
                 OSMESA_FORMAT,                  format as i32,

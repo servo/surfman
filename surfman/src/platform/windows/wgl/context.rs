@@ -107,6 +107,7 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
 pub struct ContextDescriptor {
     pixel_format: c_int,
     gl_version: GLVersion,
+    compatibility_profile: bool,
 }
 
 pub struct Context {
@@ -151,6 +152,7 @@ impl Device {
         let alpha_bits   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
         let depth_bits   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_bits = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
+        let compatibility_profile = flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE);
 
         let attrib_i_list = [
             WGL_DRAW_TO_WINDOW_ARB as c_int, gl::TRUE as c_int,
@@ -186,7 +188,11 @@ impl Device {
                 return Err(Error::NoPixelFormatFound);
             }
 
-            Ok(ContextDescriptor { pixel_format, gl_version: attributes.version })
+            Ok(ContextDescriptor {
+                pixel_format,
+                gl_version: attributes.version,
+                compatibility_profile,
+            })
         }
     }
 
@@ -265,11 +271,15 @@ impl Device {
                 assert_ne!(ok, FALSE);
 
                 // Make the context.
+                let profile_mask = if descriptor.compatibility_profile {
+                    WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB
+                } else {
+                    WGL_CONTEXT_CORE_PROFILE_BIT_ARB
+                };
                 let wgl_attributes = [
                     WGL_CONTEXT_MAJOR_VERSION_ARB as c_int, descriptor.gl_version.major as c_int,
                     WGL_CONTEXT_MINOR_VERSION_ARB as c_int, descriptor.gl_version.minor as c_int,
-                    WGL_CONTEXT_PROFILE_MASK_ARB as c_int,
-                        WGL_CONTEXT_CORE_PROFILE_BIT_ARB as c_int,
+                    WGL_CONTEXT_PROFILE_MASK_ARB as c_int,  profile_mask as c_int,
                     0,
                 ];
                 glrc = wglCreateContextAttribsARB(dc, ptr::null_mut(), wgl_attributes.as_ptr());
