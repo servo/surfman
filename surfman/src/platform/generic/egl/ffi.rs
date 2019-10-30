@@ -22,6 +22,7 @@ pub const EGL_NATIVE_BUFFER_ANDROID:             EGLenum = 0x3140;
 pub const EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE: EGLenum = 0x3200;
 pub const EGL_D3D11_DEVICE_ANGLE:                EGLenum = 0x33a1;
 pub const EGL_DXGI_KEYED_MUTEX_ANGLE:            EGLenum = 0x33a2;
+pub const EGL_D3D_TEXTURE_ANGLE:                 EGLenum = 0x33a3;
 
 pub const EGL_NO_DEVICE_EXT: EGLDeviceEXT = 0 as EGLDeviceEXT;
 pub const EGL_NO_IMAGE_KHR: EGLImageKHR = 0 as EGLImageKHR;

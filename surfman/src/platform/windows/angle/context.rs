@@ -17,8 +17,7 @@ use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
 use crate::{SurfaceID, SurfaceType};
 use super::adapter::Adapter;
-use super::device::{Device, EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
-use super::device::{EGL_NO_DEVICE_EXT, OwnedEGLDisplay};
+use super::device::Device;
 use super::surface::{NativeWidget, Surface, SurfaceTexture, Win32Objects};
 
 use euclid::default::Size2D;
@@ -127,7 +126,6 @@ impl Device {
             // appropriate.
             let device = Device {
                 native_display: Box::new(OwnedEGLDisplay { egl_display }),
-                egl_device,
                 d3d11_device,
                 d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
             };

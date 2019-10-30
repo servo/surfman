@@ -336,6 +336,7 @@ impl Device {
             let pixel_format = wingdi::GetPixelFormat(dc_guard.dc);
 
             let _guard = self.temporarily_make_context_current(context);
+
             let version_string = context.gl.GetString(gl::VERSION) as *const c_char;
             let version_string = CStr::from_ptr(version_string).to_string_lossy();
             let mut version_string_iter = version_string.split(".");
@@ -349,9 +350,16 @@ impl Device {
                                    .expect("Where's the minor GL version?")
                                    .parse()
                                    .expect("Couldn't parse the minor GL version!");
+
+            let mut context_profile_mask = 0;
+            context.gl.GetIntegerv(gl::CONTEXT_PROFILE_MASK, &mut context_profile_mask);
+            let compatibility_profile =
+                (context_profile_mask & gl::CONTEXT_COMPATIBILITY_PROFILE_BIT as i32) != 0;
+
             ContextDescriptor {
                 pixel_format,
                 gl_version: GLVersion::new(major_version, minor_version),
+                compatibility_profile,
             }
         }
     }

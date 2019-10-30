@@ -7,6 +7,7 @@ use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_DXGI_KEYED_MUTEX_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
@@ -102,7 +103,10 @@ impl Device {
         }
     }
 
-    fn create_pbuffer_surface(&mut self, context: &Context, size: &Size2D<i32>, share_handle: Option<HandleOrTexture>)
+    fn create_pbuffer_surface(&mut self,
+                              context: &Context,
+                              size: &Size2D<i32>,
+                              share_handle: Option<HandleOrTexture>)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -157,7 +161,10 @@ impl Device {
                     size: *size,
                     context_id: context.id,
                     context_descriptor,
-                    win32_objects: Win32Objects::Pbuffer { share_handle, keyed_mutex },
+                    win32_objects: Win32Objects::Pbuffer {
+                        share_handle: HandleOrTexture::Handle(share_handle),
+                        keyed_mutex
+                    },
                 })
             })
         }
@@ -220,10 +227,22 @@ impl Device {
                     egl::NONE as EGLint,            0,
                     0,                              0,
                 ];
+
+                // FIXME(pcwalton): I'm fairly sure this is undefined behavior! We need to figure
+                // out how to use share handles for jdm's use case.
+                let (buffer_type, client_buffer) = match share_handle {
+                    HandleOrTexture::Handle(handle) => {
+                        (EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle)
+                    }
+                    HandleOrTexture::Texture(texture) => {
+                        (EGL_D3D_TEXTURE_ANGLE, texture as _)
+                    }
+                };
+
                 let local_egl_surface =
                     egl.CreatePbufferFromClientBuffer(self.native_display.egl_display(),
-                                                      EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                                                      share_handle,
+                                                      buffer_type,
+                                                      client_buffer,
                                                       local_egl_config,
                                                       pbuffer_attributes.as_ptr());
                 if local_egl_surface == egl::NO_SURFACE {
