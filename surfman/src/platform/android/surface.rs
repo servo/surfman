@@ -3,11 +3,15 @@
 //! Surface management for Android using the `GraphicBuffer` class and EGL.
 
 use crate::context::ContextID;
-use crate::egl::types::{EGLSurface, EGLenum, EGLint};
-use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::egl::types::{EGLSurface, EGLint};
+use crate::gl::types::{GLenum, GLuint};
 use crate::gl_utils;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
-use crate::platform::generic::egl::ffi::{EGLImageKHR, EGL_EXTENSION_FUNCTIONS};
+use crate::platform::generic::egl::ffi::EGLImageKHR;
+use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
+use crate::platform::generic::egl::ffi::EGL_NATIVE_BUFFER_ANDROID;
+use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
 use crate::platform::generic;
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
@@ -228,6 +232,7 @@ impl Device {
         })
     }
 
+    #[allow(non_snake_case)]
     unsafe fn create_egl_image(&self, _: &Context, hardware_buffer: *mut AHardwareBuffer)
                                -> EGLImageKHR {
         // Get the native client buffer.
@@ -235,12 +240,13 @@ impl Device {
             EGL_EXTENSION_FUNCTIONS.GetNativeClientBufferANDROID
                                    .expect("Where's the `EGL_ANDROID_get_native_client_buffer` \
                                             extension?");
-        let client_buffer = eglGetNativeClientBufferANDROID(hardware_buffer);
+        let client_buffer =
+            eglGetNativeClientBufferANDROID(hardware_buffer as *const AHardwareBuffer as *const _);
         assert!(!client_buffer.is_null());
 
         // Create the EGL image.
         let egl_image_attributes = [
-            egl::IMAGE_PRESERVED_KHR as EGLint, egl::TRUE as EGLint,
+            EGL_IMAGE_PRESERVED_KHR as EGLint,  egl::TRUE as EGLint,
             egl::NONE as EGLint,                0,
         ];
         let egl_image = (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(self.native_display.egl_display(),

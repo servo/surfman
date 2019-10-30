@@ -36,7 +36,7 @@ lazy_static! {
 lazy_static! {
     static ref EGL_LIBRARY: EGLLibraryWrapper = {
         unsafe {
-            EGLLibraryWrapper(dlopen(&b"libEGL.so\0"[0] as *const u8 as *const i8, RTLD_LAZY))
+            EGLLibraryWrapper(dlopen(&b"libEGL.so\0"[0] as *const u8 as *const _, RTLD_LAZY))
         }
     };
 }
@@ -55,6 +55,7 @@ pub(crate) trait NativeDisplay {
     unsafe fn destroy(&mut self);
 }
 
+#[allow(dead_code)]
 pub(crate) struct OwnedEGLDisplay {
     pub(crate) egl_display: EGLDisplay,
 }
@@ -82,6 +83,7 @@ impl NativeDisplay for OwnedEGLDisplay {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) struct UnsafeEGLDisplayRef {
     egl_display: EGLDisplay,
 }
@@ -117,7 +119,7 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
 fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
-        let symbol_ptr = symbol_name.as_ptr() as *const u8 as *const i8;
+        let symbol_ptr = symbol_name.as_ptr() as *const u8 as *const c_char;
         dlsym(EGL_LIBRARY.0, symbol_ptr) as *const c_void
     }
 }

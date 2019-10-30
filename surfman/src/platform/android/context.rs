@@ -3,7 +3,7 @@
 //! Wrapper for EGL contexts on Android.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
+use crate::egl::types::{EGLConfig, EGLSurface, EGLint};
 use crate::egl;
 use crate::gl::Gl;
 use crate::gl::types::GLuint;
@@ -11,17 +11,16 @@ use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeCo
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
-use crate::{SurfaceID, SurfaceType};
+use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceType};
 use super::device::{Device, UnsafeEGLDisplayRef};
 use super::surface::{NativeWidget, Surface, SurfaceObjects};
 
 use euclid::default::Size2D;
-use std::ffi::CString;
 use std::mem;
-use std::os::raw::{c_char, c_void};
-use std::ptr;
+use std::os::raw::c_void;
 use std::thread;
+
+pub use crate::platform::generic::egl::context::ContextDescriptor;
 
 thread_local! {
     pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
@@ -57,7 +56,7 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(self.native_display.egl_display(), config_attributes, &[
+            ContextDescriptor::new(self.native_display.egl_display(), attributes, &[
                 egl::COLOR_BUFFER_TYPE as EGLint,   egl::RGB_BUFFER as EGLint,
                 egl::SURFACE_TYPE as EGLint,        egl::PBUFFER_BIT as EGLint,
                 egl::RENDERABLE_TYPE as EGLint,     egl::OPENGL_ES2_BIT as EGLint,
@@ -130,7 +129,7 @@ impl Device {
             let egl_context = context::create_context(egl_display, descriptor)?;
 
             // Create a dummy pbuffer.
-            let pbuffer = create_pbuffer(egl_display, egl_config);
+            let pbuffer = context::create_dummy_pbuffer(egl_display, egl_config);
 
             // Wrap up the EGL context.
             let mut context = Context {
@@ -166,7 +165,7 @@ impl Device {
                 assert_ne!(result, egl::FALSE);
                 context.pbuffer = egl::NO_SURFACE;
 
-                context.native_context.destroy(self);
+                context.native_context.destroy(self.native_display.egl_display());
             });
         }
 
@@ -208,9 +207,8 @@ impl Device {
                     let err = egl.GetError().to_windowing_api_error();
                     return Err(Error::MakeCurrentFailed(err));
                 }
-            });
-
-            Ok(())
+                Ok(())
+            })
         }
     }
 

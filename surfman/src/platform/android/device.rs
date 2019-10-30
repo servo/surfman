@@ -1,14 +1,11 @@
 //! A thread-local handle to the device.
 
-use crate::egl::types::{EGLClientBuffer, EGLDisplay, EGLImageKHR, EGLenum};
-use crate::{Error, GLApi, egl};
-use crate::platform::generic;
+use crate::egl::types::EGLDisplay;
+use crate::egl;
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use crate::{Error, GLApi};
 use super::adapter::Adapter;
 use super::connection::Connection;
-use super::ffi::AHardwareBuffer;
-
-use std::mem;
-use std::os::raw::{c_char, c_void};
 
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
