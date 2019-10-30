@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/macos/device.rs
+//
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
 use crate::{Error, GLApi};

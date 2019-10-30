@@ -109,8 +109,9 @@ fn main() {
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
-    let context = device.create_context(&context_descriptor, SurfaceAccess::GPUOnly, &surface_type)
-                        .unwrap();
+    let mut context = device.create_context(&context_descriptor).unwrap();
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type).unwrap();
+    device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();
 
     let mut app =
@@ -218,8 +219,11 @@ impl App {
             self.device.make_context_current(&self.context).unwrap();
 
             let framebuffer_object = self.device
-                                         .context_surface_framebuffer_object(&self.context)
-                                         .unwrap();
+                                         .context_surface(&self.context)
+                                         .unwrap()
+                                         .unwrap()
+                                         .framebuffer_object();
+
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::Viewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
 
@@ -293,7 +297,12 @@ impl App {
         }
 
         if present {
-            self.device.present_context_surface(&mut self.context).unwrap();
+            let mut surface = self.device
+                                  .unbind_surface_from_context(&mut self.context)
+                                  .unwrap()
+                                  .unwrap();
+            self.device.present_surface(&mut self.context, &mut surface).unwrap();
+            self.device.bind_surface_to_context(&mut self.context, surface).unwrap();
         }
     }
 }
@@ -308,8 +317,9 @@ fn worker_thread(connection: Connection,
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
     let surface_type = SurfaceType::Generic { size };
     let mut device = Device::new(&connection, &adapter).unwrap();
-    let mut context =
-        device.create_context(&context_descriptor, SurfaceAccess::GPUOnly, &surface_type).unwrap();
+    let mut context = device.create_context(&context_descriptor).unwrap();
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type).unwrap();
+    device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();
 
     // Set up GL objects and state.
@@ -342,7 +352,11 @@ fn worker_thread(connection: Connection,
     loop {
         // Render to the surface.
         unsafe {
-            let framebuffer_object = device.context_surface_framebuffer_object(&context).unwrap();
+            let framebuffer_object = device.context_surface(&context)
+                                           .unwrap()
+                                           .unwrap()
+                                           .framebuffer_object();
+
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::Viewport(0, 0, size.width, size.height);
 
@@ -390,8 +404,9 @@ fn worker_thread(connection: Connection,
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
         }
 
+        let old_surface = device.unbind_surface_from_context(&mut context).unwrap();
         let new_surface = worker_from_main_receiver.recv().unwrap();
-        let old_surface = Some(device.replace_context_surface(&mut context, new_surface).unwrap());
+        device.bind_surface_to_context(&mut context, new_surface).unwrap();
         worker_to_main_sender.send(Frame {
             surface: old_surface,
             viewport_origin: ball_rect.origin - subscreen_offset,

@@ -1,15 +1,16 @@
+// surfman/surfman/src/platform/macos/context.rs
+//
 //! Wrapper for Core OpenGL contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::Gl;
-use crate::gl::types::GLuint;
-use crate::surface::{Framebuffer, SurfaceType};
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess, SurfaceID};
+use crate::surface::Framebuffer;
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use super::adapter::Adapter;
 use super::connection::Connection;
 use super::device::Device;
 use super::error::ToWindowingApiError;
-use super::surface::{NativeWidget, Surface, SurfaceDataGuard};
+use super::surface::Surface;
 
 use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
 use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
@@ -20,7 +21,6 @@ use core_foundation::base::TCFType;
 use core_foundation::bundle::CFBundleGetBundleWithIdentifier;
 use core_foundation::bundle::{CFBundleGetFunctionPointerForName, CFBundleRef};
 use core_foundation::string::CFString;
-use euclid::default::Size2D;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
@@ -175,11 +175,7 @@ impl Device {
         Ok((device, context))
     }
 
-    pub fn create_context(&mut self,
-                          descriptor: &ContextDescriptor,
-                          surface_access: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
-                          -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         // Take a lock so that we're only creating one context at a time. This serves two purposes:
         //
         // 1. CGLChoosePixelFormat fails, returning `kCGLBadConnection`, if multiple threads try to
@@ -204,16 +200,13 @@ impl Device {
                 return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
             }
 
-            let mut context = Context {
+            // Wrap and return the context.
+            let context = Context {
                 native_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
             };
             next_context_id.0 += 1;
-
-            // Build the initial framebuffer.
-            let surface = self.create_surface(&context, surface_access, surface_type)?;
-            context.framebuffer = Framebuffer::Surface(surface);
             Ok(context)
         }
     }
@@ -271,57 +264,46 @@ impl Device {
         Ok(guard)
     }
 
-    pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
-                                   -> Result<Surface, Error> {
-        if let Framebuffer::External = context.framebuffer {
-            return Err(Error::ExternalRenderTarget);
+    pub fn bind_surface_to_context(&self, context: &mut Context, new_surface: Surface)
+                                   -> Result<(), Error> {
+        match context.framebuffer {
+            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(_) => return Err(Error::SurfaceAlreadyBound),
+            Framebuffer::None => {}
         }
 
         if new_surface.context_id != context.id {
             return Err(Error::IncompatibleSurface);
         }
 
-        let _guard = self.temporarily_make_context_current(context)?;
+        context.framebuffer = Framebuffer::Surface(new_surface);
+        Ok(())
+    }
 
-        // Make sure all changes are synchronized. Apple requires this.
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.Flush();
-            }
-        });
-
-        let new_framebuffer = Framebuffer::Surface(new_surface);
-        match mem::replace(&mut context.framebuffer, new_framebuffer) {
-            Framebuffer::None | Framebuffer::External => unreachable!(),
-            Framebuffer::Surface(old_surface) => Ok(old_surface),
+    pub fn unbind_surface_from_context(&self, context: &mut Context)
+                                       -> Result<Option<Surface>, Error> {
+        match context.framebuffer {
+            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+            Framebuffer::None | Framebuffer::Surface(_) => {}
         }
-    }
 
-    #[inline]
-    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        let _guard = self.temporarily_make_context_current(context);
-        self.context_surface_mut(context).and_then(|surface| surface.present())
-    }
-
-    #[inline]
-    pub fn lock_context_surface_data<'s>(&self, context: &'s mut Context)
-                                         -> Result<SurfaceDataGuard<'s>, Error> {
-        self.context_surface_mut(context).and_then(|surface| surface.lock_data())
-    }
-
-    #[inline]
-    pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        self.context_surface(context).map(|surface| surface.framebuffer_object)
-    }
-
-    #[inline]
-    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
-        self.context_surface(context).map(|surface| surface.size())
-    }
-
-    #[inline]
-    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
-        self.context_surface(context).map(|surface| surface.id())
+        match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            Framebuffer::External => unreachable!(),
+            Framebuffer::None => Ok(None),
+            Framebuffer::Surface(surface) => {
+                // Make sure all changes are synchronized. Apple requires this.
+                //
+                // TODO(pcwalton): Use `glClientWaitSync` instead to avoid starving the window
+                // server.
+                GL_FUNCTIONS.with(|gl| {
+                    let _guard = self.temporarily_make_context_current(context)?;
+                    unsafe {
+                        gl.Flush();
+                    }
+                    Ok(Some(surface))
+                })
+            }
+        }
     }
 
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
@@ -361,19 +343,11 @@ impl Device {
         get_proc_address(symbol_name)
     }
 
-    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
         match context.framebuffer {
-            Framebuffer::None => unreachable!(),
+            Framebuffer::None => Ok(None),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(surface),
-        }
-    }
-
-    fn context_surface_mut<'c>(&self, context: &'c mut Context) -> Result<&'c mut Surface, Error> {
-        match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref mut surface) => Ok(surface),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
         }
     }
 }

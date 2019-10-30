@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/macos/surfman.rs
+//
 //! Surface management for macOS.
 
 use crate::context::ContextID;
@@ -365,6 +367,11 @@ impl Surface {
     #[inline]
     pub fn context_id(&self) -> ContextID {
         self.context_id
+    }
+
+    #[inline]
+    pub fn framebuffer_object(&self) -> GLuint {
+        self.framebuffer_object
     }
 
     // Assumes the context is current.

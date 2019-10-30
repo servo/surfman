@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/macos/error.rs
+//
 //! Translation of errors from the CGL API to `surfman` errors.
 
 use crate::WindowingApiError;

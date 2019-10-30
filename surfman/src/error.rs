@@ -28,6 +28,8 @@ pub enum Error {
     GLFunctionNotFound,
     /// This context renders to an externally-managed render target.
     ExternalRenderTarget,
+    /// A surface was already attached to this context.
+    SurfaceAlreadyBound,
     /// No suitable adapter could be found.
     NoAdapterFound,
     /// The device couldn't be opened.
