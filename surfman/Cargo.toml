@@ -23,6 +23,7 @@ sm-angle-default = ["sm-angle"]
 sm-osmesa = ["osmesa-sys"]
 sm-osmesa-default = ["sm-osmesa"]
 sm-no-wgl = ["sm-angle-default"]
+sm-wayland-default = []
 sm-winit = ["winit"]
 sm-x11 = ["x11"]
 
