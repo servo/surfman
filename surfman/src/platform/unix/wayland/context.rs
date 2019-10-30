@@ -209,44 +209,12 @@ impl Device {
         })
     }
 
-    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
         match context.framebuffer {
-            Framebuffer::None => unreachable!(),
+            Framebuffer::None => Ok(None),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(surface),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
         }
-    }
-
-    fn context_surface_mut<'c>(&self, context: &'c mut Context)
-                               -> Result<&'c mut Surface, Error> {
-        match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref mut surface) => Ok(surface),
-        }
-    }
-
-    #[inline]
-    pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::Surface(Surface {
-                wayland_objects: WaylandObjects::TextureImage { framebuffer_object, .. },
-                ..
-            }) => Ok(framebuffer_object),
-            Framebuffer::Surface(Surface { wayland_objects: WaylandObjects::Window { .. }, .. }) |
-            Framebuffer::External { .. } => Ok(0),
-        }
-    }
-
-    #[inline]
-    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
-        self.context_surface(context).map(|surface| surface.size())
-    }
-
-    #[inline]
-    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
-        self.context_surface(context).map(|surface| surface.id())
     }
 
     #[inline]
@@ -255,13 +223,6 @@ impl Device {
         unsafe {
             context_descriptor.attributes(self.native_connection.egl_display())
         }
-    }
-
-    #[inline]
-    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        self.context_surface_mut(context).and_then(|surface| {
-            self.present_surface_without_context(surface)
-        })
     }
 
     #[inline]
