@@ -226,28 +226,6 @@ impl Device {
         }
     }
 
-    pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
-                                   -> Result<Surface, Error> {
-        if let Framebuffer::External = context.framebuffer {
-            return Err(Error::ExternalRenderTarget)
-        }
-
-        if context.id != new_surface.context_id {
-            return Err(Error::IncompatibleSurface);
-        }
-
-        let is_current = self.context_is_current(context);
-        let old_surface = self.release_surface(context).expect("Where's our surface?");
-        self.attach_surface(context, new_surface);
-
-        if is_current {
-            // We need to make ourselves current again, because the surface changed.
-            self.make_context_current(context)?;
-        }
-
-        Ok(old_surface)
-    }
-
     #[inline]
     pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
         match context.framebuffer {
@@ -300,21 +278,40 @@ impl Device {
         }
     }
 
-    fn attach_surface(&self, context: &mut Context, surface: Surface) {
-        match context.framebuffer {
-            Framebuffer::None => {}
-            _ => panic!("Tried to attach a surface, but there was already a surface present!"),
+    pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
+                                   -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
         }
 
-        context.framebuffer = Framebuffer::Surface(surface);
+        match context.framebuffer {
+            Framebuffer::None => {
+                let is_current = self.context_is_current(context);
+                context.framebuffer = Framebuffer::Surface(surface);
+
+                if is_current {
+                    // We need to make ourselves current again, because the surface changed.
+                    self.make_context_current(context)?;
+                }
+
+                Ok(())
+            }
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Some(_) => Err(Error::SurfaceAlreadyBound),
+        }
     }
 
-    fn release_surface(&self, context: &mut Context) -> Option<Surface> {
-        let surface = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => surface,
-            Framebuffer::None | Framebuffer::External => return None,
-        };
+    pub fn unbind_surface_from_context(&self, context: &mut Context)
+                                       -> Result<Option<Surface>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => return Ok(None),
+            Framebuffer::Surface(_) => {}
+            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+        }
 
-        Some(surface)
+        match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            Framebuffer::Surface(surface) => Ok(Some(surface)),
+            Framebuffer::None | Framebuffer::External => unreachable!(),
+        }
     }
 }

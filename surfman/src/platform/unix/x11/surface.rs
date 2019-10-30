@@ -315,18 +315,12 @@ impl Device {
     }
 
     #[inline]
-    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        self.present_surface_without_context(surface)
-    }
-
-    #[inline]
     pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
 
-    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
-                                                  -> Result<(), Error> {
+    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         unsafe {
             GLX_FUNCTIONS.with(|glx| {
                 match surface.drawables {
@@ -357,6 +351,11 @@ impl Surface {
     #[inline]
     pub fn context_id(&self) -> ContextID {
         self.context_id
+    }
+
+    #[inline]
+    pub fn framebuffer_object(&self) -> GLuint {
+        0
     }
 }
 

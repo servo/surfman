@@ -305,6 +305,13 @@ impl Surface {
     pub fn context_id(&self) -> ContextID {
         self.context_id
     }
+
+    pub fn framebuffer_object(&self) -> Result<GLuint, Error> {
+        match self.wayland_objects {
+            WaylandObjects::TextureImage { framebuffer_object, .. } => Ok(framebuffer_object),
+            WaylandObjects::Window { .. } => Ok(0),
+        }
+    }
 }
 
 impl SurfaceTexture {
