@@ -163,6 +163,7 @@ impl Device {
                 size: *size,
                 context_id: context.id,
                 dx_interop_texture,
+                renderbuffers,
                 framebuffer_object: gl_framebuffer,
                 widget_info: None,
                 destroyed: false,
@@ -265,6 +266,7 @@ impl Device {
                 size,
                 context_id: context.id,
                 dx_interop_texture,
+                renderbuffers,
                 win32_objects: Win32Objects::Widget {
                     window_handle: native_widget.window_handle,
                     dxgi_swap_chain,
@@ -290,30 +292,8 @@ impl Device {
         let _guard = self.temporarily_make_context_current(context)?;
 
         unsafe {
-            match surface.win32_objects {
-                Win32Objects::Texture {
-                    ref mut gl_dx_interop_object,
-                    ref mut gl_texture,
-                    ref mut gl_framebuffer,
-                    ref mut renderbuffers,
-                    d3d11_texture: _,
-                    dxgi_share_handle: _,
-                } => {
-                    renderbuffers.destroy(&context.gl);
-
-                    gl_utils::destroy_framebuffer(&context.gl, *gl_framebuffer);
-                    *gl_framebuffer = 0;
-
-                    context.gl.DeleteTextures(1, gl_texture);
-                    *gl_texture = 0;
-
-                    let ok = (dx_interop_functions.DXUnregisterObjectNV)(self.gl_dx_interop_device,
-                                                                         *gl_dx_interop_object);
-                    assert_ne!(ok, FALSE);
-                    *gl_dx_interop_object = INVALID_HANDLE_VALUE;
-                }
-                Win32Objects::Widget { window_handle: _ } => {}
-            }
+            surface.renderbuffers.destroy(&context.gl);
+            drop(surface.dx_interop_texture.destroy(self.gl_dx_interop_device));
 
             surface.destroyed = true;
         }
