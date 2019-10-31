@@ -1,21 +1,21 @@
 //! Wrapper for GLX contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::gl::types::{GLubyte, GLuint};
+use crate::gl::types::GLubyte;
 use crate::gl::{self, Gl};
-use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXFBConfig};
+use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXFBConfig, GLXPixmap};
 use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess, SurfaceID};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
 use super::device::{Device, Quirks, UnsafeDisplayRef};
-use super::surface::{NativeWidget, Surface, SurfaceDrawables, SurfaceKind};
+use super::surface::{self, NativeWidget, Surface, SurfaceDrawables, SurfaceKind};
 
 use euclid::default::Size2D;
 use libc::{RTLD_LAZY, dlopen, dlsym};
 use std::ffi::CString;
 use std::mem;
-use std::os::raw::{c_int, c_uint, c_void};
+use std::os::raw::{c_int, c_void};
 use std::ptr;
 use std::slice;
 use std::thread;
@@ -23,9 +23,9 @@ use x11::glx::{GLX_ALPHA_SIZE, GLX_BLUE_SIZE, GLX_DEPTH_SIZE, GLX_DOUBLEBUFFER, 
 use x11::glx::{GLX_FBCONFIG_ID, GLX_GREEN_SIZE, GLX_PIXMAP_BIT, GLX_RED_SIZE, GLX_RENDER_TYPE};
 use x11::glx::{GLX_RGBA_BIT, GLX_STENCIL_SIZE, GLX_STEREO, GLX_TRUE_COLOR, GLX_WINDOW_BIT};
 use x11::glx::{GLX_X_RENDERABLE, GLX_X_VISUAL_TYPE};
-use x11::xlib::{self, Display, XDefaultScreen, XFree, XID};
+use x11::xlib::{self, Display, Pixmap, XDefaultScreen, XFree, XID, XRootWindowOfScreen};
 
-const DUMMY_PBUFFER_SIZE: c_uint = 16;
+const DUMMY_PIXMAP_SIZE: i32 = 16;
 
 thread_local! {
     pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
@@ -56,6 +56,7 @@ pub struct Context {
     framebuffer: Framebuffer<Surface>,
     gl_version: GLVersion,
     dummy_glx_pixmap: GLXPixmap,
+    #[allow(dead_code)]
     dummy_pixmap: Pixmap,
 }
 
@@ -180,12 +181,15 @@ impl Device {
                 gl.GetIntegerv(gl::MINOR_VERSION, &mut minor_gl_version);
 
                 // Create dummy pixmaps.
-                let display = self.native_display.display();
-                let glx_context = context.native_context.glx_context();
                 let glx_fb_config_id = get_fb_config_id(glx_display, glx_context);
-                let glx_fb_config = 
+                let glx_fb_config = get_fb_config_from_id(display, glx_display, glx_fb_config_id);
+                let dummy_pixmap_size = Size2D::new(DUMMY_PIXMAP_SIZE, DUMMY_PIXMAP_SIZE);
                 let (dummy_glx_pixmap, dummy_pixmap) =
-                    create_dummy_pixmaps(display, glx_display, glx_fb_config);
+                    surface::create_pixmaps(display,
+                                            glx_display,
+                                            glx_fb_config,
+                                            &dummy_pixmap_size)?;
+
 
                 // Wrap the context.
                 let context = Context {
@@ -203,19 +207,13 @@ impl Device {
         })
     }
 
-    pub fn create_context(&mut self,
-                          descriptor: &ContextDescriptor,
-                          surface_access: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
-                          -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         // Take a lock.
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        let surface_kind = match *surface_type {
-            SurfaceType::Generic { .. } => SurfaceKind::Pixmap,
-            SurfaceType::Widget  { .. } => SurfaceKind::Window,
-        };
-        let glx_fb_config = self.context_descriptor_to_glx_fb_config(descriptor, surface_kind);
+        // FIXME(pcwalton): Is using the pixmap FB config here acceptable?
+        let glx_fb_config = self.context_descriptor_to_glx_fb_config(descriptor,
+                                                                     SurfaceKind::Pixmap);
 
         GLX_FUNCTIONS.with(|glx| {
             unsafe {
@@ -238,10 +236,14 @@ impl Device {
                 }
 
                 let display = self.native_display.display();
+                let dummy_pixmap_size = Size2D::new(DUMMY_PIXMAP_SIZE, DUMMY_PIXMAP_SIZE);
                 let (dummy_glx_pixmap, dummy_pixmap) =
-                    create_dummy_pixmaps(display, glx_display, glx_fb_config);
+                    surface::create_pixmaps(display,
+                                            glx_display,
+                                            glx_fb_config,
+                                            &dummy_pixmap_size)?;
 
-                let mut context = Context {
+                let context = Context {
                     native_context: Box::new(OwnedGLXContext { glx_context }),
                     id: *next_context_id,
                     framebuffer: Framebuffer::None,
@@ -250,7 +252,6 @@ impl Device {
                     dummy_pixmap,
                 };
                 next_context_id.0 += 1;
-
                 Ok(context)
             }
         })
@@ -283,13 +284,13 @@ impl Device {
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
             let glx_context = context.native_context.glx_context();
-            let glx_fb_config_id = get_fb_config_id(glx_display, glx_context);
+            let glx_fb_config_id = get_fb_config_id(self.glx_display(), glx_context);
 
             // FIXME(pcwalton): This is wrong. Instead we should do a dance to find the other
             // GLX FB config ID, depending on the one we have.
             ContextDescriptor {
-                window_glx_fb_config_id: glx_fb_config_id as XID,
-                pixmap_glx_fb_config_id: glx_fb_config_id as XID,
+                window_glx_fb_config_id: glx_fb_config_id,
+                pixmap_glx_fb_config_id: glx_fb_config_id,
                 gl_version: context.gl_version,
             }
         }
@@ -375,13 +376,13 @@ impl Device {
                                                       context_descriptor: &ContextDescriptor,
                                                       kind: SurfaceKind)
                                                       -> GLXFBConfig {
-        let glx_display = self.glx_display();
+        let (display, glx_display) = (self.native_display.display(), self.glx_display());
         let glx_fb_config_id = match kind {
             SurfaceKind::Pixmap => context_descriptor.pixmap_glx_fb_config_id,
             SurfaceKind::Window => context_descriptor.window_glx_fb_config_id,
         };
         unsafe {
-            get_fb_config_from_id(glx_display, glx_fb_config_id)
+            get_fb_config_from_id(display, glx_display, glx_fb_config_id)
         }
     }
 
@@ -549,30 +550,7 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
     }
 }
 
-unsafe fn create_dummy_pixmaps(display: *mut Display,
-                               glx_display: *mut GlxDisplay,
-                               glx_fb_config: GLXFBConfig)
-                               -> Result<(GLXPixmap, Pixmap), Error> {
-    GLX_FUNCTIONS.with(|glx| {
-        let pixmap = XCreatePixmap(display,
-                                   XRootWindowOfScreen(XDefaultScreenOfDisplay(display)),
-                                   DUMMY_PBUFFER_SIZE,
-                                   DUMMY_PBUFFER_SIZE,
-                                   depth);
-        if pixmap == 0 {
-            return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-        }
-
-        let glx_pixmap = glx.CreatePixmap(glx_display, glx_fb_config, pixmap, ptr::null());
-        if glx_pixmap == 0 {
-            return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-        }
-
-        Ok((glx_pixmap, pixmap))
-    })
-}
-
-unsafe fn get_fb_config_id(glx_display: *mut GlxDisplay, glx_context: GLXContext) -> i32 {
+unsafe fn get_fb_config_id(glx_display: *mut GlxDisplay, glx_context: GLXContext) -> XID {
     GLX_FUNCTIONS.with(|glx| {
         let mut glx_fb_config_id: i32 = 0;
         let err = glx.QueryContext(glx_display,
@@ -580,17 +558,19 @@ unsafe fn get_fb_config_id(glx_display: *mut GlxDisplay, glx_context: GLXContext
                                    GLX_FBCONFIG_ID,
                                    &mut glx_fb_config_id);
         assert_eq!(err, xlib::Success as c_int);
-        glx_fb_config_id
+        glx_fb_config_id as XID
     })
 }
 
-unsafe fn get_fb_config_from_id(glx_display: *mut GlxDisplay, glx_fb_config_id: i32)
+unsafe fn get_fb_config_from_id(display: *mut Display,
+                                glx_display: *mut GlxDisplay,
+                                glx_fb_config_id: XID)
                                 -> GLXFBConfig {
     GLX_FUNCTIONS.with(|glx| {
         let mut glx_fb_config_count = 0;
         let glx_fb_configs_ptr = glx.GetFBConfigs(glx_display,
-                                                    XDefaultScreen(display),
-                                                    &mut glx_fb_config_count);
+                                                  XDefaultScreen(display),
+                                                  &mut glx_fb_config_count);
         let glx_fb_configs = slice::from_raw_parts(glx_fb_configs_ptr,
                                                     glx_fb_config_count as usize);
         let glx_fb_config = *glx_fb_configs.iter().filter(|&glx_fb_config| {

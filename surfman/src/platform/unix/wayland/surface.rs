@@ -305,10 +305,10 @@ impl Surface {
         self.context_id
     }
 
-    pub fn framebuffer_object(&self) -> Result<GLuint, Error> {
+    pub fn framebuffer_object(&self) -> GLuint {
         match self.wayland_objects {
-            WaylandObjects::TextureImage { framebuffer_object, .. } => Ok(framebuffer_object),
-            WaylandObjects::Window { .. } => Ok(0),
+            WaylandObjects::TextureImage { framebuffer_object, .. } => framebuffer_object,
+            WaylandObjects::Window { .. } => 0,
         }
     }
 }
