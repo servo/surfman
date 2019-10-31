@@ -62,16 +62,19 @@ impl ContextDescriptor {
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
 
         // Create required config attributes.
+        //
+        // We check these separately because `eglChooseConfig` on its own might give us 32-bit
+        // color when 24-bit color is requested, and that can break code.
         let required_config_attributes = [
             egl::RED_SIZE as EGLint,    RGB_CHANNEL_BIT_DEPTH,
             egl::GREEN_SIZE as EGLint,  RGB_CHANNEL_BIT_DEPTH,
             egl::BLUE_SIZE as EGLint,   RGB_CHANNEL_BIT_DEPTH,
-            egl::ALPHA_SIZE as EGLint,  alpha_size,
         ];
 
         // Create config attributes.
         let mut requested_config_attributes = required_config_attributes.to_vec();
         requested_config_attributes.extend_from_slice(&[
+            egl::ALPHA_SIZE as EGLint,      alpha_size,
             egl::DEPTH_SIZE as EGLint,      depth_size,
             egl::STENCIL_SIZE as EGLint,    stencil_size,
         ]);
