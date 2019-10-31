@@ -47,22 +47,16 @@ const WGL_ACCESS_READ_WRITE_NV: GLenum = 0x0001;
 pub struct Surface {
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
-    pub(crate) win32_objects: Win32Objects,
+    pub(crate) dx_interop_texture: DXInteropTexture,
+    pub(crate) framebuffer_object: GLuint,
+    pub(crate) renderbuffers: Renderbuffers,
+    pub(crate) widget_info: Option<WidgetInfo>,
     pub(crate) destroyed: bool,
 }
 
-pub(crate) enum Win32Objects {
-    Texture {
-        d3d11_texture: ComPtr<ID3D11Texture2D>,
-        dxgi_share_handle: HANDLE,
-        gl_dx_interop_object: HANDLE,
-        gl_texture: GLuint,
-        gl_framebuffer: GLuint,
-        renderbuffers: Renderbuffers,
-    },
-    Widget {
-        window_handle: HWND,
-    },
+pub(crate) struct WidgetInfo {
+    dxgi_swap_chain: ComPtr<IDXGISwapChain1>,
+    window_handle: HWND,
 }
 
 pub struct SurfaceTexture {
@@ -141,40 +135,8 @@ impl Device {
             assert!(!d3d11_texture.is_null());
             let d3d11_texture = ComPtr::from_raw(d3d11_texture);
 
-            // Upcast it to a DXGI resource.
-            let mut dxgi_resource: *mut IDXGIResource = ptr::null_mut();
-            result = d3d11_texture.QueryInterface(
-                &IDXGIResource::uuidof(),
-                &mut dxgi_resource as *mut *mut IDXGIResource as *mut *mut c_void);
-            assert!(winerror::SUCCEEDED(result));
-            assert!(!dxgi_resource.is_null());
-            let dxgi_resource = ComPtr::from_raw(dxgi_resource);
-
-            // Get the share handle. We'll need it both to bind to GL and to share the texture
-            // across contexts.
-            let mut dxgi_share_handle = INVALID_HANDLE_VALUE;
-            result = dxgi_resource.GetSharedHandle(&mut dxgi_share_handle);
-            assert!(winerror::SUCCEEDED(result));
-            assert_ne!(dxgi_share_handle, INVALID_HANDLE_VALUE);
-
-            // Tell GL about the share handle.
-            let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
-                d3d11_texture.as_raw() as *mut c_void,
-                dxgi_share_handle);
-            assert_ne!(ok, FALSE);
-
-            // Make our texture object on the GL side.
-            let mut gl_texture = 0;
-            context.gl.GenTextures(1, &mut gl_texture);
-
-            // Bind the GL texture to the D3D11 texture.
-            let gl_dx_interop_object =
-                (dx_interop_functions.DXRegisterObjectNV)(self.gl_dx_interop_device,
-                                                          d3d11_texture.as_raw() as *mut c_void,
-                                                          gl_texture,
-                                                          gl::TEXTURE_2D,
-                                                          WGL_ACCESS_READ_WRITE_NV);
-            assert_ne!(gl_dx_interop_object, INVALID_HANDLE_VALUE);
+            // Share it over to OpenGL.
+            let dx_interop_texture = DXInteropTexture::new(d3d11_texture);
 
             // Build our FBO.
             let mut gl_framebuffer = 0;
@@ -185,7 +147,7 @@ impl Device {
             context.gl.FramebufferTexture2D(gl::FRAMEBUFFER,
                                             gl::COLOR_ATTACHMENT0,
                                             SURFACE_GL_TEXTURE_TARGET,
-                                            gl_texture,
+                                            dx_interop_texture.texture_object,
                                             0);
 
             // Create renderbuffers as appropriate, and attach them.
@@ -200,14 +162,9 @@ impl Device {
             Ok(Surface {
                 size: *size,
                 context_id: context.id,
-                win32_objects: Win32Objects::Texture {
-                    d3d11_texture,
-                    dxgi_share_handle,
-                    gl_dx_interop_object,
-                    gl_texture,
-                    gl_framebuffer,
-                    renderbuffers,
-                },
+                dx_interop_texture,
+                framebuffer_object: gl_framebuffer,
+                widget_info: None,
                 destroyed: false,
             })
         }
@@ -222,12 +179,95 @@ impl Device {
                 return Err(Error::InvalidNativeWidget);
             }
 
+            // Cast the D3D interop device to a DXGI device.
+            let mut dxgi_device: *mut IDXGIDevice2 = ptr::null_mut();
+            let result = self.d3d11_device
+                             .QueryInterface(IDXGIDevice2::uuidof(), &mut dxgi_device);
+            assert!(winerror::SUCCEEDED(result));
+            let dxgi_device = ComPtr::from_raw(dxgi_device);
+
+            // Get the DXGI adapter from the DXGI device.
+            let mut dxgi_adapter: *mut IDXGIAdapter = ptr::null_mut();
+            let result = dxgi_device.GetParent(IDXGIAdapter::uuidof(), &mut dxgi_adapter);
+            assert!(winerror::SUCCEEDED(result));
+            let dxgi_adapter = ComPtr::from_raw(dxgi_adapter);
+
+            // Get the DXGI factory from the adapter.
+            let mut dxgi_factory: *mut IDXGIFactory2 = ptr::null_mut();
+            let result = dxgi_adapter.GetParent(IDXGIFactory2::uuidof(), &mut dxgi_factory);
+            assert!(winerror::SUCCEEDED(result));
+            let dxgi_factory = ComPtr::from_raw(dxgi_factory);
+
+            // Create the swap chain descriptor.
+            let size = Size2D::new(widget_rect.right - widget_rect.left,
+                                   widget_rect.bottom - widget_rect.top);
+            let dxgi_swap_chain_desc = DXGI_SWAP_CHAIN_DESC1 {
+                Width: size.width,
+                Height: size.height,
+                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                Stereo: FALSE,
+                SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+                BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHARED,
+                BufferCount: 1,
+                Scaling: DXGI_SCALING_STRETCH,
+                SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
+                AlphaMode: DXGI_ALPHA_MODE_STRAIGHT,
+                Flags: 0,
+            };
+
+            // Create a swap chain.
+            let mut dxgi_swap_chain = ptr::null_mut();
+            let result = dxgi_factory.CreateSwapChainForHwnd(self.d3d11_device.as_raw(),
+                                                             native_widget.window_handle,
+                                                             &dxgi_swap_chain_desc,
+                                                             ptr::null(),
+                                                             ptr::null(),
+                                                             &mut dxgi_swap_chain);
+            assert!(winerror::SUCCEEDED(result));
+            let dxgi_swap_chain = ComPtr::from_raw(dxgi_swap_chain);
+
+            // Take the back buffer.
+            let mut d3d11_texture = ptr::null_mut();
+            let result = dxgi_swap_chain.GetBuffer(0,
+                                                   ID3D11Texture2D::uuidof(),
+                                                   &mut d3d11_texture);
+            assert!(winerror::SUCCEEDED(result));
+            let d3d11_texture = ComPtr::from_raw(d3d11_texture);
+
+            // Share it to OpenGL.
+            let dx_interop_texture = DXInteropTexture::new(d3d11_texture);
+
+            // Build our FBO.
+            let mut gl_framebuffer = 0;
+            context.gl.GenFramebuffers(1, &mut gl_framebuffer);
+            let _guard = self.temporarily_bind_framebuffer(context, gl_framebuffer);
+
+            // Attach the reflected D3D11 texture to that FBO.
+            context.gl.FramebufferTexture2D(gl::FRAMEBUFFER,
+                                            gl::COLOR_ATTACHMENT0,
+                                            SURFACE_GL_TEXTURE_TARGET,
+                                            dx_interop_texture.texture_object,
+                                            0);
+
+            // Create renderbuffers as appropriate, and attach them.
+            let context_descriptor = self.context_descriptor(context);
+            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+            let renderbuffers = Renderbuffers::new(&context.gl, &size, &context_attributes);
+            renderbuffers.bind_to_current_framebuffer(&context.gl);
+
+            // Create renderbuffers as appropriate, and attach them.
+            let context_descriptor = self.context_descriptor(context);
+            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+            let renderbuffers = Renderbuffers::new(&context.gl, &size, &context_attributes);
+            renderbuffers.bind_to_current_framebuffer(&context.gl);
+
             Ok(Surface {
-                size: Size2D::new(widget_rect.right - widget_rect.left,
-                                  widget_rect.bottom - widget_rect.top),
+                size,
                 context_id: context.id,
+                dx_interop_texture,
                 win32_objects: Win32Objects::Widget {
                     window_handle: native_widget.window_handle,
+                    dxgi_swap_chain,
                 },
                 destroyed: false,
             })
@@ -441,7 +481,8 @@ impl Device {
         gl::TEXTURE_2D
     }
 
-    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
+    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
+        /*
         let window_handle = match surface.win32_objects {
             Win32Objects::Widget { window_handle } => window_handle,
             _ => return Err(Error::NoWidgetAttached),
@@ -452,6 +493,32 @@ impl Device {
             let ok = wingdi::SwapBuffers(dc);
             assert_ne!(ok, FALSE);
             winuser::ReleaseDC(window_handle, dc);
+            Ok(())
+        }
+        */
+        unsafe {
+            context.gl.Flush();
+
+            // 
+
+            let view_info = match self.view_info {
+                None => return Err(Error::NoWidgetAttached),
+                Some(ref mut view_info) => view_info,
+            };
+            mem::swap(&mut view_info.front_surface, &mut self.io_surface);
+            view_info.layer.set_contents(view_info.front_surface.obj as id);
+
+            transaction::commit();
+
+            let size = self.size;
+            gl.BindTexture(gl::TEXTURE_RECTANGLE, self.texture_object);
+            self.io_surface.bind_to_gl_texture(size.width, size.height, true);
+            gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
+
+            // Wait for the next swap interval.
+            let next_vblank_mutex_guard = view_info.next_vblank.mutex.lock().unwrap();
+            drop(view_info.next_vblank.cond.wait(next_vblank_mutex_guard).unwrap());
+
             Ok(())
         }
     }
@@ -502,4 +569,80 @@ impl NativeWidget {
 
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
+}
+
+pub(crate) struct DXInteropTexture {
+    pub(crate) d3d11_texture: ComPtr<ID3D11Texture2D>,
+    pub(crate) dxgi_share_handle: HANDLE,
+    pub(crate) gl_dx_interop_object: HANDLE,
+    pub(crate) texture_object: GLuint,
+}
+
+impl DXInteropTexture {
+    fn new(d3d11_texture: ComPtr<ID3D11Texture2D>) -> DXInteropTexture {
+        unsafe {
+            // Upcast the texture to a DXGI resource.
+            let mut dxgi_resource: *mut IDXGIResource = ptr::null_mut();
+            result = d3d11_texture.QueryInterface(
+                &IDXGIResource::uuidof(),
+                &mut dxgi_resource as *mut *mut IDXGIResource as *mut *mut c_void);
+            assert!(winerror::SUCCEEDED(result));
+            assert!(!dxgi_resource.is_null());
+            let dxgi_resource = ComPtr::from_raw(dxgi_resource);
+
+            // Get the share handle. We'll need it both to bind to GL and to share the texture
+            // across contexts.
+            let mut dxgi_share_handle = INVALID_HANDLE_VALUE;
+            result = dxgi_resource.GetSharedHandle(&mut dxgi_share_handle);
+            assert!(winerror::SUCCEEDED(result));
+            assert_ne!(dxgi_share_handle, INVALID_HANDLE_VALUE);
+
+            // Tell GL about the share handle.
+            let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
+                d3d11_texture.as_raw() as *mut c_void,
+                dxgi_share_handle);
+            assert_ne!(ok, FALSE);
+
+            // Make our texture object on the GL side.
+            let mut gl_texture = 0;
+            context.gl.GenTextures(1, &mut gl_texture);
+
+            // Bind the GL texture to the D3D11 texture.
+            let gl_dx_interop_object =
+                (dx_interop_functions.DXRegisterObjectNV)(self.gl_dx_interop_device,
+                                                          d3d11_texture.as_raw() as *mut c_void,
+                                                          gl_texture,
+                                                          gl::TEXTURE_2D,
+                                                          WGL_ACCESS_READ_WRITE_NV);
+            assert_ne!(gl_dx_interop_object, INVALID_HANDLE_VALUE);
+
+            DXInteropTexture {
+                d3d11_texture,
+                gl_dx_interop_object,
+                texture_object: gl_texture,
+                gl_dx_interop_object,
+            }
+        }
+    }
+
+    fn destroy(mut self, gl_dx_interop_device: HANDLE) -> ComPtr<ID3D11Texture2D> {
+        let dx_interop_functions =
+            WGL_EXTENSION_FUNCTIONS.dx_interop_functions
+                                   .as_ref()
+                                   .expect("How did you make a surface without DX interop?");
+
+        unsafe {
+            // Unregister the texture from GL/DX interop.
+            let ok = (dx_interop_functions.DXUnregisterObjectNV)(gl_dx_interop_device,
+                                                                 self.gl_dx_interop_object);
+            assert_ne!(ok, FALSE);
+            self.gl_dx_interop_object = INVALID_HANDLE_VALUE;
+
+            // Delete the texture.
+            context.gl.DeleteTextures(1, &mut self.texture_object);
+            self.texture_object = 0;
+
+            self.d3d11_texture
+        }
+    }
 }
