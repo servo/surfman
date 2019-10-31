@@ -163,7 +163,7 @@ impl Device {
             return Ok(());
         }
 
-        if let Some(surface) = self.unbind_surface_from_context(context) {
+        if let Ok(Some(surface)) = self.unbind_surface_from_context(context) {
             self.destroy_surface(context, surface)?;
         }
 
@@ -185,9 +185,8 @@ impl Device {
         unsafe {
             let egl_surface = match context.framebuffer {
                 Framebuffer::Surface(ref surface) => surface.egl_surface,
-                Framebuffer::None | Framebuffer::External => {
-                    return Err(Error::ExternalRenderTarget)
-                }
+                Framebuffer::None => egl::NO_SURFACE,
+                Framebuffer::External => return Err(Error::ExternalRenderTarget),
             };
 
             EGL_FUNCTIONS.with(|egl| {
@@ -225,11 +224,11 @@ impl Device {
         })
     }
 
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
         match context.framebuffer {
-            Framebuffer::None => unreachable!(),
+            Framebuffer::None => Ok(None),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(surface),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
         }
     }
 
@@ -257,7 +256,7 @@ impl Device {
 
     pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
                                    -> Result<(), Error> {
-        if context.id != new_surface.context_id {
+        if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
 
@@ -271,7 +270,9 @@ impl Device {
         // FIXME(pcwalton): Is this necessary and sufficient?
         if !surface.uses_keyed_mutex() {
             let _guard = self.temporarily_make_context_current(context)?;
-            GL_FUNCTIONS.with(|gl| gl.Finish());
+            unsafe {
+                GL_FUNCTIONS.with(|gl| gl.Finish());
+            }
         }
 
         let is_current = self.context_is_current(context);
@@ -292,6 +293,8 @@ impl Device {
             // We need to make ourselves current again, because the surface changed.
             self.make_context_current(context)?;
         }
+
+        Ok(())
     }
 
     pub fn unbind_surface_from_context(&self, context: &mut Context)
