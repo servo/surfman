@@ -477,6 +477,13 @@ impl Surface {
     pub fn context_id(&self) -> ContextID {
         self.context_id
     }
+
+    pub fn framebuffer_object(&self) -> GLuint {
+        match self.win32_objects {
+            Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
+            Win32Objects::Widget { .. } => 0,
+        }
+    }
 }
 
 impl SurfaceTexture {
