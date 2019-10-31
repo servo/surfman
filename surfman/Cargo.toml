@@ -82,4 +82,8 @@ optional = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 wio = "0.2"
-winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "libloaderapi"] }
+
+[target.'cfg(target_os = "windows")'.dependencies.winapi]
+version = "0.3"
+features = ["d3d11", "dxgi", "dxgi1_2", "libloaderapi", "wingdi", "winuser"]
+
