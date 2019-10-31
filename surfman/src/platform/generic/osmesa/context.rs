@@ -53,12 +53,6 @@ pub struct ContextDescriptor {
     attributes: Arc<Vec<c_int>>,
 }
 
-impl Context {
-    pub fn id(&self) -> ContextID {
-        self.id
-    }
-}
-
 impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
@@ -296,6 +290,10 @@ impl Device {
     #[inline]
     pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
         self.context_surface(context).map(|surface| surface.id())
+    }
+
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        context.id
     }
 
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
