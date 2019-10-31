@@ -254,4 +254,9 @@ impl Device {
             Framebuffer::None | Framebuffer::External => unreachable!(),
         }
     }
+
+    #[inline]
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        context.id
+    }
 }

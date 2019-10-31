@@ -27,12 +27,6 @@ pub enum ContextDescriptor {
 }
 
 impl Context {
-    pub fn id(&self) -> ContextID {
-        match *self {
-            Context::Hardware(ref ctx) => ctx.id(),
-            Context::Software(ref ctx) => ctx.id(),
-        }
-    }
 }
 
 impl Device {
@@ -218,6 +212,18 @@ impl Device {
             }
             (&Device::Software(ref device), &Context::Software(ref context)) => {
                 device.get_proc_address(context, symbol_name)
+            }
+            _ => panic!("Incompatible context!"),
+        }
+    }
+
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        match (self, context) {
+            (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
+                device.context_id(context)
+            }
+            (&Device::Software(ref device), &Context::Software(ref context)) => {
+                device.context_id(context)
             }
             _ => panic!("Incompatible context!"),
         }

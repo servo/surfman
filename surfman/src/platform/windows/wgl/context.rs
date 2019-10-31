@@ -564,6 +564,11 @@ impl Device {
             }
         }
     }
+
+    #[inline]
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        context.id
+    }
 }
 
 fn extension_loader_thread() -> WGLExtensionFunctions {

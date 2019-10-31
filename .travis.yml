@@ -1,5 +1,7 @@
 language: rust
-rust: nightly
+rust:
+  - nightly
+  - stable
 sudo: false
 
 addons:
@@ -20,9 +22,18 @@ before_install:
 os:
   - linux
   - osx
+  - windows
 
 script:
+  - cd surfman
   - cargo build --verbose
+  - cargo build --verbose --features=sm-osmesa
+  - cargo build --verbose --features=sm-angle-default
+  - cargo build --verbose --features=sm-wayland-default
+  - rustup target add arm-linux-androideabi
+  - cargo build --verbose --target=arm-linux-androideabi
+  - rustup target add aarch64-pc-windows-msvc
+  - cargo build --verbose --target=aarch64-pc-windows-msvc
   # TODO: tests
   # - cargo test --verbose
   # - cargo test --verbose --features test_egl_in_linux

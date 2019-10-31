@@ -459,6 +459,11 @@ impl Device {
         *pixels_slot = Some(pixels);
         Ok(())
     }
+
+    #[inline]
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        context.id
+    }
 }
 
 struct OwnedGLXContext {

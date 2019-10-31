@@ -350,6 +350,11 @@ impl Device {
             Framebuffer::Surface(ref surface) => Ok(Some(surface)),
         }
     }
+
+    #[inline]
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        context.id
+    }
 }
 
 struct OwnedCGLContext {

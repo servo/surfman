@@ -318,4 +318,9 @@ impl Device {
         self.make_context_current(context)?;
         Ok(guard)
     }
+
+    #[inline]
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        context.id
+    }
 }
