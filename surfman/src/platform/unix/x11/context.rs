@@ -493,6 +493,11 @@ impl Device {
             self.present_surface_without_context(surface)
         })
     }
+
+    #[inline]
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        context.id
+    }
 }
 
 struct OwnedGLXContext {

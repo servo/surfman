@@ -1,6 +1,5 @@
 //! Declarations common to all platform contexts.
 
-use crate::Context;
 use crate::info::GLVersion;
 
 use std::sync::Mutex;
@@ -10,12 +9,6 @@ pub struct ContextID(pub u64);
 
 lazy_static! {
     pub static ref CREATE_CONTEXT_MUTEX: Mutex<ContextID> = Mutex::new(ContextID(0));
-}
-
-impl Context {
-    pub fn id(&self) -> ContextID {
-        self.id
-    }
 }
 
 bitflags! {
