@@ -8,7 +8,7 @@ use crate::{GLVersion, WindowingApiError};
 use super::adapter::Adapter;
 use super::connection::Connection;
 use super::device::{DCGuard, Device, HiddenWindow};
-use super::surface::{Surface, WidgetInfo};
+use super::surface::{Surface, Win32Objects};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
@@ -245,7 +245,6 @@ impl Device {
                 // Set the pixel format on the DC.
                 let mut pixel_format_descriptor = mem::zeroed();
                 let pixel_format_count =
-
                     wingdi::DescribePixelFormat(dc,
                                                 descriptor.pixel_format,
                                                 mem::size_of::<PIXELFORMATDESCRIPTOR>() as UINT,
@@ -483,7 +482,7 @@ impl Device {
                                        -> Result<Option<Surface>, Error> {
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => {
-                self.unlock_surface(&context.gl, &surface);
+                self.unlock_surface(&surface);
                 Ok(Some(surface))
             }
             Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
@@ -495,9 +494,14 @@ impl Device {
         unsafe {
             match context.framebuffer {
                 Framebuffer::External { dc } => DCGuard::new(dc, None),
-                Framebuffer::Surface(_) | Framebuffer::None => {
-                    context.hidden_window.as_ref().unwrap().get_dc()
-                }
+                Framebuffer::Surface(Surface {
+                    win32_objects: Win32Objects::Widget { window_handle },
+                    ..
+                }) => DCGuard::new(winuser::GetDC(window_handle), Some(window_handle)),
+                Framebuffer::Surface (Surface {
+                    win32_objects: Win32Objects::Texture { .. },
+                    ..
+                }) | Framebuffer::None => context.hidden_window.as_ref().unwrap().get_dc(),
             }
         }
     }

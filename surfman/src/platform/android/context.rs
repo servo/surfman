@@ -114,7 +114,11 @@ impl Device {
         })
     }
 
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
+    pub fn create_context(&mut self,
+                          descriptor: &ContextDescriptor,
+                          surface_access: SurfaceAccess,
+                          surface_type: &SurfaceType<NativeWidget>)
+                          -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         let egl_config = self.context_descriptor_to_egl_config(descriptor);
@@ -128,13 +132,17 @@ impl Device {
             let pbuffer = context::create_dummy_pbuffer(egl_display, egl_config);
 
             // Wrap up the EGL context.
-            let context = Context {
+            let mut context = Context {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
                 id: *next_context_id,
                 pbuffer,
                 framebuffer: Framebuffer::None,
             };
             next_context_id.0 += 1;
+
+            // Build the initial framebuffer.
+            let target = self.create_surface(&context, surface_access, surface_type)?;
+            context.framebuffer = Framebuffer::Surface(target);
             Ok(context)
         }
     }
