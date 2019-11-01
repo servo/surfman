@@ -10,8 +10,6 @@ use std::ffi::CString;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
-#[cfg(feature = "sm-winit")]
-use winit::os::unix::WindowExt;
 
 #[derive(Clone)]
 pub struct Connection {

@@ -56,29 +56,15 @@ impl Device {
         })
     }
 
-    pub fn create_context(&mut self,
-                          descriptor: &ContextDescriptor,
-                          surface_access: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
-                          -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         match (&mut *self, descriptor) {
             (&mut Device::Hardware(ref mut device),
              &ContextDescriptor::Hardware(ref descriptor)) => {
-                 device.create_context(descriptor, surface_access, surface_type)
-                       .map(Context::Hardware)
+                 device.create_context(descriptor).map(Context::Hardware)
             }
             (&mut Device::Software(ref mut device),
              &ContextDescriptor::Software(ref descriptor)) => {
-                let surface_type = match *surface_type {
-                    SurfaceType::Generic { size } => SurfaceType::Generic { size },
-                    SurfaceType::Widget { .. } => {
-                        // TODO(pcwalton): Allow rendering to native widgets using the universal
-                        // backend.
-                        return Err(Error::Unimplemented)
-                    }
-                };
-                device.create_context(descriptor, surface_access, &surface_type)
-                      .map(Context::Software)
+                device.create_context(descriptor).map(Context::Software)
             }
             _ => Err(Error::IncompatibleContextDescriptor),
         }
@@ -131,22 +117,18 @@ impl Device {
         }
     }
 
-    pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
-                                   -> Result<Surface, Error> {
+    pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
+                                   -> Result<(), Error> {
         match (self, &mut *context) {
             (&Device::Hardware(ref device), &mut Context::Hardware(ref mut context)) => {
-                match new_surface {
-                    Surface::Hardware(new_surface) => {
-                        device.replace_context_surface(context, new_surface).map(Surface::Hardware)
-                    }
+                match surface {
+                    Surface::Hardware(surface) => device.bind_surface_to_context(context, surface),
                     _ => Err(Error::IncompatibleSurface),
                 }
             }
             (&Device::Software(ref device), &mut Context::Software(ref mut context)) => {
-                match new_surface {
-                    Surface::Software(new_surface) => {
-                        device.replace_context_surface(context, new_surface).map(Surface::Software)
-                    }
+                match surface {
+                    Surface::Software(surface) => device.bind_surface_to_context(context, surface),
                     _ => Err(Error::IncompatibleSurface),
                 }
             }
@@ -154,37 +136,18 @@ impl Device {
         }
     }
 
-    pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        match (self, context) {
-            (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
-                device.context_surface_framebuffer_object(context)
+    pub fn unbind_surface_from_context(&self, context: &mut Context)
+                                       -> Result<Option<Surface>, Error> {
+        match (self, &mut *context) {
+            (&Device::Hardware(ref device), &mut Context::Hardware(ref mut context)) => {
+                device.unbind_surface_from_context(context).map(|surface| {
+                    surface.map(Surface::Hardware)
+                })
             }
-            (&Device::Software(ref device), &Context::Software(ref context)) => {
-                device.context_surface_framebuffer_object(context)
-            }
-            _ => Err(Error::IncompatibleContext),
-        }
-    }
-
-    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
-        match (self, context) {
-            (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
-                device.context_surface_size(context)
-            }
-            (&Device::Software(ref device), &Context::Software(ref context)) => {
-                device.context_surface_size(context)
-            }
-            _ => Err(Error::IncompatibleContext),
-        }
-    }
-
-    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
-        match (self, context) {
-            (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
-                device.context_surface_id(context)
-            }
-            (&Device::Software(ref device), &Context::Software(ref context)) => {
-                device.context_surface_id(context)
+            (&Device::Software(ref device), &mut Context::Software(ref mut context)) => {
+                device.unbind_surface_from_context(context).map(|surface| {
+                    surface.map(Surface::Software)
+                })
             }
             _ => Err(Error::IncompatibleContext),
         }

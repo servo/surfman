@@ -4,7 +4,7 @@
 
 use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
-use crate::glx::types::Display as GlxDisplay;
+use crate::glx::types::{Display as GlxDisplay, GLXFBConfig};
 use crate::{gl, glx};
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
 use super::context::{Context, GLX_FUNCTIONS, GL_FUNCTIONS};
@@ -103,46 +103,15 @@ impl Device {
         let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor,
                                                                      SurfaceKind::Pixmap);
 
-        GLX_FUNCTIONS.with(|glx| {
-            unsafe {
-                let mut glx_visual_id = 0;
-                let result = glx.GetFBConfigAttrib(glx_display,
-                                                   glx_fb_config,
-                                                   GLX_VISUAL_ID,
-                                                   &mut glx_visual_id);
-                if result != xlib::Success as c_int {
-                    let windowing_api_error = error::glx_error_to_windowing_api_error(result);
-                    return Err(Error::SurfaceCreationFailed(windowing_api_error));
-                }
-
-                // Get the depth of the current visual.
-                let depth = get_depth_of_visual_with_id(display, glx_visual_id as VisualID);
-                let depth = depth.expect("GLX FB config has an invalid visual ID!");
-
-                // Create an X11 pixmap.
-                let pixmap = XCreatePixmap(display,
-                                           XRootWindowOfScreen(XDefaultScreenOfDisplay(display)),
-                                           size.width as c_uint,
-                                           size.height as c_uint,
-                                           depth);
-                if pixmap == 0 {
-                    return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-                }
-
-                // Create a GLX pixmap.
-                let glx_pixmap = glx.CreatePixmap(glx_display, glx_fb_config, pixmap, ptr::null());
-                if glx_pixmap == 0 {
-                    return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-                }
-
-                Ok(Surface {
-                    drawables: SurfaceDrawables::Pixmap { glx_pixmap, pixmap, pixels: None },
-                    size: *size,
-                    context_id: context.id,
-                    destroyed: false,
-                })
-            }
-        })
+        unsafe {
+            let (glx_pixmap, pixmap) = create_pixmaps(display, glx_display, glx_fb_config, size)?;
+            Ok(Surface {
+                drawables: SurfaceDrawables::Pixmap { glx_pixmap, pixmap, pixels: None },
+                size: *size,
+                context_id: context.id,
+                destroyed: false,
+            })
+        }
     }
 
     fn create_widget_surface(&mut self, context: &Context, native_widget: &NativeWidget)
@@ -315,18 +284,13 @@ impl Device {
     }
 
     #[inline]
-    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        self.present_surface_without_context(surface)
-    }
-
-    #[inline]
     pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
 
-    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
-                                                  -> Result<(), Error> {
+    // TODO(pcwalton): Use the `XPRESENT` extension.
+    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
         unsafe {
             GLX_FUNCTIONS.with(|glx| {
                 match surface.drawables {
@@ -357,6 +321,11 @@ impl Surface {
     #[inline]
     pub fn context_id(&self) -> ContextID {
         self.context_id
+    }
+
+    #[inline]
+    pub fn framebuffer_object(&self) -> GLuint {
+        0
     }
 }
 
@@ -398,3 +367,42 @@ unsafe fn get_depth_of_visual_with_id(display: *mut Display, visual_id: VisualID
     XFree(matched_visual_infos as *mut c_void);
     Some(depth)
 }
+
+pub(crate) unsafe fn create_pixmaps(display: *mut Display,
+                                    glx_display: *mut GlxDisplay,
+                                    glx_fb_config: GLXFBConfig,
+                                    size: &Size2D<i32>)
+                                    -> Result<(GLXPixmap, Pixmap), Error> {
+    GLX_FUNCTIONS.with(|glx| {
+        let mut glx_visual_id = 0;
+        let result = glx.GetFBConfigAttrib(glx_display,
+                                           glx_fb_config,
+                                           GLX_VISUAL_ID,
+                                           &mut glx_visual_id);
+        if result != xlib::Success as c_int {
+            let windowing_api_error = error::glx_error_to_windowing_api_error(result);
+            return Err(Error::SurfaceCreationFailed(windowing_api_error));
+        }
+
+        // Get the depth of the current visual.
+        let depth = get_depth_of_visual_with_id(display, glx_visual_id as VisualID);
+        let depth = depth.expect("GLX FB config has an invalid visual ID!");
+
+        let pixmap = XCreatePixmap(display,
+                                   XRootWindowOfScreen(XDefaultScreenOfDisplay(display)),
+                                   size.width as u32,
+                                   size.height as u32,
+                                   depth);
+        if pixmap == 0 {
+            return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
+        }
+
+        let glx_pixmap = glx.CreatePixmap(glx_display, glx_fb_config, pixmap, ptr::null());
+        if glx_pixmap == 0 {
+            return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
+        }
+
+        Ok((glx_pixmap, pixmap))
+    })
+}
+

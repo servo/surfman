@@ -110,4 +110,3 @@ impl Drop for Display {
         }
     }
 }
-

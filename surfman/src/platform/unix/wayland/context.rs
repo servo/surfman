@@ -6,17 +6,15 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLConfig, EGLint};
 use crate::egl;
 use crate::gl::Gl;
-use crate::gl::types::GLuint;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceType};
 use super::device::Device;
 use super::surface::{NativeWidget, Surface, WaylandObjects};
 
-use euclid::default::Size2D;
 use std::mem;
 use std::os::raw::c_void;
 use std::thread;
@@ -98,39 +96,20 @@ impl Device {
         unimplemented!()
     }
 
-    pub fn create_context(&mut self,
-                          descriptor: &ContextDescriptor,
-                          surface_access: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
-                          -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         unsafe {
             // Create the context.
             let egl_display = self.native_connection.egl_display();
             let egl_context = context::create_context(egl_display, descriptor)?;
 
-            // Wrap the context.
-            let mut context = Context {
+            // Wrap and return it.
+            let context = Context {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
             };
             next_context_id.0 += 1;
-
-            // Build the initial surface.
-            let initial_surface = match self.create_surface(&context,
-                                                            surface_access,
-                                                            surface_type) {
-                Ok(surface) => surface,
-                Err(err) => {
-                    self.destroy_context(&mut context)?;
-                    return Err(err);
-                }
-            };
-
-            self.attach_surface(&mut context, initial_surface);
-
-            // Return the context.
             Ok(context)
         }
     }
@@ -140,7 +119,7 @@ impl Device {
             return Ok(());
         }
 
-        if let Some(surface) = self.release_surface(context) {
+        if let Ok(Some(surface)) = self.unbind_surface_from_context(context) {
             self.destroy_surface(context, surface)?;
         }
 
@@ -209,66 +188,12 @@ impl Device {
         })
     }
 
-    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
         match context.framebuffer {
-            Framebuffer::None => unreachable!(),
+            Framebuffer::None => Ok(None),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(surface),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
         }
-    }
-
-    fn context_surface_mut<'c>(&self, context: &'c mut Context)
-                               -> Result<&'c mut Surface, Error> {
-        match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref mut surface) => Ok(surface),
-        }
-    }
-
-    pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
-                                   -> Result<Surface, Error> {
-        if let Framebuffer::External = context.framebuffer {
-            return Err(Error::ExternalRenderTarget)
-        }
-
-        if context.id != new_surface.context_id {
-            return Err(Error::IncompatibleSurface);
-        }
-
-        let is_current = self.context_is_current(context);
-        let old_surface = self.release_surface(context).expect("Where's our surface?");
-        self.attach_surface(context, new_surface);
-
-        if is_current {
-            // We need to make ourselves current again, because the surface changed.
-            self.make_context_current(context)?;
-        }
-
-        Ok(old_surface)
-    }
-
-    #[inline]
-    pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::Surface(Surface {
-                wayland_objects: WaylandObjects::TextureImage { framebuffer_object, .. },
-                ..
-            }) => Ok(framebuffer_object),
-            Framebuffer::Surface(Surface { wayland_objects: WaylandObjects::Window { .. }, .. }) |
-            Framebuffer::External { .. } => Ok(0),
-        }
-    }
-
-    #[inline]
-    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
-        self.context_surface(context).map(|surface| surface.size())
-    }
-
-    #[inline]
-    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
-        self.context_surface(context).map(|surface| surface.id())
     }
 
     #[inline]
@@ -277,13 +202,6 @@ impl Device {
         unsafe {
             context_descriptor.attributes(self.native_connection.egl_display())
         }
-    }
-
-    #[inline]
-    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        self.context_surface_mut(context).and_then(|surface| {
-            self.present_surface_without_context(surface)
-        })
     }
 
     #[inline]
@@ -300,22 +218,41 @@ impl Device {
         }
     }
 
-    fn attach_surface(&self, context: &mut Context, surface: Surface) {
-        match context.framebuffer {
-            Framebuffer::None => {}
-            _ => panic!("Tried to attach a surface, but there was already a surface present!"),
+    pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
+                                   -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
         }
 
-        context.framebuffer = Framebuffer::Surface(surface);
+        match context.framebuffer {
+            Framebuffer::None => {
+                let is_current = self.context_is_current(context);
+                context.framebuffer = Framebuffer::Surface(surface);
+
+                if is_current {
+                    // We need to make ourselves current again, because the surface changed.
+                    self.make_context_current(context)?;
+                }
+
+                Ok(())
+            }
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(_) => Err(Error::SurfaceAlreadyBound),
+        }
     }
 
-    fn release_surface(&self, context: &mut Context) -> Option<Surface> {
-        let surface = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => surface,
-            Framebuffer::None | Framebuffer::External => return None,
-        };
+    pub fn unbind_surface_from_context(&self, context: &mut Context)
+                                       -> Result<Option<Surface>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => return Ok(None),
+            Framebuffer::Surface(_) => {}
+            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+        }
 
-        Some(surface)
+        match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            Framebuffer::Surface(surface) => Ok(Some(surface)),
+            Framebuffer::None | Framebuffer::External => unreachable!(),
+        }
     }
 
     #[inline]

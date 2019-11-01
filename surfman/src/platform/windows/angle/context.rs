@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/windows/angle/context.rs
+//
 //! Wrapper for EGL contexts managed by ANGLE using Direct3D 11 as a backend on Windows.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
@@ -142,26 +144,18 @@ impl Device {
         })
     }
 
-    pub fn create_context(&mut self,
-                          descriptor: &ContextDescriptor,
-                          surface_access: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
-                          -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         unsafe {
             let egl_context = context::create_context(self.native_display.egl_display(),
                                                       descriptor)?;
 
-            let mut context = Context {
+            let context = Context {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
             };
             next_context_id.0 += 1;
-
-            let initial_surface = self.create_surface(&context, surface_access, surface_type)?;
-            self.attach_surface(&mut context, initial_surface);
-
             Ok(context)
         }
     }
@@ -171,7 +165,7 @@ impl Device {
             return Ok(());
         }
 
-        if let Some(surface) = self.release_surface(context) {
+        if let Ok(Some(surface)) = self.unbind_surface_from_context(context) {
             self.destroy_surface(context, surface)?;
         }
 
@@ -193,9 +187,8 @@ impl Device {
         unsafe {
             let egl_surface = match context.framebuffer {
                 Framebuffer::Surface(ref surface) => surface.egl_surface,
-                Framebuffer::None | Framebuffer::External => {
-                    return Err(Error::ExternalRenderTarget)
-                }
+                Framebuffer::None => egl::NO_SURFACE,
+                Framebuffer::External => return Err(Error::ExternalRenderTarget),
             };
 
             EGL_FUNCTIONS.with(|egl| {
@@ -233,68 +226,12 @@ impl Device {
         })
     }
 
-    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
         match context.framebuffer {
-            Framebuffer::None => unreachable!(),
+            Framebuffer::None => Ok(None),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(surface),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
         }
-    }
-
-    fn context_surface_mut<'c>(&self, context: &'c mut Context)
-                               -> Result<&'c mut Surface, Error> {
-        match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref mut surface) => Ok(surface),
-        }
-    }
-
-    pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
-                                   -> Result<Surface, Error> {
-        if let Framebuffer::External = context.framebuffer {
-            return Err(Error::ExternalRenderTarget)
-        }
-
-        if context.id != new_surface.context_id {
-            return Err(Error::IncompatibleSurface);
-        }
-
-        unsafe {
-            let is_current = self.context_is_current(context);
-
-            // If the surface does not use a DXGI keyed mutex, then finish.
-            // FIXME(pcwalton): Is this necessary and sufficient?
-            if !new_surface.uses_keyed_mutex() {
-                let _guard = self.temporarily_make_context_current(context)?;
-                GL_FUNCTIONS.with(|gl| gl.Finish());
-            }
-
-            let old_surface = self.release_surface(context).expect("Where's our surface?");
-            self.attach_surface(context, new_surface);
-
-            if is_current {
-                // We need to make ourselves current again, because the surface changed.
-                self.make_context_current(context)?;
-            }
-
-            Ok(old_surface)
-        }
-    }
-
-    #[inline]
-    pub fn context_surface_framebuffer_object(&self, _context: &Context) -> Result<GLuint, Error> {
-        Ok(0)
-    }
-
-    #[inline]
-    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
-        self.context_surface(context).map(|surface| surface.size())
-    }
-
-    #[inline]
-    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
-        self.context_surface(context).map(|surface| surface.id())
     }
 
     #[inline]
@@ -303,13 +240,6 @@ impl Device {
         unsafe {
             context_descriptor.attributes(self.native_display.egl_display())
         }
-    }
-
-    #[inline]
-    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        self.context_surface_mut(context).and_then(|surface| {
-            self.present_surface_without_context(surface)
-        })
     }
 
     #[inline]
@@ -326,11 +256,28 @@ impl Device {
         }
     }
 
-    fn attach_surface(&self, context: &mut Context, surface: Surface) {
+    pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
+                                   -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
         match context.framebuffer {
             Framebuffer::None => {}
-            _ => panic!("Tried to attach a surface, but there was already a surface present!"),
+            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(_) => return Err(Error::SurfaceAlreadyBound),
         }
+
+        // If the surface does not use a DXGI keyed mutex, then finish.
+        // FIXME(pcwalton): Is this necessary and sufficient?
+        if !surface.uses_keyed_mutex() {
+            let _guard = self.temporarily_make_context_current(context)?;
+            unsafe {
+                GL_FUNCTIONS.with(|gl| gl.Finish());
+            }
+        }
+
+        let is_current = self.context_is_current(context);
 
         match surface.win32_objects {
             Win32Objects::Pbuffer { keyed_mutex: Some(ref keyed_mutex), .. } => {
@@ -343,12 +290,26 @@ impl Device {
         }
 
         context.framebuffer = Framebuffer::Surface(surface);
+
+        if is_current {
+            // We need to make ourselves current again, because the surface changed.
+            self.make_context_current(context)?;
+        }
+
+        Ok(())
     }
 
-    fn release_surface(&self, context: &mut Context) -> Option<Surface> {
+    pub fn unbind_surface_from_context(&self, context: &mut Context)
+                                       -> Result<Option<Surface>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => return Ok(None),
+            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(_) => {}
+        }
+
         let surface = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => surface,
-            Framebuffer::None | Framebuffer::External => return None,
+            Framebuffer::None | Framebuffer::External => unreachable!(),
         };
 
         match surface.win32_objects {
@@ -361,7 +322,7 @@ impl Device {
             _ => {}
         }
 
-        Some(surface)
+        Ok(Some(surface))
     }
 
     #[inline]

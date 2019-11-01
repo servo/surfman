@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/windows/angle/surface.rs
+//
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
 use crate::context::ContextID;
@@ -312,7 +314,7 @@ impl Device {
     pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
-            // leak!
+            // Leak!
             surface.egl_surface = egl::NO_SURFACE;
             return Err(Error::IncompatibleSurface);
         }
@@ -358,18 +360,12 @@ impl Device {
     }
 
     #[inline]
-    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        self.present_surface_without_context(surface)
-    }
-
-    #[inline]
     pub fn lock_surface_data<'s>(&self, _surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
 
-    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
-                                                  -> Result<(), Error> {
+    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
         match surface.win32_objects {
             Win32Objects::Window { .. } => {}
             _ => return Err(Error::NoWidgetAttached),
@@ -399,6 +395,11 @@ impl Surface {
     #[inline]
     pub fn context_id(&self) -> ContextID {
         self.context_id
+    }
+
+    #[inline]
+    pub fn framebuffer_object(&self) -> GLuint {
+        0
     }
 
     #[inline]

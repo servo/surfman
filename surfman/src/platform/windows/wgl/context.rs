@@ -3,16 +3,15 @@
 //! Wrapper for WGL contexts on Windows.
 
 use crate::context::CREATE_CONTEXT_MUTEX;
-use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion, SurfaceAccess};
-use crate::{SurfaceID, SurfaceType, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error};
+use crate::{GLVersion, WindowingApiError};
 use super::adapter::Adapter;
 use super::connection::Connection;
 use super::device::{DCGuard, Device, HiddenWindow};
-use super::surface::{NativeWidget, Surface, Win32Objects};
+use super::surface::{Surface, Win32Objects};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
-use euclid::default::Size2D;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 use std::mem;
@@ -226,11 +225,7 @@ impl Device {
     }
 
     #[allow(non_snake_case)]
-    pub fn create_context(&mut self,
-                          descriptor: &ContextDescriptor,
-                          surface_access: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
-                          -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         let wglCreateContextAttribsARB = match WGL_EXTENSION_FUNCTIONS.CreateContextAttribsARB {
             None => return Err(Error::RequiredExtensionUnavailable),
             Some(wglCreateContextAttribsARB) => wglCreateContextAttribsARB,
@@ -241,35 +236,13 @@ impl Device {
             let (glrc, gl);
 
             // Get a suitable DC.
-            let hidden_window = match *surface_type {
-                SurfaceType::Widget { .. } => None,
-                SurfaceType::Generic { .. } => Some(HiddenWindow::new()),
-            };
+            let hidden_window = HiddenWindow::new();
 
             {
-                let hidden_window_dc = match hidden_window {
-                    None => None,
-                    Some(ref hidden_window) => Some(hidden_window.get_dc()),
-                };
-                let dc = match *surface_type {
-                    SurfaceType::Widget { ref native_widget } => {
-                        winuser::GetDC(native_widget.window_handle)
-                    }
-                    SurfaceType::Generic { .. } => hidden_window_dc.as_ref().unwrap().dc,
-                };
-
-                // Set the pixel format on the DC.
-                let mut pixel_format_descriptor = mem::zeroed();
-                let pixel_format_count =
-                    wingdi::DescribePixelFormat(dc,
-                                                descriptor.pixel_format,
-                                                mem::size_of::<PIXELFORMATDESCRIPTOR>() as UINT,
-                                                &mut pixel_format_descriptor);
-                assert_ne!(pixel_format_count, 0);
-                let ok = wingdi::SetPixelFormat(dc,
-                                                descriptor.pixel_format,
-                                                &mut pixel_format_descriptor);
-                assert_ne!(ok, FALSE);
+                // Set the pixel format on the hidden window DC.
+                let hidden_window_dc = hidden_window.get_dc();
+                let dc = hidden_window_dc.dc;
+                set_dc_pixel_format(dc, descriptor.pixel_format);
 
                 // Make the context.
                 let profile_mask = if descriptor.compatibility_profile {
@@ -298,18 +271,14 @@ impl Device {
             }
 
             // Create the initial context.
-            let mut context = Context {
+            let context = Context {
                 native_context: Box::new(OwnedGLRC { glrc }),
                 id: *next_context_id,
                 gl,
-                hidden_window,
+                hidden_window: Some(hidden_window),
                 framebuffer: Framebuffer::None,
             };
             next_context_id.0 += 1;
-
-            // Build the initial framebuffer.
-            let surface = self.create_surface(&context, surface_access, surface_type)?;
-            self.attach_surface(&mut context, surface);
             Ok(context)
         }
     }
@@ -319,7 +288,7 @@ impl Device {
             return Ok(());
         }
 
-        if let Some(surface) = self.release_surface(context) {
+        if let Ok(Some(surface)) = self.unbind_surface_from_context(context) {
             self.destroy_surface(context, surface)?;
         }
 
@@ -411,29 +380,6 @@ impl Device {
         }
     }
 
-    pub fn replace_context_surface(&self, context: &mut Context, new_surface: Surface)
-                                   -> Result<Surface, Error> {
-        if let Framebuffer::External { .. } = context.framebuffer {
-            return Err(Error::ExternalRenderTarget)
-        }
-
-        if context.id != new_surface.context_id {
-            return Err(Error::IncompatibleSurface);
-        }
-
-        let is_current = self.context_is_current(context);
-
-        let old_surface = self.release_surface(context).expect("Where's our surface?");
-        self.attach_surface(context, new_surface);
-
-        if is_current {
-            // We need to make ourselves current again, because the surface changed.
-            self.make_context_current(context)?;
-        }
-
-        Ok(old_surface)
-    }
-
     pub(crate) fn temporarily_bind_framebuffer<'a>(&self,
                                                    context: &'a Context,
                                                    framebuffer: GLuint)
@@ -476,31 +422,6 @@ impl Device {
         }
     }
 
-    pub fn context_surface_framebuffer_object(&self, context: &Context) -> Result<GLuint, Error> {
-        let surface = self.context_surface(context)?;
-        match surface.win32_objects {
-            Win32Objects::Texture { gl_framebuffer, .. } => Ok(gl_framebuffer),
-            Win32Objects::Widget { .. } => Ok(0),
-        }
-    }
-
-    #[inline]
-    pub fn context_surface_size(&self, context: &Context) -> Result<Size2D<i32>, Error> {
-        self.context_surface(context).map(|surface| surface.size())
-    }
-
-    #[inline]
-    pub fn context_surface_id(&self, context: &Context) -> Result<SurfaceID, Error> {
-        self.context_surface(context).map(|surface| surface.id())
-    }
-
-    #[inline]
-    pub fn present_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        self.context_surface_mut(context).and_then(|surface| {
-            self.present_surface_without_context(surface)
-        })
-    }
-
     #[inline]
     pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
         get_proc_address(symbol_name)
@@ -513,43 +434,52 @@ impl Device {
         }
     }
 
-    fn context_surface<'c>(&self, context: &'c Context) -> Result<&'c Surface, Error> {
+    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
         match context.framebuffer {
-            Framebuffer::None => unreachable!(),
+            Framebuffer::None => Ok(None),
             Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(surface),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
         }
     }
 
-    fn context_surface_mut<'c>(&self, context: &'c mut Context) -> Result<&'c mut Surface, Error> {
+    pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
+                                   -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
         match context.framebuffer {
-            Framebuffer::None => unreachable!(),
-            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref mut surface) => Ok(surface),
+            Framebuffer::None => {}
+            Framebuffer::External { .. } => return Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(_) => return Err(Error::SurfaceAlreadyBound),
         }
+
+        let is_current = self.context_is_current(context);
+
+        self.lock_surface(&surface);
+        context.framebuffer = Framebuffer::Surface(surface);
+
+        if is_current {
+            // We need to make ourselves current again, because the surface changed.
+            self.make_context_current(context)?;
+        }
+
+        Ok(())
     }
 
-    fn attach_surface(&self, context: &mut Context, surface: Surface) {
-        match context.framebuffer {
-            Framebuffer::None => {
-                self.lock_surface(&surface);
-                context.framebuffer = Framebuffer::Surface(surface);
-            }
-            _ => panic!("Tried to attach a surface, but there was already a surface present!"),
-        }
-    }
-
-    fn release_surface(&self, context: &mut Context) -> Option<Surface> {
+    pub fn unbind_surface_from_context(&self, context: &mut Context)
+                                       -> Result<Option<Surface>, Error> {
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => {
                 self.unlock_surface(&surface);
-                Some(surface)
+                Ok(Some(surface))
             }
-            Framebuffer::None | Framebuffer::External { .. } => None,
+            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
+            Framebuffer::None => Ok(None),
         }
     }
 
-    fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
+    pub(crate) fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
         unsafe {
             match context.framebuffer {
                 Framebuffer::External { dc } => DCGuard::new(dc, None),
@@ -842,5 +772,19 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
         OPENGL_LIBRARY.with(|opengl_library| {
             libloaderapi::GetProcAddress(*opengl_library, symbol_ptr) as *const c_void
         })
+    }
+}
+
+pub(crate) fn set_dc_pixel_format(dc: HDC, pixel_format: c_int) {
+    unsafe {
+        let mut pixel_format_descriptor = mem::zeroed();
+        let pixel_format_count =
+            wingdi::DescribePixelFormat(dc,
+                                        pixel_format,
+                                        mem::size_of::<PIXELFORMATDESCRIPTOR>() as UINT,
+                                        &mut pixel_format_descriptor);
+        assert_ne!(pixel_format_count, 0);
+        let ok = wingdi::SetPixelFormat(dc, pixel_format, &mut pixel_format_descriptor);
+        assert_ne!(ok, FALSE);
     }
 }

@@ -261,8 +261,7 @@ impl Device {
     }
 
     // TODO(pcwalton): Damage regions.
-    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
-                                                  -> Result<(), Error> {
+    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
         unsafe {
             match surface.wayland_objects {
                 WaylandObjects::Window { egl_surface, .. } => {
@@ -304,6 +303,13 @@ impl Surface {
     #[inline]
     pub fn context_id(&self) -> ContextID {
         self.context_id
+    }
+
+    pub fn framebuffer_object(&self) -> GLuint {
+        match self.wayland_objects {
+            WaylandObjects::TextureImage { framebuffer_object, .. } => framebuffer_object,
+            WaylandObjects::Window { .. } => 0,
+        }
     }
 }
 

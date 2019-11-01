@@ -5,7 +5,7 @@
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
 use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
-use super::context::{Context, WGL_EXTENSION_FUNCTIONS};
+use super::context::{self, Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
 use crate::gl::types::{GLenum, GLint, GLuint};
@@ -216,10 +216,19 @@ impl Device {
     fn create_widget_surface(&mut self, context: &Context, native_widget: &NativeWidget)
                               -> Result<Surface, Error> {
         unsafe {
+            // Get the bounds of the native HWND.
             let mut widget_rect = mem::zeroed();
             let ok = winuser::GetWindowRect(native_widget.window_handle, &mut widget_rect);
             if ok == FALSE {
                 return Err(Error::InvalidNativeWidget);
+            }
+
+            // Set its pixel format.
+            {
+                let context_dc_guard = self.get_context_dc(context);
+                let pixel_format = wingdi::GetPixelFormat(context_dc_guard.dc);
+                let window_dc = winuser::GetDC(native_widget.window_handle);
+                context::set_dc_pixel_format(window_dc, pixel_format);
             }
 
             Ok(Surface {
@@ -441,8 +450,7 @@ impl Device {
         gl::TEXTURE_2D
     }
 
-    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
-                                                  -> Result<(), Error> {
+    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
         let window_handle = match surface.win32_objects {
             Win32Objects::Widget { window_handle } => window_handle,
             _ => return Err(Error::NoWidgetAttached),
@@ -476,6 +484,13 @@ impl Surface {
     #[inline]
     pub fn context_id(&self) -> ContextID {
         self.context_id
+    }
+
+    pub fn framebuffer_object(&self) -> GLuint {
+        match self.win32_objects {
+            Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
+            Win32Objects::Widget { .. } => 0,
+        }
     }
 }
 

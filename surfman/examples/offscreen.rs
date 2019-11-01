@@ -74,11 +74,11 @@ fn main() {
         flags: ContextAttributeFlags::empty(),
     };
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
-    let mut context = device.create_context(&context_descriptor,
-                                            SurfaceAccess::GPUOnly,
-                                            &SurfaceType::Generic {
+    let mut context = device.create_context(&context_descriptor).unwrap();
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, &SurfaceType::Generic {
         size: Size2D::new(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT),
     }).unwrap();
+    device.bind_surface_to_context(&mut context, surface).unwrap();
 
     gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
     device.make_context_current(&context).unwrap();
