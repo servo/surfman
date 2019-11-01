@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/windows/angle/adapter.rs
+//
 //! A wrapper for DXGI adapters and Direct3D 11 drivers.
 
 use crate::Error;

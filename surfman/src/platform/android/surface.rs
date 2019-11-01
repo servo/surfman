@@ -214,11 +214,6 @@ impl Device {
     }
 
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        self.present_surface_without_context(surface)
-    }
-
-    pub(crate) fn present_surface_without_context(&self, surface: &mut Surface)
-                                                  -> Result<(), Error> {
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
                 match surface.objects {
@@ -364,6 +359,13 @@ impl Surface {
     #[inline]
     pub fn context_id(&self) -> ContextID {
         self.context_id
+    }
+
+    pub fn framebuffer_object(&self) -> GLuint {
+        match self.objects {
+            SurfaceObjects::HardwareBuffer { framebuffer_object, .. } => framebuffer_object,
+            SurfaceObjects::Window { .. } => 0,
+        }
     }
 }
 
