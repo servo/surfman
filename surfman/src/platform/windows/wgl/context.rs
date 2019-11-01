@@ -239,21 +239,10 @@ impl Device {
             let hidden_window = HiddenWindow::new();
 
             {
+                // Set the pixel format on the hidden window DC.
                 let hidden_window_dc = hidden_window.get_dc();
                 let dc = hidden_window_dc.dc;
-
-                // Set the pixel format on the DC.
-                let mut pixel_format_descriptor = mem::zeroed();
-                let pixel_format_count =
-                    wingdi::DescribePixelFormat(dc,
-                                                descriptor.pixel_format,
-                                                mem::size_of::<PIXELFORMATDESCRIPTOR>() as UINT,
-                                                &mut pixel_format_descriptor);
-                assert_ne!(pixel_format_count, 0);
-                let ok = wingdi::SetPixelFormat(dc,
-                                                descriptor.pixel_format,
-                                                &mut pixel_format_descriptor);
-                assert_ne!(ok, FALSE);
+                set_dc_pixel_format(dc, descriptor.pixel_format);
 
                 // Make the context.
                 let profile_mask = if descriptor.compatibility_profile {
@@ -490,7 +479,7 @@ impl Device {
         }
     }
 
-    fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
+    pub(crate) fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
         unsafe {
             match context.framebuffer {
                 Framebuffer::External { dc } => DCGuard::new(dc, None),
@@ -783,5 +772,19 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
         OPENGL_LIBRARY.with(|opengl_library| {
             libloaderapi::GetProcAddress(*opengl_library, symbol_ptr) as *const c_void
         })
+    }
+}
+
+pub(crate) fn set_dc_pixel_format(dc: HDC, pixel_format: c_int) {
+    unsafe {
+        let mut pixel_format_descriptor = mem::zeroed();
+        let pixel_format_count =
+            wingdi::DescribePixelFormat(dc,
+                                        pixel_format,
+                                        mem::size_of::<PIXELFORMATDESCRIPTOR>() as UINT,
+                                        &mut pixel_format_descriptor);
+        assert_ne!(pixel_format_count, 0);
+        let ok = wingdi::SetPixelFormat(dc, pixel_format, &mut pixel_format_descriptor);
+        assert_ne!(ok, FALSE);
     }
 }

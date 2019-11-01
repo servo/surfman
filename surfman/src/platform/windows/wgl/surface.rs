@@ -5,7 +5,7 @@
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
 use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
-use super::context::{Context, WGL_EXTENSION_FUNCTIONS};
+use super::context::{self, Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
 use crate::gl::types::{GLenum, GLint, GLuint};
@@ -216,10 +216,19 @@ impl Device {
     fn create_widget_surface(&mut self, context: &Context, native_widget: &NativeWidget)
                               -> Result<Surface, Error> {
         unsafe {
+            // Get the bounds of the native HWND.
             let mut widget_rect = mem::zeroed();
             let ok = winuser::GetWindowRect(native_widget.window_handle, &mut widget_rect);
             if ok == FALSE {
                 return Err(Error::InvalidNativeWidget);
+            }
+
+            // Set its pixel format.
+            {
+                let context_dc_guard = self.get_context_dc(context);
+                let pixel_format = wingdi::GetPixelFormat(context_dc_guard.dc);
+                let window_dc = winuser::GetDC(native_widget.window_handle);
+                context::set_dc_pixel_format(window_dc, pixel_format);
             }
 
             Ok(Surface {
