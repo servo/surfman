@@ -1,4 +1,4 @@
-// surfman/src/gl_utils.rs
+// surfman/surfman/src/gl_utils.rs
 //
 //! Various OpenGL utilities used by the different backends.
 

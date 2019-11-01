@@ -1,4 +1,6 @@
-// surfman/build.rs
+// surfman/surfman/build.rs
+//
+// The `surfman` build script.
 
 use gl_generator::{Api, Fallbacks, Profile, Registry, StructGenerator};
 use std::env;

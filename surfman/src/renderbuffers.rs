@@ -1,11 +1,6 @@
-// surfman/src/renderbuffers.rs
-
+// surfman/surfman/src/renderbuffers.rs
+//
 //! A utility module for backends that wrap surfaces in OpenGL FBOs.
-//!
-//! FIXME(pcwalton): This can only really be used by one backend at a
-//! time, thanks to the use of `GL_FUNCTIONS`. This works for now, but
-//! it will need to be revisited if a platform can ever have two
-//! backends that need renderbuffers.
 
 use crate::context::{ContextAttributeFlags, ContextAttributes};
 use crate::gl::types::GLuint;

@@ -1,3 +1,5 @@
+// surfman/surfman/src/info.rs
+//
 //! OpenGL information.
 
 /// The API (OpenGL or OpenGL ES).

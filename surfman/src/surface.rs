@@ -1,7 +1,23 @@
-//! Information related to hardware surfaces.
+// surfman/surfman/src/surface.rs 
+//
+//! Declarations common to all surfaces.
+
+use crate::gl::types::GLuint;
+use crate::ContextID;
 
 use euclid::default::Size2D;
 use std::fmt::{self, Display, Formatter};
+
+pub trait Surface {
+    fn size(&self) -> Size2D<i32>;
+    fn id(&self) -> SurfaceID;
+    fn context_id(&self) -> ContextID;
+    fn framebuffer_object(&self) -> GLuint;
+}
+
+pub trait SurfaceTexture {
+    fn gl_texture(&self) -> GLuint;
+}
 
 // The default framebuffer for a context.
 #[allow(dead_code)]

@@ -1,3 +1,5 @@
+// surfman/surfman/src/context.rs
+//
 //! Declarations common to all platform contexts.
 
 use crate::info::GLVersion;

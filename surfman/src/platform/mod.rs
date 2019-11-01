@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/mod.rs
+//
 //! Platform-specific backends.
 
 pub mod generic;

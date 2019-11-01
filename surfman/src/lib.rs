@@ -1,3 +1,5 @@
+// surfman/surfman/src/lib.rs
+//
 //! Cross-platform GPU device and surface management.
 //!
 //! You can use this crate to multithread a graphics application so that rendering happens on
@@ -21,6 +23,10 @@ pub use platform::default::connection::Connection;
 pub use platform::default::context::{Context, ContextDescriptor};
 pub use platform::default::device::Device;
 pub use platform::default::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture};
+
+pub mod adapter;
+pub mod connection;
+pub mod device;
 
 pub mod error;
 pub use crate::error::{Error, WindowingApiError};
