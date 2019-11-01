@@ -245,6 +245,7 @@ impl Device {
                 // Set the pixel format on the DC.
                 let mut pixel_format_descriptor = mem::zeroed();
                 let pixel_format_count =
+
                     wingdi::DescribePixelFormat(dc,
                                                 descriptor.pixel_format,
                                                 mem::size_of::<PIXELFORMATDESCRIPTOR>() as UINT,
@@ -482,7 +483,7 @@ impl Device {
                                        -> Result<Option<Surface>, Error> {
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => {
-                self.unlock_surface(&surface);
+                self.unlock_surface(&context.gl, &surface);
                 Ok(Some(surface))
             }
             Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),

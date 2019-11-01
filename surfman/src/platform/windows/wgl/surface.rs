@@ -12,21 +12,22 @@ use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
 use crate::gl_utils;
 use euclid::default::Size2D;
+use std::ffi::CStr;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
-use std::os::raw::c_void;
+use std::os::raw::{c_char, c_void};
 use std::ptr;
 use std::thread;
 use winapi::Interface;
-use winapi::shared::dxgi::{DXGI_SWAP_EFFECT_DISCARD, IDXGIAdapter, IDXGIResource};
-use winapi::shared::dxgi1_2::{DXGI_ALPHA_MODE_STRAIGHT, DXGI_PRESENT_PARAMETERS, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, IDXGIDevice2, IDXGIFactory2, IDXGISwapChain1};
-use winapi::shared::dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM;
+use winapi::shared::dxgi::{DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_SWAP_EFFECT_SEQUENTIAL, IDXGIAdapter, IDXGIResource};
+use winapi::shared::dxgi1_2::{DXGI_ALPHA_MODE_UNSPECIFIED, DXGI_PRESENT_PARAMETERS, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, IDXGIDevice2, IDXGIFactory2, IDXGISwapChain1};
+use winapi::shared::dxgiformat::DXGI_FORMAT_B8G8R8A8_UNORM;
 use winapi::shared::dxgitype::{DXGI_SAMPLE_DESC, DXGI_USAGE_RENDER_TARGET_OUTPUT, DXGI_USAGE_SHARED};
 use winapi::shared::minwindef::{FALSE, UINT};
 use winapi::shared::ntdef::HANDLE;
 use winapi::shared::windef::HWND;
-use winapi::shared::winerror;
+use winapi::shared::winerror::{self, S_OK};
 use winapi::um::d3d11::{D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE};
 use winapi::um::d3d11::{D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX, D3D11_TEXTURE2D_DESC};
 use winapi::um::d3d11::{D3D11_USAGE_DEFAULT, ID3D11Texture2D};
@@ -120,7 +121,7 @@ impl Device {
                 Height: size.height as UINT,
                 MipLevels: 1,
                 ArraySize: 1,
-                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
                 SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
                 Usage: D3D11_USAGE_DEFAULT,
                 BindFlags: D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
@@ -174,6 +175,12 @@ impl Device {
     fn create_widget_surface(&mut self, context: &Context, native_widget: &NativeWidget)
                               -> Result<Surface, Error> {
         unsafe {
+            let _guard = self.temporarily_make_context_current(context)?;
+
+            let vendor_string = context.gl.GetString(gl::VENDOR) as *const c_char;
+            let vendor_string = CStr::from_ptr(vendor_string).to_string_lossy();
+            println!("vendor: {}", vendor_string);
+
             let mut widget_rect = mem::zeroed();
             let ok = winuser::GetWindowRect(native_widget.window_handle, &mut widget_rect);
             if ok == FALSE {
@@ -205,19 +212,23 @@ impl Device {
             let dxgi_factory = ComPtr::from_raw(dxgi_factory);
 
             // Create the swap chain descriptor.
+            //
+            // FIXME(pcwalton): There seem to be synchronization issues with
+            // `DXGI_SWAP_EFFECT_DISCARD` on _____, so we use `DXGI_SWAP_EFFECT_SEQUENTIAL`
+            // instead. This does not make me happy.
             let size = Size2D::new(widget_rect.right - widget_rect.left,
                                    widget_rect.bottom - widget_rect.top);
             let dxgi_swap_chain_desc = DXGI_SWAP_CHAIN_DESC1 {
                 Width: size.width as UINT,
                 Height: size.height as UINT,
-                Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
                 Stereo: FALSE,
                 SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
-                BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT | DXGI_USAGE_SHARED,
-                BufferCount: 1,
+                BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
+                BufferCount: 2,
                 Scaling: DXGI_SCALING_STRETCH,
-                SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-                AlphaMode: DXGI_ALPHA_MODE_STRAIGHT,
+                SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
+                AlphaMode: DXGI_ALPHA_MODE_UNSPECIFIED,
                 Flags: 0,
             };
 
@@ -230,7 +241,8 @@ impl Device {
                                                     ptr::null(),
                                                     ptr::null_mut(),
                                                     &mut dxgi_swap_chain);
-            assert!(winerror::SUCCEEDED(result));
+            println!("CreateSwapChainForHwnd result={:x}", result);
+            assert_eq!(result, S_OK);
             let dxgi_swap_chain = ComPtr::from_raw(dxgi_swap_chain);
 
             // Take the back buffer.
@@ -425,21 +437,27 @@ impl Device {
             let ok = (dx_interop_functions.DXLockObjectsNV)(self.gl_dx_interop_device,
                                                             1,
                                                             &mut gl_dx_interop_object);
+            //println!("locked object: {:x}", gl_dx_interop_object as usize);
             assert_ne!(ok, FALSE);
         }
     }
 
-    pub(crate) fn unlock_surface(&self, surface: &Surface) {
+    pub(crate) fn unlock_surface(&self, gl: &Gl, surface: &Surface) {
         let dx_interop_functions =
             WGL_EXTENSION_FUNCTIONS.dx_interop_functions
                                    .as_ref()
                                    .expect("How did you make a surface without DX interop?");
 
         unsafe {
+            // FIXME(pcwalton): This seems to be necessary for proper synchronization, but not per
+            // the spec. I don't like that.
+            //gl.Finish();
+
             let mut gl_dx_interop_object = surface.dx_interop_texture.gl_dx_interop_object;
             let ok = (dx_interop_functions.DXUnlockObjectsNV)(self.gl_dx_interop_device,
                                                               1,
                                                               &mut gl_dx_interop_object);
+            //println!("unlocked object: {:x}", gl_dx_interop_object as usize);
             assert_ne!(ok, FALSE);
         }
     }
@@ -457,6 +475,8 @@ impl Device {
 
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         unsafe {
+            let _guard = self.temporarily_make_context_current(context)?;
+
             // Grab the swap chain.
             let dxgi_swap_chain = match surface.widget_info {
                 None => return Err(Error::NoWidgetAttached),
@@ -464,7 +484,7 @@ impl Device {
             };
 
             // Release the texture from DX interop.
-            context.gl.Flush();
+            //context.gl.Flush();
             surface.dx_interop_texture.destroy(&context.gl, self.gl_dx_interop_device);
 
             // Present it.
@@ -476,7 +496,7 @@ impl Device {
                 pScrollRect: ptr::null_mut(),
                 pScrollOffset: ptr::null_mut(),
             };
-            let result = (*dxgi_swap_chain).Present1(1, 0, &dxgi_present_parameters);
+            let result = (*dxgi_swap_chain).Present1(0, 0, &dxgi_present_parameters);
             assert!(winerror::SUCCEEDED(result));
 
             // Take the new back buffer.
@@ -571,14 +591,16 @@ impl DXInteropTexture {
             // across contexts.
             let mut dxgi_share_handle = INVALID_HANDLE_VALUE;
             let result = dxgi_resource.GetSharedHandle(&mut dxgi_share_handle);
-            assert!(winerror::SUCCEEDED(result));
-            assert_ne!(dxgi_share_handle, INVALID_HANDLE_VALUE);
+            if result == S_OK {
+                println!("warning: failed to get shared handle!");
+                assert_ne!(dxgi_share_handle, INVALID_HANDLE_VALUE);
 
-            // Tell GL about the share handle.
-            let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
-                d3d11_texture.as_raw() as *mut c_void,
-                dxgi_share_handle);
-            assert_ne!(ok, FALSE);
+                // Tell GL about the share handle.
+                let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
+                    d3d11_texture.as_raw() as *mut c_void,
+                    dxgi_share_handle);
+                assert_ne!(ok, FALSE);
+            }
 
             // Make our texture object on the GL side.
             let mut gl_texture = 0;
