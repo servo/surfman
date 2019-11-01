@@ -150,6 +150,11 @@ impl Surface {
     pub fn context_id(&self) -> ContextID {
         self.context_id
     }
+
+    #[inline]
+    pub fn framebuffer_object(&self) -> GLuint {
+        0
+    }
 }
 
 impl SurfaceTexture {

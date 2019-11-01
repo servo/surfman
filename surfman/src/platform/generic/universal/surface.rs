@@ -151,6 +151,14 @@ impl Surface {
             Surface::Software(ref surface) => surface.id(),
         }
     }
+
+    #[inline]
+    pub fn framebuffer_object(&self) -> GLuint {
+        match *self {
+            Surface::Hardware(ref surface) => surface.framebuffer_object(),
+            Surface::Software(ref surface) => surface.framebuffer_object(),
+        }
+    }
 }
 
 impl SurfaceTexture {
