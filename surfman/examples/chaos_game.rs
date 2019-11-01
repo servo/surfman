@@ -47,8 +47,9 @@ fn main() {
     }).unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
-    let mut context =
-        device.create_context(&context_descriptor, SurfaceAccess::GPUCPU, &surface_type).unwrap();
+    let context = device.create_context(&context_descriptor).unwrap();
+    let mut surface = device.create_surface(&context, SurfaceAccess::GPUCPU, &surface_type)
+                            .unwrap();
 
     let mut rng = rand::thread_rng();
     let mut point = Point2D::new(WINDOW_WIDTH as f32 * 0.5, WINDOW_HEIGHT as f32 * 0.5);
@@ -62,8 +63,8 @@ fn main() {
             put_pixel(&mut data, &point, FOREGROUND_COLOR);
         }
 
-        device.lock_context_surface_data(&mut context).unwrap().data().copy_from_slice(&data);
-        device.present_context_surface(&mut context).unwrap();
+        device.lock_surface_data(&mut surface).unwrap().data().copy_from_slice(&data);
+        device.present_surface(&context, &mut surface).unwrap();
 
         event_loop.poll_events(|event| {
             match event {
