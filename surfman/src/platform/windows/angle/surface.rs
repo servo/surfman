@@ -122,23 +122,34 @@ impl Device {
             ];
 
             EGL_FUNCTIONS.with(|egl| {
-                let egl_surface = egl.CreatePbufferSurface(self.native_display.egl_display(),
+                let egl_surface = if share_handle.is_some() {
+                    egl::NO_SURFACE
+                } else {
+                    let surface = egl.CreatePbufferSurface(self.native_display.egl_display(),
                                                            egl_config,
                                                            attributes.as_ptr());
-                assert_ne!(egl_surface, egl::NO_SURFACE);
+                    assert_ne!(surface, egl::NO_SURFACE);
+                    surface
+                };
 
-                let mut share_handle = INVALID_HANDLE_VALUE;
                 let eglQuerySurfacePointerANGLE =
                     EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE
                                         .expect("Where's the `EGL_ANGLE_query_surface_pointer` \
                                                     extension?");
-                let result =
-                    eglQuerySurfacePointerANGLE(self.native_display.egl_display(),
-                                                egl_surface,
-                                                EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
-                                                &mut share_handle);
-                assert_ne!(result, egl::FALSE);
-                assert_ne!(share_handle, INVALID_HANDLE_VALUE);
+
+                let share_handle = if let Some(share_handle) = share_handle {
+                    share_handle
+                } else {
+                    let mut share_handle = INVALID_HANDLE_VALUE;
+                    let result =
+                        eglQuerySurfacePointerANGLE(self.native_display.egl_display(),
+                                                    egl_surface,
+                                                    EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
+                                                    &mut share_handle);
+                    assert_ne!(result, egl::FALSE);
+                    assert_ne!(share_handle, INVALID_HANDLE_VALUE);
+                    HandleOrTexture::Handle(share_handle)
+                };
 
                 // `mozangle` builds ANGLE with keyed mutexes for sharing. Use the
                 // `EGL_ANGLE_keyed_mutex` extension to fetch the keyed mutex so we can grab it.
@@ -162,7 +173,7 @@ impl Device {
                     context_id: context.id,
                     context_descriptor,
                     win32_objects: Win32Objects::Pbuffer {
-                        share_handle: HandleOrTexture::Handle(share_handle),
+                        share_handle,
                         keyed_mutex
                     },
                 })
