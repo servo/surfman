@@ -6,8 +6,7 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay, EGLSurface};
 use crate::egl::types::{EGLenum, EGLint};
 use crate::egl;
-use crate::gl::types::GLuint;
-use crate::gl::{self, Gl};
+use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
 use crate::platform::generic::egl::device::{EGL_FUNCTIONS, OwnedEGLDisplay};
@@ -16,16 +15,12 @@ use crate::platform::generic::egl::ffi::EGL_D3D11_DEVICE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_NO_DEVICE_EXT;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
-use crate::{SurfaceID, SurfaceInfo, SurfaceType};
-use super::adapter::Adapter;
+use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
-use super::surface::{NativeWidget, Surface, SurfaceTexture, Win32Objects};
+use super::surface::{Surface, Win32Objects};
 
-use euclid::default::Size2D;
-use std::ffi::CString;
 use std::mem;
-use std::os::raw::{c_char, c_void};
+use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
 use winapi::shared::winerror::S_OK;
@@ -82,6 +77,7 @@ impl Device {
     /// library will not modify or try to detect the render target. This means that any of the
     /// methods that query or replace the surface—e.g. `replace_context_surface`—will fail if
     /// called with a context object created via this method.
+    #[allow(non_snake_case)]
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
@@ -133,7 +129,7 @@ impl Device {
             };
 
             // Create the context.
-            let mut context = Context {
+            let context = Context {
                 native_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::External,
@@ -224,14 +220,6 @@ impl Device {
                 egl.GetCurrentContext() == context.native_context.egl_context()
             }
         })
-    }
-
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
-        match context.framebuffer {
-            Framebuffer::None => Ok(None),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
-        }
     }
 
     #[inline]

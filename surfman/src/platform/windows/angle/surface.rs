@@ -3,7 +3,7 @@
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
 use crate::context::ContextID;
-use crate::egl::types::{EGLSurface, EGLenum};
+use crate::egl::types::EGLSurface;
 use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
@@ -13,8 +13,8 @@ use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_DXGI_KEYED_MUTEX_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
-use crate::{ContextAttributeFlags, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
-use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
+use super::context::{Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::Device;
 
 use euclid::default::Size2D;
@@ -105,6 +105,7 @@ impl Device {
         }
     }
 
+    #[allow(non_snake_case)]
     fn create_pbuffer_surface(&mut self,
                               context: &Context,
                               size: &Size2D<i32>,
@@ -221,6 +222,7 @@ impl Device {
         self.create_pbuffer_surface(context, size, Some(HandleOrTexture::Texture(texture)))
     }
 
+    #[allow(non_snake_case)]
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
         let share_handle = match surface.win32_objects {
@@ -392,11 +394,11 @@ impl Device {
     }
 
     #[inline]
-    pub fn context_surface(&self, surface: &Surface) -> SurfaceInfo {
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
         SurfaceInfo {
-            size: self.size,
-            id: self.id(),
-            context_id: self.context_id,
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
             framebuffer_object: 0,
         }
     }

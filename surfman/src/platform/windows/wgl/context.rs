@@ -3,12 +3,12 @@
 //! Wrapper for WGL contexts on Windows.
 
 use crate::context::CREATE_CONTEXT_MUTEX;
-use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error};
-use crate::{GLVersion, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion};
+use crate::{SurfaceInfo, WindowingApiError};
 use super::adapter::Adapter;
 use super::connection::Connection;
 use super::device::{DCGuard, Device, HiddenWindow};
-use super::surface::{Surface, SurfaceInfo, Win32Objects};
+use super::surface::{Surface, Win32Objects};
 
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl::{self, Gl};
@@ -434,14 +434,6 @@ impl Device {
         }
     }
 
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
-        match context.framebuffer {
-            Framebuffer::None => Ok(None),
-            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
-        }
-    }
-
     pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
                                    -> Result<(), Error> {
         if context.id != surface.context_id {
@@ -503,7 +495,7 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
     }

@@ -4,7 +4,7 @@
 
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 use super::context::{self, Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
@@ -466,11 +466,11 @@ impl Device {
     }
 
     #[inline]
-    pub fn context_surface(&self, surface: &Surface) -> SurfaceInfo {
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
         SurfaceInfo {
-            size: self.size,
-            id: self.id(),
-            context_id: self.context_id,
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
             framebuffer_object: match surface.win32_objects {
                 Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
                 Win32Objects::Widget { .. } => 0,
