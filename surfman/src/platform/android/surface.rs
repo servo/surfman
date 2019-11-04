@@ -338,10 +338,10 @@ impl Device {
 
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
         SurfaceInfo {
-            size: self.size,
-            id: self.id(),
-            context_id: self.context_id,
-            framebuffer_object: match self.objects {
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
+            framebuffer_object: match surface.objects {
                 SurfaceObjects::HardwareBuffer { framebuffer_object, .. } => framebuffer_object,
                 SurfaceObjects::Window { .. } => 0,
             },
