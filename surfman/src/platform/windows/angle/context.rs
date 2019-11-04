@@ -17,7 +17,7 @@ use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_NO_DEVICE_EXT;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
-use crate::{SurfaceID, SurfaceType};
+use crate::{SurfaceID, SurfaceInfo, SurfaceType};
 use super::adapter::Adapter;
 use super::device::Device;
 use super::surface::{NativeWidget, Surface, SurfaceTexture, Win32Objects};
@@ -328,5 +328,13 @@ impl Device {
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
+    }
+
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
     }
 }

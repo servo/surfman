@@ -5,11 +5,10 @@ use crate::platform::default::surface::Surface as HWSurface;
 use crate::platform::default::surface::SurfaceTexture as HWSurfaceTexture;
 use crate::platform::generic::osmesa::surface::Surface as OSMesaSurface;
 use crate::platform::generic::osmesa::surface::SurfaceTexture as OSMesaSurfaceTexture;
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use super::context::Context;
 use super::device::Device;
 
-use euclid::default::Size2D;
 use std::marker::PhantomData;
 
 pub use crate::platform::default::surface::NativeWidget;
@@ -133,30 +132,17 @@ impl Device {
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
-}
-
-impl Surface {
-    #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        match *self {
-            Surface::Hardware(ref surface) => surface.size(),
-            Surface::Software(ref surface) => surface.size(),
-        }
-    }
 
     #[inline]
-    pub fn id(&self) -> SurfaceID {
-        match *self {
-            Surface::Hardware(ref surface) => surface.id(),
-            Surface::Software(ref surface) => surface.id(),
-        }
-    }
-
-    #[inline]
-    pub fn framebuffer_object(&self) -> GLuint {
-        match *self {
-            Surface::Hardware(ref surface) => surface.framebuffer_object(),
-            Surface::Software(ref surface) => surface.framebuffer_object(),
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        match (self, surface) {
+            (&Device::Hardware(ref device), &Surface::Hardware(ref surface)) => {
+                device.surface_info(surface)
+            }
+            (&Device::Software(ref device), &Surface::Software(ref surface)) => {
+                device.surface_info(surface)
+            }
+            _ => panic!("Incompatible surface!"),
         }
     }
 }

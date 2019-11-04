@@ -7,7 +7,7 @@ use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXFBConfig, GLXPixma
 use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceAccess};
-use crate::{SurfaceType, WindowingApiError};
+use crate::{SurfaceInfo, SurfaceType, WindowingApiError};
 use super::device::{Device, Quirks, UnsafeDisplayRef};
 use super::surface::{self, NativeWidget, Surface, SurfaceDrawables, SurfaceKind};
 
@@ -463,6 +463,14 @@ impl Device {
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
+    }
+
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
     }
 }
 

@@ -5,7 +5,7 @@
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::Gl;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use super::adapter::Adapter;
 use super::connection::Connection;
 use super::device::Device;
@@ -343,11 +343,11 @@ impl Device {
         get_proc_address(symbol_name)
     }
 
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
             Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
+            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
     }
 

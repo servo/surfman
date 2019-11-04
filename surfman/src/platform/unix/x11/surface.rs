@@ -303,29 +303,24 @@ impl Device {
             })
         }
     }
+
+    #[inline]
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: self.size,
+            id: self.id(),
+            context_id: self.context_id,
+            framebuffer_object: 0,
+        }
+    }
 }
 
 impl Surface {
-    #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
-    pub fn id(&self) -> SurfaceID {
+    fn id(&self) -> SurfaceID {
         match self.drawables {
             SurfaceDrawables::Pixmap { glx_pixmap, .. } => SurfaceID(glx_pixmap as usize),
             SurfaceDrawables::Window { window } => SurfaceID(window as usize),
         }
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    #[inline]
-    pub fn framebuffer_object(&self) -> GLuint {
-        0
     }
 }
 

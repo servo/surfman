@@ -219,10 +219,10 @@ impl App {
             self.device.make_context_current(&self.context).unwrap();
 
             let framebuffer_object = self.device
-                                         .context_surface(&self.context)
+                                         .context_surface_info(&self.context)
                                          .unwrap()
                                          .unwrap()
-                                         .framebuffer_object();
+                                         .framebuffer_object;
 
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::Viewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -352,10 +352,10 @@ fn worker_thread(connection: Connection,
     loop {
         // Render to the surface.
         unsafe {
-            let framebuffer_object = device.context_surface(&context)
+            let framebuffer_object = device.context_surface_info(&context)
                                            .unwrap()
                                            .unwrap()
-                                           .framebuffer_object();
+                                           .framebuffer_object;
 
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::Viewport(0, 0, size.width, size.height);

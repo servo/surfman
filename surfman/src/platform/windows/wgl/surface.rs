@@ -464,32 +464,28 @@ impl Device {
             Ok(())
         }
     }
+
+    #[inline]
+    pub fn context_surface(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: self.size,
+            id: self.id(),
+            context_id: self.context_id,
+            framebuffer_object: match surface.win32_objects {
+                Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
+                Win32Objects::Widget { .. } => 0,
+            },
+        }
+    }
 }
 
 impl Surface {
-    #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
     pub fn id(&self) -> SurfaceID {
         match self.win32_objects {
             Win32Objects::Texture { ref d3d11_texture, .. } => {
                 SurfaceID((*d3d11_texture).as_raw() as usize)
             }
             Win32Objects::Widget { window_handle } => SurfaceID(window_handle as usize),
-        }
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    pub fn framebuffer_object(&self) -> GLuint {
-        match self.win32_objects {
-            Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
-            Win32Objects::Widget { .. } => 0,
         }
     }
 }

@@ -13,7 +13,7 @@ use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_DXGI_KEYED_MUTEX_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
-use crate::{ContextAttributeFlags, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextAttributeFlags, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::Device;
 
@@ -390,27 +390,22 @@ impl Device {
             }
         })
     }
+
+    #[inline]
+    pub fn context_surface(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: self.size,
+            id: self.id(),
+            context_id: self.context_id,
+            framebuffer_object: 0,
+        }
+    }
 }
 
 impl Surface {
     #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
-    #[inline]
-    pub fn id(&self) -> SurfaceID {
+    fn id(&self) -> SurfaceID {
         SurfaceID(self.egl_surface as usize)
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    #[inline]
-    pub fn framebuffer_object(&self) -> GLuint {
-        0
     }
 
     #[inline]

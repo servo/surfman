@@ -32,7 +32,7 @@ mod info;
 pub use crate::info::{GLApi, GLVersion};
 
 mod surface;
-pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceType};
+pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 
 mod gl_utils;
 mod renderbuffers;

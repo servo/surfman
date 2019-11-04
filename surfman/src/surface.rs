@@ -1,7 +1,26 @@
+// surfman/surfman/src/surface.rs
+//
 //! Information related to hardware surfaces.
 
+use crate::context::ContextID;
+
+use crate::gl::types::GLuint;
 use euclid::default::Size2D;
 use std::fmt::{self, Display, Formatter};
+
+/// Various data about the surface.
+pub struct SurfaceInfo {
+    /// The surface's size, in device pixels.
+    pub size: Size2D<i32>,
+    /// The ID of the surface. This should be globally unique for each currently-allocated surface.
+    pub id: SurfaceID,
+    /// The ID of the context that this surface belongs to.
+    pub context_id: ContextID,
+    /// The OpenGL framebuffer object that can be used to render to this surface.
+    /// 
+    /// This is only valid when the surface is actually attached to a context.
+    pub framebuffer_object: GLuint,
+}
 
 // The default framebuffer for a context.
 #[allow(dead_code)]

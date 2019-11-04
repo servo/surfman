@@ -285,30 +285,25 @@ impl Device {
     pub fn surface_gl_texture_target(&self) -> GLenum {
         SURFACE_GL_TEXTURE_TARGET
     }
+
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
+            framebuffer_object: match self.wayland_objects {
+                WaylandObjects::TextureImage { framebuffer_object, .. } => framebuffer_object,
+                WaylandObjects::Window { .. } => 0,
+            },
+        }
+    }
 }
 
 impl Surface {
-    #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
-    pub fn id(&self) -> SurfaceID {
+    fn id(&self) -> SurfaceID {
         match self.wayland_objects {
             WaylandObjects::TextureImage { egl_image, .. } => SurfaceID(egl_image as usize),
             WaylandObjects::Window { egl_surface, .. } => SurfaceID(egl_surface as usize),
-        }
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    pub fn framebuffer_object(&self) -> GLuint {
-        match self.wayland_objects {
-            WaylandObjects::TextureImage { framebuffer_object, .. } => framebuffer_object,
-            WaylandObjects::Window { .. } => 0,
         }
     }
 }

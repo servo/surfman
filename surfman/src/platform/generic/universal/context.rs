@@ -1,18 +1,15 @@
 //! A context abstraction that can switch between hardware and software rendering.
 
-use crate::gl::types::GLuint;
 use crate::platform::default::context::Context as HWContext;
 use crate::platform::default::context::ContextDescriptor as HWContextDescriptor;
-use crate::platform::default::surface::NativeWidget;
 use crate::platform::default::device::Device as HWDevice;
 use crate::platform::generic::osmesa::context::Context as OSMesaContext;
 use crate::platform::generic::osmesa::context::ContextDescriptor as OSMesaContextDescriptor;
 use crate::platform::generic::osmesa::device::Device as OSMesaDevice;
-use crate::{ContextAttributes, ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextAttributes, ContextID, Error, SurfaceInfo};
 use super::device::Device;
 use super::surface::Surface;
 
-use euclid::default::Size2D;
 use std::os::raw::c_void;
 
 pub enum Context {
@@ -24,9 +21,6 @@ pub enum Context {
 pub enum ContextDescriptor {
     Hardware(HWContextDescriptor),
     Software(OSMesaContextDescriptor),
-}
-
-impl Context {
 }
 
 impl Device {
@@ -187,6 +181,18 @@ impl Device {
             }
             (&Device::Software(ref device), &Context::Software(ref context)) => {
                 device.context_id(context)
+            }
+            _ => panic!("Incompatible context!"),
+        }
+    }
+
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match (self, context) {
+            (&Device::Hardware(ref device), &Context::Hardware(ref context)) => {
+                device.context_surface_info(context)
+            }
+            (&Device::Software(ref device), &Context::Software(ref context)) => {
+                device.context_surface_info(context)
             }
             _ => panic!("Incompatible context!"),
         }

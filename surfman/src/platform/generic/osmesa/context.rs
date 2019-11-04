@@ -1,15 +1,13 @@
 //! Wrapper for OSMesa contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::gl::types::{GLint, GLuint};
+use crate::gl::types::GLint;
 use crate::gl::{self, Gl};
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceAccess, SurfaceID};
-use crate::{SurfaceType, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceInfo, WindowingApiError};
 use super::device::Device;
-use super::surface::{NativeWidget, Surface};
+use super::surface::Surface;
 
-use euclid::default::Size2D;
 use osmesa_sys::{self, OSMESA_CONTEXT_MAJOR_VERSION, OSMESA_CONTEXT_MINOR_VERSION};
 use osmesa_sys::{OSMESA_COMPAT_PROFILE, OSMESA_CORE_PROFILE, OSMESA_DEPTH_BITS, OSMESA_FORMAT};
 use osmesa_sys::{OSMESA_PROFILE, OSMESA_STENCIL_BITS, OSMesaContext, OSMesaCreateContextAttribs};
@@ -126,7 +124,7 @@ impl Device {
                 return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
             }
 
-            let mut context = Context {
+            let context = Context {
                 native_context: Box::new(OwnedOSMesaContext { osmesa_context }),
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
@@ -327,6 +325,14 @@ impl Device {
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
+    }
+
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
     }
 }
 

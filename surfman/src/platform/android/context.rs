@@ -11,7 +11,7 @@ use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeCo
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 use super::device::{Device, UnsafeEGLDisplayRef};
 use super::surface::{NativeWidget, Surface, SurfaceObjects};
 
@@ -288,5 +288,13 @@ impl Device {
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
+    }
+
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
     }
 }
