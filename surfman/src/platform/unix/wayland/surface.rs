@@ -13,7 +13,7 @@ use crate::platform::generic::egl::ffi::{EGL_EXTENSION_FUNCTIONS, EGL_GL_TEXTURE
 use crate::platform::generic::egl::ffi::{EGL_IMAGE_PRESERVED_KHR, EGL_NO_IMAGE_KHR};
 use crate::platform::generic::egl::surface;
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 
@@ -291,7 +291,7 @@ impl Device {
             size: surface.size,
             id: surface.id(),
             context_id: surface.context_id,
-            framebuffer_object: match self.wayland_objects {
+            framebuffer_object: match surface.wayland_objects {
                 WaylandObjects::TextureImage { framebuffer_object, .. } => framebuffer_object,
                 WaylandObjects::Window { .. } => 0,
             },
