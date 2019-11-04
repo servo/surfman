@@ -296,6 +296,11 @@ impl Device {
     }
 
     #[inline]
+    pub fn surface_gl_texture(&self, surface_texture: &SurfaceTexture) -> GLuint {
+        surface_texture.texture_object
+    }
+
+    #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         SURFACE_GL_TEXTURE_TARGET
     }
@@ -424,13 +429,6 @@ impl Surface {
 
             Ok(SurfaceDataGuard { surface: &mut *self, stride, ptr, len })
         }
-    }
-}
-
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.texture_object
     }
 }
 

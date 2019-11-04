@@ -10,6 +10,8 @@ use super::super::surface::{Surface, SurfaceTexture};
 
 use euclid::default::Size2D;
 
+// TODO(pcwalton): Refactor to `SurfaceInfo` or something. Then we can have a
+// `context_surface_info()` method.
 impl SurfaceInterface for Surface {
     #[inline]
     fn size(&self) -> Size2D<i32> {

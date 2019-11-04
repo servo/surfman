@@ -60,7 +60,7 @@ pub enum Error {
     NoSoftwareAdapters,
     /// The surface has no window attachment.
     NoWidgetAttached,
-    /// The surface has a window attachement.
+    /// The surface has a window attachment.
     WidgetAttached,
     /// The native widget is invalid.
     InvalidNativeWidget,
@@ -73,6 +73,10 @@ pub enum Error {
     ConnectionFailed,
     /// A connection to the window server is required to open a hardware device.
     ConnectionRequired,
+    /// The adapter type does not match the supplied connection.
+    IncompatibleAdapter,
+    /// The native widget type does not match the supplied device.
+    IncompatibleNativeWidget,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.

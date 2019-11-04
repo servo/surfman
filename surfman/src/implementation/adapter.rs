@@ -23,4 +23,3 @@ impl AdapterInterface for Adapter {
         Adapter::software()
     }
 }
-

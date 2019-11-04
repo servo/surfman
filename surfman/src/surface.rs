@@ -8,15 +8,28 @@ use crate::ContextID;
 use euclid::default::Size2D;
 use std::fmt::{self, Display, Formatter};
 
-pub trait Surface {
-    fn size(&self) -> Size2D<i32>;
-    fn id(&self) -> SurfaceID;
-    fn context_id(&self) -> ContextID;
-    fn framebuffer_object(&self) -> GLuint;
-}
+pub struct SurfaceInfo {
+    /// The ID of this surface.
+    /// 
+    /// This is guaranteed to be unique among all currently-allocated surfaces.
+    pub id: SurfaceID,
 
-pub trait SurfaceTexture {
-    fn gl_texture(&self) -> GLuint;
+    /// The size of this surface, in device pixels.
+    pub size: Size2D<i32>,
+
+    /// The ID of the context that this surface is associated with.
+    pub context_id: ContextID;
+
+    /// The OpenGL framebuffer object that can be used to render to (or read from) this surface.
+    ///
+    /// This framebuffer object is only valid if the surface is currently attached to its
+    /// associated context. Do not assume that this value necessarily remains the same across the
+    /// lifetime of the surface; this value may change whenever the surface is attached to a
+    /// context.
+    /// 
+    /// This value can be zero, in which case this surface is represented by the default
+    /// framebuffer.
+    pub framebuffer_object: GLuint;
 }
 
 // The default framebuffer for a context.

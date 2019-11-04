@@ -25,8 +25,7 @@ impl Adapter {
 
     /// Returns the "best" software adapter on this system.
     ///
-    /// The WGL backend has no software support, so this returns an error. You can use the
-    /// universal backend to get a software adapter.
+    /// The WGL backend has no software support, so this returns an error.
     ///
     /// FIXME(pcwalton): Does it really?
     #[inline]

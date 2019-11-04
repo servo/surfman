@@ -24,8 +24,7 @@ impl Adapter {
 
     /// Returns the "best" software adapter on this system.
     ///
-    /// The X11 backend has no software support, so this returns an error. You can use the
-    /// universal backend to get a software adapter.
+    /// The X11 backend has no software support, so this returns an error.
     ///
     /// TODO(pcwalton): If Mesa is in use, maybe we could use `llvmpipe` somehow?
     #[inline]

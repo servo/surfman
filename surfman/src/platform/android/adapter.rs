@@ -26,8 +26,7 @@ impl Adapter {
 
     /// Returns the "best" software adapter on this system.
     ///
-    /// The Android backend has no software support, so this returns an error. You can use the
-    /// universal backend to get a software adapter.
+    /// The Android backend has no software support, so this returns an error.
     #[inline]
     pub fn software() -> Result<Adapter, Error> {
         Err(Error::NoSoftwareAdapters)

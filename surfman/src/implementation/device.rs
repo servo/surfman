@@ -5,7 +5,7 @@
 
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::GLenum;
-use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceType};
+use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use super::super::adapter::Adapter;
 use super::super::connection::Connection;
 use super::super::context::{Context, ContextDescriptor};
@@ -85,9 +85,8 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn context_surface<'c>(&self, context: &'c Self::Context)
-                           -> Result<Option<&'c Self::Surface>, Error> {
-        Device::context_surface(self, context)
+    fn context_surface_info(&self, context: &Self::Context) -> Result<Option<SurfaceInfo>, Error> {
+        Device::context_surface_info(self, context)
     }
 
     #[inline]
@@ -147,6 +146,16 @@ impl DeviceInterface for Device {
                                surface_texture: Self::SurfaceTexture)
                                -> Result<Self::Surface, Error> {
         Device::destroy_surface_texture(self, context, surface_texture)
+    }
+
+    #[inline]
+    fn surface_info(&self, surface: &Self::Surface) -> SurfaceInfo {
+        Device::surface_info(self, surface)
+    }
+
+    #[inline]
+    fn surface_gl_texture(&self, surface_texture: &Self::SurfaceTexture) -> GLuint {
+        Device::surface_gl_texture(self, surface_texture)
     }
 
     #[inline]
