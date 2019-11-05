@@ -23,11 +23,6 @@ use x11::xlib::{self, Display, Pixmap, VisualID, Window, XCreatePixmap, XDefault
 use x11::xlib::{XDefaultScreenOfDisplay, XFree, XGetGeometry, XGetVisualInfo};
 use x11::xlib::{XRootWindowOfScreen, XVisualInfo};
 
-#[cfg(feature = "sm-winit")]
-use winit::Window as WinitWindow;
-#[cfg(feature = "sm-winit")]
-use winit::os::unix::WindowExt;
-
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 pub struct Surface {
@@ -55,6 +50,7 @@ pub(crate) enum SurfaceDrawables {
     },
 }
 
+#[derive(Clone)]
 pub struct NativeWidget {
     pub(crate) window: Window,
 }
@@ -306,6 +302,11 @@ impl Device {
             framebuffer_object: 0,
         }
     }
+
+    #[inline]
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+        surface_texture.gl_texture
+    }
 }
 
 impl Surface {
@@ -314,21 +315,6 @@ impl Surface {
             SurfaceDrawables::Pixmap { glx_pixmap, .. } => SurfaceID(glx_pixmap as usize),
             SurfaceDrawables::Window { window } => SurfaceID(window as usize),
         }
-    }
-}
-
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.gl_texture
-    }
-}
-
-impl NativeWidget {
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn from_winit_window(window: &WinitWindow) -> NativeWidget {
-        NativeWidget { window: window.get_xlib_window().expect("Where's the X11 window?") }
     }
 }
 

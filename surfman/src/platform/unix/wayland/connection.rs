@@ -7,10 +7,12 @@ use crate::egl::types::EGLDisplay;
 use crate::egl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use super::adapter::Adapter;
+use super::surface::NativeWidget;
 
+use euclid::default::Size2D;
 use std::ptr;
 use std::sync::Arc;
-use wayland_sys::client::{WAYLAND_CLIENT_HANDLE, wl_display};
+use wayland_sys::client::{WAYLAND_CLIENT_HANDLE, wl_display, wl_proxy};
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
@@ -72,7 +74,7 @@ impl Connection {
         unsafe {
             let wayland_display = match window.get_wayland_display() {
                 Some(wayland_display) => wayland_display as *mut wl_display,
-                None => ptr::null_mut(),
+                None => return Err(Error::IncompatibleWinitWindow),
             };
             Connection::from_wayland_display(wayland_display)
         }
@@ -99,6 +101,26 @@ impl Connection {
             });
             Ok(Connection { native_connection })
         })
+    }
+
+    #[cfg(feature = "sm-winit")]
+    pub fn create_native_widget_from_winit_window(&self, window: &Window)
+                                                  -> Result<NativeWidget, Error> {
+        let wayland_surface = match window.get_wayland_surface() {
+            Some(wayland_surface) => wayland_surface as *mut wl_proxy,
+            None => return Err(Error::IncompatibleNativeWidget),
+        };
+
+        // The window's DPI factor is 1.0 when nothing has been rendered to it yet. So use the DPI
+        // factor of the primary monitor instead, since that's where the window will presumably go
+        // when actually displayed. (The user might move it somewhere else later, of course.)
+        //
+        // FIXME(pcwalton): Is it true that the window will go the primary monitor first?
+        let hidpi_factor = window.get_primary_monitor().get_hidpi_factor();
+        let window_size = window.get_inner_size().unwrap().to_physical(hidpi_factor);
+        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
+
+        Ok(NativeWidget { wayland_surface, size: window_size })
     }
 }
 

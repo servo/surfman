@@ -15,7 +15,7 @@ use surfman::{SurfaceTexture, SurfaceType};
 use self::common::FilesystemResourceLoader;
 
 #[cfg(not(target_os = "android"))]
-use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion, NativeWidget};
+use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
 #[cfg(not(target_os = "android"))]
 use winit::dpi::PhysicalSize;
 #[cfg(not(target_os = "android"))]
@@ -98,7 +98,7 @@ fn main() {
     window.show();
 
     let connection = Connection::from_winit_window(&window).unwrap();
-    let native_widget = NativeWidget::from_winit_window(&window);
+    let native_widget = connection.create_native_widget_from_winit_window(&window).unwrap();
     let adapter = connection.create_adapter().unwrap();
     let mut device = Device::new(&connection, &adapter).unwrap();
 

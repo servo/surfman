@@ -7,12 +7,14 @@ use crate::Error;
 use crate::connection::Connection as ConnectionInterface;
 use super::super::adapter::Adapter;
 use super::super::connection::Connection;
+use super::super::surface::NativeWidget;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
 impl ConnectionInterface for Connection {
     type Adapter = Adapter;
+    type NativeWidget = NativeWidget;
 
     #[inline]
     fn new() -> Result<Connection, Error> {
@@ -38,5 +40,12 @@ impl ConnectionInterface for Connection {
     #[cfg(feature = "sm-winit")]
     fn from_winit_window(window: &Window) -> Result<Connection, Error> {
         Connection::from_winit_window(window)
+    }
+
+    #[inline]
+    #[cfg(feature = "sm-winit")]
+    fn create_native_widget_from_winit_window(&self, window: &Window)
+                                              -> Result<NativeWidget, Error> {
+        Connection::create_native_widget_from_winit_window(self, window)
     }
 }

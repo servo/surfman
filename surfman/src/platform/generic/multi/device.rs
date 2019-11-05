@@ -58,16 +58,15 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
 }
 
 impl<Def, Alt> DeviceInterface for Device<Def, Alt>
-                               where Def: DeviceInterface,
-                                     Alt: DeviceInterface,
-                                     Def::Connection: ConnectionInterface,
-                                     Alt::Connection: ConnectionInterface,
-                                     Def::NativeWidget: Clone,
-                                     Alt::NativeWidget: Clone {
+        where Def: DeviceInterface,
+              Alt: DeviceInterface,
+              Def::Connection: ConnectionInterface,
+              Alt::Connection: ConnectionInterface,
+              <Def::Connection as ConnectionInterface>::NativeWidget: Clone,
+              <Alt::Connection as ConnectionInterface>::NativeWidget: Clone {
     type Connection = Connection<Def, Alt>;
     type Context = Context<Def, Alt>;
     type ContextDescriptor = ContextDescriptor<Def, Alt>;
-    type NativeWidget = NativeWidget<Def, Alt>;
     type Surface = Surface<Def, Alt>;
     type SurfaceTexture = SurfaceTexture<Def, Alt>;
 

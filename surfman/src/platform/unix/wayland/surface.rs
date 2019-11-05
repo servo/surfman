@@ -25,11 +25,6 @@ use std::ptr;
 use wayland_sys::client::wl_proxy;
 use wayland_sys::egl::{WAYLAND_EGL_HANDLE, wl_egl_window};
 
-#[cfg(feature = "sm-winit")]
-use winit::Window;
-#[cfg(feature = "sm-winit")]
-use winit::os::unix::WindowExt;
-
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
@@ -46,6 +41,7 @@ pub struct SurfaceTexture {
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
+#[derive(Clone)]
 pub struct NativeWidget {
     pub(crate) wayland_surface: *mut wl_proxy,
     pub(crate) size: Size2D<i32>,
@@ -297,6 +293,11 @@ impl Device {
             },
         }
     }
+
+    #[inline]
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+        surface_texture.texture_object
+    }
 }
 
 impl Surface {
@@ -308,31 +309,6 @@ impl Surface {
     }
 }
 
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.texture_object
-    }
-}
-
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
-}
-
-impl NativeWidget {
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(window: &Window) -> NativeWidget {
-        // The window's DPI factor is 1.0 when nothing has been rendered to it yet. So use the DPI
-        // factor of the primary monitor instead, since that's where the window will presumably go
-        // when actually displayed. (The user might move it somewhere else later, of course.)
-        //
-        // FIXME(pcwalton): Is it true that the window will go the primary monitor first?
-        let hidpi_factor = window.get_primary_monitor().get_hidpi_factor();
-        let window_size = window.get_inner_size().unwrap().to_physical(hidpi_factor);
-
-        NativeWidget {
-            wayland_surface: window.get_wayland_surface().unwrap() as *mut wl_proxy,
-            size: Size2D::new(window_size.width as i32, window_size.height as i32),
-        }
-    }
 }

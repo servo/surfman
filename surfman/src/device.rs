@@ -12,7 +12,6 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
     type Connection;
     type Context;
     type ContextDescriptor;
-    type NativeWidget;
     type Surface;
     type SurfaceTexture;
 
@@ -45,11 +44,12 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
     fn context_surface_info(&self, context: &Self::Context) -> Result<Option<SurfaceInfo>, Error>;
 
     // surface.rs
-    fn create_surface(&mut self,
-                      context: &Self::Context,
-                      surface_access: SurfaceAccess,
-                      surface_type: &SurfaceType<Self::NativeWidget>)
-                      -> Result<Self::Surface, Error>;
+    fn create_surface(
+        &mut self,
+        context: &Self::Context,
+        surface_access: SurfaceAccess,
+        surface_type: &SurfaceType<<Self::Connection as ConnectionInterface>::NativeWidget>)
+        -> Result<Self::Surface, Error>;
     fn create_surface_texture(&self, context: &mut Self::Context, surface: Self::Surface)
                               -> Result<Self::SurfaceTexture, Error>;
     fn destroy_surface(&self, context: &mut Self::Context, surface: Self::Surface)

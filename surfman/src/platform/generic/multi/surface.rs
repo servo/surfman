@@ -2,6 +2,7 @@
 //
 //! A surface abstraction that allows the choice of backends dynamically.
 
+use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
@@ -20,14 +21,15 @@ pub enum SurfaceTexture<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterfa
 }
 
 pub enum NativeWidget<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
-    Default(Def::NativeWidget),
-    Alternate(Alt::NativeWidget),
+    Default(<Def::Connection as ConnectionInterface>::NativeWidget),
+    Alternate(<Alt::Connection as ConnectionInterface>::NativeWidget),
 }
 
-impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
-                                      Alt: DeviceInterface,
-                                      Def::NativeWidget: Clone,
-                                      Alt::NativeWidget: Clone {
+impl<Def, Alt> Device<Def, Alt>
+               where Def: DeviceInterface,
+                     Alt: DeviceInterface,
+                     <Def::Connection as ConnectionInterface>::NativeWidget: Clone,
+                     <Alt::Connection as ConnectionInterface>::NativeWidget: Clone {
     pub fn create_surface(&mut self,
                           context: &Context<Def, Alt>,
                           surface_access: SurfaceAccess,
@@ -190,3 +192,4 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
         }
     }
 }
+

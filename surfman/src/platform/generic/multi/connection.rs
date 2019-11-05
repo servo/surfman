@@ -6,6 +6,7 @@ use crate::Error;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use super::adapter::Adapter;
+use super::surface::NativeWidget;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
@@ -72,6 +73,21 @@ impl<Def, Alt> Connection<Def, Alt> where Def: DeviceInterface,
             Err(_) => <Alt::Connection>::from_winit_window(window).map(Connection::Alternate),
         }
     }
+
+    #[cfg(feature = "sm-winit")]
+    pub fn create_native_widget_from_winit_window(&self, window: &Window)
+                                                  -> Result<NativeWidget<Def, Alt>, Error> {
+        match *self {
+            Connection::Default(ref connection) => {
+                connection.create_native_widget_from_winit_window(window)
+                          .map(NativeWidget::Default)
+            }
+            Connection::Alternate(ref connection) => {
+                connection.create_native_widget_from_winit_window(window)
+                          .map(NativeWidget::Alternate)
+            }
+        }
+    }
 }
 
 impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
@@ -80,6 +96,7 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
                                          Def::Connection: ConnectionInterface,
                                          Alt::Connection: ConnectionInterface {
     type Adapter = Adapter<Def, Alt>;
+    type NativeWidget = NativeWidget<Def, Alt>;
 
     #[inline]
     fn new() -> Result<Connection<Def, Alt>, Error> {
@@ -105,5 +122,11 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
     #[cfg(feature = "sm-winit")]
     fn from_winit_window(window: &Window) -> Result<Connection<Def, Alt>, Error> {
         Connection::from_winit_window(window)
+    }
+
+    #[cfg(feature = "sm-winit")]
+    fn create_native_widget_from_winit_window(&self, window: &Window)
+                                              -> Result<Self::NativeWidget, Error> {
+        Connection::create_native_widget_from_winit_window(self, window)
     }
 }

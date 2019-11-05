@@ -77,6 +77,8 @@ pub enum Error {
     IncompatibleAdapter,
     /// The native widget type does not match the supplied device.
     IncompatibleNativeWidget,
+    /// The `winit` window is incompatible with this backend.
+    IncompatibleWinitWindow,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.

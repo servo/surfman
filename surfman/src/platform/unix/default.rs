@@ -2,22 +2,47 @@
 //
 //! The default backend for Unix, which dynamically switches between Wayland and X11.
 
-use crate::platform::generic::multi::adapter::Adapter as MultiAdapter;
-use crate::platform::generic::multi::connection::Connection as MultiConnection;
-use crate::platform::generic::multi::context::Context as MultiContext;
-use crate::platform::generic::multi::surface::Surface as MultiSurface;
-use crate::platform::generic::multi::surface::SurfaceTexture as MultiSurfaceTexture;
-use super::wayland::adapter::Adapter as WaylandAdapter;
-use super::wayland::connection::Connection as WaylandConnection;
-use super::wayland::context::Context as WaylandContext;
-use super::wayland::surface::{Surface as WaylandSurface, SurfaceTexture as WaylandSurfaceTexture};
-use super::x11::adapter::Adapter as X11Adapter;
-use super::x11::connection::Connection as X11Connection;
-use super::x11::context::Context as X11Context;
-use super::x11::surface::{Surface as X11Surface, SurfaceTexture as X11SurfaceTexture};
+pub mod adapter {
+    use crate::platform::generic::multi::adapter::Adapter as MultiAdapter;
+    use crate::platform::unix::wayland::device::Device as WaylandDevice;
+    use crate::platform::unix::x11::device::Device as X11Device;
+    pub type Adapter = MultiAdapter<WaylandDevice, X11Device>;
+}
 
-pub type Adapter = MultiAdapter<WaylandAdapter, X11Adapter>;
-pub type Connection = MultiConnection<WaylandConnection, X11Connection>;
-pub type Context = MultiContext<WaylandContext, X11Context>;
-pub type Surface = MultiSurface<WaylandSurface, X11Surface>;
-pub type SurfaceTexture = MultiSurfaceTexture<WaylandSurfaceTexture, X11SurfaceTexture>;
+pub mod connection {
+    use crate::platform::generic::multi::connection::Connection as MultiConnection;
+    use crate::platform::unix::wayland::device::Device as WaylandDevice;
+    use crate::platform::unix::x11::device::Device as X11Device;
+    pub type Connection = MultiConnection<WaylandDevice, X11Device>;
+}
+
+pub mod context {
+    use crate::platform::generic::multi::context::Context as MultiContext;
+    use crate::platform::generic::multi::context::ContextDescriptor as MultiContextDescriptor;
+    use crate::platform::unix::wayland::device::Device as WaylandDevice;
+    use crate::platform::unix::x11::device::Device as X11Device;
+    pub type Context = MultiContext<WaylandDevice, X11Device>;
+    pub type ContextDescriptor = MultiContextDescriptor<WaylandDevice, X11Device>;
+}
+
+pub mod device {
+    use crate::platform::generic::multi::device::Device as MultiDevice;
+    use crate::platform::unix::wayland::device::Device as WaylandDevice;
+    use crate::platform::unix::x11::device::Device as X11Device;
+    pub type Device = MultiDevice<WaylandDevice, X11Device>;
+}
+
+pub mod surface {
+    use crate::platform::generic::multi::surface::NativeWidget as MultiNativeWidget;
+    use crate::platform::generic::multi::surface::Surface as MultiSurface;
+    use crate::platform::generic::multi::surface::SurfaceTexture as MultiSurfaceTexture;
+    use crate::platform::unix::wayland::device::Device as WaylandDevice;
+    use crate::platform::unix::x11::device::Device as X11Device;
+    pub type NativeWidget = MultiNativeWidget<WaylandDevice, X11Device>;
+    pub type Surface = MultiSurface<WaylandDevice, X11Device>;
+    pub type SurfaceTexture = MultiSurfaceTexture<WaylandDevice, X11Device>;
+
+    // FIXME(pcwalton): Revamp how this works.
+    pub struct SurfaceDataGuard {}
+}
+
