@@ -3,8 +3,8 @@
 //! Wrapper for WGL contexts on Windows.
 
 use crate::context::CREATE_CONTEXT_MUTEX;
-use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error};
-use crate::{GLVersion, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion};
+use crate::{SurfaceInfo, WindowingApiError};
 use super::adapter::Adapter;
 use super::connection::Connection;
 use super::device::{DCGuard, Device, HiddenWindow};
@@ -434,14 +434,6 @@ impl Device {
         }
     }
 
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
-        match context.framebuffer {
-            Framebuffer::None => Ok(None),
-            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
-        }
-    }
-
     pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
                                    -> Result<(), Error> {
         if context.id != surface.context_id {
@@ -498,6 +490,14 @@ impl Device {
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
+    }
+
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
     }
 }
 

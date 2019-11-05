@@ -6,7 +6,7 @@ use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
 use crate::renderbuffers::Renderbuffers;
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, gl};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, gl};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 use super::ffi::{IOSurfaceGetAllocSize, IOSurfaceGetBaseAddress, IOSurfaceGetBytesPerRow};
@@ -356,27 +356,22 @@ impl Device {
             }
         })
     }
+
+    #[inline]
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
+            framebuffer_object: surface.framebuffer_object,
+        }
+    }
 }
 
 impl Surface {
     #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
-    #[inline]
-    pub fn id(&self) -> SurfaceID {
+    fn id(&self) -> SurfaceID {
         SurfaceID(self.io_surface.as_concrete_TypeRef() as usize)
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    #[inline]
-    pub fn framebuffer_object(&self) -> GLuint {
-        self.framebuffer_object
     }
 
     // Assumes the context is current.

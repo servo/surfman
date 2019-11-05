@@ -4,7 +4,9 @@
 
 use crate::context::ContextID;
 use crate::egl::types::{EGLSurface, EGLint};
+use crate::egl;
 use crate::gl::types::{GLenum, GLuint};
+use crate::gl;
 use crate::gl_utils;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGLImageKHR;
@@ -14,8 +16,7 @@ use crate::platform::generic::egl::ffi::EGL_NATIVE_BUFFER_ANDROID;
 use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
 use crate::platform::generic;
 use crate::renderbuffers::Renderbuffers;
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
-use crate::{egl, gl};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 use super::ffi::{AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM, AHARDWAREBUFFER_USAGE_CPU_READ_NEVER};
@@ -334,6 +335,18 @@ impl Device {
     pub fn surface_gl_texture_target(&self) -> GLenum {
         SURFACE_GL_TEXTURE_TARGET
     }
+
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
+            framebuffer_object: match surface.objects {
+                SurfaceObjects::HardwareBuffer { framebuffer_object, .. } => framebuffer_object,
+                SurfaceObjects::Window { .. } => 0,
+            },
+        }
+    }
 }
 
 impl NativeWidget {
@@ -344,27 +357,10 @@ impl NativeWidget {
 }
 
 impl Surface {
-    #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
-    pub fn id(&self) -> SurfaceID {
+    fn id(&self) -> SurfaceID {
         match self.objects {
             SurfaceObjects::HardwareBuffer { egl_image, .. } => SurfaceID(egl_image as usize),
             SurfaceObjects::Window { egl_surface } => SurfaceID(egl_surface as usize),
-        }
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    pub fn framebuffer_object(&self) -> GLuint {
-        match self.objects {
-            SurfaceObjects::HardwareBuffer { framebuffer_object, .. } => framebuffer_object,
-            SurfaceObjects::Window { .. } => 0,
         }
     }
 }

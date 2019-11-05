@@ -3,7 +3,7 @@
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
 use crate::context::ContextID;
-use crate::egl::types::{EGLSurface, EGLenum};
+use crate::egl::types::EGLSurface;
 use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
@@ -13,8 +13,8 @@ use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_DXGI_KEYED_MUTEX_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
-use crate::{ContextAttributeFlags, Error, SurfaceAccess, SurfaceID, SurfaceType};
-use super::context::{self, Context, ContextDescriptor, GL_FUNCTIONS};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
+use super::context::{Context, ContextDescriptor, GL_FUNCTIONS};
 use super::device::Device;
 
 use euclid::default::Size2D;
@@ -105,6 +105,7 @@ impl Device {
         }
     }
 
+    #[allow(non_snake_case)]
     fn create_pbuffer_surface(&mut self,
                               context: &Context,
                               size: &Size2D<i32>,
@@ -124,23 +125,34 @@ impl Device {
             ];
 
             EGL_FUNCTIONS.with(|egl| {
-                let egl_surface = egl.CreatePbufferSurface(self.native_display.egl_display(),
+                let egl_surface = if share_handle.is_some() {
+                    egl::NO_SURFACE
+                } else {
+                    let surface = egl.CreatePbufferSurface(self.native_display.egl_display(),
                                                            egl_config,
                                                            attributes.as_ptr());
-                assert_ne!(egl_surface, egl::NO_SURFACE);
+                    assert_ne!(surface, egl::NO_SURFACE);
+                    surface
+                };
 
-                let mut share_handle = INVALID_HANDLE_VALUE;
                 let eglQuerySurfacePointerANGLE =
                     EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE
                                         .expect("Where's the `EGL_ANGLE_query_surface_pointer` \
                                                     extension?");
-                let result =
-                    eglQuerySurfacePointerANGLE(self.native_display.egl_display(),
-                                                egl_surface,
-                                                EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
-                                                &mut share_handle);
-                assert_ne!(result, egl::FALSE);
-                assert_ne!(share_handle, INVALID_HANDLE_VALUE);
+
+                let share_handle = if let Some(share_handle) = share_handle {
+                    share_handle
+                } else {
+                    let mut share_handle = INVALID_HANDLE_VALUE;
+                    let result =
+                        eglQuerySurfacePointerANGLE(self.native_display.egl_display(),
+                                                    egl_surface,
+                                                    EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
+                                                    &mut share_handle);
+                    assert_ne!(result, egl::FALSE);
+                    assert_ne!(share_handle, INVALID_HANDLE_VALUE);
+                    HandleOrTexture::Handle(share_handle)
+                };
 
                 // `mozangle` builds ANGLE with keyed mutexes for sharing. Use the
                 // `EGL_ANGLE_keyed_mutex` extension to fetch the keyed mutex so we can grab it.
@@ -164,7 +176,7 @@ impl Device {
                     context_id: context.id,
                     context_descriptor,
                     win32_objects: Win32Objects::Pbuffer {
-                        share_handle: HandleOrTexture::Handle(share_handle),
+                        share_handle,
                         keyed_mutex
                     },
                 })
@@ -210,6 +222,7 @@ impl Device {
         self.create_pbuffer_surface(context, size, Some(HandleOrTexture::Texture(texture)))
     }
 
+    #[allow(non_snake_case)]
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
         let share_handle = match surface.win32_objects {
@@ -379,27 +392,22 @@ impl Device {
             }
         })
     }
+
+    #[inline]
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
+            framebuffer_object: 0,
+        }
+    }
 }
 
 impl Surface {
     #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
-    #[inline]
-    pub fn id(&self) -> SurfaceID {
+    fn id(&self) -> SurfaceID {
         SurfaceID(self.egl_surface as usize)
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    #[inline]
-    pub fn framebuffer_object(&self) -> GLuint {
-        0
     }
 
     #[inline]

@@ -6,16 +6,14 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLConfig, EGLSurface, EGLint};
 use crate::egl;
 use crate::gl::Gl;
-use crate::gl::types::GLuint;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
 use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::{Device, UnsafeEGLDisplayRef};
-use super::surface::{NativeWidget, Surface, SurfaceObjects};
+use super::surface::{Surface, SurfaceObjects};
 
-use euclid::default::Size2D;
 use std::mem;
 use std::os::raw::c_void;
 use std::thread;
@@ -128,7 +126,7 @@ impl Device {
             let pbuffer = context::create_dummy_pbuffer(egl_display, egl_config);
 
             // Wrap up the EGL context.
-            let mut context = Context {
+            let context = Context {
                 native_context: Box::new(OwnedEGLContext { egl_context }),
                 id: *next_context_id,
                 pbuffer,
@@ -210,14 +208,6 @@ impl Device {
         }
     }
 
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
-        match context.framebuffer {
-            Framebuffer::None => Ok(None),
-            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref target) => Ok(Some(target)),
-        }
-    }
-
     pub fn bind_surface_to_context(&self, context: &mut Context, new_surface: Surface)
                                    -> Result<(), Error> {
         if context.id != new_surface.context_id {
@@ -288,5 +278,13 @@ impl Device {
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
+    }
+
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
     }
 }

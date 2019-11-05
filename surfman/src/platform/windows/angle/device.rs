@@ -2,20 +2,16 @@
 //
 //! A thread-local handle to the device.
 
-use crate::egl::types::{EGLAttrib, EGLBoolean, EGLDeviceEXT, EGLDisplay};
-use crate::egl::types::{EGLSurface, EGLenum, EGLint};
+use crate::egl::types::{EGLAttrib, EGLint};
 use crate::egl;
-use crate::platform::generic::egl::device::{EGL_FUNCTIONS, NativeDisplay};
-use crate::platform::generic::egl::device::{OwnedEGLDisplay, UnsafeEGLDisplayRef};
+use crate::platform::generic::egl::device::{EGL_FUNCTIONS, NativeDisplay, OwnedEGLDisplay};
 use crate::platform::generic::egl::ffi::{EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic::egl::ffi::{EGL_NO_DEVICE_EXT, EGL_PLATFORM_DEVICE_EXT};
-use crate::platform::generic;
 use crate::{Error, GLApi};
 use super::adapter::Adapter;
 use super::connection::Connection;
 
-use std::mem;
-use std::os::raw::{c_char, c_void};
+use std::os::raw::c_void;
 use std::ptr;
 use winapi::Interface;
 use winapi::shared::dxgi::IDXGIDevice;
@@ -31,6 +27,7 @@ pub struct Device {
 }
 
 impl Device {
+    #[allow(non_snake_case)]
     pub fn new(_: &Connection, adapter: &Adapter) -> Result<Device, Error> {
         let d3d_driver_type = adapter.d3d_driver_type;
         unsafe {

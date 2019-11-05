@@ -6,7 +6,7 @@ use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
 use crate::glx::types::{Display as GlxDisplay, GLXFBConfig};
 use crate::{gl, glx};
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, WindowingApiError};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
 use super::context::{Context, GLX_FUNCTIONS, GL_FUNCTIONS};
 use super::device::{Device, Quirks};
 use super::error;
@@ -75,12 +75,6 @@ impl Drop for Surface {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub(crate) enum SurfaceKind {
-    Pixmap,
-    Window,
-}
-
 impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
@@ -100,8 +94,7 @@ impl Device {
         let (display, glx_display) = (self.native_display.display(), self.glx_display());
 
         let context_descriptor = self.context_descriptor(context);
-        let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor,
-                                                                     SurfaceKind::Pixmap);
+        let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
 
         unsafe {
             let (glx_pixmap, pixmap) = create_pixmaps(display, glx_display, glx_fb_config, size)?;
@@ -303,29 +296,24 @@ impl Device {
             })
         }
     }
+
+    #[inline]
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
+            framebuffer_object: 0,
+        }
+    }
 }
 
 impl Surface {
-    #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
-    pub fn id(&self) -> SurfaceID {
+    fn id(&self) -> SurfaceID {
         match self.drawables {
             SurfaceDrawables::Pixmap { glx_pixmap, .. } => SurfaceID(glx_pixmap as usize),
             SurfaceDrawables::Window { window } => SurfaceID(window as usize),
         }
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    #[inline]
-    pub fn framebuffer_object(&self) -> GLuint {
-        0
     }
 }
 

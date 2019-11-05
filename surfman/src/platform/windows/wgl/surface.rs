@@ -4,7 +4,7 @@
 
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 use super::context::{self, Context, WGL_EXTENSION_FUNCTIONS};
 use super::device::Device;
 
@@ -464,32 +464,28 @@ impl Device {
             Ok(())
         }
     }
+
+    #[inline]
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: surface.size,
+            id: surface.id(),
+            context_id: surface.context_id,
+            framebuffer_object: match surface.win32_objects {
+                Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
+                Win32Objects::Widget { .. } => 0,
+            },
+        }
+    }
 }
 
 impl Surface {
-    #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        self.size
-    }
-
     pub fn id(&self) -> SurfaceID {
         match self.win32_objects {
             Win32Objects::Texture { ref d3d11_texture, .. } => {
                 SurfaceID((*d3d11_texture).as_raw() as usize)
             }
             Win32Objects::Widget { window_handle } => SurfaceID(window_handle as usize),
-        }
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        self.context_id
-    }
-
-    pub fn framebuffer_object(&self) -> GLuint {
-        match self.win32_objects {
-            Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
-            Win32Objects::Widget { .. } => 0,
         }
     }
 }

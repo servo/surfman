@@ -6,14 +6,14 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLConfig, EGLint};
 use crate::egl;
 use crate::gl::Gl;
-use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
-use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
+use crate::platform::generic::egl::context::{self, CurrentContextGuard};
+use crate::platform::generic::egl::context::{NativeContext, OwnedEGLContext};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributes, Error, SurfaceAccess, SurfaceType};
+use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
-use super::surface::{NativeWidget, Surface, WaylandObjects};
+use super::surface::{Surface, WaylandObjects};
 
 use std::mem;
 use std::os::raw::c_void;
@@ -188,14 +188,6 @@ impl Device {
         })
     }
 
-    pub fn context_surface<'c>(&self, context: &'c Context) -> Result<Option<&'c Surface>, Error> {
-        match context.framebuffer {
-            Framebuffer::None => Ok(None),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(surface)),
-        }
-    }
-
     #[inline]
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
@@ -258,5 +250,13 @@ impl Device {
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
+    }
+
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match context.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
     }
 }
