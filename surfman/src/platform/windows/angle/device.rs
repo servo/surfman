@@ -107,7 +107,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn gl_api() -> GLApi {
+    pub fn gl_api(&self) -> GLApi {
         GLApi::GLES
     }
 }

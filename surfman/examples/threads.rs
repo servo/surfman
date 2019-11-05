@@ -8,8 +8,8 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, Surface, SurfaceAccess};
-use surfman::{SurfaceTexture, SurfaceType};
+use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, GLApi, Surface};
+use surfman::{SurfaceAccess, SurfaceTexture, SurfaceType};
 
 #[cfg(not(target_os = "android"))]
 use self::common::FilesystemResourceLoader;
@@ -160,9 +160,14 @@ impl App {
         gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
 
         // Set up GL objects and state.
+        let gl_api = device.gl_api();
         let surface_gl_texture_target = device.surface_gl_texture_target();
-        let grid_vertex_array = GridVertexArray::new(surface_gl_texture_target, &*resource_loader);
-        let blit_vertex_array = BlitVertexArray::new(surface_gl_texture_target, &*resource_loader);
+        let grid_vertex_array = GridVertexArray::new(gl_api,
+                                                     surface_gl_texture_target,
+                                                     &*resource_loader);
+        let blit_vertex_array = BlitVertexArray::new(gl_api,
+                                                     surface_gl_texture_target,
+                                                     &*resource_loader);
 
         // Set up communication channels, and spawn our worker thread.
         let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
@@ -323,7 +328,8 @@ fn worker_thread(connection: Connection,
     device.make_context_current(&context).unwrap();
 
     // Set up GL objects and state.
-    let vertex_array = CheckVertexArray::new(device.surface_gl_texture_target(),
+    let vertex_array = CheckVertexArray::new(device.gl_api(),
+                                             device.surface_gl_texture_target(),
                                              &*resource_loader);
 
     // Initialize our origin and size.
@@ -452,8 +458,9 @@ struct BlitVertexArray {
 }
 
 impl BlitVertexArray {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> BlitVertexArray {
-        let blit_program = BlitProgram::new(gl_texture_target, resource_loader);
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> BlitVertexArray {
+        let blit_program = BlitProgram::new(gl_api, gl_texture_target, resource_loader);
         unsafe {
             let mut vertex_array = 0;
             gl::GenVertexArrays(1, &mut vertex_array); ck();
@@ -482,8 +489,9 @@ struct GridVertexArray {
 }
 
 impl GridVertexArray {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> GridVertexArray {
-        let grid_program = GridProgram::new(gl_texture_target, resource_loader);
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> GridVertexArray {
+        let grid_program = GridProgram::new(gl_api, gl_texture_target, resource_loader);
         unsafe {
             let mut vertex_array = 0;
             gl::GenVertexArrays(1, &mut vertex_array); ck();
@@ -512,8 +520,9 @@ struct CheckVertexArray {
 }
 
 impl CheckVertexArray {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> CheckVertexArray {
-        let check_program = CheckProgram::new(gl_texture_target, resource_loader);
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> CheckVertexArray {
+        let check_program = CheckProgram::new(gl_api, gl_texture_target, resource_loader);
         unsafe {
             let mut vertex_array = 0;
             gl::GenVertexArrays(1, &mut vertex_array); ck();
@@ -545,13 +554,16 @@ struct BlitProgram {
 }
 
 impl BlitProgram {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> BlitProgram {
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> BlitProgram {
         let vertex_shader = Shader::new("quad",
                                         ShaderKind::Vertex,
+                                        gl_api,
                                         gl_texture_target,
                                         resource_loader);
         let fragment_shader = Shader::new("blit",
                                           ShaderKind::Fragment,
+                                          gl_api,
                                           gl_texture_target,
                                           resource_loader);
         let program = Program::new(vertex_shader, fragment_shader);
@@ -603,13 +615,16 @@ struct GridProgram {
 }
 
 impl GridProgram {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> GridProgram {
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> GridProgram {
         let vertex_shader = Shader::new("quad",
                                         ShaderKind::Vertex,
+                                        gl_api,
                                         gl_texture_target,
                                         resource_loader);
         let fragment_shader = Shader::new("grid",
                                           ShaderKind::Fragment,
+                                          gl_api,
                                           gl_texture_target,
                                           resource_loader);
         let program = Program::new(vertex_shader, fragment_shader);
@@ -683,13 +698,16 @@ struct CheckProgram {
 }
 
 impl CheckProgram {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> CheckProgram {
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> CheckProgram {
         let vertex_shader = Shader::new("quad",
                                         ShaderKind::Vertex,
+                                        gl_api,
                                         gl_texture_target,
                                         resource_loader);
         let fragment_shader = Shader::new("check",
                                           ShaderKind::Fragment,
+                                          gl_api,
                                           gl_texture_target,
                                           resource_loader);
         let program = Program::new(vertex_shader, fragment_shader);

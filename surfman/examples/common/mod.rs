@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::Read;
 use std::os::raw::c_void;
 use std::ptr;
-use surfman::{Device, GLApi};
+use surfman::GLApi;
 
 pub struct Program {
     pub object: GLuint,
@@ -37,11 +37,12 @@ pub struct Shader {
 impl Shader {
     pub fn new(name: &str,
                kind: ShaderKind,
+               gl_api: GLApi,
                gl_texture_target: GLenum,
                resource_loader: &dyn ResourceLoader)
                -> Shader {
         let mut source = vec![];
-        match Device::gl_api() {
+        match gl_api {
             GLApi::GL => source.extend_from_slice(b"#version 330\n"),
             GLApi::GLES => source.extend_from_slice(b"#version 300 es\n"),
         }

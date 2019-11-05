@@ -7,9 +7,14 @@
 
 use crate::Error;
 use super::adapter::Adapter;
+use super::surface::{NSView, NativeWidget};
+
+use cocoa::base::id;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
+#[cfg(feature = "sm-winit")]
+use winit::os::macos::WindowExt;
 
 /// A no-op connection.
 #[derive(Clone)]
@@ -45,5 +50,17 @@ impl Connection {
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
         Connection::new()
+    }
+
+    #[cfg(feature = "sm-winit")]
+    pub fn create_native_widget_from_winit_window(&self, window: &Window)
+                                                  -> Result<NativeWidget, Error> {
+        let ns_view = window.get_nsview() as id;
+        if ns_view.is_null() {
+            return Err(Error::IncompatibleNativeWidget);
+        }
+        unsafe {
+            Ok(NativeWidget { view: NSView(msg_send![ns_view, retain]) })
+        }
     }
 }

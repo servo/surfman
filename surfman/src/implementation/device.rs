@@ -39,8 +39,8 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn gl_api() -> GLApi {
-        Device::gl_api()
+    fn gl_api(&self) -> GLApi {
+        Device::gl_api(self)
     }
 
     // context.rs

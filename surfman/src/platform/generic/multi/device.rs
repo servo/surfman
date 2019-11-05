@@ -50,10 +50,11 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
         }
     }
 
-    // FIXME(pcwalton): This should take `self`!
-    #[inline]
-    pub fn gl_api() -> GLApi {
-        GLApi::GL
+    pub fn gl_api(&self) -> GLApi {
+        match *self {
+            Device::Default(ref device) => device.gl_api(),
+            Device::Alternate(ref device) => device.gl_api(),
+        }
     }
 }
 
@@ -88,9 +89,8 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     }
 
     #[inline]
-    fn gl_api() -> GLApi {
-        // FIXME(pcwalton): Take a self parameter.
-        Def::gl_api()
+    fn gl_api(&self) -> GLApi {
+        Device::gl_api(self)
     }
 
     // context.rs

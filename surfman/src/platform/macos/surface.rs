@@ -35,11 +35,6 @@ use std::slice;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
-#[cfg(feature = "sm-winit")]
-use winit::Window;
-#[cfg(feature = "sm-winit")]
-use winit::os::macos::WindowExt;
-
 const BYTES_PER_PIXEL: i32 = 4;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
@@ -89,7 +84,7 @@ struct VblankCond {
     cond: Condvar,
 }
 
-pub struct NSView(id);
+pub struct NSView(pub(crate) id);
 
 pub struct NativeWidget {
     pub view: NSView,
@@ -445,16 +440,6 @@ impl<'a> Drop for SurfaceDataGuard<'a> {
         unsafe {
             let mut seed = 0;
             IOSurfaceUnlock(self.surface.io_surface.as_concrete_TypeRef(), 0, &mut seed);
-        }
-    }
-}
-
-impl NativeWidget {
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn from_winit_window(window: &Window) -> NativeWidget {
-        unsafe {
-            NativeWidget { view: NSView(msg_send![window.get_nsview() as id, retain]) }
         }
     }
 }

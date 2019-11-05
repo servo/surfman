@@ -21,7 +21,7 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
            -> Result<Self, Error>;
     fn connection(&self) -> Self::Connection;
     fn adapter(&self) -> <Self::Connection as ConnectionInterface>::Adapter;
-    fn gl_api() -> GLApi;
+    fn gl_api(&self) -> GLApi;
 
     // context.rs
     fn create_context_descriptor(&self, attributes: &ContextAttributes)
