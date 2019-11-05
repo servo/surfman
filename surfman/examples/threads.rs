@@ -99,7 +99,7 @@ fn main() {
 
     let connection = Connection::from_winit_window(&window).unwrap();
     let native_widget = NativeWidget::from_winit_window(&window);
-    let adapter = Adapter::default().unwrap();
+    let adapter = connection.create_adapter().unwrap();
     let mut device = Device::new(&connection, &adapter).unwrap();
 
     let context_attributes = ContextAttributes {

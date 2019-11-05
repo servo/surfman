@@ -3,6 +3,7 @@
 //! This is an included private module that automatically produces the implementation of the
 //! `Device` trait for a backend.
 
+use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
@@ -15,7 +16,6 @@ use super::super::surface::{NativeWidget, Surface, SurfaceTexture};
 use std::os::raw::c_void;
 
 impl DeviceInterface for Device {
-    type Adapter = Adapter;
     type Connection = Connection;
     type Context = Context;
     type ContextDescriptor = ContextDescriptor;
@@ -36,7 +36,7 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn adapter(&self) -> Self::Adapter {
+    fn adapter(&self) -> <Self::Connection as ConnectionInterface>::Adapter {
         Device::adapter(self)
     }
 

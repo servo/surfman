@@ -3,7 +3,6 @@
 //! A device abstraction that allows the choice of backends dynamically.
 
 use crate::{ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
-use crate::adapter::Adapter as AdapterInterface;
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
@@ -22,8 +21,6 @@ pub enum Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
 
 impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
                                       Alt: DeviceInterface,
-                                      Def::Adapter: AdapterInterface,
-                                      Alt::Adapter: AdapterInterface,
                                       Def::Connection: ConnectionInterface,
                                       Alt::Connection: ConnectionInterface {
     pub fn new(connection: &Connection<Def, Alt>, adapter: &Adapter<Def, Alt>)
@@ -63,13 +60,10 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
 impl<Def, Alt> DeviceInterface for Device<Def, Alt>
                                where Def: DeviceInterface,
                                      Alt: DeviceInterface,
-                                     Def::Adapter: AdapterInterface,
-                                     Alt::Adapter: AdapterInterface,
                                      Def::Connection: ConnectionInterface,
                                      Alt::Connection: ConnectionInterface,
                                      Def::NativeWidget: Clone,
                                      Alt::NativeWidget: Clone {
-    type Adapter = Adapter<Def, Alt>;
     type Connection = Connection<Def, Alt>;
     type Context = Context<Def, Alt>;
     type ContextDescriptor = ContextDescriptor<Def, Alt>;
@@ -85,12 +79,12 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     }
 
     #[inline]
-    fn connection(&self) -> Self::Connection {
+    fn connection(&self) -> Connection<Def, Alt> {
         Device::connection(self)
     }
 
     #[inline]
-    fn adapter(&self) -> Self::Adapter {
+    fn adapter(&self) -> Adapter<Def, Alt> {
         Device::adapter(self)
     }
 

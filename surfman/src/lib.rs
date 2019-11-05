@@ -24,7 +24,6 @@ pub use platform::default::context::{Context, ContextDescriptor};
 pub use platform::default::device::Device;
 pub use platform::default::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture};
 
-pub mod adapter;
 pub mod connection;
 pub mod device;
 

@@ -4,11 +4,11 @@
 
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use crate::gl::types::{GLenum, GLuint};
+use super::connection::Connection as ConnectionInterface;
 
 use std::os::raw::c_void;
 
-pub trait Device: Sized {
-    type Adapter;
+pub trait Device: Sized where Self::Connection: ConnectionInterface {
     type Connection;
     type Context;
     type ContextDescriptor;
@@ -17,9 +17,11 @@ pub trait Device: Sized {
     type SurfaceTexture;
 
     // device.rs
-    fn new(connection: &Self::Connection, adapter: &Self::Adapter) -> Result<Self, Error>;
+    fn new(connection: &Self::Connection,
+           adapter: &<Self::Connection as ConnectionInterface>::Adapter)
+           -> Result<Self, Error>;
     fn connection(&self) -> Self::Connection;
-    fn adapter(&self) -> Self::Adapter;
+    fn adapter(&self) -> <Self::Connection as ConnectionInterface>::Adapter;
     fn gl_api() -> GLApi;
 
     // context.rs

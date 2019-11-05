@@ -6,6 +6,7 @@
 //! connection.
 
 use crate::Error;
+use super::adapter::Adapter;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
@@ -19,6 +20,26 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         Ok(Connection)
+    }
+
+    /// Returns the "best" adapter on this system.
+    #[inline]
+    pub fn create_adapter(&self) -> Result<Adapter, Error> {
+        self.create_hardware_adapter()
+    }
+
+    /// Returns the "best" hardware adapter on this system.
+    #[inline]
+    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
+        Ok(Adapter)
+    }
+
+    /// Returns the "best" software adapter on this system.
+    ///
+    /// The macOS backend has no software support, so this returns an error.
+    #[inline]
+    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
+        Err(Error::NoSoftwareAdapters)
     }
 
     #[cfg(feature = "sm-winit")]

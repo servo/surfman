@@ -6,6 +6,7 @@ use crate::Error;
 use crate::egl::types::EGLDisplay;
 use crate::egl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use super::adapter::Adapter;
 
 use std::ptr;
 use std::sync::Arc;
@@ -42,6 +43,28 @@ impl Connection {
             let wayland_display = (WAYLAND_CLIENT_HANDLE.wl_display_connect)(ptr::null());
             Connection::from_wayland_display(wayland_display)
         }
+    }
+
+    /// Returns the "best" adapter on this system.
+    #[inline]
+    pub fn create_adapter(&self) -> Result<Adapter, Error> {
+        self.create_hardware_adapter()
+    }
+
+    /// Returns the "best" hardware adapter on this system.
+    #[inline]
+    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
+        Ok(Adapter)
+    }
+
+    /// Returns the "best" software adapter on this system.
+    ///
+    /// The Wayland backend has no software support, so this returns an error.
+    ///
+    /// TODO(pcwalton): If Mesa is in use, maybe we could use `llvmpipe` somehow?
+    #[inline]
+    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
+        Err(Error::NoSoftwareAdapters)
     }
 
     #[cfg(feature = "sm-winit")]
