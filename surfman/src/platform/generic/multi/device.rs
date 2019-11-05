@@ -2,13 +2,12 @@
 //
 //! A device abstraction that allows the choice of backends dynamically.
 
-use crate::{ContextID, Error, GLApi, SurfaceAccess, SurfaceType};
+use crate::{ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use crate::adapter::Adapter as AdapterInterface;
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
-use crate::gl::types::GLenum;
-use crate::surface::{Surface as SurfaceInterface, SurfaceTexture as SurfaceTextureInterface};
+use crate::gl::types::{GLenum, GLuint};
 use super::adapter::Adapter;
 use super::connection::Connection;
 use super::context::{Context, ContextDescriptor};
@@ -69,11 +68,7 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
                                      Def::Connection: ConnectionInterface,
                                      Alt::Connection: ConnectionInterface,
                                      Def::NativeWidget: Clone,
-                                     Alt::NativeWidget: Clone,
-                                     Def::Surface: SurfaceInterface,
-                                     Alt::Surface: SurfaceInterface,
-                                     Def::SurfaceTexture: SurfaceTextureInterface,
-                                     Alt::SurfaceTexture: SurfaceTextureInterface {
+                                     Alt::NativeWidget: Clone {
     type Adapter = Adapter<Def, Alt>;
     type Connection = Connection<Def, Alt>;
     type Context = Context<Def, Alt>;
@@ -145,12 +140,6 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     }
 
     #[inline]
-    fn context_surface<'c>(&self, context: &'c Context<Def, Alt>)
-                           -> Result<Option<&'c Surface<Def, Alt>>, Error> {
-        Device::context_surface(self, context)
-    }
-
-    #[inline]
     fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor<Def, Alt>)
                                      -> ContextAttributes {
         Device::context_descriptor_attributes(self, context_descriptor)
@@ -176,6 +165,12 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     #[inline]
     fn context_id(&self, context: &Context<Def, Alt>) -> ContextID {
         Device::context_id(self, context)
+    }
+
+    #[inline]
+    fn context_surface_info(&self, context: &Context<Def, Alt>)
+                            -> Result<Option<SurfaceInfo>, Error> {
+        Device::context_surface_info(self, context)
     }
 
     // surface.rs
@@ -218,5 +213,15 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     fn present_surface(&self, context: &Context<Def, Alt>, surface: &mut Surface<Def, Alt>)
                        -> Result<(), Error> {
         Device::present_surface(self, context, surface)
+    }
+
+    #[inline]
+    fn surface_info(&self, surface: &Surface<Def, Alt>) -> SurfaceInfo {
+        Device::surface_info(self, surface)
+    }
+
+    #[inline]
+    fn surface_texture_object(&self, surface_texture: &SurfaceTexture<Def, Alt>) -> GLuint {
+        Device::surface_texture_object(self, surface_texture)
     }
 }

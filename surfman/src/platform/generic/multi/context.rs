@@ -2,14 +2,11 @@
 //
 //! A context abstraction that allows the choice of backends dynamically.
 
-use crate::gl::types::GLuint;
-use crate::{ContextAttributes, ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{ContextAttributes, ContextID, Error, SurfaceInfo};
 use crate::device::Device as DeviceInterface;
-use crate::surface::Surface as SurfaceInterface;
 use super::device::Device;
 use super::surface::Surface;
 
-use euclid::default::Size2D;
 use std::os::raw::c_void;
 
 pub enum Context<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
@@ -23,10 +20,7 @@ pub enum ContextDescriptor<Def, Alt> where Def: DeviceInterface, Alt: DeviceInte
     Alternate(Alt::ContextDescriptor),
 }
 
-impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
-                                      Alt: DeviceInterface,
-                                      Def::Surface: SurfaceInterface,
-                                      Alt::Surface: SurfaceInterface {
+impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor<Def, Alt>, Error> {
         match *self {
@@ -40,16 +34,11 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
     }
 
     /// Opens the device and context corresponding to the current default context.
-    pub unsafe fn from_current_default_context() -> Result<(Device<Def, Alt>, Context<Def, Alt>),
+    pub unsafe fn from_current_context() -> Result<(Device<Def, Alt>, Context<Def, Alt>),
                                                             Error> {
-        Def::from_current_context().map(|(device, context)| {
-            (Device::Default(device), Context::Default(context))
-        })
-    }
-
-    /// Opens the device and context corresponding to the current alternate context.
-    pub unsafe fn from_current_alternate_context() -> Result<(Device<Def, Alt>, Context<Def, Alt>),
-                                                            Error> {
+        if let Ok((device, context)) = Def::from_current_context() {
+            return Ok((Device::Default(device), Context::Default(context)));
+        }
         Alt::from_current_context().map(|(device, context)| {
             (Device::Alternate(device), Context::Alternate(context))
         })
@@ -194,6 +183,19 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
                 device.context_id(context)
             }
             _ => panic!("Incompatible context!"),
+        }
+    }
+
+    pub fn context_surface_info(&self, context: &Context<Def, Alt>)
+                                -> Result<Option<SurfaceInfo>, Error> {
+        match (self, context) {
+            (&Device::Default(ref device), &Context::Default(ref context)) => {
+                device.context_surface_info(context)
+            }
+            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+                device.context_surface_info(context)
+            }
+            _ => Err(Error::IncompatibleContext),
         }
     }
 }

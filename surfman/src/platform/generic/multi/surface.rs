@@ -4,27 +4,17 @@
 
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
-use crate::surface::{Surface as SurfaceInterface, SurfaceTexture as SurfaceTextureInterface};
-use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use super::context::Context;
 use super::device::Device;
 
-use euclid::default::Size2D;
-use std::marker::PhantomData;
-
 #[derive(Debug)]
-pub enum Surface<Def, Alt> where Def: DeviceInterface,
-                                 Alt: DeviceInterface,
-                                 Def::Surface: SurfaceInterface,
-                                 Alt::Surface: SurfaceInterface {
+pub enum Surface<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     Default(Def::Surface),
     Alternate(Alt::Surface),
 }
 
-pub enum SurfaceTexture<Def, Alt> where Def: DeviceInterface,
-                                        Alt: DeviceInterface,
-                                        Def::SurfaceTexture: SurfaceTextureInterface,
-                                        Alt::SurfaceTexture: SurfaceTextureInterface {
+pub enum SurfaceTexture<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     Default(Def::SurfaceTexture),
     Alternate(Alt::SurfaceTexture),
 }
@@ -37,11 +27,7 @@ pub enum NativeWidget<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
 impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
                                       Alt: DeviceInterface,
                                       Def::NativeWidget: Clone,
-                                      Alt::NativeWidget: Clone,
-                                      Def::Surface: SurfaceInterface,
-                                      Alt::Surface: SurfaceInterface,
-                                      Def::SurfaceTexture: SurfaceTextureInterface,
-                                      Alt::SurfaceTexture: SurfaceTextureInterface {
+                                      Alt::NativeWidget: Clone {
     pub fn create_surface(&mut self,
                           context: &Context<Def, Alt>,
                           surface_access: SurfaceAccess,
@@ -151,6 +137,27 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
         }
     }
 
+    pub fn present_surface(&self, context: &Context<Def, Alt>, surface: &mut Surface<Def, Alt>)
+                           -> Result<(), Error> {
+        match (self, context) {
+            (&Device::Default(ref device), &Context::Default(ref context)) => {
+                match *surface {
+                    Surface::Default(ref mut surface) => device.present_surface(context, surface),
+                    _ => Err(Error::IncompatibleSurface),
+                }
+            }
+            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+                match *surface {
+                    Surface::Alternate(ref mut surface) => {
+                        device.present_surface(context, surface)
+                    }
+                    _ => Err(Error::IncompatibleSurface),
+                }
+            }
+            _ => Err(Error::IncompatibleContext),
+        }
+    }
+
     #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         match *self {
@@ -158,90 +165,28 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
             Device::Alternate(ref device) => device.surface_gl_texture_target(),
         }
     }
-}
 
-impl<Def, Alt> Surface<Def, Alt> where Def: DeviceInterface,
-                                       Alt: DeviceInterface,
-                                       Def::Surface: SurfaceInterface,
-                                       Alt::Surface: SurfaceInterface {
-    #[inline]
-    pub fn size(&self) -> Size2D<i32> {
-        match *self {
-            Surface::Default(ref surface) => surface.size(),
-            Surface::Alternate(ref surface) => surface.size(),
+    pub fn surface_info(&self, surface: &Surface<Def, Alt>) -> SurfaceInfo {
+        match (self, surface) {
+            (&Device::Default(ref device), Surface::Default(ref surface)) => {
+                device.surface_info(surface)
+            }
+            (&Device::Alternate(ref device), Surface::Alternate(ref surface)) => {
+                device.surface_info(surface)
+            }
+            _ => panic!("Incompatible context!"),
         }
     }
 
-    #[inline]
-    pub fn id(&self) -> SurfaceID {
-        match *self {
-            Surface::Default(ref surface) => surface.id(),
-            Surface::Alternate(ref surface) => surface.id(),
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture<Def, Alt>) -> GLuint {
+        match (self, surface_texture) {
+            (&Device::Default(ref device), SurfaceTexture::Default(ref surface_texture)) => {
+                device.surface_texture_object(surface_texture)
+            }
+            (&Device::Alternate(ref device), SurfaceTexture::Alternate(ref surface_texture)) => {
+                device.surface_texture_object(surface_texture)
+            }
+            _ => panic!("Incompatible context!"),
         }
-    }
-
-    #[inline]
-    pub fn context_id(&self) -> ContextID {
-        match *self {
-            Surface::Default(ref surface) => surface.context_id(),
-            Surface::Alternate(ref surface) => surface.context_id(),
-        }
-    }
-
-    #[inline]
-    pub fn framebuffer_object(&self) -> GLuint {
-        match *self {
-            Surface::Default(ref surface) => surface.framebuffer_object(),
-            Surface::Alternate(ref surface) => surface.framebuffer_object(),
-        }
-    }
-}
-
-impl<Def, Alt> SurfaceTexture<Def, Alt> where Def: DeviceInterface,
-                                              Alt: DeviceInterface,
-                                              Def::SurfaceTexture: SurfaceTextureInterface,
-                                              Alt::SurfaceTexture: SurfaceTextureInterface {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        match *self {
-            SurfaceTexture::Default(ref surface_texture) => surface_texture.gl_texture(),
-            SurfaceTexture::Alternate(ref surface_texture) => surface_texture.gl_texture(),
-        }
-    }
-}
-
-impl<Def, Alt> SurfaceInterface for Surface<Def, Alt> where Def: DeviceInterface,
-                                                            Alt: DeviceInterface,
-                                                            Def::Surface: SurfaceInterface,
-                                                            Alt::Surface: SurfaceInterface {
-    #[inline]
-    fn size(&self) -> Size2D<i32> {
-        Surface::size(self)
-    }
-
-    #[inline]
-    fn id(&self) -> SurfaceID {
-        Surface::id(self)
-    }
-    
-    #[inline]
-    fn context_id(&self) -> ContextID {
-        Surface::context_id(self)
-    }
-    
-    #[inline]
-    fn framebuffer_object(&self) -> GLuint {
-        Surface::framebuffer_object(self)
-    }
-}
-
-impl<Def, Alt> SurfaceTextureInterface for SurfaceTexture<Def, Alt>
-                                       where Def: DeviceInterface,
-                                             Alt: DeviceInterface,
-                                             Def::SurfaceTexture: SurfaceTextureInterface,
-                                             Alt::SurfaceTexture: SurfaceTextureInterface {
-    #[inline]
-    fn gl_texture(&self) -> GLuint {
-        SurfaceTexture::gl_texture(self)
     }
 }

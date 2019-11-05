@@ -296,7 +296,7 @@ impl Device {
     }
 
     #[inline]
-    pub fn surface_gl_texture(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
         surface_texture.texture_object
     }
 

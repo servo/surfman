@@ -6,4 +6,3 @@
 mod adapter;
 mod connection;
 mod device;
-mod surface;

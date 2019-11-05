@@ -4,7 +4,7 @@
 //! `Device` trait for a backend.
 
 use crate::device::Device as DeviceInterface;
-use crate::gl::types::GLenum;
+use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use super::super::adapter::Adapter;
 use super::super::connection::Connection;
@@ -85,11 +85,6 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn context_surface_info(&self, context: &Self::Context) -> Result<Option<SurfaceInfo>, Error> {
-        Device::context_surface_info(self, context)
-    }
-
-    #[inline]
     fn context_descriptor_attributes(&self, context_descriptor: &Self::ContextDescriptor)
                                      -> ContextAttributes {
         Device::context_descriptor_attributes(self, context_descriptor)
@@ -115,6 +110,11 @@ impl DeviceInterface for Device {
     #[inline]
     fn context_id(&self, context: &Self::Context) -> ContextID {
         Device::context_id(self, context)
+    }
+
+    #[inline]
+    fn context_surface_info(&self, context: &Self::Context) -> Result<Option<SurfaceInfo>, Error> {
+        Device::context_surface_info(self, context)
     }
 
     // surface.rs
@@ -149,16 +149,6 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn surface_info(&self, surface: &Self::Surface) -> SurfaceInfo {
-        Device::surface_info(self, surface)
-    }
-
-    #[inline]
-    fn surface_gl_texture(&self, surface_texture: &Self::SurfaceTexture) -> GLuint {
-        Device::surface_gl_texture(self, surface_texture)
-    }
-
-    #[inline]
     fn surface_gl_texture_target(&self) -> GLenum {
         Device::surface_gl_texture_target(self)
     }
@@ -167,5 +157,15 @@ impl DeviceInterface for Device {
     fn present_surface(&self, context: &Self::Context, surface: &mut Self::Surface)
                        -> Result<(), Error> {
         Device::present_surface(self, context, surface)
+    }
+
+    #[inline]
+    fn surface_info(&self, surface: &Self::Surface) -> SurfaceInfo {
+        Device::surface_info(self, surface)
+    }
+
+    #[inline]
+    fn surface_texture_object(&self, surface_texture: &Self::SurfaceTexture) -> GLuint {
+        Device::surface_texture_object(self, surface_texture)
     }
 }

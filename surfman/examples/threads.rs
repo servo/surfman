@@ -287,7 +287,7 @@ impl App {
                            ZERO_TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
             gl::BindTexture(self.device.surface_gl_texture_target(),
-                            self.texture.as_ref().unwrap().gl_texture()); ck();
+                            self.device.surface_texture_object(self.texture.as_ref().unwrap()));
             gl::Uniform1i(self.blit_vertex_array.blit_program.source_uniform, 0); ck();
             gl::Enable(gl::BLEND);
             gl::BlendEquation(gl::FUNC_ADD);
