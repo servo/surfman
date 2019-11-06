@@ -48,7 +48,7 @@ impl Drop for Device {
 }
 
 impl Device {
-    pub fn new(_: &Connection, _: &Adapter) -> Result<Device, Error> {
+    pub(crate) fn new() -> Result<Device, Error> {
         let dx_interop_functions = match WGL_EXTENSION_FUNCTIONS.dx_interop_functions {
             Some(ref dx_interop_functions) => dx_interop_functions,
             None => return Err(Error::RequiredExtensionUnavailable),

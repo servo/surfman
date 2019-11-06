@@ -34,11 +34,6 @@ use winapi::um::wingdi;
 use winapi::um::winuser;
 use wio::com::ComPtr;
 
-#[cfg(feature = "sm-winit")]
-use winit::Window;
-#[cfg(feature = "sm-winit")]
-use winit::os::windows::WindowExt;
-
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 const WGL_ACCESS_READ_ONLY_NV:  GLenum = 0x0000;
@@ -98,11 +93,11 @@ impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
+                          surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        match *surface_type {
-            SurfaceType::Generic { ref size } => self.create_generic_surface(context, size),
-            SurfaceType::Widget { ref native_widget } => {
+        match surface_type {
+            SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
+            SurfaceType::Widget { native_widget } => {
                 self.create_widget_surface(context, native_widget)
             }
         }
@@ -213,7 +208,7 @@ impl Device {
         }
     }
 
-    fn create_widget_surface(&mut self, context: &Context, native_widget: &NativeWidget)
+    fn create_widget_surface(&mut self, context: &Context, native_widget: NativeWidget)
                               -> Result<Surface, Error> {
         unsafe {
             // Get the bounds of the native HWND.
@@ -477,6 +472,11 @@ impl Device {
             },
         }
     }
+
+    #[inline]
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+        surface_texture.gl_texture
+    }
 }
 
 impl Surface {
@@ -487,21 +487,6 @@ impl Surface {
             }
             Win32Objects::Widget { window_handle } => SurfaceID(window_handle as usize),
         }
-    }
-}
-
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.gl_texture
-    }
-}
-
-impl NativeWidget {
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn from_winit_window(window: &Window) -> NativeWidget {
-        NativeWidget { window_handle: window.get_hwnd() as HWND }
     }
 }
 
