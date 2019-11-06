@@ -7,7 +7,7 @@ use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue};
 use jni::{JNIEnv, JavaVM};
 use std::cell::{Cell, RefCell};
 use std::mem;
-use surfman::{Adapter, Connection, Device};
+use surfman::Device;
 
 #[path = "../../../surfman/examples/threads.rs"]
 mod threads;
@@ -26,8 +26,8 @@ pub unsafe extern "system" fn
                                                                                   height: i32) {
     ATTACHED_TO_JNI.with(|attached_to_jni| attached_to_jni.set(true));
 
-    let (connection, adapter) = (Connection::new().unwrap(), Adapter::default().unwrap());
     let (device, context) = Device::from_current_context().unwrap();
+    let (connection, adapter) = (device.connection(), device.adapter());
 
     APP.with(|app| {
         let resource_loader = Box::new(JavaResourceLoader::new(env, loader));

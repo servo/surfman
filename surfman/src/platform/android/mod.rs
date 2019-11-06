@@ -9,3 +9,6 @@ pub mod device;
 pub mod surface;
 
 mod ffi;
+
+#[path = "../../implementation/mod.rs"]
+mod implementation;

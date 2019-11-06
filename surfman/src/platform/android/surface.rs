@@ -88,11 +88,11 @@ impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
+                          surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        match *surface_type {
-            SurfaceType::Generic { ref size } => self.create_generic_surface(context, size),
-            SurfaceType::Widget { ref native_widget } => {
+        match surface_type {
+            SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
+            SurfaceType::Widget { native_widget } => {
                 unsafe {
                     self.create_window_surface(context, native_widget.native_window)
                 }
@@ -347,6 +347,11 @@ impl Device {
             },
         }
     }
+
+    #[inline]
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+        surface_texture.texture_object
+    }
 }
 
 impl NativeWidget {
@@ -362,13 +367,6 @@ impl Surface {
             SurfaceObjects::HardwareBuffer { egl_image, .. } => SurfaceID(egl_image as usize),
             SurfaceObjects::Window { egl_surface } => SurfaceID(egl_surface as usize),
         }
-    }
-}
-
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.texture_object
     }
 }
 

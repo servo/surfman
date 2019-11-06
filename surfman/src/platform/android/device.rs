@@ -19,7 +19,7 @@ pub(crate) trait NativeDisplay {
 
 impl Device {
     #[inline]
-    pub fn new(_: &Connection, _: &Adapter) -> Result<Device, Error> {
+    pub(crate) fn new() -> Result<Device, Error> {
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
                 let egl_display = egl.GetDisplay(egl::DEFAULT_DISPLAY);
