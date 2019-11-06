@@ -15,6 +15,10 @@ in GPU memory. Using this library, you can:
 
 * Draw to a surface with a platform-specific GPU API like Metal.
 
+`surfman` forms the low-level graphics infrastructure of the
+[Servo](https://github.com/servo/servo/) project, where it allows for easy porting of the
+browser's WebGL and WebXR code to a variety of platforms.
+
 ## What `surfman` is not
 
 `surfman` is not a full-featured GPU rendering API. It doesn't attempt to abstract over rendering
@@ -25,8 +29,8 @@ and needs to be paired with a crate like [winit](https://github.com/rust-windowi
 actually open the window. 
 
 Likewise, `surfman` is not a UI toolkit. For that, see GTK+ and many other libraries. It's possible
-to use `surfman` alongside any of these UI toolkits to integrate GPU rendering into an application,
-however.
+to use `surfman` alongside any of these UI toolkits to efficiently integrate GPU rendering into an
+application, however.
 
 ## Why `surfman`?
 
@@ -40,7 +44,7 @@ example:
   you would like to render with.
 
 * OpenGL's *share context* or *share lists* feature allows you to share textures across contexts.
-  However, this often exposes driver bugs, and even if it works, it causes most operations to take
+  However, this often exposes driver bugs, and, even if it works, it causes most operations to take
   mutex locks. Efficient texture sharing requires the use of platform-specific APIs, which
   `surfman` abstracts over.
 
