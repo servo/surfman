@@ -3,8 +3,7 @@
 //! Wrapper for EGL contexts managed by ANGLE using Direct3D 11 as a backend on Windows.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDeviceEXT, EGLDisplay, EGLSurface};
-use crate::egl::types::{EGLenum, EGLint};
+use crate::egl::types::{EGLAttrib, EGLConfig, EGLDeviceEXT, EGLenum, EGLint};
 use crate::egl;
 use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};

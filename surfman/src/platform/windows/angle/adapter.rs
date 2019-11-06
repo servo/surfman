@@ -10,8 +10,7 @@ use std::ptr;
 use winapi::Interface;
 use winapi::shared::dxgi::{self, IDXGIAdapter, IDXGIFactory1};
 use winapi::shared::winerror;
-use winapi::um::d3dcommon::{D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_HARDWARE};
-use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
+use winapi::um::d3dcommon::D3D_DRIVER_TYPE;
 use wio::com::ComPtr;
 
 thread_local! {
@@ -27,7 +26,7 @@ pub struct Adapter {
 unsafe impl Send for Adapter {}
 
 impl Adapter {
-    fn from_driver_type(d3d_driver_type: D3D_DRIVER_TYPE) -> Result<Adapter, Error> {
+    pub(crate) fn from_driver_type(d3d_driver_type: D3D_DRIVER_TYPE) -> Result<Adapter, Error> {
         unsafe {
             let dxgi_factory = DXGI_FACTORY.with(|dxgi_factory_slot| {
                 let mut dxgi_factory_slot: RefMut<Option<ComPtr<IDXGIFactory1>>> =
@@ -63,23 +62,5 @@ impl Adapter {
 
             Ok(Adapter { dxgi_adapter, d3d_driver_type })
         }
-    }
-
-    /// Returns the "best" adapter on this system.
-    #[inline]
-    pub fn default() -> Result<Adapter, Error> {
-        Adapter::from_driver_type(D3D_DRIVER_TYPE_UNKNOWN)
-    }
-
-    /// Returns the "best" hardware adapter on this system.
-    #[inline]
-    pub fn hardware() -> Result<Adapter, Error> {
-        Adapter::from_driver_type(D3D_DRIVER_TYPE_HARDWARE)
-    }
-
-    /// Returns the "best" software adapter on this system.
-    #[inline]
-    pub fn software() -> Result<Adapter, Error> {
-        Adapter::from_driver_type(D3D_DRIVER_TYPE_WARP)
     }
 }

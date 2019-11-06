@@ -28,7 +28,7 @@ pub struct Device {
 
 impl Device {
     #[allow(non_snake_case)]
-    pub fn new(_: &Connection, adapter: &Adapter) -> Result<Device, Error> {
+    pub(crate) fn new(adapter: &Adapter) -> Result<Device, Error> {
         let d3d_driver_type = adapter.d3d_driver_type;
         unsafe {
             let mut d3d11_device = ptr::null_mut();

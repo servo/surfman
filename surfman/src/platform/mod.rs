@@ -15,6 +15,7 @@ pub use android as default;
 pub mod macos;
 #[cfg(all(target_os = "macos", not(any(feature = "sm-x11", feature = "sm-osmesa-default"))))]
 pub use macos::cgl as default;
+#[cfg(target_os = "macos")]
 pub use macos::system;
 
 #[cfg(unix)]

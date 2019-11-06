@@ -33,11 +33,6 @@ use winapi::um::winnt::HANDLE;
 use winapi::um::winuser;
 use wio::com::ComPtr;
 
-#[cfg(feature = "sm-winit")]
-use winit::Window;
-#[cfg(feature = "sm-winit")]
-use winit::os::windows::WindowExt;
-
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 pub struct Surface {
@@ -95,9 +90,9 @@ impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
+                          surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        match *surface_type {
+        match surface_type {
             SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size, None),
             SurfaceType::Widget { ref native_widget } => {
                 self.create_window_surface(context, native_widget)
@@ -402,6 +397,11 @@ impl Device {
             framebuffer_object: 0,
         }
     }
+
+    #[inline]
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+        surface_texture.gl_texture
+    }
 }
 
 impl Surface {
@@ -416,21 +416,6 @@ impl Surface {
             Win32Objects::Pbuffer { keyed_mutex: Some(_), .. } => true,
             Win32Objects::Pbuffer { keyed_mutex: None, .. } | Win32Objects::Window => false,
         }
-    }
-}
-
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.gl_texture
-    }
-}
-
-impl NativeWidget {
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn from_winit_window(window: &Window) -> NativeWidget {
-        NativeWidget { window_handle: window.get_hwnd() as HWND }
     }
 }
 
