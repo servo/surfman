@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/src/macos/cgl/adapter.rs
+// surfman/surfman/src/platform/macos/cgl/adapter.rs
 //
 //! A wrapper for Core OpenGL adapters.
 

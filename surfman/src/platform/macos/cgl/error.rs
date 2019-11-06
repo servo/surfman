@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/macos/error.rs
+// surfman/surfman/src/platform/macos/cgl/error.rs
 //
 //! Translation of errors from the CGL API to `surfman` errors.
 

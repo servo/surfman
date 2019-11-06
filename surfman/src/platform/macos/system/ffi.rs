@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/macos/ffi.rs
+// surfman/surfman/src/platform/macos/system/ffi.rs
 //
 //! FFI definitions for the macOS backend.
 

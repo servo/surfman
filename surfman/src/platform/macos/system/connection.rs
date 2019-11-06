@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/src/macos/system/connection.rs
+// surfman/surfman/src/platform/macos/system/connection.rs
 //
 //! Represents the connection to the Core Graphics window server.
 //! 

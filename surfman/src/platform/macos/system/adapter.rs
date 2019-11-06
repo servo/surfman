@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/src/macos/system/adapter.rs
+// surfman/surfman/src/platform/macos/system/adapter.rs
 //
 //! A wrapper for Metal adapters.
 

@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/macos/surfman.rs
+// surfman/surfman/src/platform/macos/cgl/surface.rs
 //
 //! Surface management for macOS.
 
