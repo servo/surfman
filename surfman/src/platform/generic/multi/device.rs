@@ -23,19 +23,6 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
                                       Alt: DeviceInterface,
                                       Def::Connection: ConnectionInterface,
                                       Alt::Connection: ConnectionInterface {
-    pub fn new(connection: &Connection<Def, Alt>, adapter: &Adapter<Def, Alt>)
-               -> Result<Device<Def, Alt>, Error> {
-        match (connection, adapter) {
-            (&Connection::Default(ref connection), &Adapter::Default(ref adapter)) => {
-                Def::new(connection, adapter).map(Device::Default)
-            }
-            (&Connection::Alternate(ref connection), &Adapter::Alternate(ref adapter)) => {
-                Alt::new(connection, adapter).map(Device::Alternate)
-            }
-            _ => Err(Error::IncompatibleAdapter),
-        }
-    }
-
     pub fn adapter(&self) -> Adapter<Def, Alt> {
         match *self {
             Device::Default(ref device) => Adapter::Default(device.adapter()),
@@ -59,12 +46,10 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
 }
 
 impl<Def, Alt> DeviceInterface for Device<Def, Alt>
-        where Def: DeviceInterface,
-              Alt: DeviceInterface,
-              Def::Connection: ConnectionInterface,
-              Alt::Connection: ConnectionInterface,
-              <Def::Connection as ConnectionInterface>::NativeWidget: Clone,
-              <Alt::Connection as ConnectionInterface>::NativeWidget: Clone {
+                               where Def: DeviceInterface,
+                                     Alt: DeviceInterface,
+                                     Def::Connection: ConnectionInterface<Device = Def>,
+                                     Alt::Connection: ConnectionInterface<Device = Alt> {
     type Connection = Connection<Def, Alt>;
     type Context = Context<Def, Alt>;
     type ContextDescriptor = ContextDescriptor<Def, Alt>;
@@ -72,11 +57,6 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     type SurfaceTexture = SurfaceTexture<Def, Alt>;
 
     // device.rs
-
-    #[inline]
-    fn new(connection: &Connection<Def, Alt>, adapter: &Adapter<Def, Alt>) -> Result<Self, Error> {
-        Device::new(connection, adapter)
-    }
 
     #[inline]
     fn connection(&self) -> Connection<Def, Alt> {
@@ -172,7 +152,7 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     fn create_surface(&mut self,
                       context: &Context<Def, Alt>,
                       surface_access: SurfaceAccess,
-                      surface_type: &SurfaceType<NativeWidget<Def, Alt>>)
+                      surface_type: SurfaceType<NativeWidget<Def, Alt>>)
                       -> Result<Surface<Def, Alt>, Error> {
         Device::create_surface(self, context, surface_access, surface_type)
     }

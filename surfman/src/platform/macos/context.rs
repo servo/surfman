@@ -6,8 +6,6 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::Gl;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
-use super::adapter::Adapter;
-use super::connection::Connection;
 use super::device::Device;
 use super::error::ToWindowingApiError;
 use super::surface::Surface;
@@ -171,8 +169,7 @@ impl Device {
         };
         next_context_id.0 += 1;
 
-        let device = Device::new(&Connection, &Adapter)?;
-        Ok((device, context))
+        Ok((Device::new()?, context))
     }
 
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {

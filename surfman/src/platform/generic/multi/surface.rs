@@ -25,41 +25,37 @@ pub enum NativeWidget<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
     Alternate(<Alt::Connection as ConnectionInterface>::NativeWidget),
 }
 
-impl<Def, Alt> Device<Def, Alt>
-               where Def: DeviceInterface,
-                     Alt: DeviceInterface,
-                     <Def::Connection as ConnectionInterface>::NativeWidget: Clone,
-                     <Alt::Connection as ConnectionInterface>::NativeWidget: Clone {
+impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     pub fn create_surface(&mut self,
                           context: &Context<Def, Alt>,
                           surface_access: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget<Def, Alt>>)
+                          surface_type: SurfaceType<NativeWidget<Def, Alt>>)
                           -> Result<Surface<Def, Alt>, Error> {
         match (&mut *self, context) {
             (&mut Device::Default(ref mut device), &Context::Default(ref context)) => {
-                let surface_type = match *surface_type {
+                let surface_type = match surface_type {
                     SurfaceType::Generic { size } => SurfaceType::Generic { size },
                     SurfaceType::Widget {
-                        native_widget: NativeWidget::Default(ref native_widget),
-                    } => SurfaceType::Widget { native_widget: (*native_widget).clone() },
+                        native_widget: NativeWidget::Default(native_widget),
+                    } => SurfaceType::Widget { native_widget },
                     SurfaceType::Widget { native_widget: _ } => {
                         return Err(Error::IncompatibleNativeWidget)
                     }
                 };
-                device.create_surface(context, surface_access, &surface_type)
+                device.create_surface(context, surface_access, surface_type)
                       .map(Surface::Default)
             }
             (&mut Device::Alternate(ref mut device), &Context::Alternate(ref context)) => {
-                let surface_type = match *surface_type {
+                let surface_type = match surface_type {
                     SurfaceType::Generic { size } => SurfaceType::Generic { size },
                     SurfaceType::Widget {
-                        native_widget: NativeWidget::Alternate(ref native_widget),
-                    } => SurfaceType::Widget { native_widget: (*native_widget).clone() },
+                        native_widget: NativeWidget::Alternate(native_widget),
+                    } => SurfaceType::Widget { native_widget },
                     SurfaceType::Widget { native_widget: _ } => {
                         return Err(Error::IncompatibleNativeWidget)
                     }
                 };
-                device.create_surface(context, surface_access, &surface_type)
+                device.create_surface(context, surface_access, surface_type)
                       .map(Surface::Alternate)
             }
             _ => Err(Error::IncompatibleContext),

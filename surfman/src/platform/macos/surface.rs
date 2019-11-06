@@ -101,12 +101,12 @@ impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
                           access: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
+                          surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         let _guard = self.temporarily_make_context_current(context);
         GL_FUNCTIONS.with(|gl| {
             unsafe {
-                let size = match *surface_type {
+                let size = match surface_type {
                     SurfaceType::Generic { size } => size,
                     SurfaceType::Widget { ref native_widget } => {
                         let window: id = msg_send![native_widget.view.0, window];
@@ -137,7 +137,7 @@ impl Device {
                 debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
                                  gl::FRAMEBUFFER_COMPLETE);
 
-                let view_info = match *surface_type {
+                let view_info = match surface_type {
                     SurfaceType::Generic { .. } => None,
                     SurfaceType::Widget { ref native_widget, .. } => {
                         Some(self.create_view_info(&size, access, native_widget))

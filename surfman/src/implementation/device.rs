@@ -24,11 +24,6 @@ impl DeviceInterface for Device {
     // device.rs
 
     #[inline]
-    fn new(connection: &Connection, adapter: &Adapter) -> Result<Self, Error> {
-        Device::new(connection, adapter)
-    }
-
-    #[inline]
     fn connection(&self) -> Connection {
         Device::connection(self)
     }
@@ -121,7 +116,7 @@ impl DeviceInterface for Device {
     fn create_surface(&mut self,
                       context: &Self::Context,
                       surface_access: SurfaceAccess,
-                      surface_type: &SurfaceType<NativeWidget>)
+                      surface_type: SurfaceType<NativeWidget>)
                       -> Result<Self::Surface, Error> {
         Device::create_surface(self, context, surface_access, surface_type)
     }

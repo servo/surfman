@@ -9,6 +9,7 @@ use winit::Window;
 
 pub trait Connection: Sized {
     type Adapter;
+    type Device;
     type NativeWidget;
 
     fn new() -> Result<Self, Error>;
@@ -16,6 +17,8 @@ pub trait Connection: Sized {
     fn create_adapter(&self) -> Result<Self::Adapter, Error>;
     fn create_hardware_adapter(&self) -> Result<Self::Adapter, Error>;
     fn create_software_adapter(&self) -> Result<Self::Adapter, Error>;
+
+    fn create_device(&self, adapter: &Self::Adapter) -> Result<Self::Device, Error>;
 
     #[cfg(feature = "sm-winit")]
     fn from_winit_window(window: &Window) -> Result<Self, Error>;

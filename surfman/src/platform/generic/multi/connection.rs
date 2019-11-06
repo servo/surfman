@@ -6,6 +6,7 @@ use crate::Error;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use super::adapter::Adapter;
+use super::device::Device;
 use super::surface::NativeWidget;
 
 #[cfg(feature = "sm-winit")]
@@ -20,10 +21,11 @@ pub enum Connection<Def, Alt> where Def: DeviceInterface,
     Alternate(Alt::Connection),
 }
 
-impl<Def, Alt> Connection<Def, Alt> where Def: DeviceInterface,
-                                          Alt: DeviceInterface,
-                                          Def::Connection: ConnectionInterface,
-                                          Alt::Connection: ConnectionInterface {
+impl<Def, Alt> Connection<Def, Alt>
+               where Def: DeviceInterface,
+                     Alt: DeviceInterface,
+                     Def::Connection: ConnectionInterface<Device = Def>,
+                     Alt::Connection: ConnectionInterface<Device = Alt> {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection<Def, Alt>, Error> {
@@ -66,6 +68,18 @@ impl<Def, Alt> Connection<Def, Alt> where Def: DeviceInterface,
         }
     }
 
+    pub fn create_device(&self, adapter: &Adapter<Def, Alt>) -> Result<Device<Def, Alt>, Error> {
+        match (self, adapter) {
+            (&Connection::Default(ref connection), &Adapter::Default(ref adapter)) => {
+                connection.create_device(adapter).map(Device::Default)
+            }
+            (&Connection::Alternate(ref connection), &Adapter::Alternate(ref adapter)) => {
+                connection.create_device(adapter).map(Device::Alternate)
+            }
+            _ => Err(Error::IncompatibleAdapter),
+        }
+    }
+
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection<Def, Alt>, Error> {
         match <Def::Connection>::from_winit_window(window) {
@@ -93,9 +107,10 @@ impl<Def, Alt> Connection<Def, Alt> where Def: DeviceInterface,
 impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
                                    where Def: DeviceInterface,
                                          Alt: DeviceInterface,
-                                         Def::Connection: ConnectionInterface,
-                                         Alt::Connection: ConnectionInterface {
+                                         Def::Connection: ConnectionInterface<Device = Def>,
+                                         Alt::Connection: ConnectionInterface<Device = Alt> {
     type Adapter = Adapter<Def, Alt>;
+    type Device = Device<Def, Alt>;
     type NativeWidget = NativeWidget<Def, Alt>;
 
     #[inline]
@@ -116,6 +131,11 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
     #[inline]
     fn create_software_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
         Connection::create_software_adapter(self)
+    }
+
+    #[inline]
+    fn create_device(&self, adapter: &Adapter<Def, Alt>) -> Result<Device<Def, Alt>, Error> {
+        Connection::create_device(self, adapter)
     }
 
     #[inline]

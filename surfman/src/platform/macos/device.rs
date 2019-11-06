@@ -15,7 +15,7 @@ pub struct Device {
 
 impl Device {
     #[inline]
-    pub fn new(_: &Connection, _: &Adapter) -> Result<Device, Error> {
+    pub(crate) fn new() -> Result<Device, Error> {
         Ok(Device { phantom: PhantomData })
     }
 

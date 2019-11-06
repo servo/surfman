@@ -16,9 +16,6 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
     type SurfaceTexture;
 
     // device.rs
-    fn new(connection: &Self::Connection,
-           adapter: &<Self::Connection as ConnectionInterface>::Adapter)
-           -> Result<Self, Error>;
     fn connection(&self) -> Self::Connection;
     fn adapter(&self) -> <Self::Connection as ConnectionInterface>::Adapter;
     fn gl_api(&self) -> GLApi;
@@ -48,7 +45,7 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
         &mut self,
         context: &Self::Context,
         surface_access: SurfaceAccess,
-        surface_type: &SurfaceType<<Self::Connection as ConnectionInterface>::NativeWidget>)
+        surface_type: SurfaceType<<Self::Connection as ConnectionInterface>::NativeWidget>)
         -> Result<Self::Surface, Error>;
     fn create_surface_texture(&self, context: &mut Self::Context, surface: Self::Surface)
                               -> Result<Self::SurfaceTexture, Error>;

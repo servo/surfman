@@ -100,7 +100,7 @@ fn main() {
     let connection = Connection::from_winit_window(&window).unwrap();
     let native_widget = connection.create_native_widget_from_winit_window(&window).unwrap();
     let adapter = connection.create_adapter().unwrap();
-    let mut device = Device::new(&connection, &adapter).unwrap();
+    let mut device = connection.create_device(&adapter).unwrap();
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 3),
@@ -110,7 +110,7 @@ fn main() {
 
     let surface_type = SurfaceType::Widget { native_widget };
     let mut context = device.create_context(&context_descriptor).unwrap();
-    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type).unwrap();
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, surface_type).unwrap();
     device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();
 
@@ -321,9 +321,9 @@ fn worker_thread(connection: Connection,
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
     let surface_type = SurfaceType::Generic { size };
-    let mut device = Device::new(&connection, &adapter).unwrap();
+    let mut device = connection.create_device(&adapter).unwrap();
     let mut context = device.create_context(&context_descriptor).unwrap();
-    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type).unwrap();
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, surface_type).unwrap();
     device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();
 
@@ -347,7 +347,8 @@ fn worker_thread(connection: Connection,
     let mut theta_z = INITIAL_ROTATION_Z;
 
     // Send an initial surface back to the main thread.
-    let surface = Some(device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type)
+    let surface_type = SurfaceType::Generic { size };
+    let surface = Some(device.create_surface(&context, SurfaceAccess::GPUOnly, surface_type)
                              .unwrap());
     worker_to_main_sender.send(Frame {
         surface,

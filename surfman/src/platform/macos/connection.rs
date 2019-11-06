@@ -7,6 +7,7 @@
 
 use crate::Error;
 use super::adapter::Adapter;
+use super::device::Device;
 use super::surface::{NSView, NativeWidget};
 
 use cocoa::base::id;
@@ -45,6 +46,11 @@ impl Connection {
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
         Err(Error::NoSoftwareAdapters)
+    }
+
+    #[inline]
+    pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
+        Device::new()
     }
 
     #[cfg(feature = "sm-winit")]

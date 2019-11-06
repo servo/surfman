@@ -53,9 +53,9 @@ impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
+                          surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        let size = match *surface_type {
+        let size = match surface_type {
             SurfaceType::Generic { ref size } => *size,
             SurfaceType::Widget { .. } => unreachable!(),
         };
