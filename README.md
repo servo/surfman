@@ -101,3 +101,5 @@ The following features may be added later:
 ## License
 
 `surfman` is licensed under the same terms as Rust itself.
+
+`surfman` abides by the same code of conduct as Rust itself.
