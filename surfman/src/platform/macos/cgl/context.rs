@@ -1,9 +1,10 @@
-// surfman/surfman/src/platform/macos/context.rs
+// surfman/surfman/src/platform/macos/cgl/context.rs
 //
 //! Wrapper for Core OpenGL contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::Gl;
+use crate::platform::macos::system::connection::Connection as SystemConnection;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use super::device::Device;
@@ -169,7 +170,12 @@ impl Device {
         };
         next_context_id.0 += 1;
 
-        Ok((Device::new()?, context))
+        // Create the device.
+        let connection = SystemConnection::new()?;
+        let adapter = connection.create_adapter()?;
+        let device = connection.create_device(&adapter)?;
+
+        Ok((Device(device), context))
     }
 
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {

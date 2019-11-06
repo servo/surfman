@@ -9,6 +9,14 @@ use euclid::default::Size2D;
 use std::fmt::{self, Display, Formatter};
 
 /// Various data about the surface.
+pub struct SystemSurfaceInfo {
+    /// The surface's size, in device pixels.
+    pub size: Size2D<i32>,
+    /// The ID of the surface. This should be globally unique for each currently-allocated surface.
+    pub id: SurfaceID,
+}
+
+/// Various data about the surface.
 pub struct SurfaceInfo {
     /// The surface's size, in device pixels.
     pub size: Size2D<i32>,

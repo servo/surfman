@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/src/macos/connection.rs
+// surfman/surfman/src/platform/src/macos/cgl/connection.rs
 //
 //! Represents the connection to the Core Graphics window server.
 //! 
@@ -6,38 +6,35 @@
 //! connection.
 
 use crate::Error;
+use crate::platform::macos::system::connection::Connection as SystemConnection;
+use crate::platform::macos::system::surface::NativeWidget;
 use super::adapter::Adapter;
 use super::device::Device;
-use super::surface::{NSView, NativeWidget};
-
-use cocoa::base::id;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
-#[cfg(feature = "sm-winit")]
-use winit::os::macos::WindowExt;
 
 /// A no-op connection.
 #[derive(Clone)]
-pub struct Connection;
+pub struct Connection(pub SystemConnection);
 
 impl Connection {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection, Error> {
-        Ok(Connection)
+        SystemConnection::new().map(Connection)
     }
 
     /// Returns the "best" adapter on this system.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        self.create_hardware_adapter()
+        self.0.create_adapter().map(Adapter)
     }
 
     /// Returns the "best" hardware adapter on this system.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter)
+        self.0.create_hardware_adapter().map(Adapter)
     }
 
     /// Returns the "best" software adapter on this system.
@@ -45,28 +42,23 @@ impl Connection {
     /// The macOS backend has no software support, so this returns an error.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Err(Error::NoSoftwareAdapters)
+        self.0.create_software_adapter().map(Adapter)
     }
 
     #[inline]
-    pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
-        Device::new()
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        self.0.create_device(&adapter.0).map(Device)
     }
 
     #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
-        Connection::new()
+    pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
+        SystemConnection::from_winit_window(window).map(Connection)
     }
 
     #[cfg(feature = "sm-winit")]
+    #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
-        let ns_view = window.get_nsview() as id;
-        if ns_view.is_null() {
-            return Err(Error::IncompatibleNativeWidget);
-        }
-        unsafe {
-            Ok(NativeWidget { view: NSView(msg_send![ns_view, retain]) })
-        }
+        self.0.create_native_widget_from_winit_window(window)
     }
 }

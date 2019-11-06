@@ -1,8 +1,8 @@
-// surfman/surfman/src/platform/macos/device.rs
+// surfman/surfman/src/platform/macos/system/device.rs
 //
-//! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
+//! A handle to the device. (This is a no-op, because handles are implicit in `IOSurface`.)
 
-use crate::{Error, GLApi};
+use crate::Error;
 use super::adapter::Adapter;
 use super::connection::Connection;
 
@@ -27,10 +27,5 @@ impl Device {
     #[inline]
     pub fn adapter(&self) -> Adapter {
         Adapter
-    }
-
-    #[inline]
-    pub fn gl_api(&self) -> GLApi {
-        GLApi::GL
     }
 }

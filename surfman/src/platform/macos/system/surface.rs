@@ -1,13 +1,8 @@
-// surfman/surfman/src/platform/macos/surfman.rs
+// surfman/surfman/src/platform/macos/system/surface.rs
 //
 //! Surface management for macOS.
 
-use crate::context::ContextID;
-use crate::gl::types::{GLenum, GLint, GLuint};
-use crate::gl_utils;
-use crate::renderbuffers::Renderbuffers;
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, gl};
-use super::context::{Context, GL_FUNCTIONS};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, SystemSurfaceInfo};
 use super::device::Device;
 use super::ffi::{IOSurfaceGetAllocSize, IOSurfaceGetBaseAddress, IOSurfaceGetBytesPerRow};
 use super::ffi::{IOSurfaceLock, IOSurfaceUnlock, kCVPixelFormatType_32BGRA, kIOMapDefaultCache};
@@ -28,7 +23,6 @@ use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerR
 use io_surface::{kIOSurfaceCacheMode, kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
 use mach::kern_return::KERN_SUCCESS;
 use std::fmt::{self, Debug, Formatter};
-use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
 use std::slice;
@@ -37,23 +31,12 @@ use std::thread;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
-const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
-
 pub struct Surface {
     pub(crate) io_surface: IOSurface,
     pub(crate) size: Size2D<i32>,
     access: SurfaceAccess,
-    pub(crate) context_id: ContextID,
-    pub(crate) framebuffer_object: GLuint,
-    pub(crate) texture_object: GLuint,
-    pub(crate) renderbuffers: Renderbuffers,
+    pub(crate) destroyed: bool,
     pub(crate) view_info: Option<ViewInfo>,
-}
-
-pub struct SurfaceTexture {
-    pub(crate) surface: Surface,
-    pub(crate) texture_object: GLuint,
-    pub(crate) phantom: PhantomData<*const ()>,
 }
 
 unsafe impl Send for Surface {}
@@ -66,7 +49,7 @@ impl Debug for Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        if self.framebuffer_object != 0 && !thread::panicking() {
+        if !self.destroyed && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
         }
     }
@@ -99,63 +82,30 @@ pub struct SurfaceDataGuard<'a> {
 
 impl Device {
     pub fn create_surface(&mut self,
-                          context: &Context,
                           access: SurfaceAccess,
                           surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        let _guard = self.temporarily_make_context_current(context);
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                let size = match surface_type {
-                    SurfaceType::Generic { size } => size,
-                    SurfaceType::Widget { ref native_widget } => {
-                        let window: id = msg_send![native_widget.view.0, window];
-                        let bounds = window.convertRectToBacking(native_widget.view.0.bounds());
-                        Size2D::new(bounds.size.width.round(), bounds.size.height.round()).to_i32()
-                    }
-                };
+        unsafe {
+            let size = match surface_type {
+                SurfaceType::Generic { size } => size,
+                SurfaceType::Widget { ref native_widget } => {
+                    let window: id = msg_send![native_widget.view.0, window];
+                    let bounds = window.convertRectToBacking(native_widget.view.0.bounds());
+                    Size2D::new(bounds.size.width.round(), bounds.size.height.round()).to_i32()
+                }
+            };
 
-                let io_surface = self.create_io_surface(&size, access);
-                let texture_object = self.bind_to_gl_texture(&io_surface, &size);
+            let io_surface = self.create_io_surface(&size, access);
 
-                let mut framebuffer_object = 0;
-                gl.GenFramebuffers(1, &mut framebuffer_object);
-                let _guard = self.temporarily_bind_framebuffer(framebuffer_object);
+            let view_info = match surface_type {
+                SurfaceType::Generic { .. } => None,
+                SurfaceType::Widget { ref native_widget, .. } => {
+                    Some(self.create_view_info(&size, access, native_widget))
+                }
+            };
 
-                gl.FramebufferTexture2D(gl::FRAMEBUFFER,
-                                        gl::COLOR_ATTACHMENT0,
-                                        SURFACE_GL_TEXTURE_TARGET,
-                                        texture_object,
-                                        0);
-
-                let context_descriptor = self.context_descriptor(context);
-                let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-
-                let renderbuffers = Renderbuffers::new(gl, &size, &context_attributes);
-                renderbuffers.bind_to_current_framebuffer(gl);
-
-                debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
-                                 gl::FRAMEBUFFER_COMPLETE);
-
-                let view_info = match surface_type {
-                    SurfaceType::Generic { .. } => None,
-                    SurfaceType::Widget { ref native_widget, .. } => {
-                        Some(self.create_view_info(&size, access, native_widget))
-                    }
-                };
-
-                Ok(Surface {
-                    io_surface,
-                    size,
-                    access,
-                    context_id: context.id,
-                    framebuffer_object,
-                    texture_object,
-                    renderbuffers,
-                    view_info,
-                })
-            }
-        })
+            Ok(Surface { io_surface, size, access, destroyed: false, view_info })
+        }
     }
 
     unsafe fn create_view_info(&mut self,
@@ -209,99 +159,12 @@ impl Device {
         ViewInfo { layer, front_surface, display_link, next_vblank }
     }
 
-    pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
-        if surface.view_info.is_some() {
-            return Err(Error::WidgetAttached);
-        }
-
-        let texture_object = self.bind_to_gl_texture(&surface.io_surface, &surface.size);
-        Ok(SurfaceTexture {
-            surface,
-            texture_object,
-            phantom: PhantomData,
-        })
+    pub fn destroy_surface(&self, mut surface: Surface) -> Result<(), Error> {
+        surface.destroyed = true;
+        Ok(())
     }
 
-    fn bind_to_gl_texture(&self, io_surface: &IOSurface, size: &Size2D<i32>) -> GLuint {
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                let mut texture = 0;
-                gl.GenTextures(1, &mut texture);
-                debug_assert_ne!(texture, 0);
-
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, texture);
-                io_surface.bind_to_gl_texture(size.width, size.height, true);
-
-                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                 gl::TEXTURE_MAG_FILTER,
-                                 gl::NEAREST as GLint);
-                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                 gl::TEXTURE_MIN_FILTER,
-                                 gl::NEAREST as GLint);
-                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                 gl::TEXTURE_WRAP_S,
-                                 gl::CLAMP_TO_EDGE as GLint);
-                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                 gl::TEXTURE_WRAP_T,
-                                 gl::CLAMP_TO_EDGE as GLint);
-
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
-
-                debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
-
-                texture
-            }
-        })
-    }
-
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
-                           -> Result<(), Error> {
-        GL_FUNCTIONS.with(|gl| {
-            if context.id != surface.context_id {
-                // Leak the surface, and return an error.
-                surface.framebuffer_object = 0;
-                surface.renderbuffers.leak();
-                return Err(Error::IncompatibleSurface);
-            }
-
-            unsafe {
-                gl_utils::destroy_framebuffer(gl, surface.framebuffer_object);
-                surface.framebuffer_object = 0;
-
-                surface.renderbuffers.destroy(gl);
-                gl.DeleteTextures(1, &surface.texture_object);
-                surface.texture_object = 0;
-            }
-
-            Ok(())
-        })
-    }
-
-    pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.DeleteTextures(1, &surface_texture.texture_object);
-                surface_texture.texture_object = 0;
-            }
-
-            Ok(surface_texture.surface)
-        })
-    }
-
-    #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
-        surface_texture.texture_object
-    }
-
-    #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
-        SURFACE_GL_TEXTURE_TARGET
-    }
-
-    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
-        let _guard = self.temporarily_make_context_current(context)?;
+    pub fn present_surface(&self, surface: &mut Surface) -> Result<(), Error> {
         surface.present()
     }
 
@@ -337,28 +200,11 @@ impl Device {
         }
     }
 
-    fn temporarily_bind_framebuffer(&self, new_framebuffer: GLuint) -> FramebufferGuard {
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
-                gl.GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut current_draw_framebuffer);
-                gl.GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut current_read_framebuffer);
-                gl.BindFramebuffer(gl::FRAMEBUFFER, new_framebuffer);
-                FramebufferGuard {
-                    draw: current_draw_framebuffer as GLuint,
-                    read: current_read_framebuffer as GLuint,
-                }
-            }
-        })
-    }
-
     #[inline]
-    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        SurfaceInfo {
+    pub fn surface_info(&self, surface: &Surface) -> SystemSurfaceInfo {
+        SystemSurfaceInfo {
             size: surface.size,
             id: surface.id(),
-            context_id: surface.context_id,
-            framebuffer_object: surface.framebuffer_object,
         }
     }
 }
@@ -370,35 +216,26 @@ impl Surface {
     }
 
     // Assumes the context is current.
-    pub(crate) fn present(&mut self) -> Result<(), Error> {
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.Flush();
+    fn present(&mut self) -> Result<(), Error> {
+        unsafe {
+            transaction::begin();
+            transaction::set_disable_actions(true);
 
-                transaction::begin();
-                transaction::set_disable_actions(true);
+            let view_info = match self.view_info {
+                None => return Err(Error::NoWidgetAttached),
+                Some(ref mut view_info) => view_info,
+            };
+            mem::swap(&mut view_info.front_surface, &mut self.io_surface);
+            view_info.layer.set_contents(view_info.front_surface.obj as id);
 
-                let view_info = match self.view_info {
-                    None => return Err(Error::NoWidgetAttached),
-                    Some(ref mut view_info) => view_info,
-                };
-                mem::swap(&mut view_info.front_surface, &mut self.io_surface);
-                view_info.layer.set_contents(view_info.front_surface.obj as id);
+            transaction::commit();
 
-                transaction::commit();
+            // Wait for the next swap interval.
+            let next_vblank_mutex_guard = view_info.next_vblank.mutex.lock().unwrap();
+            drop(view_info.next_vblank.cond.wait(next_vblank_mutex_guard).unwrap());
 
-                let size = self.size;
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, self.texture_object);
-                self.io_surface.bind_to_gl_texture(size.width, size.height, true);
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
-
-                // Wait for the next swap interval.
-                let next_vblank_mutex_guard = view_info.next_vblank.mutex.lock().unwrap();
-                drop(view_info.next_vblank.cond.wait(next_vblank_mutex_guard).unwrap());
-
-                Ok(())
-            }
-        })
+            Ok(())
+        }
     }
 
     pub(crate) fn lock_data(&mut self) -> Result<SurfaceDataGuard, Error> {
@@ -466,23 +303,6 @@ impl Drop for ViewInfo {
             // Drop the reference that the callback was holding onto.
             mem::transmute_copy::<Arc<VblankCond>, Arc<VblankCond>>(&self.next_vblank);
         }
-    }
-}
-
-#[must_use]
-struct FramebufferGuard {
-    draw: GLuint,
-    read: GLuint,
-}
-
-impl Drop for FramebufferGuard {
-    fn drop(&mut self) {
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.BindFramebuffer(gl::READ_FRAMEBUFFER, self.read);
-                gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.draw);
-            }
-        })
     }
 }
 

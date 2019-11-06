@@ -3,10 +3,8 @@
 //! Demonstrates how to use `surfman` to draw to a window surface via the CPU.
 
 use euclid::default::Point2D;
-
 use rand::{self, Rng};
-use surfman::{Connection, ContextAttributeFlags, ContextAttributes, GLVersion};
-use surfman::{SurfaceAccess, SurfaceType};
+use surfman::{SurfaceAccess, SurfaceType, SystemConnection};
 use winit::dpi::PhysicalSize;
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 use winit::{WindowBuilder, WindowEvent};
@@ -18,7 +16,7 @@ const BYTES_PER_PIXEL: usize = 4;
 
 const FOREGROUND_COLOR: u32 = !0;
 
-const ITERATIONS_PER_FRAME: usize = 200;
+const ITERATIONS_PER_FRAME: usize = 20;
 
 static TRIANGLE_POINTS: [(f32, f32); 3] = [
     (400.0,          300.0 + 75.0 + 150.0),
@@ -27,7 +25,7 @@ static TRIANGLE_POINTS: [(f32, f32); 3] = [
 ];
 
 fn main() {
-    let connection = Connection::new().unwrap();
+    let connection = SystemConnection::new().unwrap();
     let adapter = connection.create_adapter().unwrap();
     let mut device = connection.create_device(&adapter).unwrap();
 
@@ -42,15 +40,9 @@ fn main() {
     window.show();
 
     let native_widget = connection.create_native_widget_from_winit_window(&window).unwrap();
-    let context_descriptor = device.create_context_descriptor(&ContextAttributes {
-        version: GLVersion::new(2, 0),
-        flags: ContextAttributeFlags::empty(),
-    }).unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
-    let context = device.create_context(&context_descriptor).unwrap();
-    let mut surface = device.create_surface(&context, SurfaceAccess::GPUCPU, surface_type)
-                            .unwrap();
+    let mut surface = device.create_surface(SurfaceAccess::GPUCPU, surface_type).unwrap();
 
     let mut rng = rand::thread_rng();
     let mut point = Point2D::new(WINDOW_WIDTH as f32 * 0.5, WINDOW_HEIGHT as f32 * 0.5);
@@ -65,7 +57,7 @@ fn main() {
         }
 
         device.lock_surface_data(&mut surface).unwrap().data().copy_from_slice(&data);
-        device.present_surface(&context, &mut surface).unwrap();
+        device.present_surface(&mut surface).unwrap();
 
         event_loop.poll_events(|event| {
             match event {
