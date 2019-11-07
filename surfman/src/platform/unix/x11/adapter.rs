@@ -5,4 +5,7 @@
 //! These are no-ops, since we don't support multi-GPU on X11 yet.
 
 #[derive(Clone, Debug)]
-pub struct Adapter;
+pub enum Adapter {
+    Hardware,
+    Software,
+}

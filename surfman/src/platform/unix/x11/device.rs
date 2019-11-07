@@ -12,17 +12,18 @@ use x11::xlib::{self, Display, XCloseDisplay, XDisplayString, XOpenDisplay};
 
 pub struct Device {
     pub(crate) connection: Connection,
+    pub(crate) adapter: Adapter,
 }
 
 impl Device {
     #[inline]
-    pub(crate) fn new(connection: &Connection) -> Result<Device, Error> {
-        Ok(Device { connection: (*connection).clone() })
+    pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
+        Ok(Device { connection: (*connection).clone(), adapter: (*adapter).clone() })
     }
 
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        Adapter
+        self.adapter.clone()
     }
 
     #[inline]

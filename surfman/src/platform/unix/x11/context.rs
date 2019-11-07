@@ -8,12 +8,14 @@ use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
+use super::adapter::Adapter;
 use super::connection::{Connection, Quirks, UnsafeDisplayRef};
 use super::device::Device;
 use super::surface::{self, Surface, SurfaceDrawables};
 
 use euclid::default::Size2D;
 use libc::{RTLD_LAZY, dlopen, dlsym};
+use std::env;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_int, c_void};
@@ -27,6 +29,8 @@ use x11::glx::{GLX_X_RENDERABLE, GLX_X_VISUAL_TYPE};
 use x11::xlib::{self, Display, Pixmap, XDefaultScreen, XFree, XID};
 
 const DUMMY_PIXMAP_SIZE: i32 = 16;
+
+static MESA_SOFTWARE_RENDERING_ENV_VAR: &'static str = "LIBGL_ALWAYS_SOFTWARE";
 
 thread_local! {
     pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
@@ -87,6 +91,16 @@ impl Device {
                                      -> Result<ContextDescriptor, Error> {
         let display = self.connection.native_display.display();
         let glx_display = self.glx_display();
+
+        // Set environment variables as appropriate.
+        match self.adapter {
+            Adapter::Hardware => {
+                env::remove_var(MESA_SOFTWARE_RENDERING_ENV_VAR);
+            }
+            Adapter::Software => {
+                env::set_var(MESA_SOFTWARE_RENDERING_ENV_VAR, "1");
+            }
+        }
 
         let flags = attributes.flags;
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
@@ -153,7 +167,9 @@ impl Device {
                     quirks: Quirks::detect(),
                 };
 
-                let device = Device { connection };
+                // TODO(pcwalton): Figure out the current adapter somehow.
+                let adapter = connection.create_adapter().unwrap();
+                let device = Device { connection, adapter };
 
                 // Get the current context.
                 let glx_context = glx.GetCurrentContext();
