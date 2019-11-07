@@ -12,14 +12,18 @@ use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, SurfaceInfo};
+use super::adapter::Adapter;
 use super::device::Device;
 use super::surface::{Surface, WaylandObjects};
 
+use std::env;
 use std::mem;
 use std::os::raw::c_void;
 use std::thread;
 
 pub use crate::platform::generic::egl::context::ContextDescriptor;
+
+static MESA_SOFTWARE_RENDERING_ENV_VAR: &'static str = "LIBGL_ALWAYS_SOFTWARE";
 
 thread_local! {
     pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
@@ -44,6 +48,16 @@ impl Device {
     #[inline]
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
+        // Set environment variables as appropriate.
+        match self.adapter {
+            Adapter::Hardware => {
+                env::remove_var(MESA_SOFTWARE_RENDERING_ENV_VAR);
+            }
+            Adapter::Software => {
+                env::set_var(MESA_SOFTWARE_RENDERING_ENV_VAR, "1");
+            }
+        }
+
         unsafe {
             ContextDescriptor::new(self.native_connection.egl_display(), attributes, &[
                 egl::SURFACE_TYPE as EGLint,    egl::WINDOW_BIT as EGLint,

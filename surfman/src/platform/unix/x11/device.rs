@@ -5,11 +5,6 @@ use crate::{Error, GLApi};
 use super::adapter::Adapter;
 use super::connection::Connection;
 
-use std::ffi::CStr;
-use std::os::raw::c_int;
-use std::ptr;
-use x11::xlib::{self, Display, XCloseDisplay, XDisplayString, XOpenDisplay};
-
 pub struct Device {
     pub(crate) connection: Connection,
     pub(crate) adapter: Adapter,

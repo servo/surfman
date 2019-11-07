@@ -57,28 +57,24 @@ impl Connection {
     /// Returns the "best" hardware adapter on this system.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter)
+        Ok(Adapter::Hardware)
     }
 
     /// Returns the "best" low-power hardware adapter on this system.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter)
+        Ok(Adapter::Hardware)
     }
 
     /// Returns the "best" software adapter on this system.
-    ///
-    /// The Wayland backend has no software support, so this returns an error.
-    ///
-    /// TODO(pcwalton): If Mesa is in use, maybe we could use `llvmpipe` somehow?
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Err(Error::NoSoftwareAdapters)
+        Ok(Adapter::Software)
     }
 
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new(self)
+        Device::new(self, adapter)
     }
 
     #[cfg(feature = "sm-winit")]

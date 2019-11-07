@@ -8,17 +8,21 @@ use super::connection::{Connection, NativeConnection};
 
 pub struct Device {
     pub(crate) native_connection: Box<dyn NativeConnection>,
+    pub(crate) adapter: Adapter,
 }
 
 impl Device {
     #[inline]
-    pub(crate) fn new(connection: &Connection) -> Result<Device, Error> {
-        Ok(Device { native_connection: connection.native_connection.retain() })
+    pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
+        Ok(Device {
+            native_connection: connection.native_connection.retain(),
+            adapter: (*adapter).clone(),
+        })
     }
 
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        Adapter
+        self.adapter.clone()
     }
 
     #[inline]

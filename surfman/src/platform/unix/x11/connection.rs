@@ -9,7 +9,6 @@ use super::adapter::Adapter;
 use super::device::Device;
 use super::surface::NativeWidget;
 
-use std::ffi::CString;
 use std::ptr;
 use std::sync::Arc;
 use x11::xlib::{Display, XCloseDisplay, XOpenDisplay};

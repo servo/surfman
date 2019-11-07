@@ -2,7 +2,11 @@
 //
 //! A wrapper for Wayland adapters.
 //! 
-//! These are no-ops, since we don't support multi-GPU on Wayland yet.
+//! TODO(pcwalton): There may be better Wayland extensions we can use for this.
 
 #[derive(Clone, Debug)]
-pub struct Adapter;
+pub enum Adapter {
+    Hardware,
+    Software,
+}
+
