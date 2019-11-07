@@ -14,11 +14,12 @@ use super::surface::Surface;
 use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
 use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
 use cgl::{CGLPixelFormatAttribute, CGLPixelFormatObj, CGLReleasePixelFormat, CGLRetainPixelFormat};
-use cgl::{CGLSetCurrentContext, kCGLPFAAlphaSize, kCGLPFADepthSize};
+use cgl::{CGLSetCurrentContext, kCGLPFAAllowOfflineRenderers, kCGLPFAAlphaSize, kCGLPFADepthSize};
 use cgl::{kCGLPFAStencilSize, kCGLPFAOpenGLProfile};
 use core_foundation::base::TCFType;
 use core_foundation::bundle::CFBundleGetBundleWithIdentifier;
-use core_foundation::bundle::{CFBundleGetFunctionPointerForName, CFBundleRef};
+use core_foundation::bundle::CFBundleGetFunctionPointerForName;
+use core_foundation::bundle::CFBundleRef;
 use core_foundation::string::CFString;
 use std::mem;
 use std::os::raw::c_void;
@@ -123,13 +124,21 @@ impl Device {
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
 
-        let cgl_pixel_format_attributes = [
+        let mut cgl_pixel_format_attributes = vec![
             kCGLPFAOpenGLProfile, profile,
             kCGLPFAAlphaSize,     alpha_size,
             kCGLPFADepthSize,     depth_size,
             kCGLPFAStencilSize,   stencil_size,
-            0, 0,
         ];
+
+        // This means "opt into the integrated GPU".
+        //
+        // https://supermegaultragroovy.com/2016/12/10/auto-graphics-switching/
+        if self.adapter().0.is_low_power {
+            cgl_pixel_format_attributes.push(kCGLPFAAllowOfflineRenderers);
+        }
+
+        cgl_pixel_format_attributes.extend_from_slice(&[0, 0]);
 
         unsafe {
             let (mut cgl_pixel_format, mut cgl_pixel_format_count) = (ptr::null_mut(), 0);
@@ -187,6 +196,7 @@ impl Device {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         unsafe {
+            // Create the CGL context.
             let mut cgl_context = ptr::null_mut();
             let err = CGLCreateContext(descriptor.cgl_pixel_format,
                                        ptr::null_mut(),

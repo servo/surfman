@@ -10,13 +10,14 @@ use std::marker::PhantomData;
 
 #[derive(Clone)]
 pub struct Device {
+    adapter: Adapter,
     phantom: PhantomData<*mut ()>,
 }
 
 impl Device {
     #[inline]
-    pub(crate) fn new() -> Result<Device, Error> {
-        Ok(Device { phantom: PhantomData })
+    pub(crate) fn new(adapter: Adapter) -> Result<Device, Error> {
+        Ok(Device { adapter, phantom: PhantomData })
     }
 
     #[inline]
@@ -26,6 +27,6 @@ impl Device {
 
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        Adapter
+        self.adapter.clone()
     }
 }

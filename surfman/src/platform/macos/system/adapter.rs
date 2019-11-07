@@ -2,6 +2,8 @@
 //
 //! A wrapper for Metal adapters.
 
-/// A no-op adapter.
+/// An adapter.
 #[derive(Clone, Debug)]
-pub struct Adapter;
+pub struct Adapter {
+    pub(crate) is_low_power: bool,
+}

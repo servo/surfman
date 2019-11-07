@@ -37,6 +37,14 @@ impl Connection {
         self.0.create_hardware_adapter().map(Adapter)
     }
 
+    /// Returns the most energy-efficient hardware adapter on this system.
+    /// 
+    /// On multi-GPU systems, this will return the integrated GPU.
+    #[inline]
+    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
+        self.0.create_low_power_adapter().map(Adapter)
+    }
+
     /// Returns the "best" software adapter on this system.
     ///
     /// The macOS backend has no software support, so this returns an error.
