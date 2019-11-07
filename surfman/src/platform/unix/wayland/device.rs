@@ -12,7 +12,7 @@ pub struct Device {
 
 impl Device {
     #[inline]
-    pub fn new(connection: &Connection, _: &Adapter) -> Result<Device, Error> {
+    pub(crate) fn new(connection: &Connection) -> Result<Device, Error> {
         Ok(Device { native_connection: connection.native_connection.retain() })
     }
 

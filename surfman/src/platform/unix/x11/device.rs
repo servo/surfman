@@ -29,7 +29,7 @@ bitflags! {
 
 impl Device {
     #[inline]
-    pub fn new(connection: &Connection, _: &Adapter) -> Result<Device, Error> {
+    pub(crate) fn new(connection: &Connection) -> Result<Device, Error> {
         unsafe {
             let display_name = match connection.display_name {
                 None => ptr::null(),

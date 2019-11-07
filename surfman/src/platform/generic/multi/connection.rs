@@ -57,6 +57,17 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    pub fn create_low_power_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+        match *self {
+            Connection::Default(ref connection) => {
+                connection.create_low_power_adapter().map(Adapter::Default)
+            }
+            Connection::Alternate(ref connection) => {
+                connection.create_low_power_adapter().map(Adapter::Alternate)
+            }
+        }
+    }
+
     pub fn create_software_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
         match *self {
             Connection::Default(ref connection) => {
@@ -126,6 +137,11 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
     #[inline]
     fn create_hardware_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
         Connection::create_hardware_adapter(self)
+    }
+
+    #[inline]
+    fn create_low_power_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+        Connection::create_low_power_adapter(self)
     }
 
     #[inline]

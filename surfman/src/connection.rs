@@ -16,6 +16,7 @@ pub trait Connection: Sized {
 
     fn create_adapter(&self) -> Result<Self::Adapter, Error>;
     fn create_hardware_adapter(&self) -> Result<Self::Adapter, Error>;
+    fn create_low_power_adapter(&self) -> Result<Self::Adapter, Error>;
     fn create_software_adapter(&self) -> Result<Self::Adapter, Error>;
 
     fn create_device(&self, adapter: &Self::Adapter) -> Result<Self::Device, Error>;

@@ -34,6 +34,11 @@ impl ConnectionInterface for Connection {
     }
 
     #[inline]
+    fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
+        Connection::create_low_power_adapter(self)
+    }
+
+    #[inline]
     fn create_software_adapter(&self) -> Result<Adapter, Error> {
         Connection::create_software_adapter(self)
     }

@@ -7,6 +7,7 @@ use crate::egl::types::EGLDisplay;
 use crate::egl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use super::adapter::Adapter;
+use super::device::Device;
 use super::surface::NativeWidget;
 
 use euclid::default::Size2D;
@@ -59,6 +60,12 @@ impl Connection {
         Ok(Adapter)
     }
 
+    /// Returns the "best" low-power hardware adapter on this system.
+    #[inline]
+    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
+        Ok(Adapter)
+    }
+
     /// Returns the "best" software adapter on this system.
     ///
     /// The Wayland backend has no software support, so this returns an error.
@@ -67,6 +74,11 @@ impl Connection {
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
         Err(Error::NoSoftwareAdapters)
+    }
+
+    #[inline]
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        Device::new(self)
     }
 
     #[cfg(feature = "sm-winit")]

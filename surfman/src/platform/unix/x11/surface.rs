@@ -75,11 +75,11 @@ impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
+                          surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        match *surface_type {
-            SurfaceType::Generic { ref size } => self.create_generic_surface(context, size),
-            SurfaceType::Widget { ref native_widget } => {
+        match surface_type {
+            SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
+            SurfaceType::Widget { native_widget } => {
                 self.create_widget_surface(context, native_widget)
             }
         }
@@ -103,7 +103,7 @@ impl Device {
         }
     }
 
-    fn create_widget_surface(&mut self, context: &Context, native_widget: &NativeWidget)
+    fn create_widget_surface(&mut self, context: &Context, native_widget: NativeWidget)
                              -> Result<Surface, Error> {
         let display = self.native_display.display();
         unsafe {
