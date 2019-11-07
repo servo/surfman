@@ -10,22 +10,59 @@ use super::device::Device;
 use super::surface::NativeWidget;
 
 use std::ffi::CString;
+use std::ptr;
+use std::sync::Arc;
+use x11::xlib::{Display, XCloseDisplay, XOpenDisplay};
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
 
-#[derive(Clone)]
 pub struct Connection {
-    pub(crate) display_name: Option<CString>,
+    pub(crate) native_display: Box<dyn NativeDisplay>,
+    pub(crate) quirks: Quirks,
+}
+
+unsafe impl Send for Connection {}
+
+pub(crate) trait NativeDisplay {
+    fn display(&self) -> *mut Display;
+    fn is_destroyed(&self) -> bool;
+    fn retain(&self) -> Box<dyn NativeDisplay>;
+    unsafe fn destroy(&mut self);
+}
+
+bitflags! {
+    pub struct Quirks: u8 {
+        const BROKEN_GLX_TEXTURE_FROM_PIXMAP = 0x01;
+    }
+}
+
+impl Clone for Connection {
+    fn clone(&self) -> Connection {
+        Connection {
+            native_display: self.native_display.retain(),
+            quirks: self.quirks.clone(),
+        }
+    }
 }
 
 impl Connection {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection, Error> {
-        Ok(Connection { display_name: None })
+        unsafe {
+            let display = XOpenDisplay(ptr::null());
+            if display.is_null() {
+                return Err(Error::ConnectionFailed);
+            }
+            let display = Some(Arc::new(OwnedDisplay(display)));
+            Ok(Connection {
+                native_display: Box::new(SharedDisplay { display }),
+                quirks: Quirks::detect(),
+            })
+        }
     }
 
     /// Returns the "best" adapter on this system.
@@ -63,8 +100,11 @@ impl Connection {
 
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        if window.get_xlib_display().is_some() {
-            Connection::new()
+        if let Some(display) = window.get_xlib_display() {
+            Ok(Connection {
+                native_display: Box::new(UnsafeDisplayRef { display: display as *mut Display }),
+                quirks: Quirks::detect(),
+            })
         } else {
             Err(Error::IncompatibleWinitWindow)
         }
@@ -79,3 +119,75 @@ impl Connection {
         }
     }
 }
+
+pub(crate) struct SharedDisplay {
+    pub(crate) display: Option<Arc<OwnedDisplay>>,
+}
+
+pub(crate) struct OwnedDisplay(*mut Display);
+
+impl NativeDisplay for SharedDisplay {
+    #[inline]
+    fn display(&self) -> *mut Display {
+        debug_assert!(!self.is_destroyed());
+        self.display.as_ref().unwrap().0
+    }
+
+    #[inline]
+    fn is_destroyed(&self) -> bool {
+        self.display.is_none()
+    }
+
+    #[inline]
+    fn retain(&self) -> Box<dyn NativeDisplay> {
+        Box::new(SharedDisplay { display: self.display.clone() })
+    }
+
+    unsafe fn destroy(&mut self) {
+        assert!(!self.is_destroyed());
+        self.display = None;
+    }
+}
+
+impl Drop for OwnedDisplay {
+    fn drop(&mut self) {
+        unsafe {
+            XCloseDisplay(self.0);
+        }
+    }
+}
+
+pub(crate) struct UnsafeDisplayRef {
+    pub(crate) display: *mut Display,
+}
+
+impl NativeDisplay for UnsafeDisplayRef {
+    #[inline]
+    fn display(&self) -> *mut Display {
+        debug_assert!(!self.is_destroyed());
+        self.display
+    }
+
+    #[inline]
+    fn is_destroyed(&self) -> bool {
+        self.display.is_null()
+    }
+
+    #[inline]
+    fn retain(&self) -> Box<dyn NativeDisplay> {
+        Box::new(UnsafeDisplayRef { display: self.display })
+    }
+
+    unsafe fn destroy(&mut self) {
+        assert!(!self.is_destroyed());
+        self.display = ptr::null_mut();
+    }
+}
+
+impl Quirks {
+    pub(crate) fn detect() -> Quirks {
+        // TODO(pcwalton): Whitelist implementations with working `GLX_texture_from_pixmap`.
+        Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP
+    }
+}
+

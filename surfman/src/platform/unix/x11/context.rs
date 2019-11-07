@@ -8,7 +8,8 @@ use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
-use super::device::{Device, Quirks, UnsafeDisplayRef};
+use super::connection::{Connection, Quirks, UnsafeDisplayRef};
+use super::device::Device;
 use super::surface::{self, Surface, SurfaceDrawables};
 
 use euclid::default::Size2D;
@@ -84,7 +85,8 @@ pub struct ContextDescriptor {
 impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
-        let (display, glx_display) = (self.native_display.display(), self.glx_display());
+        let display = self.connection.native_display.display();
+        let glx_display = self.glx_display();
 
         let flags = attributes.flags;
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
@@ -146,10 +148,12 @@ impl Device {
                 }
                 let display = glx_display as *mut Display;
 
-                let device = Device {
+                let connection = Connection {
                     native_display: Box::new(UnsafeDisplayRef { display }),
                     quirks: Quirks::detect(),
                 };
+
+                let device = Device { connection };
 
                 // Get the current context.
                 let glx_context = glx.GetCurrentContext();
@@ -212,7 +216,7 @@ impl Device {
                     return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
                 }
 
-                let display = self.native_display.display();
+                let display = self.connection.native_display.display();
                 let dummy_pixmap_size = Size2D::new(DUMMY_PIXMAP_SIZE, DUMMY_PIXMAP_SIZE);
                 let (dummy_glx_pixmap, dummy_pixmap) =
                     surface::create_pixmaps(display,
@@ -339,7 +343,8 @@ impl Device {
     pub(crate) fn context_descriptor_to_glx_fb_config(&self,
                                                       context_descriptor: &ContextDescriptor)
                                                       -> GLXFBConfig {
-        let (display, glx_display) = (self.native_display.display(), self.glx_display());
+        let display = self.connection.native_display.display();
+        let glx_display = self.glx_display();
         let glx_fb_config_id = context_descriptor.pixmap_glx_fb_config_id;
         unsafe {
             get_fb_config_from_id(display, glx_display, glx_fb_config_id)
@@ -374,7 +379,7 @@ impl Device {
     }
 
     fn flush_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        if !self.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
+        if !self.connection.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
             return Ok(())
         }
 

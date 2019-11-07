@@ -7,8 +7,9 @@ use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
 use crate::glx::types::{Display as GlxDisplay, GLXFBConfig};
 use crate::{gl, glx};
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
+use super::connection::Quirks;
 use super::context::{Context, GLX_FUNCTIONS, GL_FUNCTIONS};
-use super::device::{Device, Quirks};
+use super::device::Device;
 use super::error;
 
 use euclid::default::Size2D;
@@ -87,7 +88,8 @@ impl Device {
 
     fn create_generic_surface(&mut self, context: &Context, size: &Size2D<i32>)
                               -> Result<Surface, Error> {
-        let (display, glx_display) = (self.native_display.display(), self.glx_display());
+        let display = self.connection.native_display.display();
+        let glx_display = self.glx_display();
 
         let context_descriptor = self.context_descriptor(context);
         let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
@@ -105,7 +107,7 @@ impl Device {
 
     fn create_widget_surface(&mut self, context: &Context, native_widget: NativeWidget)
                              -> Result<Surface, Error> {
-        let display = self.native_display.display();
+        let display = self.connection.native_display.display();
         unsafe {
             let (mut root_window, mut x, mut y, mut width, mut height) = (0, 0, 0, 0, 0);
             let (mut border_width, mut depth) = (0, 0);
@@ -151,7 +153,7 @@ impl Device {
                     debug_assert_ne!(gl_texture, 0);
                     gl.BindTexture(gl::TEXTURE_2D, gl_texture);
 
-                    if !self.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
+                    if !self.connection.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
                         // Bind the surface's GLX pixmap to the texture.
                         let attributes = [
                             glx::TEXTURE_FORMAT_EXT as c_int,
@@ -160,7 +162,7 @@ impl Device {
                                 glx::TEXTURE_2D_EXT as c_int,
                             0,
                         ];
-                        let display = self.native_display.display() as *mut GlxDisplay;
+                        let display = self.connection.native_display.display() as *mut GlxDisplay;
                         glx.BindTexImageEXT(display,
                                             glx_pixmap,
                                             glx::FRONT_EXT as c_int,
@@ -252,8 +254,8 @@ impl Device {
                 unsafe {
                     gl.BindTexture(gl::TEXTURE_2D, surface_texture.gl_texture);
 
-                    if !self.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
-                        let display = self.native_display.display() as *mut GlxDisplay;
+                    if !self.connection.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
+                        let display = self.connection.native_display.display() as *mut GlxDisplay;
                         glx.ReleaseTexImageEXT(display, glx_pixmap, glx::FRONT_EXT as c_int);
                     }
 
