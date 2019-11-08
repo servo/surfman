@@ -49,6 +49,8 @@ pub use crate::info::{GLApi, GLVersion};
 mod surface;
 pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
 
+pub mod macros;
+
 mod gl_utils;
 mod renderbuffers;
 
@@ -80,3 +82,8 @@ mod egl {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(target_os = "windows")]
+#[link(name = "surfmansupport")]
+extern "C" {}
+

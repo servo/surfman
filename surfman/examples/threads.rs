@@ -9,7 +9,7 @@ use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, GLApi, Surface};
-use surfman::{SurfaceAccess, SurfaceTexture, SurfaceType};
+use surfman::{SurfaceAccess, SurfaceTexture, SurfaceType, declare_surfman};
 
 #[cfg(not(target_os = "android"))]
 use self::common::FilesystemResourceLoader;
@@ -24,6 +24,11 @@ use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 use winit::{WindowBuilder, WindowEvent};
 
 pub mod common;
+
+declare_surfman!();
+
+#[no_mangle]
+pub static BlahBlahBlahBlahBla: i32 = 12345;
 
 const WINDOW_WIDTH:  i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
