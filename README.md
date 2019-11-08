@@ -38,14 +38,15 @@ Most of this functionality can be achieved with other libraries, such as `glutin
 for several use cases you can achieve better performance and/or correctness with `surfman`. For
 example:
 
-* On multi-GPU systems, UI applications typically want to use the integrated GPU instead of the
-  discrete GPU, for better energy consumption. However, most game-oriented windowing libraries end
-  up using the discrete GPU. On such systems, `surfman` explicitly allows you to choose which GPU
-  you would like to render with.
+* On multi-GPU systems, games typically want to use the discrete GPU instead of the integrated GPU
+  for better performance, while UI applications want the reverse for better energy consumption.
+  However, most game-oriented OpenGL windowing libraries end up using the discrete GPU on Linux
+  and macOS and the integrated GPU on Windows. On such systems, `surfman` explicitly allows you to
+  choose which GPU you would like to render with.
 
 * OpenGL's *share context* or *share lists* feature allows you to share textures across contexts.
-  However, this often exposes driver bugs, and, even if it works, it causes most operations to take
-  mutex locks. Efficient texture sharing requires the use of platform-specific APIs, which
+  However, this often exposes driver bugs, and, even if it works, it causes most operations to
+  take mutex locks. Efficient texture sharing requires the use of platform-specific APIs, which
   `surfman` abstracts over.
 
 * The ANGLE implementation of OpenGL on Windows is not generally thread-safe, so attempts to render
