@@ -5,6 +5,7 @@
 use crate::context::CREATE_CONTEXT_MUTEX;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
+use super::connection::Connection;
 use super::device::{DCGuard, Device, HiddenWindow};
 use super::surface::{Surface, Win32Objects};
 
@@ -208,7 +209,9 @@ impl Device {
     /// called with a context object created via this method.
     pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-        let device = Device::new()?;
+
+        let connection = Connection::new()?;
+        let device = Device::new(&connection.create_adapter()?)?;
 
         let context = Context {
             native_context: Box::new(UnsafeGLRCRef { glrc: wglGetCurrentContext() }),

@@ -45,6 +45,14 @@ impl Connection {
         Adapter::from_driver_type(D3D_DRIVER_TYPE_HARDWARE)
     }
 
+    /// Returns the "best" low-power hardware adapter on this system.
+    ///
+    /// TODO(pcwalton)
+    #[inline]
+    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
+        Adapter::from_driver_type(D3D_DRIVER_TYPE_HARDWARE)
+    }
+
     /// Returns the "best" software adapter on this system.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {

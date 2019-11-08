@@ -7,9 +7,6 @@ use std::env;
 use std::fs::File;
 use std::path::PathBuf;
 
-#[cfg(target_os = "windows")]
-use cc::Build;
-
 fn main() {
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_family = env::var("CARGO_CFG_TARGET_FAMILY").unwrap();
@@ -40,9 +37,4 @@ fn main() {
     let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
     let registry = Registry::new(Api::Gl, (3, 3), Profile::Core, Fallbacks::All, []);
     registry.write_bindings(StructGenerator, &mut file).unwrap();
-
-    // Compile support code.
-    if target_os == "windows" {
-        Build::new().file("src/support.c").compile("surfmansupport");
-    }
 }

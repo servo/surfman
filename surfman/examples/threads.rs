@@ -27,9 +27,6 @@ pub mod common;
 
 declare_surfman!();
 
-#[no_mangle]
-pub static BlahBlahBlahBlahBla: i32 = 12345;
-
 const WINDOW_WIDTH:  i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
 

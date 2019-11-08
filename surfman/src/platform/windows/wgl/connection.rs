@@ -36,7 +36,13 @@ impl Connection {
     /// Returns the "best" hardware adapter on this system.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter)
+        Ok(Adapter::HighPerformance)
+    }
+
+    /// Returns the "best" low-power hardware adapter on this system.
+    #[inline]
+    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
+        Ok(Adapter::LowPower)
     }
 
     /// Returns the "best" software adapter on this system.
@@ -48,8 +54,8 @@ impl Connection {
     }
 
     #[inline]
-    pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
-        Device::new()
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        Device::new(adapter)
     }
 
     #[cfg(feature = "sm-winit")]

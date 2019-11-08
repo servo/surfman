@@ -12,10 +12,10 @@ macro_rules! declare_surfman {
             *b" /export:NvOptimusEnablement /export:AmdPowerXpressRequestHighPerformance ";
         #[cfg(target_os = "windows")]
         #[no_mangle]
-        pub static NvOptimusEnablement: i32 = 1;
+        pub static mut NvOptimusEnablement: i32 = 1;
         #[cfg(target_os = "windows")]
         #[no_mangle]
-        pub static AmdPowerXpressRequestHighPerformance: i32 = 1;
+        pub static mut AmdPowerXpressRequestHighPerformance: i32 = 1;
     }
 }
 

@@ -32,6 +32,7 @@ unsafe impl Send for SendableHWND {}
 
 #[allow(dead_code)]
 pub struct Device {
+    pub(crate) adapter: Adapter,
     pub(crate) d3d11_device: ComPtr<ID3D11Device>,
     pub(crate) d3d11_device_context: ComPtr<ID3D11DeviceContext>,
     pub(crate) gl_dx_interop_device: HANDLE,
@@ -48,7 +49,9 @@ impl Drop for Device {
 }
 
 impl Device {
-    pub(crate) fn new() -> Result<Device, Error> {
+    pub(crate) fn new(adapter: &Adapter) -> Result<Device, Error> {
+        adapter.set_exported_variables();
+
         let dx_interop_functions = match WGL_EXTENSION_FUNCTIONS.dx_interop_functions {
             Some(ref dx_interop_functions) => dx_interop_functions,
             None => return Err(Error::RequiredExtensionUnavailable),
@@ -79,7 +82,13 @@ impl Device {
             assert!(!gl_dx_interop_device.is_null());
 
             let hidden_window = HiddenWindow::new();
-            Ok(Device { d3d11_device, d3d11_device_context, gl_dx_interop_device, hidden_window })
+            Ok(Device {
+                adapter: (*adapter).clone(),
+                d3d11_device,
+                d3d11_device_context,
+                gl_dx_interop_device,
+                hidden_window,
+            })
         }
     }
 
@@ -90,7 +99,7 @@ impl Device {
 
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        Adapter
+        self.adapter.clone()
     }
 
     #[inline]
