@@ -47,22 +47,29 @@ impl Connection {
 
     /// Returns the "best" software adapter on this system.
     ///
-    /// The macOS backend has no software support, so this returns an error.
+    /// On macOS this returns the low-power adapter.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
         self.0.create_software_adapter().map(Adapter)
     }
 
+    /// Opens the hardware device corresponding to the given adapter.
+    /// 
+    /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         self.0.create_device(&adapter.0).map(Device)
     }
 
+    /// Retrieves the display server connection from the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
         SystemConnection::from_winit_window(window).map(Connection)
     }
 
+    /// Retrieves the native widget handle from the given `winit` window.
+    /// 
+    /// This widget can be used to create surfaces.
     #[cfg(feature = "sm-winit")]
     #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)

@@ -56,6 +56,9 @@ pub mod macros;
 mod gl_utils;
 mod renderbuffers;
 
+#[cfg(test)]
+mod tests;
+
 mod gl {
     include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
 }
@@ -81,7 +84,3 @@ mod egl {
     pub type NativeWindowType = EGLNativeWindowType;
     include!(concat!(env!("OUT_DIR"), "/egl_bindings.rs"));
 }
-
-#[cfg(test)]
-mod tests;
-

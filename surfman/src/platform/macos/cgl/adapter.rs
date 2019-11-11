@@ -4,6 +4,8 @@
 
 use crate::platform::macos::system::adapter::Adapter as SystemAdapter;
 
-/// A no-op adapter.
+/// Represents a display adapter on macOS.
+/// 
+/// Adapters can be sent between threads. You can use them with a `Connection` to open the device.
 #[derive(Clone, Debug)]
-pub struct Adapter(pub SystemAdapter);
+pub struct Adapter(pub(crate) SystemAdapter);
