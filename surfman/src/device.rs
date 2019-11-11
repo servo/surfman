@@ -23,7 +23,6 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
     // context.rs
     fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                  -> Result<Self::ContextDescriptor, Error>;
-    unsafe fn from_current_context() -> Result<(Self, Self::Context), Error>;
     fn create_context(&mut self, descriptor: &Self::ContextDescriptor)
                       -> Result<Self::Context, Error>;
     fn destroy_context(&self, context: &mut Self::Context) -> Result<(), Error>;

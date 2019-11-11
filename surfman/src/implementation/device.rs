@@ -47,11 +47,6 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    unsafe fn from_current_context() -> Result<(Self, Self::Context), Error> {
-        Device::from_current_context()
-    }
-
-    #[inline]
     fn create_context(&mut self, descriptor: &Self::ContextDescriptor)
                       -> Result<Self::Context, Error> {
         Device::create_context(self, descriptor)

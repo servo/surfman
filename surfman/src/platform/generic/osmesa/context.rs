@@ -79,40 +79,6 @@ impl Device {
         })
     }
 
-    /// Opens the device and context corresponding to the current OSMesa context.
-    ///
-    /// The native context is not retained, as there is no way to do this in the OSMesa API. It is
-    /// the caller's responsibility to keep it alive for the duration of this context. Be careful
-    /// when using this method; it's essentially a last resort.
-    ///
-    /// This method is designed to allow `surfman` to deal with contexts created outside the
-    /// library. It's legal to use this method to wrap a context rendering to any target. The
-    /// target is opaque to `surfman`; the library will not modify or try to detect the render
-    /// target. As a consequence, any of the methods that query or replace the surface—e.g.
-    /// `replace_context_surface`—will fail if called with a context object created via this
-    /// method.
-    pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
-        // Take a lock.
-        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-
-        // Create a device.
-        let device = Device { phantom: PhantomData };
-
-        // Get the current context.
-        let osmesa_context = OSMesaGetCurrentContext();
-        assert!(!osmesa_context.is_null());
-
-        // Wrap the context.
-        let context = Context {
-            native_context: Box::new(UnsafeOSMesaContextRef { osmesa_context }),
-            id: *next_context_id,
-            framebuffer: Framebuffer::External,
-        };
-        next_context_id.0 += 1;
-
-        Ok((device, context))
-    }
-
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         // Take a lock.
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();

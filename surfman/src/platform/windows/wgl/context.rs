@@ -195,36 +195,6 @@ impl Device {
         }
     }
 
-    /// Opens the device and context corresponding to the current WGL context.
-    ///
-    /// The native context is not retained, as there is no way to do this in the WGL API. It is
-    /// the caller's responsibility to keep it alive for the duration of this context. Be careful
-    /// when using this method; it's essentially a last resort.
-    ///
-    /// This method is designed to allow `surfman` to deal with contexts created outside the
-    /// library; for example, by Glutin. It's legal to use this method to wrap a context rendering
-    /// to any target: either a window or a pbuffer. The target is opaque to `surfman`; the
-    /// library will not modify or try to detect the render target. This means that any of the
-    /// methods that query or replace the surface—e.g. `replace_context_surface`—will fail if
-    /// called with a context object created via this method.
-    pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
-        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-
-        let connection = Connection::new()?;
-        let device = Device::new(&connection.create_adapter()?)?;
-
-        let context = Context {
-            native_context: Box::new(UnsafeGLRCRef { glrc: wglGetCurrentContext() }),
-            id: *next_context_id,
-            gl: Gl::load_with(get_proc_address),
-            hidden_window: None,
-            framebuffer: Framebuffer::External { dc: wglGetCurrentDC() },
-        };
-        next_context_id.0 += 1;
-
-        Ok((device, context))
-    }
-
     #[allow(non_snake_case)]
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         let wglCreateContextAttribsARB = match WGL_EXTENSION_FUNCTIONS.CreateContextAttribsARB {

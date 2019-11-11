@@ -4,7 +4,6 @@
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::Gl;
-use crate::platform::macos::system::connection::Connection as SystemConnection;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use super::device::Device;
@@ -68,7 +67,7 @@ thread_local! {
 /// Contexts are specific to the device that created them and cannot be used with any other device.
 /// They are also not thread-safe, just as devices are not.
 pub struct Context {
-    pub(crate) native_context: Box<dyn NativeContext>,
+    pub(crate) cgl_context: CGLContextObj,
     pub(crate) id: ContextID,
     framebuffer: Framebuffer<Surface>,
 }
@@ -82,7 +81,7 @@ pub(crate) trait NativeContext {
 impl Drop for Context {
     #[inline]
     fn drop(&mut self) {
-        if !self.native_context.is_destroyed() && !thread::panicking() {
+        if !self.cgl_context.is_null() && !thread::panicking() {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
@@ -169,36 +168,6 @@ impl Device {
         }
     }
 
-    /// Opens the device and OpenGL context corresponding to the current CGL context.
-    ///
-    /// The native context is not retained, as there is no way to do this in the CGL API. It is the
-    /// caller's responsibility to keep it alive for the lifetime of the resulting context.
-    ///
-    /// This method is designed to allow `surfman` to deal with contexts created outside the
-    /// library; for example, by Glutin. It's legal to use this method to wrap a context rendering
-    /// to any target: either a window or a pbuffer. The target is opaque to `surfman`; the library
-    /// will not modify or try to detect the render target. This means that any of the methods that
-    /// query or modify the surface—e.g. `bind_surface_to_context`—will fail if called with a
-    /// context object created via this method.
-    pub unsafe fn from_current_context() -> Result<(Device, Context), Error> {
-        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-
-        // Create the context.
-        let context = Context {
-            native_context: Box::new(UnsafeCGLContextRef::current()),
-            id: *next_context_id,
-            framebuffer: Framebuffer::External,
-        };
-        next_context_id.0 += 1;
-
-        // Create the device.
-        let connection = SystemConnection::new()?;
-        let adapter = connection.create_adapter()?;
-        let device = connection.create_device(&adapter)?;
-
-        Ok((Device(device), context))
-    }
-
     /// Creates an OpenGL context from the given descriptor.
     /// 
     /// The context must be destroyed with `Device::destroy_context()` when it is no longer needed,
@@ -222,18 +191,11 @@ impl Device {
             if err != kCGLNoError {
                 return Err(Error::ContextCreationFailed(err.to_windowing_api_error()));
             }
-
             debug_assert_ne!(cgl_context, ptr::null_mut());
-            let native_context = Box::new(OwnedCGLContext { cgl_context });
-
-            let err = CGLSetCurrentContext(native_context.cgl_context());
-            if err != kCGLNoError {
-                return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
-            }
 
             // Wrap and return the context.
             let context = Context {
-                native_context,
+                cgl_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
             };
@@ -244,7 +206,7 @@ impl Device {
 
     /// Destroys an OpenGL context.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.native_context.is_destroyed() {
+        if context.cgl_context.is_null() {
             return Ok(());
         }
 
@@ -254,7 +216,9 @@ impl Device {
         }
 
         unsafe {
-            context.native_context.destroy();
+            CGLSetCurrentContext(ptr::null_mut());
+            CGLDestroyContext(context.cgl_context);
+            context.cgl_context = ptr::null_mut();
         }
 
         Ok(())
@@ -264,7 +228,7 @@ impl Device {
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            let mut cgl_pixel_format = CGLGetPixelFormat(context.native_context.cgl_context());
+            let mut cgl_pixel_format = CGLGetPixelFormat(context.cgl_context);
             cgl_pixel_format = CGLRetainPixelFormat(cgl_pixel_format);
             ContextDescriptor { cgl_pixel_format }
         }
@@ -276,7 +240,7 @@ impl Device {
     /// currently-bound surface.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let err = CGLSetCurrentContext(context.native_context.cgl_context());
+            let err = CGLSetCurrentContext(context.cgl_context);
             if err != kCGLNoError {
                 return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
             }
@@ -413,60 +377,6 @@ impl Device {
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
-    }
-}
-
-struct OwnedCGLContext {
-    cgl_context: CGLContextObj,
-}
-
-impl NativeContext for OwnedCGLContext {
-    #[inline]
-    fn cgl_context(&self) -> CGLContextObj {
-        debug_assert!(!self.is_destroyed());
-        self.cgl_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.cgl_context.is_null()
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        CGLSetCurrentContext(ptr::null_mut());
-        CGLDestroyContext(self.cgl_context);
-        self.cgl_context = ptr::null_mut();
-    }
-}
-
-struct UnsafeCGLContextRef {
-    cgl_context: CGLContextObj,
-}
-
-impl UnsafeCGLContextRef {
-    #[inline]
-    unsafe fn current() -> UnsafeCGLContextRef {
-        let cgl_context = CGLGetCurrentContext();
-        assert!(!cgl_context.is_null());
-        UnsafeCGLContextRef { cgl_context }
-    }
-}
-
-impl NativeContext for UnsafeCGLContextRef {
-    #[inline]
-    fn cgl_context(&self) -> CGLContextObj {
-        self.cgl_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.cgl_context.is_null()
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        self.cgl_context = ptr::null_mut();
     }
 }
 

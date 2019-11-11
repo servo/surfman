@@ -82,11 +82,6 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     }
 
     #[inline]
-    unsafe fn from_current_context() -> Result<(Device<Def, Alt>, Context<Def, Alt>), Error> {
-        Device::from_current_context()
-    }
-
-    #[inline]
     fn create_context(&mut self, descriptor: &ContextDescriptor<Def, Alt>)
                       -> Result<Context<Def, Alt>, Error> {
         Device::create_context(self, descriptor)

@@ -33,17 +33,6 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
         }
     }
 
-    /// Opens the device and context corresponding to the current default context.
-    pub unsafe fn from_current_context() -> Result<(Device<Def, Alt>, Context<Def, Alt>),
-                                                            Error> {
-        if let Ok((device, context)) = Def::from_current_context() {
-            return Ok((Device::Default(device), Context::Default(context)));
-        }
-        Alt::from_current_context().map(|(device, context)| {
-            (Device::Alternate(device), Context::Alternate(context))
-        })
-    }
-
     pub fn create_context(&mut self, descriptor: &ContextDescriptor<Def, Alt>)
                           -> Result<Context<Def, Alt>, Error> {
         match (&mut *self, descriptor) {
