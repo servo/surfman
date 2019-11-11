@@ -4,10 +4,13 @@
 
 use euclid::default::Point2D;
 use rand::{self, Rng};
-use surfman::{SurfaceAccess, SurfaceType, SystemConnection};
+use surfman::{SurfaceAccess, SurfaceType};
 use winit::dpi::PhysicalSize;
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 use winit::{WindowBuilder, WindowEvent};
+
+#[cfg(target_os = "macos")]
+use surfman::SystemConnection;
 
 const WINDOW_WIDTH:  i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
@@ -24,6 +27,12 @@ static TRIANGLE_POINTS: [(f32, f32); 3] = [
     (400.0 - 259.81, 300.0 + 75.0 - 300.0),
 ];
 
+#[cfg(not(target_os = "macos"))]
+fn main() {
+    println!("The `chaos_game` demo is not yet supported on this platform.");
+}
+
+#[cfg(target_os = "macos")]
 fn main() {
     let connection = SystemConnection::new().unwrap();
     let adapter = connection.create_adapter().unwrap();
