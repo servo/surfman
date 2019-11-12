@@ -11,10 +11,12 @@ use crate::{SurfaceInfo, WindowingApiError};
 use super::adapter::Adapter;
 use super::connection::{Connection, UnsafeDisplayRef};
 use super::device::Device;
+use super::error;
 use super::surface::{self, Surface, SurfaceDrawables};
 
 use euclid::default::Size2D;
 use libc::{RTLD_LAZY, dlopen, dlsym};
+use std::cell::Cell;
 use std::env;
 use std::ffi::CString;
 use std::mem;
@@ -26,11 +28,15 @@ use x11::glx::{GLX_ALPHA_SIZE, GLX_BLUE_SIZE, GLX_DEPTH_SIZE, GLX_DOUBLEBUFFER, 
 use x11::glx::{GLX_FBCONFIG_ID, GLX_GREEN_SIZE, GLX_PIXMAP_BIT, GLX_RED_SIZE, GLX_RENDER_TYPE};
 use x11::glx::{GLX_RGBA_BIT, GLX_STENCIL_SIZE, GLX_STEREO, GLX_TRUE_COLOR, GLX_WINDOW_BIT};
 use x11::glx::{GLX_X_RENDERABLE, GLX_X_VISUAL_TYPE};
-use x11::xlib::{self, Display, Pixmap, XDefaultScreen, XFree, XID};
+use x11::xlib::{self, Display, Pixmap, XDefaultScreen, XErrorEvent, XFree, XID, XSetErrorHandler};
 
 const DUMMY_PIXMAP_SIZE: i32 = 16;
 
 static MESA_SOFTWARE_RENDERING_ENV_VAR: &'static str = "LIBGL_ALWAYS_SOFTWARE";
+
+thread_local! {
+    static LAST_X_ERROR_CODE: Cell<u8> = Cell::new(0);
+}
 
 thread_local! {
     pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
@@ -154,6 +160,9 @@ impl Device {
                     0,
                 ];
 
+                let prev_error_handler = XSetErrorHandler(Some(xlib_error_handler));
+
+                let display = self.connection.native_display.display();
                 let glx_display = self.glx_display();
                 let glx_context = glx.CreateContextAttribsARB(glx_display,
                                                               glx_fb_config as *const c_void,
@@ -161,10 +170,14 @@ impl Device {
                                                               xlib::True,
                                                               attributes.as_ptr()) as GLXContext;
                 if glx_context.is_null() {
-                    return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
+                    let windowing_api_error = LAST_X_ERROR_CODE.with(|last_x_error_code| {
+                        error::xlib_error_to_windowing_api_error(display, last_x_error_code.get())
+                    });
+                    return Err(Error::ContextCreationFailed(windowing_api_error));
                 }
 
-                let display = self.connection.native_display.display();
+                XSetErrorHandler(prev_error_handler);
+
                 let dummy_pixmap_size = Size2D::new(DUMMY_PIXMAP_SIZE, DUMMY_PIXMAP_SIZE);
                 let (dummy_glx_pixmap, dummy_pixmap) =
                     surface::create_pixmaps(display,
@@ -487,3 +500,9 @@ unsafe fn get_fb_config_from_id(display: *mut Display,
         glx_fb_config
     })
 }
+
+unsafe extern "C" fn xlib_error_handler(display: *mut Display, event: *mut XErrorEvent) -> c_int {
+    LAST_X_ERROR_CODE.with(|error_code| error_code.set((*event).error_code));
+    0
+}
+

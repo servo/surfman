@@ -2,9 +2,9 @@
 //
 //! Unit tests.
 
-use crate::platform::default::adapter::Adapter;
-use crate::platform::default::connection::Connection;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, WindowingApiError};
+use super::adapter::Adapter;
+use super::connection::Connection;
 
 static GL_VERSIONS: [GLVersion; 5] = [
     GLVersion { major: 2, minor: 0 },
@@ -12,6 +12,13 @@ static GL_VERSIONS: [GLVersion; 5] = [
     GLVersion { major: 3, minor: 0 },
     GLVersion { major: 3, minor: 3 },
     GLVersion { major: 4, minor: 1 },
+];
+
+static GL_ES_VERSIONS: [GLVersion; 4] = [
+    GLVersion { major: 2, minor: 0 },
+    GLVersion { major: 2, minor: 1 },
+    GLVersion { major: 3, minor: 0 },
+    GLVersion { major: 3, minor: 1 },
 ];
 
 #[test]
@@ -57,13 +64,25 @@ fn test_context_creation() {
     let adapter = connection.create_low_power_adapter().unwrap();
     let mut device = connection.create_device(&adapter).unwrap();
 
-    for &version in &GL_VERSIONS {
+    let versions = match device.gl_api() {
+        GLApi::GL => &GL_VERSIONS[..],
+        GLApi::GLES => &GL_ES_VERSIONS[..],
+    };
+
+    for &version in versions {
         for flag_bits in 0..(ContextAttributeFlags::all().bits() + 1) {
             let flags = ContextAttributeFlags::from_bits_truncate(flag_bits);
             let attributes = ContextAttributes { version, flags };
+            println!("creating context with attributes: {:?}", attributes);
             let descriptor = device.create_context_descriptor(&attributes).unwrap();
-            let mut context = device.create_context(&descriptor).unwrap();
-            device.destroy_context(&mut context).unwrap();
+            match device.create_context(&descriptor) {
+                Ok(mut context) => device.destroy_context(&mut context).unwrap(),
+                Err(Error::ContextCreationFailed(WindowingApiError::BadPixelFormat)) => {
+                    // This is OK, as it just means the GL implementation didn't support the
+                    // requested GL version.
+                }
+                Err(_) => panic!(),
+            }
         }
     }
 }

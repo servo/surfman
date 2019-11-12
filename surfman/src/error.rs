@@ -95,6 +95,7 @@ pub enum WindowingApiError {
     /// CGL: Invalid renderer property.
 	BadProperty,
     /// CGL: Invalid pixel format object.
+    /// X11: Invalid framebuffer configuration, including an unsupported OpenGL version.
 	BadPixelFormat,
     /// CGL: Invalid renderer information object.
 	BadRendererInfo,

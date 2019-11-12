@@ -4,6 +4,7 @@
 
 use crate::info::GLVersion;
 
+use std::os::raw::c_char;
 use std::sync::Mutex;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -27,7 +28,7 @@ bitflags! {
 }
 
 // https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct ContextAttributes {
     pub version: GLVersion,
     pub flags: ContextAttributeFlags,
@@ -39,3 +40,4 @@ impl ContextAttributes {
         ContextAttributes { version: GLVersion::new(0, 0), flags: ContextAttributeFlags::empty() }
     }
 }
+
