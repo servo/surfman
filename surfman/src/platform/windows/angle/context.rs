@@ -6,13 +6,10 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLDeviceEXT, EGLenum, EGLint};
 use crate::egl;
 use crate::gl::Gl;
-use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
-use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
-use crate::platform::generic::egl::device::{EGL_FUNCTIONS, OwnedEGLDisplay};
+use crate::platform::generic::egl::context::{self, CurrentContextGuard};
+use crate::platform::generic::egl::context::{NativeContext, OwnedEGLContext};
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::platform::generic::egl::ffi::EGL_D3D11_DEVICE_ANGLE;
-use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
-use crate::platform::generic::egl::ffi::EGL_NO_DEVICE_EXT;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
@@ -20,13 +17,9 @@ use super::surface::{Surface, Win32Objects};
 
 use std::mem;
 use std::os::raw::c_void;
-use std::ptr;
 use std::thread;
 use winapi::shared::winerror::S_OK;
-use winapi::um::d3d11::ID3D11Device;
-use winapi::um::d3dcommon::D3D_DRIVER_TYPE_UNKNOWN;
 use winapi::um::winbase::INFINITE;
-use wio::com::ComPtr;
 
 pub use crate::platform::generic::egl::context::ContextDescriptor;
 

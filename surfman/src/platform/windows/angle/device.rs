@@ -11,11 +11,13 @@ use crate::{Error, GLApi};
 use super::connection::Connection;
 
 use std::cell::{RefCell, RefMut};
+use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
 use winapi::Interface;
 use winapi::shared::dxgi::{self, IDXGIAdapter, IDXGIDevice, IDXGIFactory1};
-use winapi::shared::winerror;
+use winapi::shared::minwindef::UINT;
+use winapi::shared::winerror::{self, S_OK};
 use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device};
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE, D3D_FEATURE_LEVEL_9_3};
 use wio::com::ComPtr;
@@ -39,8 +41,15 @@ pub struct Device {
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
 }
 
+pub(crate) enum VendorPreference {
+    None,
+    Prefer(UINT),
+    Avoid(UINT),
+}
+
 impl Adapter {
-    pub(crate) fn from_driver_type(d3d_driver_type: D3D_DRIVER_TYPE) -> Result<Adapter, Error> {
+    pub(crate) fn new(d3d_driver_type: D3D_DRIVER_TYPE, vendor_preference: VendorPreference)
+                      -> Result<Adapter, Error> {
         unsafe {
             let dxgi_factory = DXGI_FACTORY.with(|dxgi_factory_slot| {
                 let mut dxgi_factory_slot: RefMut<Option<ComPtr<IDXGIFactory1>>> =
@@ -59,6 +68,41 @@ impl Adapter {
                 Ok((*dxgi_factory_slot).clone().unwrap())
             })?;
 
+            // Find the first adapter that matches the vendor preference.
+            let mut adapter_index = 0;
+            loop {
+                let mut dxgi_adapter_1 = ptr::null_mut();
+                let result = (*dxgi_factory).EnumAdapters1(adapter_index, &mut dxgi_adapter_1);
+                if !winerror::SUCCEEDED(result) {
+                    break;
+                }
+                assert!(!dxgi_adapter_1.is_null());
+                let dxgi_adapter_1 = ComPtr::from_raw(dxgi_adapter_1);
+
+                let mut adapter_desc = mem::zeroed();
+                let result = (*dxgi_adapter_1).GetDesc1(&mut adapter_desc);
+                assert_eq!(result, S_OK);
+
+                let choose_this = match vendor_preference {
+                    VendorPreference::Prefer(vendor_id) => vendor_id == adapter_desc.VendorId,
+                    VendorPreference::Avoid(vendor_id) => vendor_id != adapter_desc.VendorId,
+                    VendorPreference::None => true,
+                };
+                if choose_this {
+                    let mut dxgi_adapter: *mut IDXGIAdapter = ptr::null_mut();
+                    let result = (*dxgi_adapter_1).QueryInterface(
+                        &IDXGIAdapter::uuidof(),
+                        &mut dxgi_adapter as *mut *mut IDXGIAdapter as *mut *mut c_void);
+                    assert_eq!(result, S_OK);
+                    let dxgi_adapter = ComPtr::from_raw(dxgi_adapter);
+
+                    return Ok(Adapter { dxgi_adapter, d3d_driver_type });
+                }
+
+                adapter_index += 1;
+            }
+
+            // Fallback: Go with the first adapter.
             let mut dxgi_adapter_1 = ptr::null_mut();
             let result = (*dxgi_factory).EnumAdapters1(0, &mut dxgi_adapter_1);
             if !winerror::SUCCEEDED(result) {

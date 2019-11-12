@@ -8,18 +8,19 @@
 //! implicit in the Win32 API, and as such this type is a no-op.
 
 use crate::Error;
-use super::device::{Adapter, Device};
+use super::device::{Adapter, Device, VendorPreference};
 use super::surface::NativeWidget;
 
+use winapi::shared::minwindef::UINT;
 use winapi::shared::windef::HWND;
-use winapi::um::d3dcommon::D3D_DRIVER_TYPE_HARDWARE;
-use winapi::um::d3dcommon::D3D_DRIVER_TYPE_UNKNOWN;
-use winapi::um::d3dcommon::D3D_DRIVER_TYPE_WARP;
+use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::windows::WindowExt;
+
+const INTEL_PCI_ID: UINT = 0x8086;
 
 /// A no-op connection.
 #[derive(Clone)]
@@ -35,13 +36,13 @@ impl Connection {
     /// Returns the "best" adapter on this system.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::from_driver_type(D3D_DRIVER_TYPE_UNKNOWN)
+        self.create_hardware_adapter()
     }
 
     /// Returns the "best" hardware adapter on this system.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::from_driver_type(D3D_DRIVER_TYPE_HARDWARE)
+        Adapter::new(D3D_DRIVER_TYPE_UNKNOWN, VendorPreference::Avoid(INTEL_PCI_ID))
     }
 
     /// Returns the "best" low-power hardware adapter on this system.
@@ -49,13 +50,13 @@ impl Connection {
     /// TODO(pcwalton)
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::from_driver_type(D3D_DRIVER_TYPE_HARDWARE)
+        Adapter::new(D3D_DRIVER_TYPE_UNKNOWN, VendorPreference::Prefer(INTEL_PCI_ID))
     }
 
     /// Returns the "best" software adapter on this system.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::from_driver_type(D3D_DRIVER_TYPE_WARP)
+        Adapter::new(D3D_DRIVER_TYPE_WARP, VendorPreference::None)
     }
 
     #[inline]
