@@ -20,7 +20,6 @@ use winit::os::unix::WindowExt;
 
 pub struct Connection {
     pub(crate) native_display: Box<dyn NativeDisplay>,
-    pub(crate) quirks: Quirks,
 }
 
 unsafe impl Send for Connection {}
@@ -32,18 +31,9 @@ pub(crate) trait NativeDisplay {
     unsafe fn destroy(&mut self);
 }
 
-bitflags! {
-    pub struct Quirks: u8 {
-        const BROKEN_GLX_TEXTURE_FROM_PIXMAP = 0x01;
-    }
-}
-
 impl Clone for Connection {
     fn clone(&self) -> Connection {
-        Connection {
-            native_display: self.native_display.retain(),
-            quirks: self.quirks.clone(),
-        }
+        Connection { native_display: self.native_display.retain() }
     }
 }
 
@@ -57,10 +47,7 @@ impl Connection {
                 return Err(Error::ConnectionFailed);
             }
             let display = Some(Arc::new(OwnedDisplay(display)));
-            Ok(Connection {
-                native_display: Box::new(SharedDisplay { display }),
-                quirks: Quirks::detect(),
-            })
+            Ok(Connection { native_display: Box::new(SharedDisplay { display }) })
         }
     }
 
@@ -104,7 +91,6 @@ impl Connection {
         if let Some(display) = window.get_xlib_display() {
             Ok(Connection {
                 native_display: Box::new(UnsafeDisplayRef { display: display as *mut Display }),
-                quirks: Quirks::detect(),
             })
         } else {
             Err(Error::IncompatibleWinitWindow)
@@ -182,13 +168,6 @@ impl NativeDisplay for UnsafeDisplayRef {
     unsafe fn destroy(&mut self) {
         assert!(!self.is_destroyed());
         self.display = ptr::null_mut();
-    }
-}
-
-impl Quirks {
-    pub(crate) fn detect() -> Quirks {
-        // TODO(pcwalton): Whitelist implementations with working `GLX_texture_from_pixmap`.
-        Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP
     }
 }
 

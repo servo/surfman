@@ -1,15 +1,15 @@
 //! Wrapper for GLX contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
+use crate::gl::Gl;
 use crate::gl::types::GLubyte;
-use crate::gl::{self, Gl};
 use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXFBConfig, GLXPixmap};
 use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
 use super::adapter::Adapter;
-use super::connection::{Connection, Quirks, UnsafeDisplayRef};
+use super::connection::{Connection, UnsafeDisplayRef};
 use super::device::Device;
 use super::surface::{self, Surface, SurfaceDrawables};
 
@@ -120,8 +120,10 @@ impl Device {
             GLX_RENDER_TYPE,                            GLX_RGBA_BIT,
             GLX_STEREO,                                 xlib::False,
             glx::BIND_TO_TEXTURE_RGBA_EXT as c_int,     xlib::True,
-            glx::BIND_TO_TEXTURE_TARGETS_EXT as c_int,  glx::TEXTURE_2D_BIT_EXT as c_int,
-            GLX_DOUBLEBUFFER,                           xlib::False,
+            glx::BIND_TO_TEXTURE_TARGETS_EXT as c_int,  glx::TEXTURE_RECTANGLE_BIT_EXT as c_int,
+            // FIXME(pcwalton): We shouldn't have to double-buffer pbuffers in theory. However,
+            // there seem to be some Mesa synchronization issues if we don't.
+            GLX_DOUBLEBUFFER,                           xlib::True,
             0,
         ];
 
@@ -325,10 +327,6 @@ impl Device {
     }
 
     fn flush_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        if !self.connection.quirks.contains(Quirks::BROKEN_GLX_TEXTURE_FROM_PIXMAP) {
-            return Ok(())
-        }
-
         // FIXME(pcwalton): Unbind afterward if necessary.
         self.make_context_current(context)?;
 
@@ -337,37 +335,20 @@ impl Device {
             Framebuffer::None | Framebuffer::External => return Ok(()),
         };
 
-        let pixels_slot = match surface.drawables {
-            SurfaceDrawables::Pixmap { ref mut pixels, .. } => pixels,
-            SurfaceDrawables::Window { .. } => return Ok(()),
-        };
-
-        let size = surface.size;
-        let length = size.width as usize * size.height as usize * 4;
-
-        let mut pixels = match mem::replace(pixels_slot, None) {
-            None => vec![0; length],
-            Some(mut pixels) => {
-                if pixels.len() != length {
-                    pixels.resize(length, 0);
+        match surface.drawables {
+            SurfaceDrawables::Pixmap { glx_pixmap, .. } => {
+                unsafe {
+                    GL_FUNCTIONS.with(|gl| {
+                        GLX_FUNCTIONS.with(|glx| {
+                            gl.Flush();
+                            glx.SwapBuffers(self.glx_display(), glx_pixmap);
+                        })
+                    })
                 }
-                pixels
             }
-        };
+            SurfaceDrawables::Window { .. } => {}
+        }
 
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.ReadPixels(0,
-                              0,
-                              size.width,
-                              size.height,
-                              gl::RGBA,
-                              gl::UNSIGNED_BYTE,
-                              pixels.as_mut_ptr() as *mut c_void);
-            }
-        });
-
-        *pixels_slot = Some(pixels);
         Ok(())
     }
 
