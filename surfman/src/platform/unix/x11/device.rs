@@ -6,11 +6,7 @@ use crate::glx::types::Display as GlxDisplay;
 use crate::{Error, GLApi};
 use super::connection::Connection;
 
-#[derive(Clone, Debug)]
-pub enum Adapter {
-    Hardware,
-    Software,
-}
+pub use crate::platform::unix::generic::device::Adapter;
 
 pub struct Device {
     pub(crate) connection: Connection,

@@ -56,19 +56,19 @@ impl Connection {
     /// Returns the "best" hardware adapter on this system.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::Hardware)
+        Ok(Adapter::hardware())
     }
 
     /// Returns the "best" low-power hardware adapter on this system.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::Hardware)
+        Ok(Adapter::low_power())
     }
 
     /// Returns the "best" software adapter on this system.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::Software)
+        Ok(Adapter::software())
     }
 
     #[inline]

@@ -5,11 +5,7 @@
 use crate::{Error, GLApi};
 use super::connection::{Connection, NativeConnection};
 
-#[derive(Clone, Debug)]
-pub enum Adapter {
-    Hardware,
-    Software,
-}
+pub use crate::platform::unix::generic::device::Adapter;
 
 pub struct Device {
     pub(crate) native_connection: Box<dyn NativeConnection>,

@@ -3,7 +3,8 @@
 //! A wrapper for X11 server connections (`DISPLAY` variables).
 
 use crate::error::Error;
-use super::device::{Adapter, Device};
+use crate::platform::unix::generic::device::Adapter;
+use super::device::Device;
 use super::surface::NativeWidget;
 
 use std::ptr;
@@ -57,25 +58,19 @@ impl Connection {
     /// Returns the "best" hardware adapter on this system.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::Hardware)
+        Ok(Adapter::hardware())
     }
 
     /// Returns the "best" low-power hardware adapter on this system.
-    ///
-    /// TODO(pcwalton): Use DRI PRIME if possible.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::Hardware)
+        Ok(Adapter::low_power())
     }
 
     /// Returns the "best" software adapter on this system.
-    ///
-    /// The X11 backend has no software support, so this returns an error.
-    ///
-    /// TODO(pcwalton): If Mesa is in use, maybe we could use `llvmpipe` somehow?
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::Software)
+        Ok(Adapter::software())
     }
 
     #[inline]

@@ -3,7 +3,7 @@
 //! Wrapper for GL-renderable pixmaps on X11.
 
 use crate::context::ContextID;
-use crate::gl::types::{GLenum, GLint, GLuint, GLvoid};
+use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::glx::types::{Display as GlxDisplay, GLXFBConfig};
 use crate::{gl, glx};
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
@@ -16,7 +16,6 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_int, c_uint, c_void};
-use std::ptr;
 use std::thread;
 use x11::glx::{GLX_VISUAL_ID, GLXPixmap};
 use x11::xlib::{self, Display, Pixmap, VisualID, Window, XCreatePixmap, XDefaultScreen};

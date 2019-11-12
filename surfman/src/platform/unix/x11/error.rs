@@ -4,7 +4,6 @@
 
 use crate::WindowingApiError;
 
-use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use x11::glx::{GLX_BAD_ATTRIBUTE, GLX_BAD_CONTEXT, GLX_BAD_ENUM, GLX_BAD_SCREEN, GLX_BAD_VALUE};
 use x11::glx::{GLX_BAD_VISUAL, GLX_NO_EXTENSION};

@@ -10,15 +10,13 @@ use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
-use super::connection::{Connection, UnsafeDisplayRef};
-use super::device::{Adapter, Device};
+use super::device::Device;
 use super::error;
 use super::surface::{self, Surface, SurfaceDrawables};
 
 use euclid::default::Size2D;
 use libc::{RTLD_LAZY, dlopen, dlsym};
 use std::cell::Cell;
-use std::env;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_int, c_void};
@@ -32,8 +30,6 @@ use x11::glx::{GLX_X_RENDERABLE, GLX_X_VISUAL_TYPE};
 use x11::xlib::{self, Display, Pixmap, XDefaultScreen, XErrorEvent, XFree, XID, XSetErrorHandler};
 
 const DUMMY_PIXMAP_SIZE: i32 = 16;
-
-static MESA_SOFTWARE_RENDERING_ENV_VAR: &'static str = "LIBGL_ALWAYS_SOFTWARE";
 
 thread_local! {
     static LAST_X_ERROR_CODE: Cell<u8> = Cell::new(0);
@@ -100,14 +96,7 @@ impl Device {
         let glx_display = self.glx_display();
 
         // Set environment variables as appropriate.
-        match self.adapter {
-            Adapter::Hardware => {
-                env::remove_var(MESA_SOFTWARE_RENDERING_ENV_VAR);
-            }
-            Adapter::Software => {
-                env::set_var(MESA_SOFTWARE_RENDERING_ENV_VAR, "1");
-            }
-        }
+        self.adapter.set_environment_variables();
 
         let flags = attributes.flags;
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
