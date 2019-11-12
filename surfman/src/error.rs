@@ -71,6 +71,10 @@ pub enum Error {
     ConnectionFailed,
     /// A connection to the window server is required to open a hardware device.
     ConnectionRequired,
+    /// The native widget type does not match the supplied device.
+    IncompatibleNativeWidget,
+    /// The `winit` window is incompatible with this backend.
+    IncompatibleWinitWindow,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
