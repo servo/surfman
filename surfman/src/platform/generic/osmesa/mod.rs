@@ -2,7 +2,6 @@
 //
 //! Bindings to the OSMesa software rendering library.
 
-pub mod adapter;
 pub mod connection;
 pub mod context;
 pub mod device;

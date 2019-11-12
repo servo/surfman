@@ -3,8 +3,8 @@
 //! Unit tests.
 
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, WindowingApiError};
-use super::adapter::Adapter;
 use super::connection::Connection;
+use super::device::Adapter;
 
 static GL_VERSIONS: [GLVersion; 5] = [
     GLVersion { major: 2, minor: 0 },

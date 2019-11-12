@@ -3,10 +3,12 @@
 //! A handle to the device. (This is a no-op in OSMesa.)
 
 use crate::{Error, GLApi};
-use super::adapter::Adapter;
 use super::connection::Connection;
 
 use std::marker::PhantomData;
+
+#[derive(Clone, Debug)]
+pub struct Adapter;
 
 #[derive(Clone)]
 pub struct Device {

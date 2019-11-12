@@ -1,6 +1,7 @@
+// surfman/surfman/src/platform/unix/x11/mod.rs
+//
 //! Bindings to GLX via Xlib.
 
-pub mod adapter;
 pub mod connection;
 pub mod context;
 pub mod device;

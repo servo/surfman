@@ -3,7 +3,6 @@
 //! An implementation of the GPU device for Windows using the WGL API.
 
 use crate::{Error, GLApi};
-use super::adapter::Adapter;
 use super::connection::Connection;
 use super::context::WGL_EXTENSION_FUNCTIONS;
 
@@ -26,6 +25,16 @@ use wio::com::ComPtr;
 
 pub(crate) const HIDDEN_WINDOW_SIZE: c_int = 16;
 
+static NVIDIA_GPU_SELECT_SYMBOL: &[u8] = b"NvOptimusEnablement\0";
+static AMD_GPU_SELECT_SYMBOL: &[u8] = b"AmdPowerXpressRequestHighPerformance\0";
+
+/// A no-op adapter.
+#[derive(Clone, Debug)]
+pub enum Adapter {
+    HighPerformance,
+    LowPower,
+}
+
 struct SendableHWND(HWND);
 
 unsafe impl Send for SendableHWND {}
@@ -37,6 +46,40 @@ pub struct Device {
     pub(crate) d3d11_device_context: ComPtr<ID3D11DeviceContext>,
     pub(crate) gl_dx_interop_device: HANDLE,
     pub(crate) hidden_window: HiddenWindow,
+}
+
+impl Adapter {
+    pub(crate) fn set_exported_variables(&self) {
+        unsafe {
+            let current_module = libloaderapi::GetModuleHandleA(ptr::null());
+            assert!(!current_module.is_null());
+            let nvidia_gpu_select_variable: *mut i32 = libloaderapi::GetProcAddress(
+                current_module,
+                NVIDIA_GPU_SELECT_SYMBOL.as_ptr() as LPCSTR) as *mut i32;
+            let amd_gpu_select_variable: *mut i32 = libloaderapi::GetProcAddress(
+                current_module,
+                AMD_GPU_SELECT_SYMBOL.as_ptr() as LPCSTR) as *mut i32;
+            if nvidia_gpu_select_variable.is_null() || amd_gpu_select_variable.is_null() {
+                println!("surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
+                       Your application may end up using the wrong GPU (discrete vs. \
+                       integrated). To fix this issue, ensure that you are using the MSVC \
+                       version of Rust and invoke the `declare_surfman!()` macro at the root of \
+                       your crate.");
+                warn!("surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
+                       Your application may end up using the wrong GPU (discrete vs. \
+                       integrated). To fix this issue, ensure that you are using the MSVC \
+                       version of Rust and invoke the `declare_surfman!()` macro at the root of \
+                       your crate.");
+                return;
+            }
+            let value = match *self {
+                Adapter::HighPerformance => 1,
+                Adapter::LowPower => 0,
+            };
+            *nvidia_gpu_select_variable = value;
+            *amd_gpu_select_variable = value;
+        }
+    }
 }
 
 impl Drop for Device {

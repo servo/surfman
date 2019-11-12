@@ -21,19 +21,16 @@ extern crate log;
 extern crate objc;
 
 pub mod platform;
-pub use platform::default::adapter::Adapter;
 pub use platform::default::connection::Connection;
 pub use platform::default::context::{Context, ContextDescriptor};
-pub use platform::default::device::Device;
+pub use platform::default::device::{Adapter, Device};
 pub use platform::default::surface::{NativeWidget, Surface, SurfaceTexture};
 
 // TODO(pcwalton): Fill this in with other OS's.
 #[cfg(target_os = "macos")]
-pub use platform::system::adapter::Adapter as SystemAdapter;
-#[cfg(target_os = "macos")]
 pub use platform::system::connection::Connection as SystemConnection;
 #[cfg(target_os = "macos")]
-pub use platform::system::device::Device as SystemDevice;
+pub use platform::system::device::{Adapter as SystemAdapter, Device as SystemDevice};
 #[cfg(target_os = "macos")]
 pub use platform::system::surface::Surface as SystemSurface;
 

@@ -6,8 +6,7 @@ use crate::Error;
 use crate::egl::types::EGLDisplay;
 use crate::egl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
-use super::adapter::Adapter;
-use super::device::Device;
+use super::device::{Adapter, Device};
 use super::surface::NativeWidget;
 
 use euclid::default::Size2D;

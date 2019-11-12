@@ -5,8 +5,7 @@
 //! FIXME(pcwalton): Should this instead wrap `EGLDisplay`? Is that thread-safe on Android?
 
 use crate::Error;
-use super::adapter::Adapter;
-use super::device::Device;
+use super::device::{Adapter, Device};
 
 /// A no-op connection.
 #[derive(Clone)]

@@ -8,8 +8,7 @@
 //! implicit in the Win32 API, and as such this type is a no-op.
 
 use crate::Error;
-use super::adapter::Adapter;
-use super::device::Device;
+use super::device::{Adapter, Device};
 use super::surface::NativeWidget;
 
 use winapi::shared::windef::HWND;

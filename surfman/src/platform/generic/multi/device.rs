@@ -7,12 +7,16 @@ use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
-use super::adapter::Adapter;
 use super::connection::Connection;
 use super::context::{Context, ContextDescriptor};
 use super::surface::{NativeWidget, Surface, SurfaceTexture};
 
 use std::os::raw::c_void;
+
+pub enum Adapter<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    Default(<Def::Connection as ConnectionInterface>::Adapter),
+    Alternate(<Alt::Connection as ConnectionInterface>::Adapter),
+}
 
 pub enum Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     Default(Def),

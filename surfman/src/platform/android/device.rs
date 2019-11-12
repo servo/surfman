@@ -4,8 +4,11 @@ use crate::egl::types::EGLDisplay;
 use crate::egl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::{Error, GLApi};
-use super::adapter::Adapter;
 use super::connection::Connection;
+
+/// A no-op adapter.
+#[derive(Clone, Debug)]
+pub struct Adapter;
 
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,

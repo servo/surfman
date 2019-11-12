@@ -5,8 +5,7 @@
 use crate::Error;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
-use super::adapter::Adapter;
-use super::device::Device;
+use super::device::{Adapter, Device};
 use super::surface::NativeWidget;
 
 #[cfg(feature = "sm-winit")]

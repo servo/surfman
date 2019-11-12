@@ -1,9 +1,16 @@
+// surfman/surfman/src/platform/unix/x11/device.rs
+//
 //! A wrapper around X11 Displays.
 
 use crate::glx::types::Display as GlxDisplay;
 use crate::{Error, GLApi};
-use super::adapter::Adapter;
 use super::connection::Connection;
+
+#[derive(Clone, Debug)]
+pub enum Adapter {
+    Hardware,
+    Software,
+}
 
 pub struct Device {
     pub(crate) connection: Connection,

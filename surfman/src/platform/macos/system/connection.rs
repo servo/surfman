@@ -6,8 +6,7 @@
 //! connection.
 
 use crate::Error;
-use super::adapter::Adapter;
-use super::device::Device;
+use super::device::{Adapter, Device};
 use super::surface::{NSView, NativeWidget};
 
 use cocoa::base::id;

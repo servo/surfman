@@ -3,8 +3,13 @@
 //! A wrapper around Wayland `EGLDisplay`s.
 
 use crate::{Error, GLApi};
-use super::adapter::Adapter;
 use super::connection::{Connection, NativeConnection};
+
+#[derive(Clone, Debug)]
+pub enum Adapter {
+    Hardware,
+    Software,
+}
 
 pub struct Device {
     pub(crate) native_connection: Box<dyn NativeConnection>,

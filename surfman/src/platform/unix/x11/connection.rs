@@ -1,12 +1,9 @@
 // surfman/surfman/src/platform/unix/x11/connection.rs
 //
 //! A wrapper for X11 server connections (`DISPLAY` variables).
-//!
-//! FIXME(pcwalton): I think this should actually wrap the `Display`.
 
 use crate::error::Error;
-use super::adapter::Adapter;
-use super::device::Device;
+use super::device::{Adapter, Device};
 use super::surface::NativeWidget;
 
 use std::ptr;

@@ -3,8 +3,7 @@
 //! A no-op connection. OSMesa needs no connection, as it is a CPU-based off-screen-only API.
 
 use crate::Error;
-use super::adapter::Adapter;
-use super::device::Device;
+use super::device::{Adapter, Device};
 use super::surface::NativeWidget;
 
 #[cfg(feature = "sm-winit")]

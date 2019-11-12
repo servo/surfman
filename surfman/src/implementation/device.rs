@@ -6,10 +6,9 @@
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
-use super::super::adapter::Adapter;
 use super::super::connection::Connection;
 use super::super::context::{Context, ContextDescriptor};
-use super::super::device::Device;
+use super::super::device::{Adapter, Device};
 use super::super::surface::{NativeWidget, Surface, SurfaceTexture};
 
 use std::os::raw::c_void;

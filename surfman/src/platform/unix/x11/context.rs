@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/unix/x11/context.rs
+//
 //! Wrapper for GLX contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
@@ -8,9 +10,8 @@ use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
-use super::adapter::Adapter;
 use super::connection::{Connection, UnsafeDisplayRef};
-use super::device::Device;
+use super::device::{Adapter, Device};
 use super::error;
 use super::surface::{self, Surface, SurfaceDrawables};
 

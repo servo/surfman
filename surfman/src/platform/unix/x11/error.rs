@@ -1,3 +1,5 @@
+// surfman/surfman/src/platform/unix/x11/error.rs
+//
 //! Translation of X11 errors to `surfman` errors.
 
 use crate::WindowingApiError;

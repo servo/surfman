@@ -2,13 +2,6 @@
 //
 //! The default backend for Unix, which dynamically switches between Wayland and X11.
 
-pub mod adapter {
-    use crate::platform::generic::multi::adapter::Adapter as MultiAdapter;
-    use crate::platform::unix::wayland::device::Device as WaylandDevice;
-    use crate::platform::unix::x11::device::Device as X11Device;
-    pub type Adapter = MultiAdapter<WaylandDevice, X11Device>;
-}
-
 pub mod connection {
     use crate::platform::generic::multi::connection::Connection as MultiConnection;
     use crate::platform::unix::wayland::device::Device as WaylandDevice;
@@ -26,9 +19,11 @@ pub mod context {
 }
 
 pub mod device {
+    use crate::platform::generic::multi::device::Adapter as MultiAdapter;
     use crate::platform::generic::multi::device::Device as MultiDevice;
     use crate::platform::unix::wayland::device::Device as WaylandDevice;
     use crate::platform::unix::x11::device::Device as X11Device;
+    pub type Adapter = MultiAdapter<WaylandDevice, X11Device>;
     pub type Device = MultiDevice<WaylandDevice, X11Device>;
 }
 
@@ -45,4 +40,3 @@ pub mod surface {
     // FIXME(pcwalton): Revamp how this works.
     pub struct SurfaceDataGuard {}
 }
-

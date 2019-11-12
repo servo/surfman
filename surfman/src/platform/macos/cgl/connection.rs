@@ -8,8 +8,7 @@
 use crate::Error;
 use crate::platform::macos::system::connection::Connection as SystemConnection;
 use crate::platform::macos::system::surface::NativeWidget;
-use super::adapter::Adapter;
-use super::device::Device;
+use super::device::{Adapter, Device};
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;

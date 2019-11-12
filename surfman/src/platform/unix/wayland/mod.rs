@@ -2,7 +2,6 @@
 //
 //! Bindings to Wayland via the Linux GBM interface.
 
-pub mod adapter;
 pub mod connection;
 pub mod context;
 pub mod device;
