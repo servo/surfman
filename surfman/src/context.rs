@@ -4,7 +4,6 @@
 
 use crate::info::GLVersion;
 
-use std::os::raw::c_char;
 use std::sync::Mutex;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
