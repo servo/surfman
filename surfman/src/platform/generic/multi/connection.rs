@@ -34,6 +34,9 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    /// Returns the "best" adapter on this system.
+    /// 
+    /// This is an alias for `Connection::create_hardware_adapter()`.
     pub fn create_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
         match *self {
             Connection::Default(ref connection) => {
@@ -45,6 +48,7 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     pub fn create_hardware_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
         match *self {
             Connection::Default(ref connection) => {
@@ -56,6 +60,7 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     pub fn create_low_power_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
         match *self {
             Connection::Default(ref connection) => {
@@ -67,6 +72,7 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    /// Returns the "best" adapter on this system, preferring software adapters.
     pub fn create_software_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
         match *self {
             Connection::Default(ref connection) => {
@@ -78,6 +84,9 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    /// Opens the hardware device corresponding to the given adapter.
+    /// 
+    /// Device handles are local to a single thread.
     pub fn create_device(&self, adapter: &Adapter<Def, Alt>) -> Result<Device<Def, Alt>, Error> {
         match (self, adapter) {
             (&Connection::Default(ref connection), &Adapter::Default(ref adapter)) => {
@@ -90,6 +99,7 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    /// Opens the connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection<Def, Alt>, Error> {
         match <Def::Connection>::from_winit_window(window) {
@@ -98,6 +108,9 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    /// Creates a native widget type from the given `winit` window.
+    /// 
+    /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget<Def, Alt>, Error> {

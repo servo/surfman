@@ -24,19 +24,9 @@ static GL_ES_VERSIONS: [GLVersion; 4] = [
 #[test]
 fn test_adapter_creation() {
     let connection = Connection::new().unwrap();
-    check_hw(connection.create_hardware_adapter());
-    check_hw(connection.create_low_power_adapter());
-    match connection.create_software_adapter() {
-        Ok(_) | Err(Error::NoSoftwareAdapters) => {}
-        _ => panic!(),
-    }
-
-    fn check_hw(result: Result<Adapter, Error>) {
-        match result {
-            Ok(_) | Err(Error::NoHardwareAdapters) => {}
-            _ => panic!(),
-        }
-    }
+    connection.create_hardware_adapter().unwrap();
+    connection.create_low_power_adapter().unwrap();
+    connection.create_software_adapter().unwrap();
 }
 
 #[test]

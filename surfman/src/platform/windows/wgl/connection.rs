@@ -26,42 +26,47 @@ impl Connection {
         Ok(Connection)
     }
 
-    /// Returns the "best" adapter on this system.
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
+    /// 
+    /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
         self.create_hardware_adapter()
     }
 
-    /// Returns the "best" hardware adapter on this system.
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
         Ok(Adapter::HighPerformance)
     }
 
-    /// Returns the "best" low-power hardware adapter on this system.
+    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
         Ok(Adapter::LowPower)
     }
 
-    /// Returns the "best" software adapter on this system.
-    ///
-    /// The WGL backend has no software support, so this returns an error.
+    /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Err(Error::NoSoftwareAdapters)
+        self.create_low_power_adapter()
     }
 
+    /// Opens a device.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         Device::new(adapter)
     }
 
+    /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
         Connection::new()
     }
 
+    /// Creates a native widget type from the given `winit` window.
+    /// 
+    /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)

@@ -2,8 +2,8 @@
 //
 //! Represents the connection to the Core Graphics window server.
 //! 
-//! This is a no-op, because the system APIs automatically manage the global window server
-//! connection.
+//! Connection types are zero-sized on macOS, because the system APIs automatically manage the
+//! global window server connection.
 
 use crate::Error;
 use super::device::{Adapter, Device};
@@ -53,44 +53,49 @@ impl Connection {
         Ok(Connection)
     }
 
-    /// Returns the "best" adapter on this system.
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
+    /// 
+    /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
         self.create_hardware_adapter()
     }
 
-    /// Returns the "best" hardware adapter on this system.
-    /// 
-    /// On multi-GPU systems, this will return the discrete GPU.
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
         Ok(Adapter { is_low_power: false })
     }
 
-    /// Returns the most energy-efficient hardware adapter on this system.
-    /// 
-    /// On multi-GPU systems, this will return the integrated GPU.
+    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
         Ok(Adapter { is_low_power: true })
     }
 
-    /// Returns the "best" software adapter on this system.
+    /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
         self.create_low_power_adapter()
     }
 
+    /// Opens the hardware device corresponding to the given adapter.
+    /// 
+    /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         Device::new((*adapter).clone())
     }
 
+    /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
         Connection::new()
     }
 
+    /// Creates a native widget type from the given `winit` window.
+    /// 
+    /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {

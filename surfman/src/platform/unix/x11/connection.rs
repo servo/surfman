@@ -49,35 +49,41 @@ impl Connection {
         }
     }
 
-    /// Returns the "best" adapter on this system.
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
+    /// 
+    /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
         self.create_hardware_adapter()
     }
 
-    /// Returns the "best" hardware adapter on this system.
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
         Ok(Adapter::hardware())
     }
 
-    /// Returns the "best" low-power hardware adapter on this system.
+    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
         Ok(Adapter::low_power())
     }
 
-    /// Returns the "best" software adapter on this system.
+    /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
         Ok(Adapter::software())
     }
 
+    /// Opens the hardware device corresponding to the given adapter.
+    /// 
+    /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         Device::new(self, adapter)
     }
 
+    /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
         if let Some(display) = window.get_xlib_display() {
@@ -89,6 +95,9 @@ impl Connection {
         }
     }
 
+    /// Creates a native widget type from the given `winit` window.
+    /// 
+    /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {

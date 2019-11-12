@@ -54,10 +54,6 @@ pub enum Error {
     /// The surface texture is from a hardware device, but this is a software device, or vice
     /// versa.
     IncompatibleSurfaceTexture,
-    /// There is no hardware adapter available with this backend.
-    NoHardwareAdapters,
-    /// There is no software adapter available with this backend.
-    NoSoftwareAdapters,
     /// The surface has no window attachment.
     NoWidgetAttached,
     /// The surface has a window attachment.

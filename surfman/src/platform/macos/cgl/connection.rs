@@ -2,8 +2,8 @@
 //
 //! Represents the connection to the Core Graphics window server.
 //! 
-//! This is a no-op, because the system APIs automatically manage the global window server
-//! connection.
+//! Connection types are zero-sized on macOS, because the system APIs automatically manage the
+//! global window server connection.
 
 use crate::Error;
 use crate::platform::macos::system::connection::Connection as SystemConnection;
@@ -24,29 +24,27 @@ impl Connection {
         SystemConnection::new().map(Connection)
     }
 
-    /// Returns the "best" adapter on this system.
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
+    /// 
+    /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
         self.0.create_adapter().map(Adapter)
     }
 
-    /// Returns the "best" hardware adapter on this system.
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
         self.0.create_hardware_adapter().map(Adapter)
     }
 
-    /// Returns the most energy-efficient hardware adapter on this system.
-    /// 
-    /// On multi-GPU systems, this will return the integrated GPU.
+    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
         self.0.create_low_power_adapter().map(Adapter)
     }
 
-    /// Returns the "best" software adapter on this system.
-    ///
-    /// On macOS this returns the low-power adapter.
+    /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
         self.0.create_software_adapter().map(Adapter)
@@ -60,15 +58,15 @@ impl Connection {
         self.0.create_device(&adapter.0).map(Device)
     }
 
-    /// Retrieves the display server connection from the given `winit` window.
+    /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
         SystemConnection::from_winit_window(window).map(Connection)
     }
 
-    /// Retrieves the native widget handle from the given `winit` window.
+    /// Creates a native widget type from the given `winit` window.
     /// 
-    /// This widget can be used to create surfaces.
+    /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
