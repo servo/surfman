@@ -26,7 +26,9 @@ thread_local! {
     static DXGI_FACTORY: RefCell<Option<ComPtr<IDXGIFactory1>>> = RefCell::new(None);
 }
 
-/// A wrapper for DXGI adapters and Direct3D 11 drivers.
+/// Represents a hardware display adapter that can be used for rendering (including the CPU).
+///
+/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
 #[derive(Clone)]
 pub struct Adapter {
     pub(crate) dxgi_adapter: ComPtr<IDXGIAdapter>,
@@ -35,6 +37,9 @@ pub struct Adapter {
 
 unsafe impl Send for Adapter {}
 
+/// A thread-local handle to a device.
+///
+/// Devices contain most of the relevant surface management methods.
 pub struct Device {
     pub(crate) native_display: Box<dyn NativeDisplay>,
     pub(crate) d3d11_device: ComPtr<ID3D11Device>,
@@ -176,15 +181,13 @@ impl Device {
         }
     }
 
+    /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
         Connection
     }
 
-    pub fn d3d11_device(&self) -> ComPtr<ID3D11Device> {
-        self.d3d11_device.clone()
-    }
-
+    /// Returns the adapter that this device was created with.
     pub fn adapter(&self) -> Adapter {
         unsafe {
             let mut dxgi_device: *mut IDXGIDevice = ptr::null_mut();
@@ -203,8 +206,15 @@ impl Device {
         }
     }
 
+    /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     #[inline]
     pub fn gl_api(&self) -> GLApi {
         GLApi::GLES
+    }
+
+    /// Returns the underlying Direct3D 11 device.
+    #[inline]
+    pub fn native_device(&self) -> ComPtr<ID3D11Device> {
+        self.d3d11_device.clone()
     }
 }

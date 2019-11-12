@@ -7,12 +7,17 @@ use super::connection::Connection;
 
 use std::marker::PhantomData;
 
-/// An adapter.
+/// Represents a hardware display adapter that can be used for rendering (including the CPU).
+///
+/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
 #[derive(Clone, Debug)]
 pub struct Adapter {
     pub(crate) is_low_power: bool,
 }
 
+/// A thread-local handle to a device.
+///
+/// Devices contain most of the relevant surface management methods.
 #[derive(Clone)]
 pub struct Device {
     adapter: Adapter,
@@ -25,11 +30,13 @@ impl Device {
         Ok(Device { adapter, phantom: PhantomData })
     }
 
+    /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
         Connection
     }
 
+    /// Returns the adapter that this device was created with.
     #[inline]
     pub fn adapter(&self) -> Adapter {
         self.adapter.clone()

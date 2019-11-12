@@ -13,11 +13,17 @@ use super::surface::{NativeWidget, Surface, SurfaceTexture};
 
 use std::os::raw::c_void;
 
+/// Represents a hardware display adapter that can be used for rendering (including the CPU).
+///
+/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
 pub enum Adapter<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     Default(<Def::Connection as ConnectionInterface>::Adapter),
     Alternate(<Alt::Connection as ConnectionInterface>::Adapter),
 }
 
+/// A thread-local handle to a device.
+///
+/// Devices contain most of the relevant surface management methods.
 pub enum Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     Default(Def),
     Alternate(Alt),
@@ -27,13 +33,7 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
                                       Alt: DeviceInterface,
                                       Def::Connection: ConnectionInterface,
                                       Alt::Connection: ConnectionInterface {
-    pub fn adapter(&self) -> Adapter<Def, Alt> {
-        match *self {
-            Device::Default(ref device) => Adapter::Default(device.adapter()),
-            Device::Alternate(ref device) => Adapter::Alternate(device.adapter()),
-        }
-    }
-
+    /// Returns the display server connection that this device was created with.
     pub fn connection(&self) -> Connection<Def, Alt> {
         match *self {
             Device::Default(ref device) => Connection::Default(device.connection()),
@@ -41,6 +41,15 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface,
         }
     }
 
+    /// Returns the adapter that this device was created with.
+    pub fn adapter(&self) -> Adapter<Def, Alt> {
+        match *self {
+            Device::Default(ref device) => Adapter::Default(device.adapter()),
+            Device::Alternate(ref device) => Adapter::Alternate(device.adapter()),
+        }
+    }
+
+    /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     pub fn gl_api(&self) -> GLApi {
         match *self {
             Device::Default(ref device) => device.gl_api(),

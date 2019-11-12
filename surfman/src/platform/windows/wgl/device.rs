@@ -28,7 +28,9 @@ pub(crate) const HIDDEN_WINDOW_SIZE: c_int = 16;
 static NVIDIA_GPU_SELECT_SYMBOL: &[u8] = b"NvOptimusEnablement\0";
 static AMD_GPU_SELECT_SYMBOL: &[u8] = b"AmdPowerXpressRequestHighPerformance\0";
 
-/// A no-op adapter.
+/// Represents a hardware display adapter that can be used for rendering (including the CPU).
+///
+/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
 #[derive(Clone, Debug)]
 pub enum Adapter {
     HighPerformance,
@@ -39,6 +41,9 @@ struct SendableHWND(HWND);
 
 unsafe impl Send for SendableHWND {}
 
+/// A thread-local handle to a device.
+///
+/// Devices contain most of the relevant surface management methods.
 #[allow(dead_code)]
 pub struct Device {
     pub(crate) adapter: Adapter,
@@ -135,16 +140,19 @@ impl Device {
         }
     }
 
+    /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
         Connection
     }
 
+    /// Returns the adapter that this device was created with.
     #[inline]
     pub fn adapter(&self) -> Adapter {
         self.adapter.clone()
     }
 
+    /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     #[inline]
     pub fn gl_api(&self) -> GLApi {
         GLApi::GL

@@ -8,6 +8,9 @@ use super::connection::Connection;
 
 pub use crate::platform::unix::generic::device::Adapter;
 
+/// A thread-local handle to a device.
+///
+/// Devices contain most of the relevant surface management methods.
 pub struct Device {
     pub(crate) connection: Connection,
     pub(crate) adapter: Adapter,
@@ -19,16 +22,19 @@ impl Device {
         Ok(Device { connection: (*connection).clone(), adapter: (*adapter).clone() })
     }
 
-    #[inline]
-    pub fn adapter(&self) -> Adapter {
-        self.adapter.clone()
-    }
-
+    /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
         self.connection.clone()
     }
 
+    /// Returns the adapter that this device was created with.
+    #[inline]
+    pub fn adapter(&self) -> Adapter {
+        self.adapter.clone()
+    }
+
+    /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     #[inline]
     pub fn gl_api(&self) -> GLApi {
         GLApi::GL
