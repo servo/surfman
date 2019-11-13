@@ -9,7 +9,8 @@ use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use super::context::Context;
 use super::device::Device;
 
-#[derive(Debug)]
+use std::fmt::{self, Debug, Formatter};
+
 pub enum Surface<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     Default(Def::Surface),
     Alternate(Alt::Surface),
@@ -23,6 +24,19 @@ pub enum SurfaceTexture<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterfa
 pub enum NativeWidget<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     Default(<Def::Connection as ConnectionInterface>::NativeWidget),
     Alternate(<Alt::Connection as ConnectionInterface>::NativeWidget),
+}
+
+impl<Def, Alt> Debug for Surface<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Surface")
+    }
+}
+
+impl<Def, Alt> Debug for SurfaceTexture<Def, Alt> where Def: DeviceInterface,
+                                                        Alt: DeviceInterface {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture")
+    }
 }
 
 impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {

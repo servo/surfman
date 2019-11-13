@@ -194,9 +194,9 @@ impl Device {
             return Ok(());
         }
 
-        if let Framebuffer::Surface(surface) = mem::replace(&mut context.framebuffer,
-                                                            Framebuffer::None) {
-            self.destroy_surface(context, surface)?;
+        if let Framebuffer::Surface(mut surface) = mem::replace(&mut context.framebuffer,
+                                                                Framebuffer::None) {
+            self.destroy_surface(context, &mut surface)?;
         }
 
         unsafe {

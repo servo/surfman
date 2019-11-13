@@ -187,12 +187,16 @@ impl Device {
 
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, (Error, Surface)> {
+        let _guard = match self.temporarily_make_context_current(context) {
+            Ok(guard) => guard,
+            Err(err) => return Err((err, surface)),
+        };
+
         unsafe {
             GL_FUNCTIONS.with(|gl| {
-                let _guard = self.temporarily_make_context_current(context)?;
                 let egl_image = match surface.wayland_objects {
                     WaylandObjects::TextureImage { egl_image, .. } => egl_image,
-                    WaylandObjects::Window { .. } => return Err(Error::WidgetAttached),
+                    WaylandObjects::Window { .. } => return Err((Error::WidgetAttached, surface)),
                 };
                 let texture_object = surface::bind_egl_image_to_gl_texture(gl, egl_image);
                 Ok(SurfaceTexture { surface, texture_object, phantom: PhantomData })
@@ -250,7 +254,11 @@ impl Device {
                                    context: &mut Context,
                                    mut surface_texture: SurfaceTexture)
                                    -> Result<Surface, (Error, SurfaceTexture)> {
-        let _guard = self.temporarily_make_context_current(context)?;
+        let _guard = match self.temporarily_make_context_current(context) {
+            Ok(guard) => guard,
+            Err(err) => return Err((err, surface_texture)),
+        };
+
         GL_FUNCTIONS.with(|gl| {
             unsafe {
                 gl.DeleteTextures(1, &surface_texture.texture_object);

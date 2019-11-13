@@ -78,8 +78,8 @@ impl Device {
             return Ok(());
         }
 
-        if let Ok(Some(surface)) = self.unbind_surface_from_context(context) {
-            self.destroy_surface(context, surface)?;
+        if let Ok(Some(mut surface)) = self.unbind_surface_from_context(context) {
+            self.destroy_surface(context, &mut surface)?;
         }
 
         unsafe {
@@ -182,7 +182,7 @@ impl Device {
 
                 if is_current {
                     // We need to make ourselves current again, because the surface changed.
-                    self.make_context_current(context)?;
+                    drop(self.make_context_current(context));
                 }
 
                 Ok(())
