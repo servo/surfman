@@ -22,6 +22,9 @@ pub(crate) trait NativeContext {
     unsafe fn destroy(&mut self, egl_display: EGLDisplay);
 }
 
+/// Information needed to create a context. Some APIs call this a "config" or a "pixel format".
+/// 
+/// These are local to a device.
 #[derive(Clone)]
 pub struct ContextDescriptor {
     pub(crate) egl_config_id: EGLint,

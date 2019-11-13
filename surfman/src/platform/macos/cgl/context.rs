@@ -59,13 +59,22 @@ thread_local! {
     };
 }
 
-/// An OpenGL context on macOS.
+/// Represents an OpenGL rendering context.
 /// 
-/// OpenGL contexts must be explicitly destroyed with `Device::destroy_context()`, or a panic
-/// occurs.
+/// A context allows you to issue rendering commands to a surface. When initially created, a
+/// context has no attached surface, so rendering commands will fail or be ignored. Typically, you
+/// attach a surface to the context before rendering.
 /// 
-/// Contexts are specific to the device that created them and cannot be used with any other device.
-/// They are also not thread-safe, just as devices are not.
+/// Contexts take ownership of the surfaces attached to them. In order to mutate a surface in any
+/// way other than rendering to it (e.g. presenting it to a window, which causes a buffer swap), it
+/// must first be detached from its context. Each surface is associated with a single context upon
+/// creation and may not be rendered to from any other context. However, you can wrap a surface in
+/// a surface texture, which allows the surface to be read from another context.
+/// 
+/// OpenGL objects may not be shared across contexts directly, but surface textures effectively
+/// allow for sharing of texture data. Contexts are local to a single thread and device.
+/// 
+/// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
 pub struct Context {
     pub(crate) cgl_context: CGLContextObj,
     pub(crate) id: ContextID,
@@ -118,9 +127,9 @@ impl Clone for ContextDescriptor {
 unsafe impl Send for ContextDescriptor {}
 
 impl Device {
-    /// Creates an OpenGL context descriptor object from the given set of attributes.
+    /// Creates a context descriptor with the given attributes.
     /// 
-    /// This context descriptor can be later used to create an OpenGL context for rendering.
+    /// Context descriptors are local to this device.
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         let profile = if attributes.version.major >= 4 {
@@ -168,12 +177,10 @@ impl Device {
         }
     }
 
-    /// Creates an OpenGL context from the given descriptor.
+    /// Creates a new OpenGL context.
     /// 
-    /// The context must be destroyed with `Device::destroy_context()` when it is no longer needed,
-    /// or a panic will occur.
-    /// 
-    /// The context will be local to this device and cannot be used with any other.
+    /// The context initially has no surface attached. Until a surface is bound to it, rendering
+    /// commands will fail or have no effect.
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         // Take a lock so that we're only creating one context at a time. This serves two purposes:
         //
@@ -204,7 +211,9 @@ impl Device {
         }
     }
 
-    /// Destroys an OpenGL context.
+    /// Destroys a context.
+    /// 
+    /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
         if context.cgl_context.is_null() {
             return Ok(());
@@ -224,7 +233,7 @@ impl Device {
         Ok(())
     }
 
-    /// Returns the descriptor that the context was created with.
+    /// Returns the descriptor that this context was created with.
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
@@ -234,10 +243,9 @@ impl Device {
         }
     }
 
-    /// Makes the context the current rendering context for this thread.
+    /// Makes the context the current OpenGL context for this thread.
     /// 
-    /// After calling this method, OpenGL rendering commands will render via this context to the
-    /// currently-bound surface.
+    /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
             let err = CGLSetCurrentContext(context.cgl_context);
@@ -248,10 +256,10 @@ impl Device {
         }
     }
 
-    /// Makes this thread have no current rendering context.
+    /// Removes the current OpenGL context from this thread.
     /// 
-    /// You should not call OpenGL rendering commands after calling this method until another
-    /// context becomes current.
+    /// After calling this function, OpenGL rendering commands will fail until a new context is
+    /// made current.
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
             let err = CGLSetCurrentContext(ptr::null_mut());
@@ -269,9 +277,16 @@ impl Device {
         Ok(guard)
     }
 
-    /// Attaches a surface to this context.
+    /// Attaches a surface to a context for rendering.
     /// 
-    /// Once this context becomes current, OpenGL rendering commands will render to the surface.
+    /// This function takes ownership of the surface. The surface must have been created with this
+    /// context, or an `IncompatibleSurface` error is returned.
+    /// 
+    /// If this function is called with a surface already bound, a `SurfaceAlreadyBound` error is
+    /// returned. To avoid this error, first unbind the existing surface with
+    /// `unbind_surface_from_context`.
+    /// 
+    /// If an error is returned, the surface is returned alongside it.
     pub fn bind_surface_to_context(&self, context: &mut Context, new_surface: Surface)
                                    -> Result<(), (Error, Surface)> {
         match context.framebuffer {
@@ -288,11 +303,10 @@ impl Device {
         Ok(())
     }
 
-    /// Removes any attached surface from this context and returns it.
+    /// Removes and returns any attached surface from this context.
     /// 
-    /// Once you call this method, OpenGL rendering commands will fail until a new surface is
-    /// attached. (You can still use OpenGL commands that don't render to the default framebuffer,
-    /// though, as long as the context is current.)
+    /// Any pending OpenGL commands targeting this surface will be automatically flushed, so the
+    /// surface is safe to read from immediately when this function returns.
     pub fn unbind_surface_from_context(&self, context: &mut Context)
                                        -> Result<Option<Surface>, Error> {
         match context.framebuffer {
@@ -319,7 +333,7 @@ impl Device {
         }
     }
 
-    /// Returns the attributes that the given context descriptor represents.
+    /// Returns the attributes that the context descriptor was created with.
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
         unsafe {
@@ -352,16 +366,21 @@ impl Device {
         }
     }
 
-    /// Fetches the implementation address of an OpenGL symbol for this context.
+    /// Fetches the address of an OpenGL function associated with this context.
     /// 
-    /// The symbol name should include the `gl` prefix, if any. OpenGL symbols are local to a
-    /// context and should be reloaded if switching contexts.
+    /// OpenGL functions are local to a context. You should not use OpenGL functions on one context
+    /// with any other context.
+    /// 
+    /// This method is typically used with a function like `gl::load_with()` from the `gl` crate to
+    /// load OpenGL function pointers.
     #[inline]
     pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
         get_proc_address(symbol_name)
     }
 
-    /// Retrieves various information about the surface currently attached to this context, if any.
+    /// Returns various information about the surface attached to a context.
+    /// 
+    /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
@@ -370,10 +389,10 @@ impl Device {
         }
     }
 
-    /// Returns an ID that refers to this context.
+    /// Returns a unique ID representing a context.
     /// 
-    /// Context IDs are unique to all currently-live contexts. If a context is destroyed, then
-    /// subsequently-created contexts may reuse the same ID.
+    /// This ID is unique to all currently-allocated contexts. If you destroy a context and create
+    /// a new one, the new context might have the same ID as the destroyed one.
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
