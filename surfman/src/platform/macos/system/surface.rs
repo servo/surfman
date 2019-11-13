@@ -31,6 +31,17 @@ use std::thread;
 
 const BYTES_PER_PIXEL: i32 = 4;
 
+/// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
+/// displayed in a native widget or bound to a texture for reading.
+/// 
+/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
+/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
+/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
+/// widget but not bound to a texture.
+/// 
+/// Depending on the platform, each surface may be internally double-buffered.
+/// 
+/// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
 pub struct Surface {
     pub(crate) io_surface: IOSurface,
     pub(crate) size: Size2D<i32>,
@@ -67,12 +78,15 @@ struct VblankCond {
     cond: Condvar,
 }
 
+/// Wraps an `NSView` object.
 pub struct NSView(pub(crate) id);
 
+/// A native widget on macOS (`NSView`).
 pub struct NativeWidget {
     pub view: NSView,
 }
 
+/// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     surface: &'a mut Surface,
     stride: usize,
@@ -81,6 +95,7 @@ pub struct SurfaceDataGuard<'a> {
 }
 
 impl Device {
+    /// Creates either a generic or a widget surface, depending on the supplied surface type.
     pub fn create_surface(&mut self,
                           access: SurfaceAccess,
                           surface_type: SurfaceType<NativeWidget>)
@@ -159,15 +174,24 @@ impl Device {
         ViewInfo { layer, front_surface, display_link, next_vblank }
     }
 
+    /// Destroys a surface.
+    /// 
+    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
+    /// the `drop` method.
     pub fn destroy_surface(&self, surface: &mut Surface) -> Result<(), Error> {
         surface.destroyed = true;
         Ok(())
     }
 
+    /// Displays the contents of a widget surface on screen.
+    /// 
+    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
+    /// associated widgets until this method is called.
     pub fn present_surface(&self, surface: &mut Surface) -> Result<(), Error> {
         surface.present()
     }
 
+    /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
     pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
@@ -200,6 +224,7 @@ impl Device {
         }
     }
 
+    /// Returns various information about the surface.
     #[inline]
     pub fn surface_info(&self, surface: &Surface) -> SystemSurfaceInfo {
         SystemSurfaceInfo {
@@ -260,9 +285,11 @@ impl Surface {
 }
 
 impl<'a> SurfaceDataGuard<'a> {
+    /// Returns the number of bytes per row of the surface.
     #[inline]
     pub fn stride(&self) -> usize { self.stride }
 
+    /// Returns a mutable slice of the pixel data in this surface, in BGRA format.
     #[inline]
     pub fn data(&mut self) -> &mut [u8] {
         unsafe {

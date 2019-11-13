@@ -34,7 +34,6 @@ use std::thread;
 
 pub use crate::platform::generic::egl::context::ContextDescriptor;
 
-// FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
@@ -51,6 +50,8 @@ const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 /// `SurfaceTexture`.
 /// 
 /// Depending on the platform, each surface may be internally double-buffered.
+/// 
+/// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
 pub struct Surface {
     pub(crate) context_id: ContextID,
     pub(crate) size: Size2D<i32>,
@@ -60,7 +61,13 @@ pub struct Surface {
 
 /// Represents an OpenGL texture that wraps a surface.
 /// 
-/// It is undefined behavior to write to such a texture (e.g. by binding it to a framebuffer).
+/// Reading from the associated OpenGL texture reads from the surface. It is undefined behavior to
+/// write to such a texture (e.g. by binding it to a framebuffer and rendering to that
+/// framebuffer).
+/// 
+/// Surface textures are local to a context, but that context does not have to be the same context
+/// as that associated with the underlying surface. The texture must be destroyed with the
+/// `destroy_surface_texture()` method, or a panic will occur.
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_image: EGLImageKHR,
@@ -110,8 +117,8 @@ pub struct NativeWidget {
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
     /// 
-    /// Only the given context may ever render to the surface, but it can be wrapped up in a
-    /// `SurfaceTexture` for reading by other contexts.
+    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
+    /// up in a `SurfaceTexture` for reading by other contexts.
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
@@ -306,6 +313,9 @@ impl Device {
     /// 
     /// The supplied context must be the context the surface is associated with, or this returns
     /// an `IncompatibleSurface` error.
+    /// 
+    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
+    /// the `drop` method.
     pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
@@ -353,6 +363,13 @@ impl Device {
         Ok(())
     }
 
+    /// Destroys a surface texture and returns the underlying surface.
+    /// 
+    /// The supplied context must be the same context the surface texture was created with, or an
+    /// `IncompatibleSurfaceTexture` error is returned.
+    /// 
+    /// All surface textures must be explicitly destroyed with this function, or a panic will
+    /// occur.
     pub fn destroy_surface_texture(&self,
                                    context: &mut Context,
                                    mut surface_texture: SurfaceTexture)
@@ -375,17 +392,27 @@ impl Device {
         })
     }
 
+    /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
     pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
 
+    /// Returns the OpenGL texture target needed to read from this surface texture.
+    /// 
+    /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         SURFACE_GL_TEXTURE_TARGET
     }
 
+    /// Returns various information about the surface, including the framebuffer object needed to
+    /// render to this surface.
+    /// 
+    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
+    /// on the framebuffer object returned by this function. This framebuffer object may or not be
+    /// 0, the default framebuffer, depending on platform.
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
         SurfaceInfo {
             size: surface.size,
@@ -398,6 +425,9 @@ impl Device {
         }
     }
 
+    /// Returns the OpenGL texture object containing the contents of this surface.
+    /// 
+    /// It is only legal to read from, not write to, this texture object.
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
         surface_texture.texture_object
@@ -405,6 +435,7 @@ impl Device {
 }
 
 impl NativeWidget {
+    /// Creates a native widget type from an Android `NativeWindow`.
     #[inline]
     pub unsafe fn from_native_window(native_window: *mut ANativeWindow) -> NativeWidget {
         NativeWidget { native_window }
@@ -420,6 +451,7 @@ impl Surface {
     }
 }
 
+/// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
 }

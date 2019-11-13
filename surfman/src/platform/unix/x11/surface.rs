@@ -30,6 +30,22 @@ static GLX_PIXMAP_ATTRIBUTES: [c_int; 5] = [
     0,
 ];
 
+/// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
+/// displayed in a native widget or bound to a texture for reading.
+/// 
+/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
+/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
+/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
+/// widget but not bound to a texture.
+/// 
+/// Surfaces are specific to a given context and cannot be rendered to from any context other than
+/// the one they were created with. However, they can be *read* from any context on any thread (as
+/// long as that context shares the same adapter and connection), by wrapping them in a
+/// `SurfaceTexture`.
+/// 
+/// Depending on the platform, each surface may be internally double-buffered.
+/// 
+/// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
 pub struct Surface {
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
@@ -37,6 +53,15 @@ pub struct Surface {
     destroyed: bool,
 }
 
+/// Represents an OpenGL texture that wraps a surface.
+/// 
+/// Reading from the associated OpenGL texture reads from the surface. It is undefined behavior to
+/// write to such a texture (e.g. by binding it to a framebuffer and rendering to that
+/// framebuffer).
+/// 
+/// Surface textures are local to a context, but that context does not have to be the same context
+/// as that associated with the underlying surface. The texture must be destroyed with the
+/// `destroy_surface_texture()` method, or a panic will occur.
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) gl_texture: GLuint,
@@ -82,6 +107,10 @@ impl Drop for Surface {
 }
 
 impl Device {
+    /// Creates either a generic or a widget surface, depending on the supplied surface type.
+    /// 
+    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
+    /// up in a `SurfaceTexture` for reading by other contexts.
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
@@ -189,6 +218,13 @@ impl Device {
         })
     }
 
+    /// Destroys a surface.
+    /// 
+    /// The supplied context must be the context the surface is associated with, or this returns
+    /// an `IncompatibleSurface` error.
+    /// 
+    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
+    /// the `drop` method.
     pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
@@ -214,6 +250,13 @@ impl Device {
         Ok(())
     }
 
+    /// Destroys a surface texture and returns the underlying surface.
+    /// 
+    /// The supplied context must be the same context the surface texture was created with, or an
+    /// `IncompatibleSurfaceTexture` error is returned.
+    /// 
+    /// All surface textures must be explicitly destroyed with this function, or a panic will
+    /// occur.
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
                                    -> Result<Surface, (Error, SurfaceTexture)> {
         let glx_pixmap = match surface_texture.surface.drawables {
@@ -240,19 +283,30 @@ impl Device {
         })
     }
 
+    /// Returns the OpenGL texture target needed to read from this surface texture.
+    /// 
+    /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         SURFACE_GL_TEXTURE_TARGET
     }
 
+    /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
     pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
 
-    // TODO(pcwalton): Use the `XPRESENT` extension.
+    /// Displays the contents of a widget surface on screen.
+    /// 
+    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
+    /// associated widgets until this method is called.
+    /// 
+    /// The supplied context must match the context the surface was created with, or an
+    /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
+        // TODO(pcwalton): Use the `XPRESENT` extension.
         unsafe {
             GLX_FUNCTIONS.with(|glx| {
                 match surface.drawables {
@@ -266,6 +320,12 @@ impl Device {
         }
     }
 
+    /// Returns various information about the surface, including the framebuffer object needed to
+    /// render to this surface.
+    /// 
+    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
+    /// on the framebuffer object returned by this function. This framebuffer object may or not be
+    /// 0, the default framebuffer, depending on platform.
     #[inline]
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
         SurfaceInfo {
@@ -276,6 +336,9 @@ impl Device {
         }
     }
 
+    /// Returns the OpenGL texture object containing the contents of this surface.
+    /// 
+    /// It is only legal to read from, not write to, this texture object.
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
         surface_texture.gl_texture
@@ -291,6 +354,7 @@ impl Surface {
     }
 }
 
+/// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
 }
