@@ -37,6 +37,20 @@ pub use crate::platform::generic::egl::context::ContextDescriptor;
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
+/// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
+/// displayed in a native widget or bound to a texture for reading.
+/// 
+/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
+/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
+/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
+/// widget but not bound to a texture.
+/// 
+/// Surfaces are specific to a given context and cannot be rendered to from any context other than
+/// the one they were created with. However, they can be *read* from any context on any thread (as
+/// long as that context shares the same adapter and connection), by wrapping them in a
+/// `SurfaceTexture`.
+/// 
+/// Depending on the platform, each surface may be internally double-buffered.
 pub struct Surface {
     pub(crate) context_id: ContextID,
     pub(crate) size: Size2D<i32>,
@@ -44,6 +58,9 @@ pub struct Surface {
     pub(crate) destroyed: bool,
 }
 
+/// Represents an OpenGL texture that wraps a surface.
+/// 
+/// It is undefined behavior to write to such a texture (e.g. by binding it to a framebuffer).
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_image: EGLImageKHR,
@@ -80,11 +97,21 @@ impl Drop for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
 pub struct NativeWidget {
     pub(crate) native_window: *mut ANativeWindow,
 }
 
 impl Device {
+    /// Creates either a generic or a widget surface, depending on the supplied surface type.
+    /// 
+    /// Only the given context may ever render to the surface, but it can be wrapped up in a
+    /// `SurfaceTexture` for reading by other contexts.
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
@@ -190,6 +217,16 @@ impl Device {
         })
     }
 
+    /// Creates a surface texture from an existing generic surface for use with the given context.
+    /// 
+    /// The surface texture is local to the supplied context and takes ownership of the surface.
+    /// Destroying the surface texture allows you to retrieve the surface again.
+    /// 
+    /// *The supplied context does not have to be the same context that the surface is associated
+    /// with.* This allows you to render to a surface in one context and sample from that surface
+    /// in another context.
+    /// 
+    /// Calling this method on a widget surface returns a `WidgetAttached` error.
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, Error> {
         unsafe {
@@ -214,7 +251,18 @@ impl Device {
         }
     }
 
+    /// Displays the contents of a widget surface on screen.
+    /// 
+    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
+    /// associated widgets until this method is called.
+    /// 
+    /// The supplied context must match the context the surface was created with, or an
+    /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
                 match surface.objects {
@@ -254,11 +302,13 @@ impl Device {
         egl_image
     }
 
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+    /// Destroys a surface.
+    /// 
+    /// The supplied context must be the context the surface is associated with, or this returns
+    /// an `IncompatibleSurface` error.
+    pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
-            // Leak the surface, and return an error.
-            surface.destroyed = true;
             return Err(Error::IncompatibleSurface);
         }
 
@@ -306,7 +356,7 @@ impl Device {
     pub fn destroy_surface_texture(&self,
                                    context: &mut Context,
                                    mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         let _guard = self.temporarily_make_context_current(context);
         GL_FUNCTIONS.with(|gl| {
             unsafe {

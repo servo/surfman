@@ -65,42 +65,46 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
     pub fn create_surface_texture(&self,
                                   context: &mut Context<Def, Alt>,
                                   surface: Surface<Def, Alt>)
-                                  -> Result<SurfaceTexture<Def, Alt>, Error> {
+                                  -> Result<SurfaceTexture<Def, Alt>, (Error, Surface<Def, Alt>)> {
         match (self, &mut *context) {
             (&Device::Default(ref device), &mut Context::Default(ref mut context)) => {
                 match surface {
                     Surface::Default(surface) => {
-                        device.create_surface_texture(context, surface)
-                              .map(SurfaceTexture::Default)
+                        match device.create_surface_texture(context, surface) {
+                            Ok(surface_texture) => Ok(SurfaceTexture::Default(surface_texture)),
+                            Err((err, surface)) => Err((err, Surface::Default(surface))),
+                        }
                     }
-                    _ => Err(Error::IncompatibleSurface),
+                    _ => Err((Error::IncompatibleSurface, surface)),
                 }
             }
             (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
                 match surface {
                     Surface::Alternate(surface) => {
-                        device.create_surface_texture(context, surface)
-                              .map(SurfaceTexture::Alternate)
+                        match device.create_surface_texture(context, surface) {
+                            Ok(surface_texture) => Ok(SurfaceTexture::Alternate(surface_texture)),
+                            Err((err, surface)) => Err((err, Surface::Alternate(surface))),
+                        }
                     }
-                    _ => Err(Error::IncompatibleSurface),
+                    _ => Err((Error::IncompatibleSurface, surface)),
                 }
             }
-            _ => Err(Error::IncompatibleContext),
+            _ => Err((Error::IncompatibleContext, surface)),
         }
     }
 
-    pub fn destroy_surface(&self, context: &mut Context<Def, Alt>, surface: Surface<Def, Alt>)
+    pub fn destroy_surface(&self, context: &mut Context<Def, Alt>, surface: &mut Surface<Def, Alt>)
                            -> Result<(), Error> {
         match (self, &mut *context) {
             (&Device::Default(ref device), &mut Context::Default(ref mut context)) => {
-                match surface {
-                    Surface::Default(surface) => device.destroy_surface(context, surface),
+                match *surface {
+                    Surface::Default(ref mut surface) => device.destroy_surface(context, surface),
                     _ => Err(Error::IncompatibleSurface),
                 }
             }
             (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
-                match surface {
-                    Surface::Alternate(surface) => device.destroy_surface(context, surface),
+                match *surface {
+                    Surface::Alternate(ref mut surface) => device.destroy_surface(context, surface),
                     _ => Err(Error::IncompatibleSurface),
                 }
             }
@@ -111,27 +115,36 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
     pub fn destroy_surface_texture(&self,
                                    context: &mut Context<Def, Alt>,
                                    surface_texture: SurfaceTexture<Def, Alt>)
-                                   -> Result<Surface<Def, Alt>, Error> {
+                                   -> Result<Surface<Def, Alt>,
+                                             (Error, SurfaceTexture<Def, Alt>)> {
         match (self, &mut *context) {
             (&Device::Default(ref device), &mut Context::Default(ref mut context)) => {
                 match surface_texture {
                     SurfaceTexture::Default(surface_texture) => {
-                        device.destroy_surface_texture(context, surface_texture)
-                              .map(Surface::Default)
+                        match device.destroy_surface_texture(context, surface_texture) {
+                            Ok(surface) => Ok(Surface::Default(surface)),
+                            Err((err, surface_texture)) => {
+                                Err((err, SurfaceTexture::Default(surface_texture)))
+                            }
+                        }
                     }
-                    _ => Err(Error::IncompatibleSurfaceTexture),
+                    _ => Err((Error::IncompatibleSurfaceTexture, surface_texture)),
                 }
             }
             (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
                 match surface_texture {
                     SurfaceTexture::Alternate(surface_texture) => {
-                        device.destroy_surface_texture(context, surface_texture)
-                              .map(Surface::Alternate)
+                        match device.destroy_surface_texture(context, surface_texture) {
+                            Ok(surface) => Ok(Surface::Alternate(surface)),
+                            Err((err, surface_texture)) => {
+                                Err((err, SurfaceTexture::Alternate(surface_texture)))
+                            }
+                        }
                     }
-                    _ => Err(Error::IncompatibleSurfaceTexture),
+                    _ => Err((Error::IncompatibleSurfaceTexture, surface_texture)),
                 }
             }
-            _ => Err(Error::IncompatibleContext),
+            _ => Err((Error::IncompatibleContext, surface_texture)),
         }
     }
 
@@ -188,4 +201,3 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
         }
     }
 }
-

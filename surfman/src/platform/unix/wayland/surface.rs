@@ -68,6 +68,12 @@ impl Debug for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
 impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
@@ -180,7 +186,7 @@ impl Device {
     }
 
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
         unsafe {
             GL_FUNCTIONS.with(|gl| {
                 let _guard = self.temporarily_make_context_current(context)?;
@@ -194,11 +200,9 @@ impl Device {
         }
     }
 
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+    pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
-            // Leak the surface, and return an error.
-            surface.destroyed = true;
             return Err(Error::IncompatibleSurface);
         }
 
@@ -245,7 +249,7 @@ impl Device {
     pub fn destroy_surface_texture(&self,
                                    context: &mut Context,
                                    mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         let _guard = self.temporarily_make_context_current(context)?;
         GL_FUNCTIONS.with(|gl| {
             unsafe {

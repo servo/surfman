@@ -68,6 +68,12 @@ impl Drop for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
 pub(crate) enum Win32Objects {
     Window,
     Pbuffer {
@@ -319,11 +325,9 @@ impl Device {
         })
     }
 
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+    pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
-            // Leak!
-            surface.egl_surface = egl::NO_SURFACE;
             return Err(Error::IncompatibleSurface);
         }
 
@@ -343,7 +347,7 @@ impl Device {
     }
 
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         unsafe {
             GL_FUNCTIONS.with(|gl| gl.DeleteTextures(1, &surface_texture.gl_texture));
             surface_texture.gl_texture = 0;

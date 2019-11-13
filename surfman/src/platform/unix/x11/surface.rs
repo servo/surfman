@@ -67,6 +67,12 @@ impl Debug for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
 impl Drop for Surface {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
@@ -133,7 +139,7 @@ impl Device {
     }
 
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
 
         GLX_FUNCTIONS.with(|glx| {
             GL_FUNCTIONS.with(|gl| {
@@ -141,8 +147,7 @@ impl Device {
                 unsafe {
                     let glx_pixmap = match surface.drawables {
                         SurfaceDrawables::Window { .. } => {
-                            drop(self.destroy_surface(context, surface));
-                            return Err(Error::WidgetAttached);
+                            return Err((Error::WidgetAttached, surface));
                         }
                         SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
                     };
@@ -184,11 +189,9 @@ impl Device {
         })
     }
 
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+    pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
-            // Avoid a panic and just leak the surface.
-            surface.destroyed = true;
             return Err(Error::IncompatibleSurface)
         }
 
@@ -212,7 +215,7 @@ impl Device {
     }
 
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         let glx_pixmap = match surface_texture.surface.drawables {
             SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
             SurfaceDrawables::Window { .. } => unreachable!(),

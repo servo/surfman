@@ -133,7 +133,7 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
 
     #[inline]
     fn bind_surface_to_context(&self, context: &mut Context<Def, Alt>, surface: Surface<Def, Alt>)
-                               -> Result<(), Error> {
+                               -> Result<(), (Error, Surface<Def, Alt>)> {
         Device::bind_surface_to_context(self, context, surface)
     }
 
@@ -167,12 +167,12 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
 
     #[inline]
     fn create_surface_texture(&self, context: &mut Context<Def, Alt>, surface: Surface<Def, Alt>)
-                              -> Result<SurfaceTexture<Def, Alt>, Error> {
+                              -> Result<SurfaceTexture<Def, Alt>, (Error, Surface<Def, Alt>)> {
         Device::create_surface_texture(self, context, surface)
     }
 
     #[inline]
-    fn destroy_surface(&self, context: &mut Context<Def, Alt>, surface: Surface<Def, Alt>)
+    fn destroy_surface(&self, context: &mut Context<Def, Alt>, surface: &mut Surface<Def, Alt>)
                        -> Result<(), Error> {
         Device::destroy_surface(self, context, surface)
     }
@@ -181,7 +181,7 @@ impl<Def, Alt> DeviceInterface for Device<Def, Alt>
     fn destroy_surface_texture(&self,
                                context: &mut Context<Def, Alt>,
                                surface_texture: SurfaceTexture<Def, Alt>)
-                               -> Result<Surface<Def, Alt>, Error> {
+                               -> Result<Surface<Def, Alt>, (Error, SurfaceTexture<Def, Alt>)> {
         Device::destroy_surface_texture(self, context, surface_texture)
     }
 

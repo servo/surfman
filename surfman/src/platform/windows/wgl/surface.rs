@@ -85,6 +85,12 @@ impl Drop for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
 pub struct NativeWidget {
     pub(crate) window_handle: HWND,
 }
@@ -238,7 +244,7 @@ impl Device {
         }
     }
 
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+    pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         let dx_interop_functions =
             WGL_EXTENSION_FUNCTIONS.dx_interop_functions
@@ -246,8 +252,6 @@ impl Device {
                                    .expect("How did you make a surface without DX interop?");
 
         if context.id != surface.context_id {
-            // Leak the surface, and return an error.
-            surface.destroyed = true;
             return Err(Error::IncompatibleSurface);
         }
 
@@ -285,8 +289,8 @@ impl Device {
         Ok(())
     }
 
-    pub fn create_surface_texture(&self, context: &mut Context, mut surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+    pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
         let dxgi_share_handle = match surface.win32_objects {
             Win32Objects::Widget { .. } => {
                 surface.destroyed = true;
@@ -365,7 +369,7 @@ impl Device {
     pub fn destroy_surface_texture(&self,
                                    context: &mut Context,
                                    mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         let dx_interop_functions =
             WGL_EXTENSION_FUNCTIONS.dx_interop_functions
                                    .as_ref()

@@ -49,6 +49,12 @@ impl Drop for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
 impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
@@ -64,7 +70,7 @@ impl Device {
     }
 
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
         unsafe {
             drop(self.make_context_current(context));
 
@@ -100,7 +106,7 @@ impl Device {
         }
     }
 
-    pub fn destroy_surface(&self, _: &mut Context, surface: Surface) -> Result<(), Error> {
+    pub fn destroy_surface(&self, _: &mut Context, surface: &mut Surface) -> Result<(), Error> {
         unsafe {
             (*surface.pixels.get()).clear();
         }
@@ -108,7 +114,7 @@ impl Device {
     }
 
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         GL_FUNCTIONS.with(|gl| {
             unsafe {
                 gl.BindTexture(gl::TEXTURE_2D, 0);

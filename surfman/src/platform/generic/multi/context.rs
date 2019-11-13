@@ -98,23 +98,29 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
     pub fn bind_surface_to_context(&self,
                                    context: &mut Context<Def, Alt>,
                                    surface: Surface<Def, Alt>)
-                                   -> Result<(), Error> {
+                                   -> Result<(), (Error, Surface<Def, Alt>)> {
         match (self, &mut *context) {
             (&Device::Default(ref device), &mut Context::Default(ref mut context)) => {
                 match surface {
-                    Surface::Default(surface) => device.bind_surface_to_context(context, surface),
-                    _ => Err(Error::IncompatibleSurface),
+                    Surface::Default(surface) => {
+                        device.bind_surface_to_context(context, surface).map_err(|(err, surface)| {
+                            (err, Surface::Default(surface))
+                        })
+                    }
+                    _ => Err((Error::IncompatibleSurface, surface)),
                 }
             }
             (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
                 match surface {
                     Surface::Alternate(surface) => {
-                        device.bind_surface_to_context(context, surface)
+                        device.bind_surface_to_context(context, surface).map_err(|(err, surface)| {
+                            (err, Surface::Alternate(surface))
+                        })
                     }
-                    _ => Err(Error::IncompatibleSurface),
+                    _ => Err((Error::IncompatibleSurface, surface)),
                 }
             }
-            _ => Err(Error::IncompatibleContext),
+            _ => Err((Error::IncompatibleContext, surface)),
         }
     }
 

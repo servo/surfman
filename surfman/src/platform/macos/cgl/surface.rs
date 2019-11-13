@@ -43,6 +43,12 @@ impl Debug for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
 impl Device {
     pub fn create_surface(&mut self,
                           context: &Context,
@@ -90,9 +96,9 @@ impl Device {
     }
 
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
         if surface.system_surface.view_info.is_some() {
-            return Err(Error::WidgetAttached);
+            return Err((Error::WidgetAttached, surface));
         }
 
         let texture_object = self.bind_to_gl_texture(&surface.system_surface.io_surface,    
@@ -136,13 +142,10 @@ impl Device {
         })
     }
 
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+    pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         GL_FUNCTIONS.with(|gl| {
             if context.id != surface.context_id {
-                // Leak the surface, and return an error.
-                surface.framebuffer_object = 0;
-                surface.renderbuffers.leak();
                 return Err(Error::IncompatibleSurface);
             }
 
@@ -155,12 +158,12 @@ impl Device {
                 surface.texture_object = 0;
             }
 
-            self.0.destroy_surface(surface.system_surface)
+            self.0.destroy_surface(&mut surface.system_surface)
         })
     }
 
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         GL_FUNCTIONS.with(|gl| {
             unsafe {
                 gl.DeleteTextures(1, &surface_texture.texture_object);

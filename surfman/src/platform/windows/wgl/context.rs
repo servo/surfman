@@ -406,15 +406,15 @@ impl Device {
     }
 
     pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
-                                   -> Result<(), Error> {
+                                   -> Result<(), (Error, Surface)> {
         if context.id != surface.context_id {
-            return Err(Error::IncompatibleSurface);
+            return Err((Error::IncompatibleSurface, surface));
         }
 
         match context.framebuffer {
             Framebuffer::None => {}
-            Framebuffer::External { .. } => return Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(_) => return Err(Error::SurfaceAlreadyBound),
+            Framebuffer::External { .. } => return Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
         }
 
         let is_current = self.context_is_current(context);

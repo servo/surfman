@@ -210,9 +210,9 @@ impl Device {
             return Ok(());
         }
 
-        if let Framebuffer::Surface(surface) = mem::replace(&mut context.framebuffer,
-                                                            Framebuffer::None) {
-            self.destroy_surface(context, surface)?;
+        if let Framebuffer::Surface(mut surface) = mem::replace(&mut context.framebuffer,
+                                                                Framebuffer::None) {
+            self.destroy_surface(context, &mut surface)?;
         }
 
         unsafe {
@@ -273,15 +273,15 @@ impl Device {
     /// 
     /// Once this context becomes current, OpenGL rendering commands will render to the surface.
     pub fn bind_surface_to_context(&self, context: &mut Context, new_surface: Surface)
-                                   -> Result<(), Error> {
+                                   -> Result<(), (Error, Surface)> {
         match context.framebuffer {
-            Framebuffer::External => return Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(_) => return Err(Error::SurfaceAlreadyBound),
+            Framebuffer::External => return Err((Error::ExternalRenderTarget, new_surface)),
+            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, new_surface)),
             Framebuffer::None => {}
         }
 
         if new_surface.context_id != context.id {
-            return Err(Error::IncompatibleSurface);
+            return Err((Error::IncompatibleSurface, new_surface));
         }
 
         context.framebuffer = Framebuffer::Surface(new_surface);

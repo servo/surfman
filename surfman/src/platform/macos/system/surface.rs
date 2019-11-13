@@ -159,7 +159,7 @@ impl Device {
         ViewInfo { layer, front_surface, display_link, next_vblank }
     }
 
-    pub fn destroy_surface(&self, mut surface: Surface) -> Result<(), Error> {
+    pub fn destroy_surface(&self, surface: &mut Surface) -> Result<(), Error> {
         surface.destroyed = true;
         Ok(())
     }

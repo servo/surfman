@@ -33,7 +33,7 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
                                      -> ContextAttributes;
     fn get_proc_address(&self, context: &Self::Context, symbol_name: &str) -> *const c_void;
     fn bind_surface_to_context(&self, context: &mut Self::Context, surface: Self::Surface)
-                               -> Result<(), Error>;
+                               -> Result<(), (Error, Self::Surface)>;
     fn unbind_surface_from_context(&self, context: &mut Self::Context)
                                    -> Result<Option<Self::Surface>, Error>;
     fn context_id(&self, context: &Self::Context) -> ContextID;
@@ -47,13 +47,13 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
         surface_type: SurfaceType<<Self::Connection as ConnectionInterface>::NativeWidget>)
         -> Result<Self::Surface, Error>;
     fn create_surface_texture(&self, context: &mut Self::Context, surface: Self::Surface)
-                              -> Result<Self::SurfaceTexture, Error>;
-    fn destroy_surface(&self, context: &mut Self::Context, surface: Self::Surface)
+                              -> Result<Self::SurfaceTexture, (Error, Self::Surface)>;
+    fn destroy_surface(&self, context: &mut Self::Context, surface: &mut Self::Surface)
                        -> Result<(), Error>;
     fn destroy_surface_texture(&self,
                                context: &mut Self::Context,
                                surface_texture: Self::SurfaceTexture)
-                               -> Result<Self::Surface, Error>;
+                               -> Result<Self::Surface, (Error, Self::SurfaceTexture)>;
     fn surface_gl_texture_target(&self) -> GLenum;
     fn present_surface(&self, context: &Self::Context, surface: &mut Self::Surface)
                        -> Result<(), Error>;
