@@ -2,6 +2,7 @@
 //
 //! Various errors that methods can produce.
 
+/// Various errors that methods can produce.
 #[derive(Debug)]
 pub enum Error {
     /// The method failed for a miscellaneous reason.

@@ -110,6 +110,7 @@ impl Debug for SurfaceTexture {
     }
 }
 
+/// An Android native window.
 pub struct NativeWidget {
     pub(crate) native_window: *mut ANativeWindow,
 }

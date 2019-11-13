@@ -83,6 +83,7 @@ pub struct NSView(pub(crate) id);
 
 /// A native widget on macOS (`NSView`).
 pub struct NativeWidget {
+    /// The `NSView` object.
     pub view: NSView,
 }
 

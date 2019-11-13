@@ -43,6 +43,7 @@ const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
 static OPENGL_FRAMEWORK_IDENTIFIER: &'static str = "com.apple.opengl";
 
 thread_local! {
+    #[doc(hidden)]
     pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
 }
 

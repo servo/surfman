@@ -17,7 +17,9 @@ use std::os::raw::c_void;
 ///
 /// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
 pub enum Adapter<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    /// The default adapter type.
     Default(<Def::Connection as ConnectionInterface>::Adapter),
+    /// The alternate adapter type.
     Alternate(<Alt::Connection as ConnectionInterface>::Adapter),
 }
 
@@ -25,7 +27,9 @@ pub enum Adapter<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
 ///
 /// Devices contain most of the relevant surface management methods.
 pub enum Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    /// The default device type.
     Default(Def),
+    /// The alternate device type.
     Alternate(Alt),
 }
 

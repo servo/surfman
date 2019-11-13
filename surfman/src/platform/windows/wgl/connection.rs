@@ -15,7 +15,7 @@ use winit::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::windows::WindowExt;
 
-/// A no-op connection.
+/// Represents a connection to the display server.
 #[derive(Clone)]
 pub struct Connection;
 

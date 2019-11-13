@@ -28,7 +28,9 @@ use std::fmt::{self, Debug, Formatter};
 /// 
 /// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
 pub enum Surface<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    /// The default surface type.
     Default(Def::Surface),
+    /// The alternate surface type.
     Alternate(Alt::Surface),
 }
 
@@ -42,12 +44,17 @@ pub enum Surface<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
 /// as that associated with the underlying surface. The texture must be destroyed with the
 /// `destroy_surface_texture()` method, or a panic will occur.
 pub enum SurfaceTexture<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    /// The default surface texture type.
     Default(Def::SurfaceTexture),
+    /// The alternate surface texture type.
     Alternate(Alt::SurfaceTexture),
 }
 
+/// A native widget/window type that can dynamically switch between backends.
 pub enum NativeWidget<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    /// The default native widget type.
     Default(<Def::Connection as ConnectionInterface>::NativeWidget),
+    /// The alternate native widget type.
     Alternate(<Alt::Connection as ConnectionInterface>::NativeWidget),
 }
 

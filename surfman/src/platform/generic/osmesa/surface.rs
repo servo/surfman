@@ -229,13 +229,6 @@ impl Surface {
     }
 }
 
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.gl_texture
-    }
-}
-
 /// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,

@@ -13,7 +13,7 @@ use super::device::{Adapter, Device};
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
-/// A no-op connection.
+/// A connection to the display server.
 #[derive(Clone)]
 pub struct Connection(pub SystemConnection);
 

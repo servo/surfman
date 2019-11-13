@@ -11,12 +11,15 @@ use super::surface::NativeWidget;
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
+/// A connection to the display server.
 #[derive(Clone)]
 pub enum Connection<Def, Alt> where Def: DeviceInterface,
                                     Alt: DeviceInterface,
                                     Def::Connection: ConnectionInterface,
                                     Alt::Connection: ConnectionInterface {
+    /// The default connection to the display server.
     Default(Def::Connection),
+    /// The alternate connection to the display server.
     Alternate(Alt::Connection),
 }
 

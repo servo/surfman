@@ -26,7 +26,9 @@ use std::os::raw::c_void;
 /// 
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
 pub enum Context<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    /// The default rendering context type.
     Default(Def::Context),
+    /// The alternate rendering context type.
     Alternate(Alt::Context),
 }
 
@@ -35,7 +37,9 @@ pub enum Context<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
 /// These are local to a device.
 #[derive(Clone)]
 pub enum ContextDescriptor<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    /// The default context descriptor type.
     Default(Def::ContextDescriptor),
+    /// The alternate context descriptor type.
     Alternate(Alt::ContextDescriptor),
 }
 

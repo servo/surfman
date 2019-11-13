@@ -14,7 +14,6 @@ use osmesa_sys::{OSMESA_PROFILE, OSMESA_STENCIL_BITS, OSMesaContext, OSMesaCreat
 use osmesa_sys::{OSMesaDestroyContext, OSMesaGetColorBuffer, OSMesaGetCurrentContext};
 use osmesa_sys::{OSMesaGetDepthBuffer, OSMesaGetIntegerv, OSMesaGetProcAddress, OSMesaMakeCurrent};
 use std::ffi::CString;
-use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
@@ -22,6 +21,7 @@ use std::sync::Arc;
 use std::thread;
 
 thread_local! {
+    #[doc(hidden)]
     pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
 }
 
@@ -134,9 +134,9 @@ impl Device {
             return Ok(());
         }
 
-        if let Framebuffer::Surface(surface) = mem::replace(&mut context.framebuffer,
-                                                            Framebuffer::None) {
-            self.destroy_surface(context, surface)?;
+        if let Framebuffer::Surface(mut surface) = mem::replace(&mut context.framebuffer,
+                                                                Framebuffer::None) {
+            self.destroy_surface(context, &mut surface)?;
         }
 
         unsafe {
@@ -377,27 +377,6 @@ impl NativeContext for OwnedOSMesaContext {
     unsafe fn destroy(&mut self, _: &Device) {
         assert!(!self.is_destroyed());
         OSMesaDestroyContext(self.osmesa_context);
-        self.osmesa_context = ptr::null_mut();
-    }
-}
-
-struct UnsafeOSMesaContextRef {
-    osmesa_context: OSMesaContext,
-}
-
-impl NativeContext for UnsafeOSMesaContextRef {
-    #[inline]
-    fn osmesa_context(&self) -> OSMesaContext {
-        self.osmesa_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.osmesa_context.is_null()
-    }
-
-    unsafe fn destroy(&mut self, _: &Device) {
-        assert!(!self.is_destroyed());
         self.osmesa_context = ptr::null_mut();
     }
 }

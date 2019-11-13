@@ -8,6 +8,8 @@
 //! This is in contrast to crates like SDL, GLFW, winit, and Glutin, all of which have a broader
 //! focus in that they manage windowing and the event loop as well.
 
+#![warn(missing_docs)]
+
 #[macro_use]
 extern crate bitflags;
 #[macro_use]

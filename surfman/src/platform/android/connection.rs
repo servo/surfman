@@ -7,7 +7,7 @@
 use crate::Error;
 use super::device::{Adapter, Device};
 
-/// A no-op connection.
+/// A connection to the display server.
 #[derive(Clone)]
 pub struct Connection;
 
