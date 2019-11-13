@@ -36,10 +36,12 @@ thread_local! {
 }
 
 thread_local! {
+    #[doc(hidden)]
     pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
 }
 
 thread_local! {
+    #[doc(hidden)]
     pub static GLX_FUNCTIONS: Glx = Glx::load_with(get_proc_address);
 }
 
@@ -557,7 +559,7 @@ unsafe fn get_fb_config_from_id(display: *mut Display,
     })
 }
 
-unsafe extern "C" fn xlib_error_handler(display: *mut Display, event: *mut XErrorEvent) -> c_int {
+unsafe extern "C" fn xlib_error_handler(_: *mut Display, event: *mut XErrorEvent) -> c_int {
     LAST_X_ERROR_CODE.with(|error_code| error_code.set((*event).error_code));
     0
 }

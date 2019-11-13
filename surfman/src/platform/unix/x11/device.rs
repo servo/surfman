@@ -1,6 +1,6 @@
 // surfman/surfman/src/platform/unix/x11/device.rs
 //
-//! A wrapper around X11 Displays.
+//! Thread-local handles to devices.
 
 use crate::glx::types::Display as GlxDisplay;
 use crate::{Error, GLApi};

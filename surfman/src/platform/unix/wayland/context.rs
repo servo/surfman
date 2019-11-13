@@ -1,6 +1,6 @@
 // surfman/surfman/src/platform/unix/wayland/context.rs
 //
-//! A wrapper around Wayland `EGLContext`s.
+//! OpenGL rendering contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLConfig, EGLint};
@@ -22,6 +22,7 @@ use std::thread;
 pub use crate::platform::generic::egl::context::ContextDescriptor;
 
 thread_local! {
+    #[doc(hidden)]
     pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
 }
 

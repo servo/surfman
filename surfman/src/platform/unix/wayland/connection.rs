@@ -19,6 +19,7 @@ use winit::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
 
+/// A connection to the Wayland server.
 pub struct Connection {
     pub(crate) native_connection: Box<dyn NativeConnection>,
 }

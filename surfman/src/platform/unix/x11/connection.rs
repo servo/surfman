@@ -16,6 +16,7 @@ use winit::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
 
+/// A connection to the X11 display server.
 pub struct Connection {
     pub(crate) native_display: Box<dyn NativeDisplay>,
 }

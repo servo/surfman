@@ -14,8 +14,11 @@ static MESA_DRI_PRIME_ENV_VAR: &'static str = "DRI_PRIME";
 /// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
 #[derive(Clone, Debug)]
 pub enum Adapter {
+    #[doc(hidden)]
     Hardware,
+    #[doc(hidden)]
     HardwarePrime,
+    #[doc(hidden)]
     Software,
 }
 

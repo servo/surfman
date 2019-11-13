@@ -66,6 +66,7 @@ pub struct SurfaceTexture {
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
+/// A wrapper for a Wayland surface, with associated size.
 #[derive(Clone)]
 pub struct NativeWidget {
     pub(crate) wayland_surface: *mut wl_proxy,

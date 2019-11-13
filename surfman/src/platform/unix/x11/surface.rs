@@ -1,6 +1,6 @@
 // surfman/src/platform/unix/x11/surface.rs
 //
-//! Wrapper for GL-renderable pixmaps on X11.
+//! Hardware buffers of pixels.
 
 use crate::context::ContextID;
 use crate::gl::types::{GLenum, GLint, GLuint};
@@ -79,6 +79,7 @@ pub(crate) enum SurfaceDrawables {
     },
 }
 
+/// A wrapper for an X11 `Window`.
 #[derive(Clone)]
 pub struct NativeWidget {
     pub(crate) window: Window,
@@ -167,6 +168,16 @@ impl Device {
         }
     }
 
+    /// Creates a surface texture from an existing generic surface for use with the given context.
+    /// 
+    /// The surface texture is local to the supplied context and takes ownership of the surface.
+    /// Destroying the surface texture allows you to retrieve the surface again.
+    /// 
+    /// *The supplied context does not have to be the same context that the surface is associated
+    /// with.* This allows you to render to a surface in one context and sample from that surface
+    /// in another context.
+    /// 
+    /// Calling this method on a widget surface returns a `WidgetAttached` error.
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, (Error, Surface)> {
 
