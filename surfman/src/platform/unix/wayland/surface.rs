@@ -148,10 +148,10 @@ impl Device {
                               ptr::null());
 
                 // Create our image.
-                let egl_display = self.native_connection.egl_display();
+                let egl_display = self.native_connection.egl_display;
                 let egl_image =
                     (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(egl_display,
-                                                             context.native_context.egl_context(),
+                                                             context.egl_context,
                                                              EGL_GL_TEXTURE_2D_KHR,
                                                              texture_object as EGLClientBuffer,
                                                              egl_image_attribs.as_ptr());
@@ -200,7 +200,7 @@ impl Device {
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
         EGL_FUNCTIONS.with(|egl| {
-            let egl_surface = egl.CreateWindowSurface(self.native_connection.egl_display(),
+            let egl_surface = egl.CreateWindowSurface(self.native_connection.egl_display,
                                                       egl_config,
                                                       egl_window as *const c_void,
                                                       ptr::null());
@@ -271,7 +271,7 @@ impl Device {
                         *framebuffer_object = 0;
                         renderbuffers.destroy(gl);
 
-                        let egl_display = self.native_connection.egl_display();
+                        let egl_display = self.native_connection.egl_display;
                         let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
                                                                                *egl_image);
                         assert_ne!(result, egl::FALSE);
@@ -283,7 +283,7 @@ impl Device {
                 }
                 WaylandObjects::Window { ref mut egl_surface, ref mut egl_window } => {
                     EGL_FUNCTIONS.with(|egl| {
-                        egl.DestroySurface(self.native_connection.egl_display(), *egl_surface);
+                        egl.DestroySurface(self.native_connection.egl_display, *egl_surface);
                         *egl_surface = egl::NO_SURFACE;
                     });
 
@@ -335,7 +335,7 @@ impl Device {
             match surface.wayland_objects {
                 WaylandObjects::Window { egl_surface, .. } => {
                     EGL_FUNCTIONS.with(|egl| {
-                        egl.SwapBuffers(self.native_connection.egl_display(), egl_surface);
+                        egl.SwapBuffers(self.native_connection.egl_display, egl_surface);
                     });
                     Ok(())
                 }

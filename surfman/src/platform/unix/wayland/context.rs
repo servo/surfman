@@ -3,11 +3,10 @@
 //! OpenGL rendering contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::egl::types::{EGLConfig, EGLint};
+use crate::egl::types::{EGLConfig, EGLContext, EGLint};
 use crate::egl;
 use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard};
-use crate::platform::generic::egl::context::{NativeContext, OwnedEGLContext};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::surface::Framebuffer;
@@ -19,7 +18,7 @@ use std::mem;
 use std::os::raw::c_void;
 use std::thread;
 
-pub use crate::platform::generic::egl::context::ContextDescriptor;
+pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
 
 thread_local! {
     #[doc(hidden)]
@@ -43,15 +42,16 @@ thread_local! {
 /// 
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
 pub struct Context {
-    pub(crate) native_context: Box<dyn NativeContext>,
+    pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
     framebuffer: Framebuffer<Surface>,
+    context_is_owned: bool,
 }
 
 impl Drop for Context {
     #[inline]
     fn drop(&mut self) {
-        if !self.native_context.is_destroyed() && !thread::panicking() {
+        if self.egl_context != egl::NO_CONTEXT && !thread::panicking() {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
@@ -68,7 +68,7 @@ impl Device {
         self.adapter.set_environment_variables();
 
         unsafe {
-            ContextDescriptor::new(self.native_connection.egl_display(), attributes, &[
+            ContextDescriptor::new(self.native_connection.egl_display, attributes, &[
                 egl::SURFACE_TYPE as EGLint,    egl::WINDOW_BIT as EGLint,
                 egl::RENDERABLE_TYPE as EGLint, egl::OPENGL_BIT as EGLint,
             ])
@@ -83,25 +83,44 @@ impl Device {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         unsafe {
             // Create the context.
-            let egl_display = self.native_connection.egl_display();
+            let egl_display = self.native_connection.egl_display;
             let egl_context = context::create_context(egl_display, descriptor)?;
 
             // Wrap and return it.
             let context = Context {
-                native_context: Box::new(OwnedEGLContext { egl_context }),
+                egl_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
+                context_is_owned: true,
             };
             next_context_id.0 += 1;
             Ok(context)
         }
     }
 
+    /// Wraps an `EGLContext` in a native context and returns it.
+    ///
+    /// The context is not retained, as there is no way to do this in the EGL API. Therefore,
+    /// it is the caller's responsibility to ensure that the returned `Context` object remains
+    /// alive as long as the `EGLContext` is.
+    pub fn create_context_from_native_context(native_context: NativeContext)
+                                              -> Result<Context, Error> {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let context = Context {
+            egl_context: native_context.egl_context,
+            id: *next_context_id,
+            framebuffer: Framebuffer::External,
+            context_is_owned: true,
+        };
+        next_context_id.0 += 1;
+        Ok(context)
+    }
+
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.native_context.is_destroyed() {
+        if context.egl_context == egl::NO_CONTEXT {
             return Ok(());
         }
 
@@ -109,9 +128,22 @@ impl Device {
             self.destroy_surface(context, &mut surface)?;
         }
 
-        unsafe {
-            context.native_context.destroy(self.native_connection.egl_display());
-        }
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
+                egl.MakeCurrent(self.native_connection.egl_display,
+                                egl::NO_SURFACE,
+                                egl::NO_SURFACE,
+                                egl::NO_CONTEXT);
+
+                if context.context_is_owned {
+                    let result = egl.DestroyContext(self.native_connection.egl_display,
+                                                    context.egl_context);
+                    assert_ne!(result, egl::FALSE);
+                }
+
+                context.egl_context = egl::NO_CONTEXT;
+            }
+        });
 
         Ok(())
     }
@@ -119,8 +151,8 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            ContextDescriptor::from_egl_context(self.native_connection.egl_display(),
-                                                context.native_context.egl_context())
+            ContextDescriptor::from_egl_context(self.native_connection.egl_display,
+                                                context.egl_context)
         }
     }
 
@@ -144,10 +176,10 @@ impl Device {
             };
 
             EGL_FUNCTIONS.with(|egl| {
-                let result = egl.MakeCurrent(self.native_connection.egl_display(),
+                let result = egl.MakeCurrent(self.native_connection.egl_display,
                                              egl_surface,
                                              egl_surface,
-                                             context.native_context.egl_context());
+                                             context.egl_context);
                 if result == egl::FALSE {
                     let err = egl.GetError().to_windowing_api_error();
                     return Err(Error::MakeCurrentFailed(err));
@@ -163,7 +195,7 @@ impl Device {
     /// made current.
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
-            context::make_no_context_current(self.native_connection.egl_display())
+            context::make_no_context_current(self.native_connection.egl_display)
         }
     }
 
@@ -177,7 +209,7 @@ impl Device {
     pub(crate) fn context_is_current(&self, context: &Context) -> bool {
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
-                egl.GetCurrentContext() == context.native_context.egl_context()
+                egl.GetCurrentContext() == context.egl_context
             }
         })
     }
@@ -187,7 +219,7 @@ impl Device {
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
         unsafe {
-            context_descriptor.attributes(self.native_connection.egl_display())
+            context_descriptor.attributes(self.native_connection.egl_display)
         }
     }
 
@@ -207,7 +239,7 @@ impl Device {
     pub(crate) fn context_descriptor_to_egl_config(&self, context_descriptor: &ContextDescriptor)
                                                    -> EGLConfig {
         unsafe {
-            context::egl_config_from_id(self.native_connection.egl_display(),
+            context::egl_config_from_id(self.native_connection.egl_display,
                                         context_descriptor.egl_config_id)
         }
     }

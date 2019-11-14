@@ -3,7 +3,9 @@
 //! A wrapper around Wayland `EGLDisplay`s.
 
 use crate::{Error, GLApi};
-use super::connection::{Connection, NativeConnection};
+use super::connection::{Connection, NativeConnectionWrapper};
+
+use std::sync::Arc;
 
 pub use crate::platform::unix::generic::device::Adapter;
 
@@ -11,7 +13,7 @@ pub use crate::platform::unix::generic::device::Adapter;
 ///
 /// Devices contain most of the relevant surface management methods.
 pub struct Device {
-    pub(crate) native_connection: Box<dyn NativeConnection>,
+    pub(crate) native_connection: Arc<NativeConnectionWrapper>,
     pub(crate) adapter: Adapter,
 }
 
@@ -19,7 +21,7 @@ impl Device {
     #[inline]
     pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
         Ok(Device {
-            native_connection: connection.native_connection.retain(),
+            native_connection: connection.native_connection.clone(),
             adapter: (*adapter).clone(),
         })
     }
@@ -27,7 +29,7 @@ impl Device {
     /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
-        Connection { native_connection: self.native_connection.retain() }
+        Connection { native_connection: self.native_connection.clone() }
     }
 
     /// Returns the adapter that this device was created with.

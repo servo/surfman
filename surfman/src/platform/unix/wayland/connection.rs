@@ -20,23 +20,21 @@ use winit::Window;
 use winit::os::unix::WindowExt;
 
 /// A connection to the Wayland server.
+#[derive(Clone)]
 pub struct Connection {
-    pub(crate) native_connection: Box<dyn NativeConnection>,
+    pub(crate) native_connection: Arc<NativeConnectionWrapper>,
 }
 
-pub(crate) trait NativeConnection {
-    fn wayland_display(&self) -> *mut wl_display;
-    fn egl_display(&self) -> EGLDisplay;
-    fn retain(&self) -> Box<dyn NativeConnection>;
+pub(crate) struct NativeConnectionWrapper {
+    pub(crate) wayland_display: *mut wl_display,
+    pub(crate) egl_display: EGLDisplay,
+    pub(crate) is_owned: bool,
 }
+
+/// Wrapper for a Wayland display.
+pub struct NativeConnection(pub *mut wl_display);
 
 unsafe impl Send for Connection {}
-
-impl Clone for Connection {
-    fn clone(&self) -> Connection {
-        Connection { native_connection: self.native_connection.retain() }
-    }
-}
 
 impl Connection {
     /// Connects to the default Wayland server.
@@ -44,9 +42,20 @@ impl Connection {
     pub fn new() -> Result<Connection, Error> {
         unsafe {
             let wayland_display = (WAYLAND_CLIENT_HANDLE.wl_display_connect)(ptr::null());
-            Connection::from_wayland_display(wayland_display)
+            Connection::from_wayland_display(wayland_display, true)
         }
     }
+
+    /// Wraps an existing Wayland display in a `Connection`.
+    ///
+    /// The display is not retained, as there is no way to do this in the Wayland API. Therefore,
+    /// it is the caller's responsibility to ensure that the Wayland display remains alive as long
+    /// as the connection is.
+    pub unsafe fn from_native_connection(native_connection: NativeConnection)
+                                         -> Result<Connection, Error> {
+        Connection::from_wayland_display(native_connection.0, false)
+    }
+
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     /// 
@@ -82,19 +91,7 @@ impl Connection {
         Device::new(self, adapter)
     }
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        unsafe {
-            let wayland_display = match window.get_wayland_display() {
-                Some(wayland_display) => wayland_display as *mut wl_display,
-                None => return Err(Error::IncompatibleWinitWindow),
-            };
-            Connection::from_wayland_display(wayland_display)
-        }
-    }
-
-    unsafe fn from_wayland_display(wayland_display: *mut wl_display)
+    unsafe fn from_wayland_display(wayland_display: *mut wl_display, is_owned: bool)
                                    -> Result<Connection, Error> {
         if wayland_display.is_null() {
             return Err(Error::ConnectionFailed);
@@ -110,11 +107,26 @@ impl Connection {
             let ok = egl.Initialize(egl_display, &mut egl_major_version, &mut egl_minor_version);
             assert_ne!(ok, egl::FALSE);
 
-            let native_connection = Box::new(SharedConnection {
-                display: Arc::new(Display { wayland: wayland_display, egl: egl_display }),
-            });
-            Ok(Connection { native_connection })
+            Ok(Connection {
+                native_connection: Arc::new(NativeConnectionWrapper {
+                    wayland_display,
+                    egl_display,
+                    is_owned,
+                })
+            })
         })
+    }
+
+    /// Opens the display connection corresponding to the given `winit` window.
+    #[cfg(feature = "sm-winit")]
+    pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
+        unsafe {
+            let wayland_display = match window.get_wayland_display() {
+                Some(wayland_display) => wayland_display as *mut wl_display,
+                None => return Err(Error::IncompatibleWinitWindow),
+            };
+            Connection::from_wayland_display(wayland_display, false)
+        }
     }
 
     /// Creates a native widget type from the given `winit` window.
@@ -141,34 +153,12 @@ impl Connection {
     }
 }
 
-#[derive(Clone)]
-struct SharedConnection {
-    display: Arc<Display>,
-}
-
-impl NativeConnection for SharedConnection {
-    fn wayland_display(&self) -> *mut wl_display {
-        self.display.wayland
-    }
-
-    fn egl_display(&self) -> EGLDisplay {
-        self.display.egl
-    }
-
-    fn retain(&self) -> Box<dyn NativeConnection> {
-        Box::new((*self).clone())
-    }
-}
-
-struct Display {
-    wayland: *mut wl_display,
-    egl: EGLDisplay,
-}
-
-impl Drop for Display {
+impl Drop for NativeConnectionWrapper {
     fn drop(&mut self) {
         unsafe {
-            (WAYLAND_CLIENT_HANDLE.wl_display_disconnect)(self.wayland);
+            if self.is_owned {
+                (WAYLAND_CLIENT_HANDLE.wl_display_disconnect)(self.wayland_display);
+            }
         }
     }
 }
