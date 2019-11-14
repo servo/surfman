@@ -41,15 +41,27 @@ unsafe impl Send for Adapter {}
 ///
 /// Devices contain most of the relevant surface management methods.
 pub struct Device {
-    pub(crate) native_display: Box<dyn NativeDisplay>,
-    pub(crate) d3d11_device: ComPtr<ID3D11Device>,
+    pub(crate) egl_display: EGLDisplay,
+    pub(crate) d3d11_device: *mut ID3D11Device,
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
+    pub(crate) display_is_owned: bool,
 }
 
 pub(crate) enum VendorPreference {
     None,
     Prefer(UINT),
     Avoid(UINT),
+}
+
+/// Wraps a Direct3D 11 device and its associated EGL display.
+#[derive(Clone)]
+pub struct NativeDevice {
+    /// The ANGLE EGL display.
+    pub egl_display: EGLDisplay,
+    /// The Direct3D 11 device that the ANGLE EGL display was created with.
+    pub d3d11_device: ComPtr<ID3D11Device>,
+    /// The Direct3D driver type that the device was created with.
+    pub d3d_driver_type: D3D_DRIVER_TYPE,
 }
 
 impl Adapter {
@@ -176,7 +188,24 @@ impl Device {
                                             &mut minor_version);
                 assert_ne!(result, egl::FALSE);
 
-                Ok(Device { native_display, d3d11_device, d3d_driver_type })
+                Ok(Device {
+                    native_display,
+                    d3d11_device,
+                    d3d_driver_type,
+                    display_is_owned: true,
+                })
+            })
+        }
+    }
+
+    pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
+        unsafe {
+            native_device.d3d11_device.AddRef();
+            Ok(Device {
+                native_display: native_device.native_display,
+                d3d11_device: native_device.d3d11_device,
+                d3d_driver_type: native_device.d3d_driver_type,
+                display_is_owned: false,
             })
         }
     }
@@ -206,6 +235,18 @@ impl Device {
         }
     }
 
+    /// Returns the underlying native device type.
+    /// 
+    /// The reference count on the underlying Direct3D device is increased before returning it.
+    #[inline]
+    pub fn native_device(&self) -> NativeDevice {
+        NativeDevice {
+            egl_display: self.egl_display,
+            d3d11_device: self.d3d11_device.clone().into_raw(),
+            d3d_driver_type: self.d3d_driver_type,
+        }
+    }
+
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     #[inline]
     pub fn gl_api(&self) -> GLApi {
@@ -216,5 +257,19 @@ impl Device {
     #[inline]
     pub fn native_device(&self) -> ComPtr<ID3D11Device> {
         self.d3d11_device.clone()
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe {
+            if self.display_is_owned {
+                EGL_FUNCTIONS.with(|egl| {
+                    let result = egl.Terminate(self.egl_display);
+                    assert_ne!(result, egl::FALSE);
+                    self.egl_display = egl::NO_DISPLAY;
+                })
+            }
+        }
     }
 }

@@ -8,7 +8,7 @@
 //! implicit in the Win32 API, and as such this type is a no-op.
 
 use crate::Error;
-use super::device::{Adapter, Device, VendorPreference};
+use super::device::{Adapter, Device, NativeDevice, VendorPreference};
 use super::surface::NativeWidget;
 
 use winapi::shared::minwindef::UINT;
@@ -64,6 +64,18 @@ impl Connection {
     /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        Device::new(adapter)
+    }
+
+    /// Wraps an ANGLE `EGLDisplay`, along with the associated Direct3D device, in a `Device` and
+    /// returns it.
+    ///
+    /// The underlying `EGLDisplay` is not retained, as there is no way to do this in the EGL API.
+    /// Therefore, it is the caller's responsibility to keep it alive as long as this `Device`
+    /// remains alive. This function does, however, call `AddRef` on the Direct3D device.
+    #[inline]
+    pub fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                            -> Result<Device, Error> {
         Device::new(adapter)
     }
 

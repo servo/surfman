@@ -101,17 +101,9 @@ impl Debug for SurfaceTexture {
 pub(crate) enum Win32Objects {
     Window,
     Pbuffer {
-        share_handle: HandleOrTexture,
+        share_handle: HANDLE,
         keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
     }
-}
-
-// TODO(pcwalton): Let's get rid of this in favor of adding a new type of "external surface" that
-// is thread-local and can't be bound to a texture.
-#[derive(Copy, Clone)]
-pub(crate) enum HandleOrTexture {
-    Handle(HANDLE),
-    Texture(*mut d3d11::ID3D11Texture2D)
 }
 
 /// Wraps a Windows `HWND` window handle.
@@ -144,7 +136,7 @@ impl Device {
     fn create_pbuffer_surface(&mut self,
                               context: &Context,
                               size: &Size2D<i32>,
-                              share_handle: Option<HandleOrTexture>)
+                              share_handle: Option<HANDLE>)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -173,7 +165,7 @@ impl Device {
                 let eglQuerySurfacePointerANGLE =
                     EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE
                                         .expect("Where's the `EGL_ANGLE_query_surface_pointer` \
-                                                    extension?");
+                                                 extension?");
 
                 let share_handle = if let Some(share_handle) = share_handle {
                     share_handle
@@ -186,7 +178,7 @@ impl Device {
                                                     &mut share_handle);
                     assert_ne!(result, egl::FALSE);
                     assert_ne!(share_handle, INVALID_HANDLE_VALUE);
-                    HandleOrTexture::Handle(share_handle)
+                    share_handle
                 };
 
                 // `mozangle` builds ANGLE with keyed mutexes for sharing. Use the
@@ -248,18 +240,6 @@ impl Device {
         }
     }
 
-    /// Creates a surface from a native Direct3D 11 texture.
-    ///
-    /// The texture is not retained.
-    pub unsafe fn from_native_surface(
-        &mut self,
-        context: &Context,
-        size: &Size2D<i32>,
-        texture: *mut d3d11::ID3D11Texture2D
-    ) -> Result<Surface, Error> {
-        self.create_pbuffer_surface(context, size, Some(HandleOrTexture::Texture(texture)))
-    }
-
     /// Creates a surface texture from an existing generic surface for use with the given context.
     /// 
     /// The surface texture is local to the supplied context and takes ownership of the surface.
@@ -291,21 +271,10 @@ impl Device {
                     0,                              0,
                 ];
 
-                // FIXME(pcwalton): I'm fairly sure this is undefined behavior! We need to figure
-                // out how to use share handles for jdm's use case.
-                let (buffer_type, client_buffer) = match share_handle {
-                    HandleOrTexture::Handle(handle) => {
-                        (EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle)
-                    }
-                    HandleOrTexture::Texture(texture) => {
-                        (EGL_D3D_TEXTURE_ANGLE, texture as _)
-                    }
-                };
-
                 let local_egl_surface =
                     egl.CreatePbufferFromClientBuffer(self.egl_display,
-                                                      buffer_type,
-                                                      client_buffer,
+                                                      EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
+                                                      share_handle,
                                                       local_egl_config,
                                                       pbuffer_attributes.as_ptr());
                 if local_egl_surface == egl::NO_SURFACE {
