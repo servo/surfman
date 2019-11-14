@@ -44,7 +44,7 @@ thread_local! {
 pub struct Context {
     pub(crate) osmesa_context: OSMesaContext,
     pub(crate) id: ContextID,
-    framebuffer: Framebuffer<Surface>,
+    framebuffer: Framebuffer<Surface, ()>,
     status: ContextStatus,
 }
 
@@ -232,7 +232,7 @@ impl Device {
         unsafe {
             let surface = match context.framebuffer {
                 Framebuffer::Surface(ref surface) => surface,
-                Framebuffer::None | Framebuffer::External => {
+                Framebuffer::None | Framebuffer::External(_) => {
                     return Err(Error::ExternalRenderTarget)
                 }
             };
@@ -329,7 +329,7 @@ impl Device {
                 context.framebuffer = Framebuffer::Surface(surface);
                 Ok(())
             }
-            Framebuffer::External => Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::External(_) => Err((Error::ExternalRenderTarget, surface)),
             Framebuffer::Surface(_) => Err((Error::SurfaceAlreadyBound, surface)),
         }
     }
@@ -342,7 +342,7 @@ impl Device {
                                        -> Result<Option<Surface>, Error> {
         match context.framebuffer {
             Framebuffer::None | Framebuffer::Surface(_) => {}
-            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
         }
 
         let _guard = self.temporarily_make_context_current(context)?;
@@ -356,7 +356,7 @@ impl Device {
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => Ok(Some(surface)),
             Framebuffer::None => Ok(None),
-            Framebuffer::External => unreachable!(),
+            Framebuffer::External(_) => unreachable!(),
         }
     }
 
@@ -382,7 +382,7 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
     }

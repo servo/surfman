@@ -80,7 +80,7 @@ thread_local! {
 pub struct Context {
     pub(crate) cgl_context: CGLContextObj,
     pub(crate) id: ContextID,
-    framebuffer: Framebuffer<Surface>,
+    framebuffer: Framebuffer<Surface, ()>,
 }
 
 /// Wraps a native CGL context object.
@@ -304,7 +304,7 @@ impl Device {
     pub fn bind_surface_to_context(&self, context: &mut Context, new_surface: Surface)
                                    -> Result<(), (Error, Surface)> {
         match context.framebuffer {
-            Framebuffer::External => return Err((Error::ExternalRenderTarget, new_surface)),
+            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, new_surface)),
             Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, new_surface)),
             Framebuffer::None => {}
         }
@@ -324,12 +324,12 @@ impl Device {
     pub fn unbind_surface_from_context(&self, context: &mut Context)
                                        -> Result<Option<Surface>, Error> {
         match context.framebuffer {
-            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
             Framebuffer::None | Framebuffer::Surface(_) => {}
         }
 
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::External => unreachable!(),
+            Framebuffer::External(_) => unreachable!(),
             Framebuffer::None => Ok(None),
             Framebuffer::Surface(surface) => {
                 // Make sure all changes are synchronized. Apple requires this.
@@ -398,7 +398,7 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
     }

@@ -10,6 +10,7 @@ use crate::platform::generic::egl::context::{self, CurrentContextGuard};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
+use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
 use super::surface::{Surface, SurfaceObjects};
@@ -121,10 +122,10 @@ impl Device {
             egl_context: native_context.egl_context,
             id: *next_context_id,
             pbuffer,
-            framebuffer: Framebuffer::External {
-                egl_draw_surface: native_context.egl_draw_surface,
-                egl_read_surface: native_context.egl_read_surface,
-            },
+            framebuffer: Framebuffer::External(ExternalEGLSurfaces {
+                draw: native_context.egl_draw_surface,
+                read: native_context.egl_read_surface,
+            }),
             context_is_owned: false,
         };
         next_context_id.0 += 1;
@@ -191,9 +192,7 @@ impl Device {
                     objects: SurfaceObjects::Window { egl_surface },
                     ..
                 }) => (egl_surface, egl_surface),
-                Framebuffer::External { egl_draw_surface, egl_read_surface } => {
-                    (egl_draw_surface, egl_read_surface)
-                }
+                Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
                 Framebuffer::Surface(Surface {
                     objects: SurfaceObjects::HardwareBuffer { .. },
                     ..
@@ -340,9 +339,7 @@ impl Device {
                 objects: SurfaceObjects::Window { egl_surface },
                 ..
             }) => (egl_surface, egl_surface),
-            Framebuffer::External(ExternalEGLSurfaces { egl_draw_surface, egl_read_surface }) => {
-                (egl_draw_surface, egl_read_surface)
-            }
+            Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
             Framebuffer::Surface(Surface {
                 objects: SurfaceObjects::HardwareBuffer { .. },
                 ..
