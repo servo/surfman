@@ -5,7 +5,7 @@
 //! FIXME(pcwalton): Should this instead wrap `EGLDisplay`? Is that thread-safe on Android?
 
 use crate::Error;
-use super::device::{Adapter, Device};
+use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
 #[cfg(feature = "sm-winit")]
@@ -54,6 +54,17 @@ impl Connection {
     #[inline]
     pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
         Device::new()
+    }
+
+    /// Wraps an Android `EGLDisplay` in a device and returns it.
+    ///
+    /// The underlying `EGLDisplay` is not retained, as there is no way to do this in the EGL API.
+    /// Therefore, it is the caller's responsibility to keep it alive as long as this `Device`
+    /// remains alive.
+    #[inline]
+    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                                   -> Result<Device, Error> {
+        Ok(Device { egl_display: native_device.0, display_is_owned: false })
     }
 
     /// Opens the display connection corresponding to the given `winit` window.

@@ -210,7 +210,7 @@ impl Device {
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
         EGL_FUNCTIONS.with(|egl| {
-            let egl_surface = egl.CreateWindowSurface(self.native_display.egl_display(),
+            let egl_surface = egl.CreateWindowSurface(self.egl_display,
                                                       egl_config,
                                                       native_window as *const c_void,
                                                       ptr::null());
@@ -279,7 +279,7 @@ impl Device {
             unsafe {
                 match surface.objects {
                     SurfaceObjects::Window { egl_surface } => {
-                        egl.SwapBuffers(self.native_display.egl_display(), egl_surface);
+                        egl.SwapBuffers(self.egl_display, egl_surface);
                         Ok(())
                     }
                     SurfaceObjects::HardwareBuffer { .. } => Err(Error::NoWidgetAttached),
@@ -305,7 +305,7 @@ impl Device {
             EGL_IMAGE_PRESERVED_KHR as EGLint,  egl::TRUE as EGLint,
             egl::NONE as EGLint,                0,
         ];
-        let egl_image = (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(self.native_display.egl_display(),
+        let egl_image = (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(self.egl_display,
                                                                  egl::NO_CONTEXT,
                                                                  EGL_NATIVE_BUFFER_ANDROID,
                                                                  client_buffer,
@@ -345,7 +345,7 @@ impl Device {
                         gl.DeleteTextures(1, texture_object);
                         *texture_object = 0;
 
-                        let egl_display = self.native_display.egl_display();
+                        let egl_display = self.egl_display;
                         let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
                                                                                *egl_image);
                         assert_ne!(result, egl::FALSE);
@@ -357,7 +357,7 @@ impl Device {
                 }
                 SurfaceObjects::Window { ref mut egl_surface } => {
                     EGL_FUNCTIONS.with(|egl| {
-                        egl.DestroySurface(self.native_display.egl_display(), *egl_surface);
+                        egl.DestroySurface(self.egl_display, *egl_surface);
                         *egl_surface = egl::NO_SURFACE;
                     })
                 }
@@ -385,7 +385,7 @@ impl Device {
                 gl.DeleteTextures(1, &surface_texture.texture_object);
                 surface_texture.texture_object = 0;
 
-                let egl_display = self.native_display.egl_display();
+                let egl_display = self.egl_display;
                 let result =
                     (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
                                                               surface_texture.local_egl_image);

@@ -16,10 +16,15 @@ use std::ptr;
 const DUMMY_PBUFFER_SIZE: EGLint = 16;
 const RGB_CHANNEL_BIT_DEPTH: EGLint = 8;
 
-pub(crate) trait NativeContext {
-    fn egl_context(&self) -> EGLContext;
-    fn is_destroyed(&self) -> bool;
-    unsafe fn destroy(&mut self, egl_display: EGLDisplay);
+/// Wrapper for a native `EGLContext`.
+#[derive(Clone, Copy)]
+pub struct NativeContext {
+    /// The EGL context.
+    pub egl_context: EGLContext,
+    /// The EGL read surface that is to be attached to that context.
+    pub egl_read_surface: EGLSurface,
+    /// The EGL draw surface that is to be attached to that context.
+    pub egl_draw_surface: EGLSurface,
 }
 
 /// Information needed to create a context. Some APIs call this a "config" or a "pixel format".
@@ -195,54 +200,6 @@ impl CurrentContextGuard {
                 }
             }
         })
-    }
-}
-
-pub(crate) struct OwnedEGLContext {
-    pub(crate) egl_context: EGLContext,
-}
-
-impl NativeContext for OwnedEGLContext {
-    #[inline]
-    fn egl_context(&self) -> EGLContext {
-        self.egl_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.egl_context == egl::NO_CONTEXT
-    }
-
-    unsafe fn destroy(&mut self, egl_display: EGLDisplay) {
-        assert!(!self.is_destroyed());
-
-        EGL_FUNCTIONS.with(|egl| {
-            egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl::NO_CONTEXT);
-            let result = egl.DestroyContext(egl_display, self.egl_context);
-            assert_ne!(result, egl::FALSE);
-            self.egl_context = egl::NO_CONTEXT;
-        })
-    }
-}
-
-pub(crate) struct UnsafeEGLContextRef {
-    pub(crate) egl_context: EGLContext,
-}
-
-impl NativeContext for UnsafeEGLContextRef {
-    #[inline]
-    fn egl_context(&self) -> EGLContext {
-        self.egl_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.egl_context == egl::NO_CONTEXT
-    }
-
-    unsafe fn destroy(&mut self, _: EGLDisplay) {
-        assert!(!self.is_destroyed());
-        self.egl_context = egl::NO_CONTEXT;
     }
 }
 

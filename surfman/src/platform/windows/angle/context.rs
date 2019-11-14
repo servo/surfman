@@ -67,7 +67,7 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(self.native_display.egl_display(), attributes, &[
+            ContextDescriptor::new(self.egl_display, attributes, &[
                 egl::BIND_TO_TEXTURE_RGBA as EGLint,    1 as EGLint,
                 egl::SURFACE_TYPE as EGLint,            egl::PBUFFER_BIT as EGLint,
                 egl::RENDERABLE_TYPE as EGLint,         egl::OPENGL_ES2_BIT as EGLint,
@@ -82,7 +82,7 @@ impl Device {
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         unsafe {
-            let egl_context = context::create_context(self.native_display.egl_display(),
+            let egl_context = context::create_context(self.egl_display,
                                                       descriptor)?;
 
             let context = Context {
@@ -108,7 +108,7 @@ impl Device {
         }
 
         unsafe {
-            context.native_context.destroy(self.native_display.egl_display());
+            context.native_context.destroy(self.egl_display);
         }
 
         Ok(())
@@ -117,7 +117,7 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            ContextDescriptor::from_egl_context(self.native_display.egl_display(),
+            ContextDescriptor::from_egl_context(self.egl_display,
                                                 context.native_context.egl_context())
         }
     }
@@ -134,7 +134,7 @@ impl Device {
             };
 
             EGL_FUNCTIONS.with(|egl| {
-                let result = egl.MakeCurrent(self.native_display.egl_display(),
+                let result = egl.MakeCurrent(self.egl_display,
                                              egl_surface,
                                              egl_surface,
                                              context.native_context.egl_context());
@@ -153,7 +153,7 @@ impl Device {
     /// made current.
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
-            context::make_no_context_current(self.native_display.egl_display())
+            context::make_no_context_current(self.egl_display)
         }
     }
 
@@ -177,7 +177,7 @@ impl Device {
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
         unsafe {
-            context_descriptor.attributes(self.native_display.egl_display())
+            context_descriptor.attributes(self.egl_display)
         }
     }
 
@@ -197,7 +197,7 @@ impl Device {
     pub(crate) fn context_descriptor_to_egl_config(&self, context_descriptor: &ContextDescriptor)
                                                    -> EGLConfig {
         unsafe {
-            context::egl_config_from_id(self.native_display.egl_display(),
+            context::egl_config_from_id(self.egl_display,
                                         context_descriptor.egl_config_id)
         }
     }

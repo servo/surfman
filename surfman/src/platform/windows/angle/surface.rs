@@ -163,7 +163,7 @@ impl Device {
                 let egl_surface = if share_handle.is_some() {
                     egl::NO_SURFACE
                 } else {
-                    let surface = egl.CreatePbufferSurface(self.native_display.egl_display(),
+                    let surface = egl.CreatePbufferSurface(self.egl_display,
                                                            egl_config,
                                                            attributes.as_ptr());
                     assert_ne!(surface, egl::NO_SURFACE);
@@ -180,7 +180,7 @@ impl Device {
                 } else {
                     let mut share_handle = INVALID_HANDLE_VALUE;
                     let result =
-                        eglQuerySurfacePointerANGLE(self.native_display.egl_display(),
+                        eglQuerySurfacePointerANGLE(self.egl_display,
                                                     egl_surface,
                                                     EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
                                                     &mut share_handle);
@@ -193,7 +193,7 @@ impl Device {
                 // `EGL_ANGLE_keyed_mutex` extension to fetch the keyed mutex so we can grab it.
                 let mut keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
                 let result = eglQuerySurfacePointerANGLE(
-                    self.native_display.egl_display(),
+                    self.egl_display,
                     egl_surface,
                     EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
                     &mut keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
@@ -231,7 +231,7 @@ impl Device {
 
             EGL_FUNCTIONS.with(|egl| {
                 let attributes = [egl::NONE as EGLint];
-                let egl_surface = egl.CreateWindowSurface(self.native_display.egl_display(),
+                let egl_surface = egl.CreateWindowSurface(self.egl_display,
                                                           egl_config,
                                                           native_widget.window_handle as _,
                                                           attributes.as_ptr());
@@ -303,7 +303,7 @@ impl Device {
                 };
 
                 let local_egl_surface =
-                    egl.CreatePbufferFromClientBuffer(self.native_display.egl_display(),
+                    egl.CreatePbufferFromClientBuffer(self.egl_display,
                                                       buffer_type,
                                                       client_buffer,
                                                       local_egl_config,
@@ -317,7 +317,7 @@ impl Device {
                 let eglQuerySurfacePointerANGLE = EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE
                                                                          .unwrap();
                 let result = eglQuerySurfacePointerANGLE(
-                    self.native_display.egl_display(),
+                    self.egl_display,
                     local_egl_surface,
                     EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
                     &mut local_keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
@@ -340,7 +340,7 @@ impl Device {
                     debug_assert_ne!(texture, 0);
 
                     gl.BindTexture(gl::TEXTURE_2D, texture);
-                    if egl.BindTexImage(self.native_display.egl_display(),
+                    if egl.BindTexImage(self.egl_display,
                                         local_egl_surface,
                                         egl::BACK_BUFFER as GLint) == egl::FALSE {
                         let windowing_api_error = egl.GetError().to_windowing_api_error();
@@ -394,7 +394,7 @@ impl Device {
                     self.make_no_context_current()?;
                 }
 
-                egl.DestroySurface(self.native_display.egl_display(), surface.egl_surface);
+                egl.DestroySurface(self.egl_display, surface.egl_surface);
                 surface.egl_surface = egl::NO_SURFACE;
             }
             Ok(())
@@ -420,7 +420,7 @@ impl Device {
             }
 
             EGL_FUNCTIONS.with(|egl| {
-                egl.DestroySurface(self.native_display.egl_display(),
+                egl.DestroySurface(self.egl_display,
                                    surface_texture.local_egl_surface);
             })
         }
@@ -458,7 +458,7 @@ impl Device {
 
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
-                let ok = egl.SwapBuffers(self.native_display.egl_display(), surface.egl_surface);
+                let ok = egl.SwapBuffers(self.egl_display, surface.egl_surface);
                 assert_ne!(ok, egl::FALSE);
                 Ok(())
             }

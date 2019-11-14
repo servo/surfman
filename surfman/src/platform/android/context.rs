@@ -3,22 +3,21 @@
 //! OpenGL rendering contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::egl::types::{EGLConfig, EGLSurface, EGLint};
+use crate::egl::types::{EGLConfig, EGLContext, EGLSurface, EGLint};
 use crate::egl;
 use crate::gl::Gl;
-use crate::platform::generic::egl::context::{self, CurrentContextGuard, NativeContext};
-use crate::platform::generic::egl::context::{OwnedEGLContext, UnsafeEGLContextRef};
+use crate::platform::generic::egl::context::{self, CurrentContextGuard};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::{ContextAttributes, Error, SurfaceInfo};
-use super::device::{Device, UnsafeEGLDisplayRef};
+use super::device::Device;
 use super::surface::{Surface, SurfaceObjects};
 
 use std::mem;
 use std::os::raw::c_void;
 use std::thread;
 
-pub use crate::platform::generic::egl::context::ContextDescriptor;
+pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
 
 thread_local! {
     #[doc(hidden)]
@@ -42,16 +41,17 @@ thread_local! {
 /// 
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
 pub struct Context {
-    pub(crate) native_context: Box<dyn NativeContext>,
+    pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
     pub(crate) pbuffer: EGLSurface,
     framebuffer: Framebuffer,
+    context_is_owned: bool,
 }
 
 impl Drop for Context {
     #[inline]
     fn drop(&mut self) {
-        if !self.native_context.is_destroyed() && !thread::panicking() {
+        if self.egl_context != egl::NO_CONTEXT && !thread::panicking() {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
@@ -74,7 +74,7 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(self.native_display.egl_display(), attributes, &[
+            ContextDescriptor::new(self.egl_display, attributes, &[
                 egl::COLOR_BUFFER_TYPE as EGLint,   egl::RGB_BUFFER as EGLint,
                 egl::SURFACE_TYPE as EGLint,        egl::PBUFFER_BIT as EGLint,
                 egl::RENDERABLE_TYPE as EGLint,     egl::OPENGL_ES2_BIT as EGLint,
@@ -90,7 +90,7 @@ impl Device {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         let egl_config = self.context_descriptor_to_egl_config(descriptor);
-        let egl_display = self.native_display.egl_display();
+        let egl_display = self.egl_display;
 
         unsafe {
             // Create the EGL context.
@@ -101,22 +101,53 @@ impl Device {
 
             // Wrap up the EGL context.
             let context = Context {
-                native_context: Box::new(OwnedEGLContext { egl_context }),
+                egl_context,
                 id: *next_context_id,
                 pbuffer,
                 framebuffer: Framebuffer::None,
+                context_is_owned: true,
             };
             next_context_id.0 += 1;
             Ok(context)
         }
     }
 
+    /// Wraps a native `EGLContext` in a context object.
+    ///
+    /// The underlying `EGLContext` is not retained, as there is no way to do this in the EGL API.
+    /// Therefore, it is the caller's responsibility to keep it alive as long as this `Context`
+    /// remains alive.
+    pub fn create_context_from_native_context(&self, native_context: NativeContext)
+                                              -> Result<Context, Error> {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+
+        // Create a dummy pbuffer.
+        let pbuffer = unsafe {
+            context::create_dummy_pbuffer(self.egl_display, native_context.egl_context)
+        };
+
+        // Create the context.
+        let context = Context {
+            egl_context: native_context.egl_context,
+            id: *next_context_id,
+            pbuffer,
+            framebuffer: Framebuffer::External {
+                egl_draw_surface: native_context.egl_draw_surface,
+                egl_read_surface: native_context.egl_read_surface,
+            },
+            context_is_owned: false,
+        };
+        next_context_id.0 += 1;
+
+        Ok(context)
+    }
+
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.native_context.is_destroyed() {
-            return Ok(());
+        if context.egl_context == egl::NO_CONTEXT {
+            return Ok(())
         }
 
         unsafe {
@@ -127,12 +158,23 @@ impl Device {
             }
 
             EGL_FUNCTIONS.with(|egl| {
-                let result = egl.DestroySurface(self.native_display.egl_display(),
+                let result = egl.DestroySurface(self.egl_display,
                                                 context.pbuffer);
                 assert_ne!(result, egl::FALSE);
                 context.pbuffer = egl::NO_SURFACE;
 
-                context.native_context.destroy(self.native_display.egl_display());
+                egl.MakeCurrent(self.egl_display,
+                                egl::NO_SURFACE,
+                                egl::NO_SURFACE,
+                                egl::NO_CONTEXT);
+
+                if context.context_is_owned {
+                    let result = egl.DestroyContext(self.egl_display, context.egl_context);
+                    egl.DestroyContext(self.egl_display, context.egl_context);
+                    assert_ne!(result, egl::FALSE);
+                }
+
+                context.egl_context = egl::NO_CONTEXT;
             });
         }
 
@@ -142,8 +184,7 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            ContextDescriptor::from_egl_context(self.native_display.egl_display(),
-                                                context.native_context.egl_context())
+            ContextDescriptor::from_egl_context(self.egl_display, context.egl_context)
         }
     }
 
@@ -152,8 +193,8 @@ impl Device {
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let egl_display = self.native_display.egl_display();
-            let egl_context = context.native_context.egl_context();
+            let egl_display = self.egl_display;
+            let egl_context = context.egl_context;
 
             let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
                 Framebuffer::Surface(Surface {
@@ -189,7 +230,7 @@ impl Device {
     /// made current.
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
-            context::make_no_context_current(self.native_display.egl_display())
+            context::make_no_context_current(self.egl_display)
         }
     }
 
@@ -251,7 +292,7 @@ impl Device {
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
         unsafe {
-            context_descriptor.attributes(self.native_display.egl_display())
+            context_descriptor.attributes(self.egl_display)
         }
     }
 
@@ -270,7 +311,7 @@ impl Device {
     pub(crate) fn context_descriptor_to_egl_config(&self, context_descriptor: &ContextDescriptor)
                                                    -> EGLConfig {
         unsafe {
-            context::egl_config_from_id(self.native_display.egl_display(),
+            context::egl_config_from_id(self.egl_display,
                                         context_descriptor.egl_config_id)
         }
     }

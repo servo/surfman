@@ -29,6 +29,10 @@ pub use platform::default::device::{Adapter, Device};
 pub use platform::default::surface::{NativeWidget, Surface, SurfaceTexture};
 
 // TODO(pcwalton): Fill this in with other OS's.
+#[cfg(target_os = "android")]
+pub use platform::default::context::NativeContext;
+#[cfg(target_os = "android")]
+pub use platform::default::device::NativeDevice;
 #[cfg(target_os = "macos")]
 pub use platform::system::connection::Connection as SystemConnection;
 #[cfg(target_os = "macos")]

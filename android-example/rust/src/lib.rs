@@ -3,11 +3,12 @@
 use crate::threads::App;
 use crate::threads::common::ResourceLoader;
 
+use egl::{self, EGL_DRAW, EGL_NO_SURFACE, EGL_READ};
 use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue};
 use jni::{JNIEnv, JavaVM};
 use std::cell::{Cell, RefCell};
 use std::mem;
-use surfman::Device;
+use surfman::{Connection, NativeContext, NativeDevice};
 
 #[path = "../../../surfman/examples/threads.rs"]
 mod threads;
@@ -26,8 +27,16 @@ pub unsafe extern "system" fn
                                                                                   height: i32) {
     ATTACHED_TO_JNI.with(|attached_to_jni| attached_to_jni.set(true));
 
-    let (device, context) = Device::from_current_context().unwrap();
-    let (connection, adapter) = (device.connection(), device.adapter());
+    let connection = Connection::new().unwrap();
+    let native_device = NativeDevice(egl::get_current_display().unwrap());
+    let device = connection.create_device_from_native_device(native_device).unwrap();
+    let native_context = NativeContext {
+        egl_context: egl::get_current_context().unwrap(),
+        egl_read_surface: egl::get_current_surface(EGL_READ).unwrap_or(EGL_NO_SURFACE),
+        egl_draw_surface: egl::get_current_surface(EGL_DRAW).unwrap_or(EGL_NO_SURFACE),
+    };
+    let context = device.create_context_from_native_context(native_context).unwrap();
+    let adapter = device.adapter();
 
     APP.with(|app| {
         let resource_loader = Box::new(JavaResourceLoader::new(env, loader));
