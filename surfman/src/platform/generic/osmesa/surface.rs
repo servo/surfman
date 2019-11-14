@@ -218,6 +218,17 @@ impl Device {
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
         surface_texture.gl_texture
     }
+
+    /// Displays the contents of a widget surface on screen.
+    /// 
+    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
+    /// associated widgets until this method is called.
+    /// 
+    /// The supplied context must match the context the surface was created with, or an
+    /// `IncompatibleSurface` error is returned.
+    pub fn present_surface(&self, _: &Context, _: &mut Surface) -> Result<(), Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
 }
 
 impl Surface {

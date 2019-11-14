@@ -64,7 +64,7 @@ impl Connection {
     /// Opens the display connection corresponding to the given `winit` window.
     #[inline]
     #[cfg(feature = "sm-winit")]
-    fn from_winit_window(_: &Window) -> Result<Connection, Error> {
+    pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
         Err(Error::IncompatibleNativeWidget)
     }
 
@@ -73,7 +73,8 @@ impl Connection {
     /// This type can be later used to create surfaces that render to the window.
     #[inline]
     #[cfg(feature = "sm-winit")]
-    fn create_native_widget_from_winit_window(&self, _: &Window) -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_winit_window(&self, _: &Window)
+                                                  -> Result<NativeWidget, Error> {
         Err(Error::IncompatibleNativeWidget)
     }
 }

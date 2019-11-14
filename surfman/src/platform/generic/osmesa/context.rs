@@ -42,24 +42,29 @@ thread_local! {
 /// 
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
 pub struct Context {
-    pub(crate) native_context: Box<dyn NativeContext>,
+    pub(crate) osmesa_context: OSMesaContext,
     pub(crate) id: ContextID,
     framebuffer: Framebuffer<Surface>,
-}
-
-pub(crate) trait NativeContext {
-    fn osmesa_context(&self) -> OSMesaContext;
-    fn is_destroyed(&self) -> bool;
-    unsafe fn destroy(&mut self, device: &Device);
+    status: ContextStatus,
 }
 
 impl Drop for Context {
     #[inline]
     fn drop(&mut self) {
-        if !self.native_context.is_destroyed() && !thread::panicking() {
+        if self.status != ContextStatus::Destroyed && !thread::panicking() {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
+}
+
+/// Wrapper for a native OSMesa context.
+pub struct NativeContext(pub OSMesaContext);
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum ContextStatus {
+    Owned,
+    Referenced,
+    Destroyed,
 }
 
 /// Information needed to create a context. Some APIs call this a "config" or a "pixel format".
@@ -117,20 +122,41 @@ impl Device {
             }
 
             let context = Context {
-                native_context: Box::new(OwnedOSMesaContext { osmesa_context }),
+                osmesa_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
+                status: ContextStatus::Owned,
             };
             next_context_id.0 += 1;
             Ok(context)
         }
     }
 
+    /// Wraps an existing OSMesa context in a `Context` object.
+    ///
+    /// The underlying `OSMesaContext` is not retained, as there is no way to do this in the OSMesa
+    /// API. Therefore, it is the caller's responsibility to keep it alive as long as this `Context`
+    /// remains alive.
+    pub unsafe fn create_context_from_native_context(&self, native_context: NativeContext)
+                                                     -> Result<Context, Error> {
+        // Take a lock.
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+
+        let context = Context {
+            osmesa_context: native_context.0,
+            id: *next_context_id,
+            framebuffer: Framebuffer::None,
+            status: ContextStatus::Referenced,
+        };
+        next_context_id.0 += 1;
+        Ok(context)
+    }
+
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.native_context.is_destroyed() {
+        if context.status == ContextStatus::Destroyed {
             return Ok(());
         }
 
@@ -140,9 +166,13 @@ impl Device {
         }
 
         unsafe {
-            context.native_context.destroy(self);
+            if context.status == ContextStatus::Owned {
+                OSMesaDestroyContext(context.osmesa_context);
+            }
         }
 
+        context.osmesa_context = ptr::null_mut();
+        context.status = ContextStatus::Destroyed;
         Ok(())
     }
 
@@ -164,7 +194,7 @@ impl Device {
                 // Fetch the depth size.
                 let (mut depth_width, mut depth_height, mut depth_byte_size) = (0, 0, 0);
                 let mut depth_buffer = ptr::null_mut();
-                let has_depth = OSMesaGetDepthBuffer(context.native_context.osmesa_context(),
+                let has_depth = OSMesaGetDepthBuffer(context.osmesa_context,
                                                     &mut depth_width,
                                                     &mut depth_height,
                                                     &mut depth_byte_size,
@@ -207,7 +237,7 @@ impl Device {
                 }
             };
 
-            let ok = OSMesaMakeCurrent(context.native_context.osmesa_context(),
+            let ok = OSMesaMakeCurrent(context.osmesa_context,
                                        (*surface.pixels.get()).as_mut_ptr() as *mut c_void,
                                        gl::UNSIGNED_BYTE,
                                        surface.size.width,
@@ -355,29 +385,6 @@ impl Device {
             Framebuffer::External => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
-    }
-}
-
-struct OwnedOSMesaContext {
-    osmesa_context: OSMesaContext,
-}
-
-impl NativeContext for OwnedOSMesaContext {
-    #[inline]
-    fn osmesa_context(&self) -> OSMesaContext {
-        debug_assert!(!self.is_destroyed());
-        self.osmesa_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.osmesa_context.is_null()
-    }
-
-    unsafe fn destroy(&mut self, _: &Device) {
-        assert!(!self.is_destroyed());
-        OSMesaDestroyContext(self.osmesa_context);
-        self.osmesa_context = ptr::null_mut();
     }
 }
 

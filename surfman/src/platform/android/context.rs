@@ -117,8 +117,8 @@ impl Device {
     /// The underlying `EGLContext` is not retained, as there is no way to do this in the EGL API.
     /// Therefore, it is the caller's responsibility to keep it alive as long as this `Context`
     /// remains alive.
-    pub fn create_context_from_native_context(&self, native_context: NativeContext)
-                                              -> Result<Context, Error> {
+    pub unsafe fn create_context_from_native_context(&self, native_context: NativeContext)
+                                                     -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Create a dummy pbuffer.
