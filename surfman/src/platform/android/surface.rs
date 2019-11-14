@@ -236,13 +236,17 @@ impl Device {
     /// 
     /// Calling this method on a widget surface returns a `WidgetAttached` error.
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
         unsafe {
             match surface.objects {
-                SurfaceObjects::Window { .. } => return Err(Error::WidgetAttached),
+                SurfaceObjects::Window { .. } => return Err((Error::WidgetAttached, surface)),
                 SurfaceObjects::HardwareBuffer { hardware_buffer, .. } => {
                     GL_FUNCTIONS.with(|gl| {
-                        let _guard = self.temporarily_make_context_current(context)?;
+                        let _guard = match self.temporarily_make_context_current(context) {
+                            Ok(guard) => guard,
+                            Err(err) => return Err((err, surface)),
+                        };
+
                         let local_egl_image = self.create_egl_image(context, hardware_buffer);
                         let texture_object = generic::egl::surface::bind_egl_image_to_gl_texture(
                             gl,
@@ -266,7 +270,7 @@ impl Device {
     /// 
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
+    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
@@ -395,8 +399,8 @@ impl Device {
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
-                                 -> Result<SurfaceDataGuard<'s>, Error> {
+    pub fn lock_surface_data<'s>(&self, _: &'s mut Surface) -> Result<SurfaceDataGuard<'s>, Error> {
+        // TODO(pcwalton)
         Err(Error::Unimplemented)
     }
 

@@ -21,6 +21,7 @@ use std::thread;
 pub use crate::platform::generic::egl::context::ContextDescriptor;
 
 thread_local! {
+    #[doc(hidden)]
     pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
 }
 
@@ -119,9 +120,9 @@ impl Device {
         }
 
         unsafe {
-            if let Framebuffer::Surface(target) = mem::replace(&mut context.framebuffer,
-                                                               Framebuffer::None) {
-                self.destroy_surface(context, target)?;
+            if let Framebuffer::Surface(mut target) = mem::replace(&mut context.framebuffer,
+                                                                   Framebuffer::None) {
+                self.destroy_surface(context, &mut target)?;
 
             }
 

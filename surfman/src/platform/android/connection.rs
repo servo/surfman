@@ -6,6 +6,10 @@
 
 use crate::Error;
 use super::device::{Adapter, Device};
+use super::surface::NativeWidget;
+
+#[cfg(feature = "sm-winit")]
+use winit::Window;
 
 /// A connection to the display server.
 #[derive(Clone)]
@@ -50,5 +54,22 @@ impl Connection {
     #[inline]
     pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
         Device::new()
+    }
+
+    /// Opens the display connection corresponding to the given `winit` window.
+    #[cfg(feature = "sm-winit")]
+    #[inline]
+    pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    /// Creates a native widget type from the given `winit` window.
+    /// 
+    /// This type can be later used to create surfaces that render to the window.
+    #[cfg(feature = "sm-winit")]
+    #[inline]
+    pub fn create_native_widget_from_winit_window(&self, _: &Window)
+                                                  -> Result<NativeWidget, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
     }
 }
