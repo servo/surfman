@@ -2,9 +2,9 @@
 //
 //! A thread-local handle to the device.
 
-use crate::egl::types::{EGLAttrib, EGLint};
+use crate::egl::types::{EGLAttrib, EGLDisplay, EGLint};
 use crate::egl;
-use crate::platform::generic::egl::device::{EGL_FUNCTIONS, NativeDisplay, OwnedEGLDisplay};
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::{EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic::egl::ffi::{EGL_NO_DEVICE_EXT, EGL_PLATFORM_DEVICE_EXT};
 use crate::{Error, GLApi};
@@ -42,7 +42,7 @@ unsafe impl Send for Adapter {}
 /// Devices contain most of the relevant surface management methods.
 pub struct Device {
     pub(crate) egl_display: EGLDisplay,
-    pub(crate) d3d11_device: *mut ID3D11Device,
+    pub(crate) d3d11_device: ComPtr<ID3D11Device>,
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
     pub(crate) display_is_owned: bool,
 }
@@ -59,7 +59,7 @@ pub struct NativeDevice {
     /// The ANGLE EGL display.
     pub egl_display: EGLDisplay,
     /// The Direct3D 11 device that the ANGLE EGL display was created with.
-    pub d3d11_device: ComPtr<ID3D11Device>,
+    pub d3d11_device: *mut ID3D11Device,
     /// The Direct3D driver type that the device was created with.
     pub d3d_driver_type: D3D_DRIVER_TYPE,
 }
@@ -179,17 +179,14 @@ impl Device {
                                                          egl_device as *mut c_void,
                                                          &attribs[0]);
                 assert_ne!(egl_display, egl::NO_DISPLAY);
-                let native_display = Box::new(OwnedEGLDisplay { egl_display });
 
                 // I don't think this should ever fail.
                 let (mut major_version, mut minor_version) = (0, 0);
-                let result = egl.Initialize(native_display.egl_display(),
-                                            &mut major_version,
-                                            &mut minor_version);
+                let result = egl.Initialize(egl_display, &mut major_version, &mut minor_version);
                 assert_ne!(result, egl::FALSE);
 
                 Ok(Device {
-                    native_display,
+                    egl_display,
                     d3d11_device,
                     d3d_driver_type,
                     display_is_owned: true,
@@ -200,10 +197,10 @@ impl Device {
 
     pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
         unsafe {
-            native_device.d3d11_device.AddRef();
+            (*native_device.d3d11_device).AddRef();
             Ok(Device {
-                native_display: native_device.native_display,
-                d3d11_device: native_device.d3d11_device,
+                egl_display: native_device.egl_display,
+                d3d11_device: ComPtr::from_raw(native_device.d3d11_device),
                 d3d_driver_type: native_device.d3d_driver_type,
                 display_is_owned: false,
             })
@@ -251,12 +248,6 @@ impl Device {
     #[inline]
     pub fn gl_api(&self) -> GLApi {
         GLApi::GLES
-    }
-
-    /// Returns the underlying Direct3D 11 device.
-    #[inline]
-    pub fn native_device(&self) -> ComPtr<ID3D11Device> {
-        self.d3d11_device.clone()
     }
 }
 

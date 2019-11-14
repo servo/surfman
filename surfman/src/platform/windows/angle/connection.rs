@@ -76,7 +76,7 @@ impl Connection {
     #[inline]
     pub fn create_device_from_native_device(&self, native_device: NativeDevice)
                                             -> Result<Device, Error> {
-        Device::new(adapter)
+        Device::from_native_device(native_device)
     }
 
     /// Opens the display connection corresponding to the given `winit` window.
