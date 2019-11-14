@@ -9,6 +9,7 @@ use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
@@ -20,7 +21,7 @@ use std::thread;
 use winapi::shared::winerror::S_OK;
 use winapi::um::winbase::INFINITE;
 
-pub use crate::platform::generic::egl::context::ContextDescriptor;
+pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
 
 thread_local! {
     #[doc(hidden)]
@@ -46,7 +47,7 @@ thread_local! {
 pub struct Context {
     pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
-    framebuffer: Framebuffer<Surface>,
+    framebuffer: Framebuffer<Surface, ExternalEGLSurfaces>,
     context_is_owned: bool,
 }
 
@@ -95,6 +96,30 @@ impl Device {
         }
     }
 
+    /// Wraps a native `EGLContext` in a context object.
+    ///
+    /// The underlying `EGLContext` is not retained, as there is no way to do this in the EGL API.
+    /// Therefore, it is the caller's responsibility to keep it alive as long as this `Context`
+    /// remains alive.
+    pub unsafe fn create_context_from_native_context(&self, native_context: NativeContext)
+                                                     -> Result<Context, Error> {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+
+        // Create the context.
+        let context = Context {
+            egl_context: native_context.egl_context,
+            id: *next_context_id,
+            framebuffer: Framebuffer::External(ExternalEGLSurfaces {
+                draw: native_context.egl_draw_surface,
+                read: native_context.egl_read_surface,
+            }),
+            context_is_owned: false,
+        };
+        next_context_id.0 += 1;
+
+        Ok(context)
+    }
+
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
@@ -140,7 +165,7 @@ impl Device {
             let egl_surface = match context.framebuffer {
                 Framebuffer::Surface(ref surface) => surface.egl_surface,
                 Framebuffer::None => egl::NO_SURFACE,
-                Framebuffer::External => return Err(Error::ExternalRenderTarget),
+                Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
             };
 
             EGL_FUNCTIONS.with(|egl| {
@@ -230,7 +255,7 @@ impl Device {
 
         match context.framebuffer {
             Framebuffer::None => {}
-            Framebuffer::External => return Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
             Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
         }
 
@@ -274,13 +299,13 @@ impl Device {
                                        -> Result<Option<Surface>, Error> {
         match context.framebuffer {
             Framebuffer::None => return Ok(None),
-            Framebuffer::External => return Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(_) => {}
         }
 
         let surface = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => surface,
-            Framebuffer::None | Framebuffer::External => unreachable!(),
+            Framebuffer::None | Framebuffer::External(_) => unreachable!(),
         };
 
         match surface.win32_objects {
@@ -311,8 +336,23 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
+    }
+
+    /// Given a context, returns its underlying EGL context and attached surfaces.
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
+            Framebuffer::Surface(Surface { egl_surface, .. }) => (egl_surface, egl_surface),
+            Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
+            Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
+        };
+
+        NativeContext {
+            egl_context: context.egl_context,
+            egl_draw_surface,
+            egl_read_surface,
         }
     }
 }

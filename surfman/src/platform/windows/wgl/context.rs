@@ -3,6 +3,7 @@
 //! Wrapper for WGL contexts on Windows.
 
 use crate::context::CREATE_CONTEXT_MUTEX;
+use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
 use super::device::{DCGuard, Device, HiddenWindow};
@@ -128,18 +129,24 @@ pub struct ContextDescriptor {
 /// 
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
 pub struct Context {
-    pub(crate) native_context: Box<dyn NativeContext>,
+    pub(crate) glrc: HGLRC,
     pub(crate) id: ContextID,
     pub(crate) gl: Gl,
     hidden_window: Option<HiddenWindow>,
-    pub(crate) framebuffer: Framebuffer,
+    pub(crate) framebuffer: Framebuffer<Surface, ()>,
+    status: ContextStatus,
 }
 
-pub(crate) trait NativeContext {
-    fn glrc(&self) -> HGLRC;
-    fn is_destroyed(&self) -> bool;
-    unsafe fn destroy(&mut self);
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ContextStatus {
+    Owned,
+    Referenced,
+    Destroyed,
 }
+
+/// Wrapper for a WGL `HGLRC`.
+#[derive(Clone)]
+pub struct NativeContext(pub HGLRC);
 
 thread_local! {
     static OPENGL_LIBRARY: HMODULE = {
@@ -153,11 +160,6 @@ lazy_static! {
     pub(crate) static ref WGL_EXTENSION_FUNCTIONS: WGLExtensionFunctions = {
         thread::spawn(extension_loader_thread).join().unwrap()
     };
-}
-
-pub(crate) enum Framebuffer {
-    None,
-    Surface(Surface),
 }
 
 impl Device {
@@ -267,22 +269,55 @@ impl Device {
 
             // Create the initial context.
             let context = Context {
-                native_context: Box::new(OwnedGLRC { glrc }),
+                glrc,
                 id: *next_context_id,
                 gl,
                 hidden_window: Some(hidden_window),
                 framebuffer: Framebuffer::None,
+                status: ContextStatus::Owned,
             };
             next_context_id.0 += 1;
             Ok(context)
         }
     }
 
+    /// Wraps an `HGLRC` in a `surfman` context and returns it.
+    ///
+    /// The `HGLRC` is not retained, as there is no way to do this in the Win32 API. Therefore, it
+    /// is the caller's responsibility to make sure the OpenGL context is not destroyed before this
+    /// `Context` is.
+    pub unsafe fn create_context_from_native_context(native_context: NativeContext)
+                                                     -> Result<Context, Error> {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let hidden_window = HiddenWindow::new();
+
+        // Load the GL functions.
+        let gl = {
+            let hidden_window_dc = hidden_window.get_dc();
+            let dc = hidden_window_dc.dc;
+            let _guard = CurrentContextGuard::new();
+            let ok = wglMakeCurrent(dc, native_context.0);
+            assert_ne!(ok, FALSE);
+            Gl::load_with(get_proc_address)
+        };
+
+        let context = Context {
+            glrc: native_context.0,
+            id: *next_context_id,
+            gl,
+            hidden_window: Some(hidden_window),
+            framebuffer: Framebuffer::External(()),
+            status: ContextStatus::Referenced,
+        };
+        next_context_id.0 += 1;
+        Ok(context)
+    }
+
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.native_context.is_destroyed() {
+        if context.status == ContextStatus::Destroyed {
             return Ok(());
         }
 
@@ -291,9 +326,17 @@ impl Device {
         }
 
         unsafe {
-            context.native_context.destroy();
+            if wglGetCurrentContext() == context.glrc {
+                wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
+            }
+
+            if context.status == ContextStatus::Owned {
+                wglDeleteContext(context.glrc);
+            }
         }
 
+        context.glrc = ptr::null_mut();
+        context.status = ContextStatus::Destroyed;
         Ok(())
     }
 
@@ -404,7 +447,7 @@ impl Device {
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
             let dc_guard = self.get_context_dc(context);
-            let ok = wglMakeCurrent(dc_guard.dc, context.native_context.glrc());
+            let ok = wglMakeCurrent(dc_guard.dc, context.glrc);
             if ok != FALSE {
                 Ok(())
             } else {
@@ -444,7 +487,7 @@ impl Device {
     #[inline]
     fn context_is_current(&self, context: &Context) -> bool {
         unsafe {
-            wglGetCurrentContext() == context.native_context.glrc()
+            wglGetCurrentContext() == context.glrc
         }
     }
 
@@ -466,6 +509,7 @@ impl Device {
 
         match context.framebuffer {
             Framebuffer::None => {}
+            Framebuffer::External(()) => return Err((Error::ExternalRenderTarget, surface)),
             Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
         }
 
@@ -493,6 +537,7 @@ impl Device {
                 self.unlock_surface(&surface);
                 Ok(Some(surface))
             }
+            Framebuffer::External(()) => Err(Error::ExternalRenderTarget),
             Framebuffer::None => Ok(None),
         }
     }
@@ -507,7 +552,9 @@ impl Device {
                 Framebuffer::Surface (Surface {
                     win32_objects: Win32Objects::Texture { .. },
                     ..
-                }) | Framebuffer::None => context.hidden_window.as_ref().unwrap().get_dc(),
+                }) | Framebuffer::External(()) | Framebuffer::None => {
+                    context.hidden_window.as_ref().unwrap().get_dc()
+                }
             }
         }
     }
@@ -527,8 +574,15 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
+            Framebuffer::External(()) => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
+    }
+
+    /// Given a context, returns its underlying `HGLRC`.
+    #[inline]
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        NativeContext(context.glrc)
     }
 }
 
@@ -680,32 +734,6 @@ extern "system" fn extension_loader_window_proc(hwnd: HWND,
             }
             _ => winuser::DefWindowProcA(hwnd, uMsg, wParam, lParam),
         }
-    }
-}
-
-struct OwnedGLRC {
-    glrc: HGLRC,
-}
-
-impl NativeContext for OwnedGLRC {
-    #[inline]
-    fn glrc(&self) -> HGLRC {
-        debug_assert!(!self.is_destroyed());
-        self.glrc
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.glrc.is_null()
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        if wglGetCurrentContext() == self.glrc {
-            wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
-        }
-        wglDeleteContext(self.glrc);
-        self.glrc = ptr::null_mut();
     }
 }
 

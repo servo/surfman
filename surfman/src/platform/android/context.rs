@@ -9,6 +9,7 @@ use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
 use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
 use super::surface::{Surface, SurfaceObjects};
@@ -44,7 +45,7 @@ pub struct Context {
     pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
     pub(crate) pbuffer: EGLSurface,
-    framebuffer: Framebuffer,
+    framebuffer: Framebuffer<Surface, ExternalEGLSurfaces>,
     context_is_owned: bool,
 }
 
@@ -55,15 +56,6 @@ impl Drop for Context {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
-}
-
-pub(crate) enum Framebuffer {
-    None,
-    External {
-        egl_draw_surface: EGLSurface,
-        egl_read_surface: EGLSurface,
-    },
-    Surface(Surface),
 }
 
 impl Device {
@@ -348,7 +340,7 @@ impl Device {
                 objects: SurfaceObjects::Window { egl_surface },
                 ..
             }) => (egl_surface, egl_surface),
-            Framebuffer::External { egl_draw_surface, egl_read_surface } => {
+            Framebuffer::External(ExternalEGLSurfaces { egl_draw_surface, egl_read_surface }) => {
                 (egl_draw_surface, egl_read_surface)
             }
             Framebuffer::Surface(Surface {

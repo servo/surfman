@@ -32,11 +32,11 @@ pub struct SurfaceInfo {
 
 // The default framebuffer for a context.
 #[allow(dead_code)]
-pub(crate) enum Framebuffer<S> {
+pub(crate) enum Framebuffer<S, E> {
     // No framebuffer has been attached to the context.
     None,
     // The context is externally-managed.
-    External,
+    External(E),
     // The context renders to a surface.
     Surface(S),
 }

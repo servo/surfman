@@ -11,6 +11,11 @@ use super::device::EGL_FUNCTIONS;
 
 use euclid::default::Size2D;
 
+pub(crate) struct ExternalEGLSurfaces {
+    pub(crate) draw: EGLSurface,
+    pub(crate) read: EGLSurface,
+}
+
 #[allow(dead_code)]
 pub(crate) unsafe fn create_pbuffer_surface(egl_display: EGLDisplay,
                                             egl_config: EGLConfig,

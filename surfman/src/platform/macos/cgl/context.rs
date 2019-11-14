@@ -208,7 +208,7 @@ impl Device {
         }
     }
 
-    /// Wraps a `CGLContext` in a native context and returns it.
+    /// Wraps a `CGLContext` in a `surfman` context and returns it.
     /// 
     /// This function takes ownership of the native context and does not adjust its reference
     /// count.
