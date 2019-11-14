@@ -3,9 +3,9 @@
 //! Wrapper for GLX contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::gl::Gl;
 use crate::gl::types::GLubyte;
-use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXFBConfig, GLXPixmap};
+use crate::gl::{self, Gl};
+use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
@@ -77,25 +77,35 @@ lazy_static! {
 /// 
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
 pub struct Context {
-    pub(crate) native_context: Box<dyn NativeContext>,
+    pub(crate) glx_context: GLXContext,
     pub(crate) id: ContextID,
-    framebuffer: Framebuffer<Surface>,
+    framebuffer: Framebuffer<Surface, GLXDrawable>,
     gl_version: GLVersion,
     dummy_glx_pixmap: GLXPixmap,
     #[allow(dead_code)]
     dummy_pixmap: Pixmap,
+    status: ContextStatus,
 }
 
-pub(crate) trait NativeContext {
-    fn glx_context(&self) -> GLXContext;
-    fn is_destroyed(&self) -> bool;
-    unsafe fn destroy(&mut self, device: &Device);
+/// Wraps a native GLX context and associated drawable.
+pub struct NativeContext {
+    /// The associated GLX context.
+    pub glx_context: GLXContext,
+    /// The drawable (pixmap or window) bound to the context.
+    pub glx_drawable: GLXDrawable,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ContextStatus {
+    Owned,
+    Referenced,
+    Destroyed,
 }
 
 impl Drop for Context {
     #[inline]
     fn drop(&mut self) {
-        if !self.native_context.is_destroyed() && !thread::panicking() {
+        if self.status != ContextStatus::Destroyed && !thread::panicking() {
             panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
@@ -204,12 +214,13 @@ impl Device {
                                             &dummy_pixmap_size)?;
 
                 let context = Context {
-                    native_context: Box::new(OwnedGLXContext { glx_context }),
+                    glx_context,
                     id: *next_context_id,
                     framebuffer: Framebuffer::None,
                     gl_version: descriptor.gl_version,
                     dummy_glx_pixmap,
                     dummy_pixmap,
+                    status: ContextStatus::Owned,
                 };
                 next_context_id.0 += 1;
                 Ok(context)
@@ -217,11 +228,78 @@ impl Device {
         })
     }
 
+    /// Wraps a native `GLXContext` in a `Context`.
+    ///
+    /// The native GLX context is not retained, as there is no way to do this in the GLX API.
+    /// Therefore, it is the caller's responsibility to ensure that the returned `Context` object
+    /// does not outlive the `GLXContext`.
+    pub unsafe fn create_context_with_native_context(&self, native_context: NativeContext)
+                                                     -> Result<Context, Error> {
+        // Take a lock.
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+
+        let display = self.connection.native_display.display();
+        let glx_display = self.glx_display();
+
+        GLX_FUNCTIONS.with(|glx| {
+            GL_FUNCTIONS.with(|gl| {
+                let gl_version = {
+                    let _guard = CurrentContextGuard::new();
+
+                    let ok = glx.MakeCurrent(glx_display,
+                                             native_context.glx_drawable,
+                                             native_context.glx_context);
+                    if ok == xlib::False {
+                        return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
+                    }
+
+                    let (mut gl_major_version, mut gl_minor_version) = (0, 0);
+                    gl.GetIntegerv(gl::MAJOR_VERSION, &mut gl_major_version);
+                    gl.GetIntegerv(gl::MINOR_VERSION, &mut gl_minor_version);
+                    assert!(gl_major_version > 0);
+
+                    GLVersion { major: gl_major_version as u8, minor: gl_minor_version as u8 }
+                };
+
+                // Introspect the context to create a context descriptor.
+                let glx_fb_config_id = get_fb_config_id(glx_display, native_context.glx_context);
+                let context_descriptor = ContextDescriptor {
+                    pixmap_glx_fb_config_id: glx_fb_config_id,
+                    gl_version,
+                };
+
+                // Grab the framebuffer config from that descriptor.
+                let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
+
+                // Create dummy pixmaps as necessary.
+                let dummy_pixmap_size = Size2D::new(DUMMY_PIXMAP_SIZE, DUMMY_PIXMAP_SIZE);
+                let (dummy_glx_pixmap, dummy_pixmap) =
+                    surface::create_pixmaps(display,
+                                            glx_display,
+                                            glx_fb_config,
+                                            &dummy_pixmap_size)?;
+
+
+                let context = Context {
+                    glx_context: native_context.glx_context,
+                    id: *next_context_id,
+                    framebuffer: Framebuffer::External(native_context.glx_drawable),
+                    gl_version,
+                    dummy_glx_pixmap,
+                    dummy_pixmap,
+                    status: ContextStatus::Referenced,
+                };
+                next_context_id.0 += 1;
+                Ok(context)
+            })
+        })
+    }
+
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.native_context.is_destroyed() {
+        if context.status == ContextStatus::Destroyed {
             return Ok(());
         }
 
@@ -235,9 +313,15 @@ impl Device {
             GLX_FUNCTIONS.with(|glx| {
                 glx.DestroyPixmap(glx_display, context.dummy_glx_pixmap);
                 context.dummy_glx_pixmap = 0;
-            });
 
-            context.native_context.destroy(self);
+                glx.MakeCurrent(glx_display, 0, ptr::null_mut());
+
+                if context.status == ContextStatus::Owned {
+                    glx.DestroyContext(glx_display, context.glx_context);
+                }
+
+                context.glx_context = ptr::null_mut();
+            });
         }
 
         Ok(())
@@ -247,7 +331,7 @@ impl Device {
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            let glx_context = context.native_context.glx_context();
+            let glx_context = context.glx_context;
             let glx_fb_config_id = get_fb_config_id(self.glx_display(), glx_context);
             ContextDescriptor {
                 pixmap_glx_fb_config_id: glx_fb_config_id,
@@ -263,19 +347,8 @@ impl Device {
         let glx_display = self.glx_display();
         GLX_FUNCTIONS.with(|glx| {
             unsafe {
-                let glx_context = context.native_context.glx_context();
-                let glx_drawable = match context.framebuffer {
-                    Framebuffer::Surface(ref surface) => {
-                        match surface.drawables {
-                            SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
-                            SurfaceDrawables::Window { window } => window,
-                        }
-                    }
-                    Framebuffer::None => context.dummy_glx_pixmap,
-                    Framebuffer::External => {
-                        return Err(Error::ExternalRenderTarget)
-                    }
-                };
+                let glx_context = context.glx_context;
+                let glx_drawable = self.context_glx_drawable(context);
 
                 let ok = glx.MakeCurrent(glx_display, glx_drawable, glx_context);
                 if ok == xlib::False {
@@ -285,6 +358,19 @@ impl Device {
                 Ok(())
             }
         })
+    }
+
+    fn context_glx_drawable(&self, context: &Context) -> GLXDrawable {
+        match context.framebuffer {
+            Framebuffer::Surface(ref surface) => {
+                match surface.drawables {
+                    SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
+                    SurfaceDrawables::Window { window } => window,
+                }
+            }
+            Framebuffer::None => context.dummy_glx_pixmap,
+            Framebuffer::External(glx_drawable) => glx_drawable,
+        }
     }
 
     /// Removes the current OpenGL context from this thread.
@@ -370,7 +456,7 @@ impl Device {
                 context.framebuffer = Framebuffer::Surface(surface);
                 Ok(())
             }
-            Framebuffer::External => Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::External(_) => Err((Error::ExternalRenderTarget, surface)),
             Framebuffer::Surface(_) => Err((Error::SurfaceAlreadyBound, surface)),
         }
     }
@@ -386,7 +472,7 @@ impl Device {
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => Ok(Some(surface)),
             Framebuffer::None => Ok(None),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
         }
     }
 
@@ -396,7 +482,7 @@ impl Device {
 
         let surface = match context.framebuffer {
             Framebuffer::Surface(ref mut surface) => surface,
-            Framebuffer::None | Framebuffer::External => return Ok(()),
+            Framebuffer::None | Framebuffer::External(_) => return Ok(()),
         };
 
         match surface.drawables {
@@ -431,58 +517,18 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
-            Framebuffer::External => Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
     }
-}
 
-struct OwnedGLXContext {
-    glx_context: GLXContext,
-}
-
-impl NativeContext for OwnedGLXContext {
+    /// Given a context, returns its underlying GLX context object and associated drawable.
     #[inline]
-    fn glx_context(&self) -> GLXContext {
-        debug_assert!(!self.is_destroyed());
-        self.glx_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.glx_context.is_null()
-    }
-
-    unsafe fn destroy(&mut self, device: &Device) {
-        assert!(!self.is_destroyed());
-
-        let glx_display = device.glx_display();
-        GLX_FUNCTIONS.with(|glx| {
-            glx.MakeCurrent(glx_display, 0, ptr::null_mut());
-            glx.DestroyContext(glx_display, self.glx_context);
-            self.glx_context = ptr::null_mut();
-        });
-    }
-}
-
-struct UnsafeGLXContextRef {
-    glx_context: GLXContext,
-}
-
-impl NativeContext for UnsafeGLXContextRef {
-    #[inline]
-    fn glx_context(&self) -> GLXContext {
-        self.glx_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.glx_context.is_null()
-    }
-
-    unsafe fn destroy(&mut self, _: &Device) {
-        assert!(!self.is_destroyed());
-        self.glx_context = ptr::null_mut();
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        NativeContext {
+            glx_context: context.glx_context,
+            glx_drawable: self.context_glx_drawable(context),
+        }
     }
 }
 
@@ -562,5 +608,35 @@ unsafe fn get_fb_config_from_id(display: *mut Display,
 unsafe extern "C" fn xlib_error_handler(_: *mut Display, event: *mut XErrorEvent) -> c_int {
     LAST_X_ERROR_CODE.with(|error_code| error_code.set((*event).error_code));
     0
+}
+
+struct CurrentContextGuard {
+    display: *mut GlxDisplay,
+    glx_drawable: GLXDrawable,
+    glx_context: GLXContext,
+}
+
+impl CurrentContextGuard {
+    fn new() -> CurrentContextGuard {
+        GLX_FUNCTIONS.with(|glx| {
+            unsafe {
+                CurrentContextGuard {
+                    display: glx.GetCurrentDisplay(),
+                    glx_context: glx.GetCurrentContext(),
+                    glx_drawable: glx.GetCurrentDrawable(),
+                }
+            }
+        })
+    }
+}
+
+impl Drop for CurrentContextGuard {
+    fn drop(&mut self) {
+        GLX_FUNCTIONS.with(|glx| {
+            unsafe {
+                glx.MakeCurrent(self.display, self.glx_drawable, self.glx_context);
+            }
+        })
+    }
 }
 
