@@ -122,9 +122,7 @@ impl Device {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Create a dummy pbuffer.
-        let pbuffer = unsafe {
-            context::create_dummy_pbuffer(self.egl_display, native_context.egl_context)
-        };
+        let pbuffer = context::create_dummy_pbuffer(self.egl_display, native_context.egl_context);
 
         // Create the context.
         let context = Context {
@@ -340,6 +338,29 @@ impl Device {
             Framebuffer::None => Ok(None),
             Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+        }
+    }
+
+    /// Given a context, returns its underlying EGL context and attached surfaces.
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
+            Framebuffer::Surface(Surface {
+                objects: SurfaceObjects::Window { egl_surface },
+                ..
+            }) => (egl_surface, egl_surface),
+            Framebuffer::External { egl_draw_surface, egl_read_surface } => {
+                (egl_draw_surface, egl_read_surface)
+            }
+            Framebuffer::Surface(Surface {
+                objects: SurfaceObjects::HardwareBuffer { .. },
+                ..
+            }) | Framebuffer::None => (context.pbuffer, context.pbuffer),
+        };
+
+        NativeContext {
+            egl_context: context.egl_context,
+            egl_draw_surface,
+            egl_read_surface,
         }
     }
 }

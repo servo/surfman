@@ -386,6 +386,12 @@ impl Device {
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
     }
+
+    /// Given a context, returns its underlying OSMesa context object.
+    #[inline]
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        NativeContext(context.osmesa_context)
+    }
 }
 
 fn get_proc_address(symbol_name: &str) -> *const c_void {

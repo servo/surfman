@@ -8,12 +8,13 @@ use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use super::device::Device;
 use super::error::ToWindowingApiError;
+use super::ffi::{CGLReleaseContext, CGLRetainContext};
 use super::surface::Surface;
 
-use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat};
-use cgl::{CGLDestroyContext, CGLError, CGLGetCurrentContext, CGLGetPixelFormat};
-use cgl::{CGLPixelFormatAttribute, CGLPixelFormatObj, CGLReleasePixelFormat, CGLRetainPixelFormat};
-use cgl::{CGLSetCurrentContext, kCGLPFAAllowOfflineRenderers, kCGLPFAAlphaSize, kCGLPFADepthSize};
+use cgl::{CGLChoosePixelFormat, CGLContextObj, CGLCreateContext, CGLDescribePixelFormat, CGLError};
+use cgl::{CGLGetCurrentContext, CGLGetPixelFormat, CGLPixelFormatAttribute, CGLPixelFormatObj};
+use cgl::{CGLReleasePixelFormat, CGLRetainPixelFormat, CGLSetCurrentContext};
+use cgl::{kCGLPFAAllowOfflineRenderers, kCGLPFAAlphaSize, kCGLPFADepthSize};
 use cgl::{kCGLPFAStencilSize, kCGLPFAOpenGLProfile};
 use core_foundation::base::TCFType;
 use core_foundation::bundle::CFBundleGetBundleWithIdentifier;
@@ -82,11 +83,8 @@ pub struct Context {
     framebuffer: Framebuffer<Surface>,
 }
 
-pub(crate) trait NativeContext {
-    fn cgl_context(&self) -> CGLContextObj;
-    fn is_destroyed(&self) -> bool;
-    unsafe fn destroy(&mut self);
-}
+/// Wraps a native CGL context object.
+pub struct NativeContext(CGLContextObj);
 
 impl Drop for Context {
     #[inline]
@@ -183,11 +181,9 @@ impl Device {
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
-        // Take a lock so that we're only creating one context at a time. This serves two purposes:
-        //
-        // 1. CGLChoosePixelFormat fails, returning `kCGLBadConnection`, if multiple threads try to
-        //    open a display connection simultaneously.
-        // 2. The first thread to create a context needs to load the GL function pointers.
+        // Take a lock so that we're only creating one context at a time. `CGLChoosePixelFormat`
+        // will fail, returning `kCGLBadConnection`, if multiple threads try to open a display
+        // connection simultaneously.
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         unsafe {
@@ -212,6 +208,23 @@ impl Device {
         }
     }
 
+    /// Wraps a `CGLContext` in a native context and returns it.
+    /// 
+    /// This function takes ownership of the native context and does not adjust its reference
+    /// count.
+    pub unsafe fn create_context_from_native_context(native_context: NativeContext)
+                                                     -> Result<Context, Error> {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let context = Context {
+            cgl_context: native_context.0,
+            id: *next_context_id,
+            framebuffer: Framebuffer::None,
+        };
+        next_context_id.0 += 1;
+        mem::forget(native_context);
+        Ok(context)
+    }
+
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
@@ -227,7 +240,7 @@ impl Device {
 
         unsafe {
             CGLSetCurrentContext(ptr::null_mut());
-            CGLDestroyContext(context.cgl_context);
+            CGLReleaseContext(context.cgl_context);
             context.cgl_context = ptr::null_mut();
         }
 
@@ -398,6 +411,17 @@ impl Device {
     pub fn context_id(&self, context: &Context) -> ContextID {
         context.id
     }
+
+    /// Given a context, returns its underlying CGL context object.
+    /// 
+    /// The reference count on that context is incremented via `CGLRetainContext()` before
+    /// returning.
+    #[inline]
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        unsafe {
+            NativeContext(CGLRetainContext(context.cgl_context))
+        }
+    }
 }
 
 fn get_proc_address(symbol_name: &str) -> *const c_void {
@@ -426,6 +450,25 @@ impl CurrentContextGuard {
     fn new() -> CurrentContextGuard {
         unsafe {
             CurrentContextGuard { old_cgl_context: CGLGetCurrentContext() }
+        }
+    }
+}
+
+impl Clone for NativeContext {
+    #[inline]
+    fn clone(&self) -> NativeContext {
+        unsafe {
+            NativeContext(CGLRetainContext(self.0))
+        }
+    }
+}
+
+impl Drop for NativeContext {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            CGLReleaseContext(self.0);
+            self.0 = ptr::null_mut();
         }
     }
 }
