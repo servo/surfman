@@ -32,6 +32,7 @@ pub(crate) unsafe fn create_pbuffer_surface(egl_display: EGLDisplay,
     })
 }
 
+#[allow(dead_code)]
 pub(crate) unsafe fn bind_egl_image_to_gl_texture(gl: &Gl, egl_image: EGLImageKHR) -> GLuint {
     let mut texture = 0;
     gl.GenTextures(1, &mut texture);

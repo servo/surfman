@@ -68,7 +68,6 @@ pub struct Surface {
 /// Surface textures are local to a context, but that context does not have to be the same context
 /// as that associated with the underlying surface. The texture must be destroyed with the
 /// `destroy_surface_texture()` method, or a panic will occur.
-#[derive(Debug)]
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_surface: EGLSurface,
@@ -115,8 +114,12 @@ pub(crate) enum HandleOrTexture {
     Texture(*mut d3d11::ID3D11Texture2D)
 }
 
+/// Wraps a Windows `HWND` window handle.
 pub struct NativeWidget {
-    pub(crate) window_handle: HWND,
+    /// A window handle.
+    ///
+    /// This can be a top-level window or a control.
+    pub window_handle: HWND,
 }
 
 impl Device {
@@ -245,6 +248,9 @@ impl Device {
         }
     }
 
+    /// Creates a surface from a native Direct3D 11 texture.
+    ///
+    /// The texture is not retained.
     pub unsafe fn from_native_surface(
         &mut self,
         context: &Context,
@@ -266,9 +272,9 @@ impl Device {
     /// Calling this method on a widget surface returns a `WidgetAttached` error.
     #[allow(non_snake_case)]
     pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
         let share_handle = match surface.win32_objects {
-            Win32Objects::Window => return Err(Error::WidgetAttached),
+            Win32Objects::Window => return Err((Error::WidgetAttached, surface)),
             Win32Objects::Pbuffer { share_handle, .. } => share_handle,
         };
 
@@ -304,7 +310,7 @@ impl Device {
                                                       pbuffer_attributes.as_ptr());
                 if local_egl_surface == egl::NO_SURFACE {
                     let windowing_api_error = egl.GetError().to_windowing_api_error();
-                    return Err(Error::SurfaceImportFailed(windowing_api_error));
+                    return Err((Error::SurfaceImportFailed(windowing_api_error), surface));
                 }
 
                 let mut local_keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
@@ -338,7 +344,8 @@ impl Device {
                                         local_egl_surface,
                                         egl::BACK_BUFFER as GLint) == egl::FALSE {
                         let windowing_api_error = egl.GetError().to_windowing_api_error();
-                        return Err(Error::SurfaceTextureCreationFailed(windowing_api_error));
+                        return Err((Error::SurfaceTextureCreationFailed(windowing_api_error),
+                                    surface));
                     }
 
                     // Initialize the texture, for convenience.

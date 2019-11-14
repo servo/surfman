@@ -116,8 +116,12 @@ impl Debug for SurfaceTexture {
     }
 }
 
+/// Wraps a Windows `HWND` window handle.
 pub struct NativeWidget {
-    pub(crate) window_handle: HWND,
+    /// A window handle.
+    ///
+    /// This can be a top-level window or a control.
+    pub window_handle: HWND,
 }
 
 impl Device {
@@ -338,10 +342,7 @@ impl Device {
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, (Error, Surface)> {
         let dxgi_share_handle = match surface.win32_objects {
-            Win32Objects::Widget { .. } => {
-                surface.destroyed = true;
-                return Err(Error::WidgetAttached);
-            }
+            Win32Objects::Widget { .. } => return Err((Error::WidgetAttached, surface)),
             Win32Objects::Texture { dxgi_share_handle, .. } => dxgi_share_handle,
         };
 
@@ -350,7 +351,10 @@ impl Device {
                                    .as_ref()
                                    .expect("How did you make a surface without DX interop?");
 
-        let _guard = self.temporarily_make_context_current(context)?;
+        let _guard = match self.temporarily_make_context_current(context) {
+            Ok(guard) => guard,
+            Err(err) => return Err((err, surface)),
+        };
 
         unsafe {
             // Create a new texture wrapping the shared handle.
@@ -359,8 +363,7 @@ impl Device {
                                                               &ID3D11Texture2D::uuidof(),
                                                               &mut local_d3d11_texture);
             if !winerror::SUCCEEDED(result) || local_d3d11_texture.is_null() {
-                surface.destroyed = true;
-                return Err(Error::SurfaceImportFailed(WindowingApiError::Failed));
+                return Err((Error::SurfaceImportFailed(WindowingApiError::Failed), surface));
             }
             let local_d3d11_texture =
                 ComPtr::from_raw(local_d3d11_texture as *mut ID3D11Texture2D);
@@ -428,7 +431,10 @@ impl Device {
                                    .as_ref()
                                    .expect("How did you make a surface without DX interop?");
 
-        let _guard = self.temporarily_make_context_current(context)?;
+        let _guard = match self.temporarily_make_context_current(context) {
+            Ok(guard) => guard,
+            Err(err) => return Err((err, surface_texture)),
+        };
 
         unsafe {
             // Unlock the texture.
@@ -557,7 +563,7 @@ impl Device {
 }
 
 impl Surface {
-    pub fn id(&self) -> SurfaceID {
+    pub(crate) fn id(&self) -> SurfaceID {
         match self.win32_objects {
             Win32Objects::Texture { ref d3d11_texture, .. } => {
                 SurfaceID((*d3d11_texture).as_raw() as usize)

@@ -5,7 +5,6 @@
 use crate::context::CREATE_CONTEXT_MUTEX;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
-use super::connection::Connection;
 use super::device::{DCGuard, Device, HiddenWindow};
 use super::surface::{Surface, Win32Objects};
 
@@ -158,7 +157,6 @@ lazy_static! {
 
 pub(crate) enum Framebuffer {
     None,
-    External { dc: HDC },
     Surface(Surface),
 }
 
@@ -288,8 +286,8 @@ impl Device {
             return Ok(());
         }
 
-        if let Ok(Some(surface)) = self.unbind_surface_from_context(context) {
-            self.destroy_surface(context, surface)?;
+        if let Ok(Some(mut surface)) = self.unbind_surface_from_context(context) {
+            self.destroy_surface(context, &mut surface)?;
         }
 
         unsafe {
@@ -431,6 +429,13 @@ impl Device {
         }
     }
 
+    /// Fetches the address of an OpenGL function associated with this context.
+    /// 
+    /// OpenGL functions are local to a context. You should not use OpenGL functions on one context
+    /// with any other context.
+    /// 
+    /// This method is typically used with a function like `gl::load_with()` from the `gl` crate to
+    /// load OpenGL function pointers.
     #[inline]
     pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
         get_proc_address(symbol_name)
@@ -461,7 +466,6 @@ impl Device {
 
         match context.framebuffer {
             Framebuffer::None => {}
-            Framebuffer::External { .. } => return Err((Error::ExternalRenderTarget, surface)),
             Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
         }
 
@@ -472,7 +476,7 @@ impl Device {
 
         if is_current {
             // We need to make ourselves current again, because the surface changed.
-            self.make_context_current(context)?;
+            drop(self.make_context_current(context));
         }
 
         Ok(())
@@ -489,7 +493,6 @@ impl Device {
                 self.unlock_surface(&surface);
                 Ok(Some(surface))
             }
-            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
             Framebuffer::None => Ok(None),
         }
     }
@@ -497,7 +500,6 @@ impl Device {
     pub(crate) fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
         unsafe {
             match context.framebuffer {
-                Framebuffer::External { dc } => DCGuard::new(dc, None),
                 Framebuffer::Surface(Surface {
                     win32_objects: Win32Objects::Widget { window_handle },
                     ..
@@ -525,7 +527,6 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
-            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
     }
@@ -704,28 +705,6 @@ impl NativeContext for OwnedGLRC {
             wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
         }
         wglDeleteContext(self.glrc);
-        self.glrc = ptr::null_mut();
-    }
-}
-
-struct UnsafeGLRCRef {
-    glrc: HGLRC,
-}
-
-impl NativeContext for UnsafeGLRCRef {
-    #[inline]
-    fn glrc(&self) -> HGLRC {
-        debug_assert!(!self.is_destroyed());
-        self.glrc
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.glrc.is_null()
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
         self.glrc = ptr::null_mut();
     }
 }

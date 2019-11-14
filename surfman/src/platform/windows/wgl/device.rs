@@ -33,7 +33,9 @@ static AMD_GPU_SELECT_SYMBOL: &[u8] = b"AmdPowerXpressRequestHighPerformance\0";
 /// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
 #[derive(Clone, Debug)]
 pub enum Adapter {
+    #[doc(hidden)]
     HighPerformance,
+    #[doc(hidden)]
     LowPower,
 }
 

@@ -3,7 +3,7 @@
 //! Wrapper for EGL contexts managed by ANGLE using Direct3D 11 as a backend on Windows.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::egl::types::{EGLAttrib, EGLConfig, EGLDeviceEXT, EGLenum, EGLint};
+use crate::egl::types::{EGLConfig, EGLint};
 use crate::egl;
 use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard};
@@ -23,9 +23,8 @@ use winapi::um::winbase::INFINITE;
 
 pub use crate::platform::generic::egl::context::ContextDescriptor;
 
-const EGL_DEVICE_EXT: EGLenum = 0x322c;
-
 thread_local! {
+    #[doc(hidden)]
     pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
 }
 
@@ -104,8 +103,8 @@ impl Device {
             return Ok(());
         }
 
-        if let Ok(Some(surface)) = self.unbind_surface_from_context(context) {
-            self.destroy_surface(context, surface)?;
+        if let Ok(Some(mut surface)) = self.unbind_surface_from_context(context) {
+            self.destroy_surface(context, &mut surface)?;
         }
 
         unsafe {
@@ -228,9 +227,10 @@ impl Device {
         // If the surface does not use a DXGI keyed mutex, then finish.
         // FIXME(pcwalton): Is this necessary and sufficient?
         if !surface.uses_keyed_mutex() {
-            let _guard = self.temporarily_make_context_current(context)?;
-            unsafe {
-                GL_FUNCTIONS.with(|gl| gl.Finish());
+            if let Ok(_guard) = self.temporarily_make_context_current(context) {
+                unsafe {
+                    GL_FUNCTIONS.with(|gl| gl.Finish());
+                }
             }
         }
 
@@ -250,7 +250,7 @@ impl Device {
 
         if is_current {
             // We need to make ourselves current again, because the surface changed.
-            self.make_context_current(context)?;
+            drop(self.make_context_current(context));
         }
 
         Ok(())
