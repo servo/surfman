@@ -6,6 +6,8 @@ use crate::GLApi;
 use crate::platform::macos::system::device::{Adapter as SystemAdapter, Device as SystemDevice};
 use super::connection::Connection;
 
+pub use crate::platform::macos::system::device::NativeDevice;
+
 /// Represents a hardware display adapter that can be used for rendering (including the CPU).
 ///
 /// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.

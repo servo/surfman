@@ -6,7 +6,7 @@
 //! global window server connection.
 
 use crate::Error;
-use super::device::{Adapter, Device};
+use super::device::{Adapter, Device, NativeDevice};
 use super::surface::{NSView, NativeWidget};
 
 use cocoa::base::id;
@@ -85,6 +85,13 @@ impl Connection {
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         Device::new((*adapter).clone())
+    }
+
+    /// An alias for `connection.create_device()` with the default adapter.
+    #[inline]
+    pub unsafe fn create_device_from_native_device(&self, _: NativeDevice)
+                                                   -> Result<Device, Error> {
+        self.create_device(&self.create_adapter()?)
     }
 
     /// Opens the display connection corresponding to the given `winit` window.

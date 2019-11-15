@@ -24,6 +24,12 @@ pub struct Device {
     phantom: PhantomData<*mut ()>,
 }
 
+/// An empty type representing the native device.
+///
+/// Since display server connections are implicit on macOS, this type doesn't contain anything.
+#[derive(Clone)]
+pub struct NativeDevice;
+
 impl Device {
     #[inline]
     pub(crate) fn new(adapter: Adapter) -> Result<Device, Error> {

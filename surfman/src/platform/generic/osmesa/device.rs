@@ -21,6 +21,13 @@ pub struct Device {
     pub(crate) phantom: PhantomData<*mut ()>,
 }
 
+/// An empty type representing the native device.
+///
+/// Since there's no need to open a device with a CPU backend like OSMesa, there's nothing in this
+/// type.
+#[derive(Clone)]
+pub struct NativeDevice;
+
 impl Device {
     #[inline]
     pub(crate) fn new() -> Result<Device, Error> {

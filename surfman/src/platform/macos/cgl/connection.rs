@@ -7,6 +7,7 @@
 
 use crate::Error;
 use crate::platform::macos::system::connection::Connection as SystemConnection;
+use crate::platform::macos::system::device::NativeDevice;
 use crate::platform::macos::system::surface::NativeWidget;
 use super::device::{Adapter, Device};
 
@@ -56,6 +57,13 @@ impl Connection {
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         self.0.create_device(&adapter.0).map(Device)
+    }
+
+    /// An alias for `connection.create_device()` with the default adapter.
+    #[inline]
+    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                                   -> Result<Device, Error> {
+        self.0.create_device_from_native_device(native_device).map(Device)
     }
 
     /// Opens the display connection corresponding to the given `winit` window.
