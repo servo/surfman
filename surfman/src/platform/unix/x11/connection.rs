@@ -114,7 +114,7 @@ impl Connection {
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
         if let Some(display) = window.get_xlib_display() {
-            Connection::from_native_connection(NativeConnection(display))
+            Connection::from_native_connection(NativeConnection(display as *mut Display))
         } else {
             Err(Error::IncompatibleWinitWindow)
         }
@@ -131,9 +131,5 @@ impl Connection {
             None => Err(Error::IncompatibleNativeWidget),
         }
     }
-}
-
-pub(crate) struct SharedDisplay {
-    pub(crate) display: Option<Arc<OwnedDisplay>>,
 }
 

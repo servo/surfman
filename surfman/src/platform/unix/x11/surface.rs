@@ -127,7 +127,7 @@ impl Device {
 
     fn create_generic_surface(&mut self, context: &Context, size: &Size2D<i32>)
                               -> Result<Surface, Error> {
-        let display = self.connection.native_display.display();
+        let display = self.connection.display_holder.display;
         let glx_display = self.glx_display();
 
         let context_descriptor = self.context_descriptor(context);
@@ -146,7 +146,7 @@ impl Device {
 
     fn create_widget_surface(&mut self, context: &Context, native_widget: NativeWidget)
                              -> Result<Surface, Error> {
-        let display = self.connection.native_display.display();
+        let display = self.connection.display_holder.display;
         unsafe {
             let (mut root_window, mut x, mut y, mut width, mut height) = (0, 0, 0, 0, 0);
             let (mut border_width, mut depth) = (0, 0);
@@ -214,7 +214,7 @@ impl Device {
                                      gl::CLAMP_TO_EDGE as GLint);
 
                     // Bind the surface's GLX pixmap to the texture.
-                    let display = self.connection.native_display.display() as *mut GlxDisplay;
+                    let display = self.connection.display_holder.display as *mut GlxDisplay;
                     glx.BindTexImageEXT(display,
                                         glx_pixmap,
                                         glx::FRONT_EXT as c_int,
@@ -281,7 +281,7 @@ impl Device {
                     gl.BindTexture(gl::TEXTURE_RECTANGLE, surface_texture.gl_texture);
 
                     // Release the GLX pixmap.
-                    let display = self.connection.native_display.display() as *mut GlxDisplay;
+                    let display = self.connection.display_holder.display as *mut GlxDisplay;
                     glx.ReleaseTexImageEXT(display, glx_pixmap, glx::FRONT_EXT as c_int);
 
                     gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);

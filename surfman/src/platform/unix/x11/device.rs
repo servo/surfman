@@ -47,7 +47,7 @@ impl Device {
     }
 
     pub(crate) fn glx_display(&self) -> *mut GlxDisplay {
-        self.connection.native_display.display() as *mut GlxDisplay
+        self.connection.display_holder.display as *mut GlxDisplay
     }
 }
 

@@ -126,7 +126,7 @@ impl Device {
     /// Context descriptors are local to this device.
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
-        let display = self.connection.native_display.display();
+        let display = self.connection.display_holder.display;
         let glx_display = self.glx_display();
 
         // Set environment variables as appropriate.
@@ -190,7 +190,7 @@ impl Device {
 
                 let prev_error_handler = XSetErrorHandler(Some(xlib_error_handler));
 
-                let display = self.connection.native_display.display();
+                let display = self.connection.display_holder.display;
                 let glx_display = self.glx_display();
                 let glx_context = glx.CreateContextAttribsARB(glx_display,
                                                               glx_fb_config as *const c_void,
@@ -238,7 +238,7 @@ impl Device {
         // Take a lock.
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
-        let display = self.connection.native_display.display();
+        let display = self.connection.display_holder.display;
         let glx_display = self.glx_display();
 
         GLX_FUNCTIONS.with(|glx| {
@@ -427,7 +427,7 @@ impl Device {
     pub(crate) fn context_descriptor_to_glx_fb_config(&self,
                                                       context_descriptor: &ContextDescriptor)
                                                       -> GLXFBConfig {
-        let display = self.connection.native_display.display();
+        let display = self.connection.display_holder.display;
         let glx_display = self.glx_display();
         let glx_fb_config_id = context_descriptor.pixmap_glx_fb_config_id;
         unsafe {
