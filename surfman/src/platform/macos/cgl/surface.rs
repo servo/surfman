@@ -17,7 +17,7 @@ use io_surface::{self, IOSurface};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
-pub use crate::platform::macos::system::surface::NativeWidget;
+pub use crate::platform::macos::system::surface::{NativeSurface, NativeWidget};
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
 
@@ -297,6 +297,14 @@ impl Device {
             context_id: surface.context_id,
             framebuffer_object: surface.framebuffer_object,
         }
+    }
+
+    /// Returns the native `IOSurface` corresponding to this surface.
+    ///
+    /// The reference count is increased on the `IOSurface` before returning.
+    #[inline]
+    pub fn native_surface(&self, surface: &Surface) -> NativeSurface {
+        self.0.native_surface(&surface.system_surface)
     }
 }
 

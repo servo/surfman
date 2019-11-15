@@ -19,7 +19,7 @@ use core_foundation::string::CFString;
 use core_graphics::geometry::{CGRect, CGSize, CG_ZERO_POINT};
 use display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use euclid::default::Size2D;
-use io_surface::{self, IOSurface, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
+use io_surface::{self, IOSurface, IOSurfaceRef, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
 use io_surface::{kIOSurfaceCacheMode, kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
 use mach::kern_return::KERN_SUCCESS;
 use std::fmt::{self, Debug, Formatter};
@@ -49,6 +49,10 @@ pub struct Surface {
     pub(crate) destroyed: bool,
     pub(crate) view_info: Option<ViewInfo>,
 }
+
+/// A wrapper around an `IOSurface`.
+#[derive(Clone)]
+pub struct NativeSurface(pub IOSurfaceRef);
 
 unsafe impl Send for Surface {}
 
@@ -232,6 +236,17 @@ impl Device {
             size: surface.size,
             id: surface.id(),
         }
+    }
+
+    /// Returns the native `IOSurface` corresponding to this surface.
+    ///
+    /// The reference count is increased on the `IOSurface` before returning.
+    #[inline]
+    pub fn native_surface(&self, surface: &Surface) -> NativeSurface {
+        let io_surface = surface.io_surface.clone();
+        let io_surface_ref = io_surface.as_concrete_TypeRef();
+        mem::forget(io_surface);
+        NativeSurface(io_surface_ref)
     }
 }
 

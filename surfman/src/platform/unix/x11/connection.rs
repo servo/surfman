@@ -66,8 +66,8 @@ impl Connection {
     /// the caller's responsibility to ensure that the display connection is not closed before this
     /// `Connection` object is disposed of.
     #[inline]
-    pub fn from_native_connection(native_connection: NativeConnection)
-                                  -> Result<Connection, Error> {
+    pub unsafe fn from_native_connection(native_connection: NativeConnection)
+                                         -> Result<Connection, Error> {
         Ok(Connection {
             display_holder: Arc::new(DisplayHolder {
                 display: native_connection.0,

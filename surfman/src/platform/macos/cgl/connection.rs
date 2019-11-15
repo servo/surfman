@@ -14,6 +14,8 @@ use super::device::{Adapter, Device};
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
+pub use crate::platform::macos::system::connection::NativeConnection;
+
 /// A connection to the display server.
 #[derive(Clone)]
 pub struct Connection(pub SystemConnection);
@@ -23,6 +25,13 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         SystemConnection::new().map(Connection)
+    }
+
+    /// An alias for `Connection::new()`, present for consistency with other backends.
+    #[inline]
+    pub unsafe fn from_native_connection(native_connection: NativeConnection)
+                                         -> Result<Connection, Error> {
+        SystemConnection::from_native_connection(native_connection).map(Connection)
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.

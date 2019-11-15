@@ -27,6 +27,12 @@ use winit::os::macos::WindowExt;
 #[derive(Clone)]
 pub struct Connection;
 
+/// An empty placeholder for native connections.
+///
+/// Connections to the CGS window server are implicit on macOS, so this is a zero-sized type.
+#[derive(Clone)]
+pub struct NativeConnection;
+
 impl Connection {
     /// Connects to the default display.
     #[inline]
@@ -51,6 +57,12 @@ impl Connection {
         }
 
         Ok(Connection)
+    }
+
+    /// An alias for `Connection::new()`, present for consistency with other backends.
+    #[inline]
+    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
+        Connection::new()
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
