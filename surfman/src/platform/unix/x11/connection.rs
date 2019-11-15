@@ -17,22 +17,31 @@ use winit::Window;
 use winit::os::unix::WindowExt;
 
 /// A connection to the X11 display server.
+#[derive(Clone)]
 pub struct Connection {
-    pub(crate) native_display: Box<dyn NativeDisplay>,
+    pub(crate) display_holder: Arc<DisplayHolder>,
 }
 
 unsafe impl Send for Connection {}
 
-pub(crate) trait NativeDisplay {
-    fn display(&self) -> *mut Display;
-    fn is_destroyed(&self) -> bool;
-    fn retain(&self) -> Box<dyn NativeDisplay>;
-    unsafe fn destroy(&mut self);
+pub(crate) struct DisplayHolder {
+    pub(crate) display: *mut Display,
+    pub(crate) display_is_owned: bool,
 }
 
-impl Clone for Connection {
-    fn clone(&self) -> Connection {
-        Connection { native_display: self.native_display.retain() }
+/// Wrapper for an X11 `Display`.
+#[derive(Clone)]
+pub struct NativeConnection(pub *mut Display);
+
+impl Drop for DisplayHolder {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            if self.display_is_owned {
+                XCloseDisplay(self.display);
+            }
+            self.display = ptr::null_mut();
+        }
     }
 }
 
@@ -45,9 +54,26 @@ impl Connection {
             if display.is_null() {
                 return Err(Error::ConnectionFailed);
             }
-            let display = Some(Arc::new(OwnedDisplay(display)));
-            Ok(Connection { native_display: Box::new(SharedDisplay { display }) })
+            Ok(Connection {
+                display_holder: Arc::new(DisplayHolder { display, display_is_owned: true }),
+            })
         }
+    }
+
+    /// Wraps an existing X11 `Display` in a `Connection`.
+    ///
+    /// The display is not retained, as there is no way to do that in the X11 API. Therefore, it is
+    /// the caller's responsibility to ensure that the display connection is not closed before this
+    /// `Connection` object is disposed of.
+    #[inline]
+    pub fn from_native_connection(native_connection: NativeConnection)
+                                  -> Result<Connection, Error> {
+        Ok(Connection {
+            display_holder: Arc::new(DisplayHolder {
+                display: native_connection.0,
+                display_is_owned: false,
+            }),
+        })
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
@@ -88,9 +114,7 @@ impl Connection {
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
         if let Some(display) = window.get_xlib_display() {
-            Ok(Connection {
-                native_display: Box::new(UnsafeDisplayRef { display: display as *mut Display }),
-            })
+            Connection::from_native_connection(NativeConnection(display))
         } else {
             Err(Error::IncompatibleWinitWindow)
         }
@@ -111,65 +135,5 @@ impl Connection {
 
 pub(crate) struct SharedDisplay {
     pub(crate) display: Option<Arc<OwnedDisplay>>,
-}
-
-pub(crate) struct OwnedDisplay(*mut Display);
-
-impl NativeDisplay for SharedDisplay {
-    #[inline]
-    fn display(&self) -> *mut Display {
-        debug_assert!(!self.is_destroyed());
-        self.display.as_ref().unwrap().0
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.display.is_none()
-    }
-
-    #[inline]
-    fn retain(&self) -> Box<dyn NativeDisplay> {
-        Box::new(SharedDisplay { display: self.display.clone() })
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        self.display = None;
-    }
-}
-
-impl Drop for OwnedDisplay {
-    fn drop(&mut self) {
-        unsafe {
-            XCloseDisplay(self.0);
-        }
-    }
-}
-
-pub(crate) struct UnsafeDisplayRef {
-    pub(crate) display: *mut Display,
-}
-
-impl NativeDisplay for UnsafeDisplayRef {
-    #[inline]
-    fn display(&self) -> *mut Display {
-        debug_assert!(!self.is_destroyed());
-        self.display
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.display.is_null()
-    }
-
-    #[inline]
-    fn retain(&self) -> Box<dyn NativeDisplay> {
-        Box::new(UnsafeDisplayRef { display: self.display })
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        self.display = ptr::null_mut();
-    }
 }
 
