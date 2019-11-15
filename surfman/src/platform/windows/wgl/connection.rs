@@ -2,7 +2,7 @@
 //
 //! A connection to the window server.
 //! 
-//! Window server handles are implicit in the Win32 API, so this is a no-op.
+//! Window server connections are implicit in the Win32 API, so this is a zero-sized type.
 
 use crate::Error;
 use super::device::{Adapter, Device};
@@ -16,14 +16,28 @@ use winit::Window;
 use winit::os::windows::WindowExt;
 
 /// Represents a connection to the display server.
+/// 
+/// Window server connections are implicit in the Win32 API, so this is a zero-sized type.
 #[derive(Clone)]
 pub struct Connection;
+
+/// An empty placeholder for native connections.
+///
+/// Window server connections are implicit in the Win32 API, so this is a zero-sized type.
+#[derive(Clone)]
+pub struct NativeConnection;
 
 impl Connection {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         Ok(Connection)
+    }
+
+    /// An alias for `Connection::new()`, present for consistency with other backends.
+    #[inline]
+    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
+        Connection::new()
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.

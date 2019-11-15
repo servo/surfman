@@ -23,14 +23,34 @@ use winit::os::windows::WindowExt;
 const INTEL_PCI_ID: UINT = 0x8086;
 
 /// A no-op connection.
+///
+/// It might seem like this should wrap an `EGLDisplay`, but it doesn't. Unfortunately, in the
+/// ANGLE implementation `EGLDisplay` is not thread-safe, while `surfman` connections must be
+/// thread-safe. So we need to use the DXGI/Direct3D concept of a connection instead. These are
+/// implicit in the Win32 API, and as such this type is a no-op.
 #[derive(Clone)]
 pub struct Connection;
+
+/// An empty placeholder for native connections.
+///
+/// It might seem like this should wrap an `EGLDisplay`, but it doesn't. Unfortunately, in the
+/// ANGLE implementation `EGLDisplay` is not thread-safe, while `surfman` connections must be
+/// thread-safe. So we need to use the DXGI/Direct3D concept of a connection instead. These are
+/// implicit in the Win32 API, and as such this type is a no-op.
+#[derive(Clone)]
+pub struct NativeConnection;
 
 impl Connection {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         Ok(Connection)
+    }
+
+    /// An alias for `Connection::new()`, present for consistency with other backends.
+    #[inline]
+    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
+        Connection::new()
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.

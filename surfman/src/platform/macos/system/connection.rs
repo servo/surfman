@@ -24,6 +24,8 @@ use winit::Window;
 use winit::os::macos::WindowExt;
 
 /// A no-op connection.
+///
+/// Connections to the CGS window server are implicit on macOS, so this is a zero-sized type.
 #[derive(Clone)]
 pub struct Connection;
 
