@@ -15,11 +15,21 @@ use winit::Window;
 #[derive(Clone)]
 pub struct Connection;
 
+/// An empty placeholder for native connections.
+#[derive(Clone)]
+pub struct NativeConnection;
+
 impl Connection {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         Ok(Connection)
+    }
+
+    /// An alias for `Connection::new()`, present for consistency with other backends.
+    #[inline]
+    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
+        Connection::new()
     }
 
     /// Returns the "best" adapter on this system.
