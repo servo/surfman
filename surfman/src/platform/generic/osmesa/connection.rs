@@ -16,11 +16,29 @@ use winit::Window;
 #[derive(Clone)]
 pub struct Connection;
 
+/// An empty placeholder for native connections.
+///
+/// There is no window server for OSMesa, so this is an empty type.
+#[derive(Clone)]
+pub struct NativeConnection;
+
 impl Connection {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         Ok(Connection)
+    }
+
+    /// An alias for `Connection::new()`, present for consistency with other backends.
+    #[inline]
+    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
+        Ok(Connection)
+    }
+
+    /// Returns the underlying native connection.
+    #[inline]
+    pub fn native_connection(&self) -> NativeConnection {
+        NativeConnection
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
@@ -65,7 +83,7 @@ impl Connection {
     #[inline]
     pub unsafe fn create_device_from_native_device(&self, _: NativeDevice)
                                                    -> Result<Device, Error> {
-        self.create_device_from_native_device(self.create_adapter()?)
+        Device::new()
     }
 
     /// Opens the display connection corresponding to the given `winit` window.

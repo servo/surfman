@@ -34,6 +34,12 @@ impl Connection {
         SystemConnection::from_native_connection(native_connection).map(Connection)
     }
 
+    /// Returns the underlying native connection.
+    #[inline]
+    pub fn native_connection(&self) -> NativeConnection {
+        self.0.native_connection()
+    }
+
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     /// 
     /// This is an alias for `Connection::create_hardware_adapter()`.

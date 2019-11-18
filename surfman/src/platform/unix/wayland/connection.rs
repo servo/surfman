@@ -56,6 +56,11 @@ impl Connection {
         Connection::from_wayland_display(native_connection.0, false)
     }
 
+    /// Returns the underlying native connection.
+    #[inline]
+    pub fn native_connection(&self) -> NativeConnection {
+        NativeConnection(self.native_connection.wayland_display)
+    }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     /// 

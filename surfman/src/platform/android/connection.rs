@@ -32,6 +32,12 @@ impl Connection {
         Connection::new()
     }
 
+    /// Returns the underlying native connection.
+    #[inline]
+    pub fn native_connection(&self) -> NativeConnection {
+        NativeConnection
+    }
+
     /// Returns the "best" adapter on this system.
     /// 
     /// This is an alias for `Connection::create_hardware_adapter()`.

@@ -76,6 +76,12 @@ impl Connection {
         })
     }
 
+    /// Returns the underlying native connection.
+    #[inline]
+    pub fn native_connection(&self) -> NativeConnection {
+        NativeConnection(self.display_holder.display)
+    }
+
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     /// 
     /// This is an alias for `Connection::create_hardware_adapter()`.
