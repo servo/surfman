@@ -159,14 +159,7 @@ impl Device {
         }
     }
 
-    /// Creates a `Device` from a Direct3D 11 device and associated GL/DX interop handle.
-    ///
-    /// The handle can be created by calling `wglDXOpenDeviceNV` from the `WGL_NV_DX_interop`
-    /// extension.
-    ///
-    /// This method increases the reference count on the Direct3D 11 device and takes ownership of
-    /// the GL/DX interop handle.
-    pub fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
+    pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
         unsafe {
             (*native_device.d3d11_device).AddRef();
             let d3d11_device = ComPtr::from_raw(native_device.d3d11_device);

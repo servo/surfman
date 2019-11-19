@@ -100,8 +100,8 @@ impl Connection {
     /// Therefore, it is the caller's responsibility to keep it alive as long as this `Device`
     /// remains alive. This function does, however, call `AddRef` on the Direct3D device.
     #[inline]
-    pub fn create_device_from_native_device(&self, native_device: NativeDevice)
-                                            -> Result<Device, Error> {
+    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                                   -> Result<Device, Error> {
         Device::from_native_device(native_device)
     }
 

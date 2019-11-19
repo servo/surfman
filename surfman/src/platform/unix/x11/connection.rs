@@ -121,8 +121,8 @@ impl Connection {
     ///
     /// This is present for compatibility with other backends.
     #[inline]
-    pub fn create_device_from_native_device(&self, native_device: NativeDevice)
-                                            -> Result<Device, Error> {
+    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                                   -> Result<Device, Error> {
         Device::new(self, &native_device.adapter)
     }
 

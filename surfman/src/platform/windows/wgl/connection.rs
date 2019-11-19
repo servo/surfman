@@ -5,7 +5,7 @@
 //! Window server connections are implicit in the Win32 API, so this is a zero-sized type.
 
 use crate::Error;
-use super::device::{Adapter, Device};
+use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
 use winapi::shared::windef::HWND;
@@ -76,6 +76,19 @@ impl Connection {
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         Device::new(adapter)
+    }
+
+    /// Creates a `Device` from a Direct3D 11 device and associated GL/DX interop handle.
+    ///
+    /// The handle can be created by calling `wglDXOpenDeviceNV` from the `WGL_NV_DX_interop`
+    /// extension.
+    ///
+    /// This method increases the reference count on the Direct3D 11 device and takes ownership of
+    /// the GL/DX interop handle.
+    #[inline]
+    pub fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                            -> Result<Device, Error> {
+        Device::from_native_device(native_device)
     }
 
     /// Opens the display connection corresponding to the given `winit` window.

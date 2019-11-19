@@ -59,6 +59,12 @@ impl Device {
         })
     }
 
+    /// Returns the EGL display corresponding to this device.
+    #[inline]
+    pub fn native_device(&self) -> NativeDevice {
+        NativeDevice(self.egl_display)
+    }
+
     /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {

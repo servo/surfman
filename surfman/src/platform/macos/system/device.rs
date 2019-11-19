@@ -36,6 +36,12 @@ impl Device {
         Ok(Device { adapter, phantom: PhantomData })
     }
 
+    /// Returns the native device corresponding to this device.
+    #[inline]
+    pub fn native_device(&self) -> NativeDevice {
+        NativeDevice
+    }
+
     /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
