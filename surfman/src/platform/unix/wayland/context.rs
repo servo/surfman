@@ -9,6 +9,7 @@ use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
+use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
@@ -44,7 +45,7 @@ thread_local! {
 pub struct Context {
     pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
-    framebuffer: Framebuffer<Surface, ()>,
+    framebuffer: Framebuffer<Surface, ExternalEGLSurfaces>,
     context_is_owned: bool,
 }
 
@@ -109,7 +110,10 @@ impl Device {
         let context = Context {
             egl_context: native_context.egl_context,
             id: *next_context_id,
-            framebuffer: Framebuffer::External(()),
+            framebuffer: Framebuffer::External(ExternalEGLSurfaces {
+                draw: native_context.egl_draw_surface,
+                read: native_context.egl_read_surface,
+            }),
             context_is_owned: true,
         };
         next_context_id.0 += 1;
@@ -148,6 +152,27 @@ impl Device {
         Ok(())
     }
 
+    /// Given a context, returns its underlying EGL context and attached surfaces.
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
+            Framebuffer::Surface(Surface {
+                wayland_objects: WaylandObjects::Window { egl_surface, .. },
+                ..
+            }) => (egl_surface, egl_surface),
+            Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
+            Framebuffer::Surface(Surface {
+                wayland_objects: WaylandObjects::TextureImage { .. },
+                ..
+            }) | Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
+        };
+
+        NativeContext {
+            egl_context: context.egl_context,
+            egl_draw_surface,
+            egl_read_surface,
+        }
+    }
+
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
@@ -161,24 +186,22 @@ impl Device {
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let egl_surface = match context.framebuffer {
+            let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
                 Framebuffer::Surface(Surface {
                     wayland_objects: WaylandObjects::Window { egl_surface, .. },
                     ..
-                }) => egl_surface,
+                }) => (egl_surface, egl_surface),
                 Framebuffer::Surface(Surface {
                     wayland_objects: WaylandObjects::TextureImage { .. },
                     ..
-                }) | Framebuffer::None => egl::NO_SURFACE,
-                Framebuffer::External(()) => {
-                    return Err(Error::ExternalRenderTarget)
-                }
+                }) | Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
+                Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
             };
 
             EGL_FUNCTIONS.with(|egl| {
                 let result = egl.MakeCurrent(self.native_connection.egl_display,
-                                             egl_surface,
-                                             egl_surface,
+                                             egl_draw_surface,
+                                             egl_read_surface,
                                              context.egl_context);
                 if result == egl::FALSE {
                     let err = egl.GetError().to_windowing_api_error();
@@ -272,7 +295,7 @@ impl Device {
 
                 Ok(())
             }
-            Framebuffer::External(()) => Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::External(_) => Err((Error::ExternalRenderTarget, surface)),
             Framebuffer::Surface(_) => Err((Error::SurfaceAlreadyBound, surface)),
         }
     }
@@ -286,12 +309,12 @@ impl Device {
         match context.framebuffer {
             Framebuffer::None => return Ok(None),
             Framebuffer::Surface(_) => {}
-            Framebuffer::External(()) => return Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
         }
 
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => Ok(Some(surface)),
-            Framebuffer::None | Framebuffer::External(()) => unreachable!(),
+            Framebuffer::None | Framebuffer::External(_) => unreachable!(),
         }
     }
 
@@ -310,7 +333,7 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
-            Framebuffer::External(()) => Err(Error::ExternalRenderTarget),
+            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
             Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
         }
     }
