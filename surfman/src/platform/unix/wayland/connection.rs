@@ -6,7 +6,7 @@ use crate::Error;
 use crate::egl::types::EGLDisplay;
 use crate::egl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
-use super::device::{Adapter, Device};
+use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
 use euclid::default::Size2D;
@@ -94,6 +94,16 @@ impl Connection {
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         Device::new(self, adapter)
+    }
+
+    /// Opens the hardware device corresponding to the adapter wrapped in the given native
+    /// device.
+    ///
+    /// This is present for compatibility with other backends.
+    #[inline]
+    pub fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                            -> Result<Device, Error> {
+        Device::new(self, &native_device.adapter)
     }
 
     unsafe fn from_wayland_display(wayland_display: *mut wl_display, is_owned: bool)

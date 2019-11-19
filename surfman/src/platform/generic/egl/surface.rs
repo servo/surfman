@@ -11,6 +11,7 @@ use super::device::EGL_FUNCTIONS;
 
 use euclid::default::Size2D;
 
+#[allow(dead_code)]
 pub(crate) struct ExternalEGLSurfaces {
     pub(crate) draw: EGLSurface,
     pub(crate) read: EGLSurface,

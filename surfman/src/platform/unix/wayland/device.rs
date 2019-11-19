@@ -17,6 +17,15 @@ pub struct Device {
     pub(crate) adapter: Adapter,
 }
 
+/// Wraps an adapter.
+///
+/// On Wayland, devices and adapters are essentially identical types.
+#[derive(Clone)]
+pub struct NativeDevice {
+    /// The hardware adapter corresponding to this device.
+    pub adapter: Adapter,
+}
+
 impl Device {
     #[inline]
     pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
@@ -24,6 +33,15 @@ impl Device {
             native_connection: connection.native_connection.clone(),
             adapter: (*adapter).clone(),
         })
+    }
+
+    /// Returns the native device corresponding to this device.
+    ///
+    /// This method is essentially an alias for the `adapter()` method on Wayland, since there is
+    /// no explicit concept of a device on this backend.
+    #[inline]
+    pub fn native_device(&self) -> NativeDevice {
+        NativeDevice { adapter: self.adapter() }
     }
 
     /// Returns the display server connection that this device was created with.

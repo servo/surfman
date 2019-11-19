@@ -18,14 +18,26 @@ pub struct Device {
 
 /// A zero-sized type that represents a native device in X11.
 ///
-/// GLX has no explicit concept of a hardware device, so this type is empty.
+/// GLX has no explicit concept of a hardware device, so this type only contains an adapter.
 #[derive(Clone)]
-pub struct NativeDevice;
+pub struct NativeDevice {
+    /// The hardware adapter corresponding to this device.
+    pub adapter: Adapter,
+}
 
 impl Device {
     #[inline]
     pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
         Ok(Device { connection: (*connection).clone(), adapter: (*adapter).clone() })
+    }
+
+    /// Returns the native device corresponding to this device.
+    ///
+    /// This method is essentially an alias for the `adapter()` method on X11, since there is no
+    /// explicit concept of a device on this backend.
+    #[inline]
+    pub fn native_device(&self) -> NativeDevice {
+        NativeDevice { adapter: self.adapter() }
     }
 
     /// Returns the display server connection that this device was created with.

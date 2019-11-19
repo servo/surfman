@@ -4,7 +4,7 @@
 
 use crate::error::Error;
 use crate::platform::unix::generic::device::Adapter;
-use super::device::Device;
+use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 
 use std::ptr;
@@ -116,13 +116,25 @@ impl Connection {
         Device::new(self, adapter)
     }
 
+    /// Opens the hardware device corresponding to the adapter wrapped in the given native
+    /// device.
+    ///
+    /// This is present for compatibility with other backends.
+    #[inline]
+    pub fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                            -> Result<Device, Error> {
+        Device::new(self, &native_device.adapter)
+    }
+
     /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        if let Some(display) = window.get_xlib_display() {
-            Connection::from_native_connection(NativeConnection(display as *mut Display))
-        } else {
-            Err(Error::IncompatibleWinitWindow)
+        unsafe {
+            if let Some(display) = window.get_xlib_display() {
+                Connection::from_native_connection(NativeConnection(display as *mut Display))
+            } else {
+                Err(Error::IncompatibleWinitWindow)
+            }
         }
     }
 
