@@ -41,6 +41,19 @@ impl Drop for Device {
     }
 }
 
+impl NativeDevice {
+    /// Returns the current EGL display.
+    ///
+    /// If there is no current EGL display, `egl::NO_DISPLAY` is returned.
+    pub fn current() -> NativeDevice {
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
+                NativeDevice(egl.GetCurrentDisplay())
+            }
+        })
+    }
+}
+
 impl Device {
     #[inline]
     pub(crate) fn new() -> Result<Device, Error> {

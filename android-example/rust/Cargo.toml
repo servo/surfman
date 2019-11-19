@@ -14,7 +14,6 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-egl = "0.2"
 gl = "0.13"
 jni = "0.13"
 

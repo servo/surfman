@@ -59,6 +59,23 @@ impl Drop for CurrentContextGuard {
     }
 }
 
+impl NativeContext {
+    /// Returns the current EGL context and surfaces.
+    ///
+    /// If there is no current EGL context, the context will be `egl::NO_CONTEXT`.
+    pub fn current() -> NativeContext {
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
+                NativeContext {
+                    egl_context: egl.GetCurrentContext(),
+                    egl_read_surface: egl.GetCurrentSurface(egl::READ as EGLint),
+                    egl_draw_surface: egl.GetCurrentSurface(egl::DRAW as EGLint),
+                }
+            }
+        })
+    }
+}
+
 impl ContextDescriptor {
     pub(crate) unsafe fn new(egl_display: EGLDisplay,
                              attributes: &ContextAttributes,

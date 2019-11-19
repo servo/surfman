@@ -6,19 +6,20 @@ use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, W
 use super::connection::Connection;
 use super::device::Adapter;
 
-static GL_VERSIONS: [GLVersion; 5] = [
+static GL_VERSIONS: [GLVersion; 6] = [
     GLVersion { major: 2, minor: 0 },
-    GLVersion { major: 2, minor: 1 },
     GLVersion { major: 3, minor: 0 },
-    GLVersion { major: 3, minor: 3 },
+    GLVersion { major: 3, minor: 1 },
+    GLVersion { major: 3, minor: 2 },
+    GLVersion { major: 4, minor: 0 },
     GLVersion { major: 4, minor: 1 },
 ];
 
 static GL_ES_VERSIONS: [GLVersion; 4] = [
     GLVersion { major: 2, minor: 0 },
-    GLVersion { major: 2, minor: 1 },
     GLVersion { major: 3, minor: 0 },
     GLVersion { major: 3, minor: 1 },
+    GLVersion { major: 3, minor: 2 },
 ];
 
 #[test]
@@ -63,10 +64,37 @@ fn test_context_creation() {
         for flag_bits in 0..(ContextAttributeFlags::all().bits() + 1) {
             let flags = ContextAttributeFlags::from_bits_truncate(flag_bits);
             let attributes = ContextAttributes { version, flags };
-            println!("creating context with attributes: {:?}", attributes);
-            let descriptor = device.create_context_descriptor(&attributes).unwrap();
+            println!("Creating context with attributes: {:?}", attributes);
+            let descriptor = match device.create_context_descriptor(&attributes) {
+                Ok(descriptor) => descriptor,
+                Err(Error::UnsupportedGLProfile) => {
+                    // Nothing we can do about this. Go on to the next one.
+                    continue
+                }
+                Err(err) => panic!("Context descriptor creation failed: {:?}", err),
+            };
+
             match device.create_context(&descriptor) {
-                Ok(mut context) => device.destroy_context(&mut context).unwrap(),
+                Ok(mut context) => {
+                    // Verify that the attributes round-trip.
+                    let actual_descriptor = device.context_descriptor(&context);
+                    let actual_attributes =
+                        device.context_descriptor_attributes(&actual_descriptor);
+                    if !actual_attributes.flags.contains(attributes.flags) {
+                        panic!("Expected at least attribute flags {:?} but got {:?}",
+                               attributes.flags,
+                               actual_attributes.flags);
+                    }
+                    if actual_attributes.version.major < attributes.version.major ||
+                            (actual_attributes.version.major == attributes.version.major &&
+                             actual_attributes.version.minor < attributes.version.minor) {
+                        panic!("Expected at least GL version {:?} but got version {:?}",
+                               attributes,
+                               actual_attributes);
+                    }
+
+                    device.destroy_context(&mut context).unwrap();
+                }
                 Err(Error::ContextCreationFailed(WindowingApiError::BadPixelFormat)) => {
                     // This is OK, as it just means the GL implementation didn't support the
                     // requested GL version.

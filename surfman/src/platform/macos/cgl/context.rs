@@ -131,6 +131,11 @@ impl Device {
     /// Context descriptors are local to this device.
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
+        if attributes.flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE) &&
+                attributes.version.major > 2 {
+            return Err(Error::UnsupportedGLProfile);
+        };
+
         let profile = if attributes.version.major >= 4 {
             kCGLOGLPVersion_GL4_Core
         } else if attributes.version.major == 3 {
@@ -361,8 +366,13 @@ impl Device {
             attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
             attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
 
-            let version = GLVersion::new(((gl_profile >> 12) & 0xf) as u8,
-                                        ((gl_profile >> 8) & 0xf) as u8);
+            let mut version = GLVersion::new(((gl_profile >> 12) & 0xf) as u8,
+                                             ((gl_profile >> 8) & 0xf) as u8);
+            if version.major <= 2 {
+                version.major = 2;
+                version.minor = 1;
+                attribute_flags.insert(ContextAttributeFlags::COMPATIBILITY_PROFILE);
+            }
 
             return ContextAttributes { flags: attribute_flags, version };
         }

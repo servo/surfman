@@ -13,6 +13,12 @@ pub enum Error {
     Unimplemented,
     /// The system doesn't support the requested OpenGL API type (OpenGL or OpenGL ES).
     UnsupportedGLType,
+    /// The system doesn't support the requested OpenGL compatibility profile for the supplied
+    /// OpenGL version.
+    /// 
+    /// On some systems, like macOS, the compatibility profile is only supported on some GL
+    /// versions.
+    UnsupportedGLProfile,
     /// Choosing an OpenGL pixel format failed.
     PixelFormatSelectionFailed(WindowingApiError),
     /// The system couldn't choose an OpenGL pixel format.
