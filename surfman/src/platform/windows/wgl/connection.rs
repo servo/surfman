@@ -86,8 +86,8 @@ impl Connection {
     /// This method increases the reference count on the Direct3D 11 device and takes ownership of
     /// the GL/DX interop handle.
     #[inline]
-    pub fn create_device_from_native_device(&self, native_device: NativeDevice)
-                                            -> Result<Device, Error> {
+    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                                   -> Result<Device, Error> {
         Device::from_native_device(native_device)
     }
 

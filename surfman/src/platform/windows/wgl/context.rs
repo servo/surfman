@@ -286,7 +286,7 @@ impl Device {
     /// The `HGLRC` is not retained, as there is no way to do this in the Win32 API. Therefore, it
     /// is the caller's responsibility to make sure the OpenGL context is not destroyed before this
     /// `Context` is.
-    pub unsafe fn create_context_from_native_context(native_context: NativeContext)
+    pub unsafe fn create_context_from_native_context(&self, native_context: NativeContext)
                                                      -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         let hidden_window = HiddenWindow::new();

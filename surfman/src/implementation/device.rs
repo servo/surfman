@@ -3,11 +3,12 @@
 //! This is an included private module that automatically produces the implementation of the
 //! `Device` trait for a backend.
 
+use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use super::super::connection::Connection;
-use super::super::context::{Context, ContextDescriptor};
+use super::super::context::{Context, ContextDescriptor, NativeContext};
 use super::super::device::{Adapter, Device};
 use super::super::surface::{NativeWidget, Surface, SurfaceTexture};
 
@@ -17,10 +18,17 @@ impl DeviceInterface for Device {
     type Connection = Connection;
     type Context = Context;
     type ContextDescriptor = ContextDescriptor;
+    type NativeContext = NativeContext;
     type Surface = Surface;
     type SurfaceTexture = SurfaceTexture;
 
     // device.rs
+
+    /// Returns the native device associated with this device.
+    #[inline]
+    fn native_device(&self) -> <Self::Connection as ConnectionInterface>::NativeDevice {
+        Device::native_device(self)
+    }
 
     #[inline]
     fn connection(&self) -> Connection {
@@ -49,6 +57,12 @@ impl DeviceInterface for Device {
     fn create_context(&mut self, descriptor: &Self::ContextDescriptor)
                       -> Result<Self::Context, Error> {
         Device::create_context(self, descriptor)
+    }
+
+    #[inline]
+    unsafe fn create_context_from_native_context(&self, native_context: Self::NativeContext)
+                                                 -> Result<Self::Context, Error> {
+        Device::create_context_from_native_context(self, native_context)
     }
 
     #[inline]
@@ -102,6 +116,11 @@ impl DeviceInterface for Device {
     #[inline]
     fn context_surface_info(&self, context: &Self::Context) -> Result<Option<SurfaceInfo>, Error> {
         Device::context_surface_info(self, context)
+    }
+
+    #[inline]
+    fn native_context(&self, context: &Self::Context) -> Self::NativeContext {
+        Device::native_context(self, context)
     }
 
     // surface.rs

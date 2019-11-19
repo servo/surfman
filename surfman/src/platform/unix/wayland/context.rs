@@ -104,7 +104,7 @@ impl Device {
     /// The context is not retained, as there is no way to do this in the EGL API. Therefore,
     /// it is the caller's responsibility to ensure that the returned `Context` object remains
     /// alive as long as the `EGLContext` is.
-    pub unsafe fn create_context_from_native_context(native_context: NativeContext)
+    pub unsafe fn create_context_from_native_context(&self, native_context: NativeContext)
                                                      -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         let context = Context {

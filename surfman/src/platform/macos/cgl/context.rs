@@ -212,7 +212,7 @@ impl Device {
     /// 
     /// This function takes ownership of the native context and does not adjust its reference
     /// count.
-    pub unsafe fn create_context_from_native_context(native_context: NativeContext)
+    pub unsafe fn create_context_from_native_context(&self, native_context: NativeContext)
                                                      -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         let context = Context {

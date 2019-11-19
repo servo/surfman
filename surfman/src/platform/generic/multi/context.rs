@@ -43,6 +43,14 @@ pub enum ContextDescriptor<Def, Alt> where Def: DeviceInterface, Alt: DeviceInte
     Alternate(Alt::ContextDescriptor),
 }
 
+/// Wraps a platform-specific native context.
+pub enum NativeContext<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
+    /// The default context type.
+    Default(Def::NativeContext),
+    /// The alternate context type.
+    Alternate(Alt::NativeContext),
+}
+
 impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     /// Creates a context descriptor with the given attributes.
     /// 
@@ -78,6 +86,32 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
         }
     }
 
+    /// Wraps an existing native context in a `Context` object.
+    pub unsafe fn create_context_from_native_context(&self,
+                                                     native_context: NativeContext<Def, Alt>)
+                                                     -> Result<Context<Def, Alt>, Error> {
+        match self {
+            &Device::Default(ref device) => {
+                match native_context {
+                    NativeContext::Default(native_context) => {
+                        device.create_context_from_native_context(native_context)
+                              .map(Context::Default)
+                    }
+                    _ => Err(Error::IncompatibleNativeContext)
+                }
+            }
+            &Device::Alternate(ref device) => {
+                match native_context {
+                    NativeContext::Alternate(native_context) => {
+                        device.create_context_from_native_context(native_context)
+                              .map(Context::Alternate)
+                    }
+                    _ => Err(Error::IncompatibleNativeContext)
+                }
+            }
+        }
+    }
+
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
@@ -90,6 +124,19 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
                 device.destroy_context(context)
             }
             _ => Err(Error::IncompatibleContext),
+        }
+    }
+
+    /// Returns the native context underlying this context.
+    pub fn native_context(&self, context: &Context<Def, Alt>) -> NativeContext<Def, Alt> {
+        match (self, context) {
+            (&Device::Default(ref device), &Context::Default(ref context)) => {
+                NativeContext::Default(device.native_context(context))
+            }
+            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+                NativeContext::Alternate(device.native_context(context))
+            }
+            _ => panic!("Incompatible context!"),
         }
     }
 

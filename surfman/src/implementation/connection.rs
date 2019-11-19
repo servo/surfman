@@ -5,8 +5,8 @@
 
 use crate::Error;
 use crate::connection::Connection as ConnectionInterface;
-use super::super::connection::Connection;
-use super::super::device::{Adapter, Device};
+use super::super::connection::{Connection, NativeConnection};
+use super::super::device::{Adapter, Device, NativeDevice};
 use super::super::surface::NativeWidget;
 
 #[cfg(feature = "sm-winit")]
@@ -15,11 +15,18 @@ use winit::Window;
 impl ConnectionInterface for Connection {
     type Adapter = Adapter;
     type Device = Device;
+    type NativeConnection = NativeConnection;
+    type NativeDevice = NativeDevice;
     type NativeWidget = NativeWidget;
 
     #[inline]
     fn new() -> Result<Connection, Error> {
         Connection::new()
+    }
+
+    #[inline]
+    fn native_connection(&self) -> Self::NativeConnection {
+        Connection::native_connection(self)
     }
 
     #[inline]
@@ -45,6 +52,12 @@ impl ConnectionInterface for Connection {
     #[inline]
     fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         Connection::create_device(self, adapter)
+    }
+
+    #[inline]
+    unsafe fn create_device_from_native_device(&self, native_device: Self::NativeDevice)
+                                               -> Result<Device, Error> {
+        Connection::create_device_from_native_device(self, native_device)
     }
 
     #[inline]

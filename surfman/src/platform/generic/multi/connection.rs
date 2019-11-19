@@ -5,7 +5,7 @@
 use crate::Error;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
-use super::device::{Adapter, Device};
+use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
 #[cfg(feature = "sm-winit")]
@@ -23,6 +23,17 @@ pub enum Connection<Def, Alt> where Def: DeviceInterface,
     Alternate(Alt::Connection),
 }
 
+/// The native connection type.
+pub enum NativeConnection<Def, Alt> where Def: DeviceInterface,
+                                          Alt: DeviceInterface,
+                                          Def::Connection: ConnectionInterface,
+                                          Alt::Connection: ConnectionInterface {
+    /// The default native connection type.
+    Default(<Def::Connection as ConnectionInterface>::NativeConnection),
+    /// The alternate native connection type.
+    Alternate(<Alt::Connection as ConnectionInterface>::NativeConnection),
+}
+
 impl<Def, Alt> Connection<Def, Alt>
                where Def: DeviceInterface,
                      Alt: DeviceInterface,
@@ -34,6 +45,18 @@ impl<Def, Alt> Connection<Def, Alt>
         match <Def::Connection>::new() {
             Ok(connection) => Ok(Connection::Default(connection)),
             Err(_) => <Alt::Connection>::new().map(Connection::Alternate),
+        }
+    }
+
+    /// Returns the native connection corresponding to this connection.
+    pub fn native_connection(&self) -> NativeConnection<Def, Alt> {
+        match *self {
+            Connection::Default(ref connection) => {
+                NativeConnection::Default(connection.native_connection())
+            }
+            Connection::Alternate(ref connection) => {
+                NativeConnection::Alternate(connection.native_connection())
+            }
         }
     }
 
@@ -102,6 +125,32 @@ impl<Def, Alt> Connection<Def, Alt>
         }
     }
 
+    /// Wraps a native device in a device.
+    #[inline]
+    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice<Def, Alt>)
+                                                   -> Result<Device<Def, Alt>, Error> {
+        match self {
+            &Connection::Default(ref connection) => {
+                match native_device {
+                    NativeDevice::Default(native_device) => {
+                        connection.create_device_from_native_device(native_device)
+                                  .map(Device::Default)
+                    }
+                    _ => Err(Error::IncompatibleNativeDevice),
+                }
+            }
+            &Connection::Alternate(ref connection) => {
+                match native_device {
+                    NativeDevice::Alternate(native_device) => {
+                        connection.create_device_from_native_device(native_device)
+                                  .map(Device::Alternate)
+                    }
+                    _ => Err(Error::IncompatibleNativeDevice),
+                }
+            }
+        }
+    }
+
     /// Opens the connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection<Def, Alt>, Error> {
@@ -137,11 +186,18 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
                                          Alt::Connection: ConnectionInterface<Device = Alt> {
     type Adapter = Adapter<Def, Alt>;
     type Device = Device<Def, Alt>;
+    type NativeConnection = NativeConnection<Def, Alt>;
+    type NativeDevice = NativeDevice<Def, Alt>;
     type NativeWidget = NativeWidget<Def, Alt>;
 
     #[inline]
     fn new() -> Result<Connection<Def, Alt>, Error> {
         Connection::new()
+    }
+
+    #[inline]
+    fn native_connection(&self) -> NativeConnection<Def, Alt> {
+        Connection::native_connection(self)
     }
 
     #[inline]
@@ -167,6 +223,12 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
     #[inline]
     fn create_device(&self, adapter: &Adapter<Def, Alt>) -> Result<Device<Def, Alt>, Error> {
         Connection::create_device(self, adapter)
+    }
+
+    #[inline]
+    unsafe fn create_device_from_native_device(&self, native_device: NativeDevice<Def, Alt>)
+                                               -> Result<Device<Def, Alt>, Error> {
+        Connection::create_device_from_native_device(self, native_device)
     }
 
     #[inline]
