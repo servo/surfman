@@ -2,12 +2,14 @@
 //
 //! Unit tests.
 
+use crate::gl::{self, Gl};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
 use super::connection::Connection;
 use super::device::Adapter;
 
 use euclid::default::Size2D;
+use std::os::raw::c_void;
 
 static GL_VERSIONS: [GLVersion; 6] = [
     GLVersion { major: 2, minor: 0 },
@@ -181,4 +183,108 @@ fn test_generic_surface_creation() {
     }
 
     device.destroy_context(&mut context).unwrap();
+}
+
+// Tests that basic GL commands work.
+#[test]
+fn test_gl() {
+    let connection = Connection::new().unwrap();
+    let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
+    let mut device = match connection.create_device(&adapter) {
+        Ok(device) => device,
+        Err(Error::RequiredExtensionUnavailable) => {
+            // Can't run these tests on this hardware.
+            return;
+        }
+        Err(err) => panic!("Failed to create device: {:?}", err),
+    };
+
+    let descriptor = device.create_context_descriptor(&ContextAttributes {
+        version: GLVersion::new(3, 0),
+        flags: ContextAttributeFlags::empty(),
+    }).unwrap();
+
+    let mut context = device.create_context(&descriptor).unwrap();
+
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, SurfaceType::Generic {
+        size: Size2D::new(640, 480),
+    }).unwrap();
+    device.bind_surface_to_context(&mut context, surface).unwrap();
+    device.make_context_current(&context).unwrap();
+
+    unsafe {
+        let gl = Gl::load_with(|symbol| device.get_proc_address(&context, symbol));
+        let framebuffer_object = device.context_surface_info(&context)
+                                       .unwrap()
+                                       .unwrap()
+                                       .framebuffer_object;
+        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl.Viewport(0, 0, 640, 480);
+
+        // Check basic clear.
+        gl.ClearColor(0.0, 1.0, 0.0, 1.0);
+        gl.Clear(gl::COLOR_BUFFER_BIT);
+        assert_eq!(get_pixel(&gl), [0, 255, 0, 255]);
+
+        // Check that GL commands don't work after `make_no_context_current()`.
+        //
+        // The `glGetError()` calls are there to clear any errors.
+        device.make_no_context_current().unwrap();
+        gl.ClearColor(1.0, 0.0, 0.0, 1.0);
+        gl.GetError();
+        gl.Clear(gl::COLOR_BUFFER_BIT);
+        gl.GetError();
+        device.make_context_current(&context).unwrap();
+        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        assert_eq!(get_pixel(&gl), [0, 255, 0, 255]);
+
+        // Make sure GL commands don't work when no surface is attached.
+        let green_surface = device.unbind_surface_from_context(&mut context).unwrap().unwrap();
+        gl.ClearColor(1.0, 0.0, 0.0, 1.0);
+        gl.GetError();
+        gl.Clear(gl::COLOR_BUFFER_BIT);
+        gl.GetError();
+        device.bind_surface_to_context(&mut context, green_surface).unwrap();
+        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        assert_eq!(get_pixel(&gl), [0, 255, 0, 255]);
+
+        // Make sure GL commands go to the right surface.
+        let green_surface = device.unbind_surface_from_context(&mut context).unwrap().unwrap();
+        let red_surface = device.create_surface(&context,
+                                                SurfaceAccess::GPUOnly,
+                                                SurfaceType::Generic {
+            size: Size2D::new(640, 480),
+        }).unwrap();
+        device.bind_surface_to_context(&mut context, red_surface).unwrap();
+        let red_framebuffer_object = device.context_surface_info(&context)
+                                           .unwrap()
+                                           .unwrap()
+                                           .framebuffer_object;
+        gl.BindFramebuffer(gl::FRAMEBUFFER, red_framebuffer_object);
+        gl.ClearColor(1.0, 0.0, 0.0, 1.0);
+        gl.Clear(gl::COLOR_BUFFER_BIT);
+        let mut red_surface = device.unbind_surface_from_context(&mut context).unwrap().unwrap();
+        device.bind_surface_to_context(&mut context, green_surface).unwrap();
+        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        assert_eq!(get_pixel(&gl), [0, 255, 0, 255]);
+
+        // Clean up.
+        device.destroy_surface(&mut context, &mut red_surface).unwrap();
+    }
+
+    device.destroy_context(&mut context).unwrap();
+
+    fn get_pixel(gl: &Gl) -> [u8; 4] {
+        unsafe {
+            let mut pixel: [u8; 4] = [0; 4];
+            gl.ReadPixels(0,
+                          0,
+                          1,
+                          1,
+                          gl::RGBA,
+                          gl::UNSIGNED_BYTE,
+                          pixel.as_mut_ptr() as *mut c_void);
+            pixel
+        }
+    }
 }
