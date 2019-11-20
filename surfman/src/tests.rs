@@ -33,15 +33,29 @@ fn test_adapter_creation() {
 #[test]
 fn test_device_creation() {
     let connection = Connection::new().unwrap();
-    let adapter = connection.create_low_power_adapter().unwrap();
-    connection.create_device(&adapter).unwrap();
+    let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
+    let device = match connection.create_device(&adapter) {
+        Ok(device) => device,
+        Err(Error::RequiredExtensionUnavailable) => {
+            // Can't run these tests on this hardware.
+            return;
+        }
+        Err(err) => panic!("Failed to create device: {:?}", err),
+    };
 }
 
 #[test]
 fn test_device_accessors() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().unwrap();
-    let device = connection.create_device(&adapter).unwrap();
+    let device = match connection.create_device(&adapter) {
+        Ok(device) => device,
+        Err(Error::RequiredExtensionUnavailable) => {
+            // Can't run these tests on this hardware.
+            return;
+        }
+        Err(err) => panic!("Failed to create device: {:?}", err),
+    };
     drop(device.connection());
     drop(device.adapter());
     drop(device.gl_api());
@@ -52,8 +66,15 @@ fn test_device_accessors() {
 #[test]
 fn test_context_creation() {
     let connection = Connection::new().unwrap();
-    let adapter = connection.create_low_power_adapter().unwrap();
-    let mut device = connection.create_device(&adapter).unwrap();
+    let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
+    let mut device = match connection.create_device(&adapter) {
+        Ok(device) => device,
+        Err(Error::RequiredExtensionUnavailable) => {
+            // Can't run these tests on this hardware.
+            return;
+        }
+        Err(err) => panic!("Failed to create device: {:?}", err),
+    };
 
     let versions = match device.gl_api() {
         GLApi::GL => &GL_VERSIONS[..],

@@ -352,11 +352,7 @@ impl Device {
             let compatibility_profile =
                 context::current_context_uses_compatibility_profile(&context.gl);
 
-            ContextDescriptor {
-                pixel_format,
-                gl_version: GLVersion::new(major_version, minor_version),
-                compatibility_profile,
-            }
+            ContextDescriptor { pixel_format, gl_version, compatibility_profile }
         }
     }
 
