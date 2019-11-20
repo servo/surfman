@@ -2,14 +2,14 @@
 name = "surfman"
 license = "MIT / Apache-2.0"
 edition = "2018"
-version = "0.23.0"
+version = "0.2.0"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
     "The Servo Project Developers",
 ]
-description = "Multithreaded GPU usage made easy"
-repository = "https://github.com/pcwalton/rust-offscreen-rendering-context"
+description = "A cross-platform, low-level toolkit for GPU surface management"
+repository = "https://github.com/pcwalton/surfman"
 build = "build.rs"
 
 [build-dependencies]
