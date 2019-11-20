@@ -2,9 +2,12 @@
 //
 //! Unit tests.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
+use crate::{SurfaceType, WindowingApiError};
 use super::connection::Connection;
 use super::device::Adapter;
+
+use euclid::default::Size2D;
 
 static GL_VERSIONS: [GLVersion; 6] = [
     GLVersion { major: 2, minor: 0 },
@@ -126,4 +129,56 @@ fn test_context_creation() {
             }
         }
     }
+}
+
+// Tests that generic surfaces can be created.
+#[test]
+fn test_generic_surface_creation() {
+    let connection = Connection::new().unwrap();
+    let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
+    let mut device = match connection.create_device(&adapter) {
+        Ok(device) => device,
+        Err(Error::RequiredExtensionUnavailable) => {
+            // Can't run these tests on this hardware.
+            return;
+        }
+        Err(err) => panic!("Failed to create device: {:?}", err),
+    };
+
+    let descriptor = device.create_context_descriptor(&ContextAttributes {
+        version: GLVersion::new(3, 0),
+        flags: ContextAttributeFlags::empty(),
+    }).unwrap();
+
+    let mut context = device.create_context(&descriptor).unwrap();
+    let context_id = device.context_id(&context);
+
+    let surfaces: Vec<_> = [
+        SurfaceAccess::GPUOnly,
+        SurfaceAccess::GPUCPU,
+        SurfaceAccess::GPUCPUWriteCombined,
+    ].iter().map(|&access| {
+        let surface = device.create_surface(&context, access, SurfaceType::Generic {
+            size: Size2D::new(640, 480),
+        }).unwrap();
+        let info = device.surface_info(&surface);
+        assert_eq!(info.size, Size2D::new(640, 480));
+        assert_eq!(info.context_id, context_id);
+        surface
+    }).collect();
+
+    // Make sure all IDs for extant surfaces are distinct.
+    for (surface_index, surface) in surfaces.iter().enumerate() {
+        for (other_surface_index, other_surface) in surfaces.iter().enumerate() {
+            if surface_index != other_surface_index {
+                assert_ne!(device.surface_info(surface).id, device.surface_info(other_surface).id);
+            }
+        }
+    }
+
+    for mut surface in surfaces.into_iter() {
+        device.destroy_surface(&mut context, &mut surface).unwrap();
+    }
+
+    device.destroy_context(&mut context).unwrap();
 }
