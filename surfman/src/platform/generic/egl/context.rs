@@ -2,9 +2,10 @@
 //
 //! Functionality common to backends using EGL contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
+use crate::gl::Gl;
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use super::device::EGL_FUNCTIONS;
 use super::error::ToWindowingApiError;
 
@@ -33,7 +34,7 @@ pub struct NativeContext {
 #[derive(Clone)]
 pub struct ContextDescriptor {
     pub(crate) egl_config_id: EGLint,
-    pub(crate) egl_context_client_version: EGLint,
+    pub(crate) gl_version: GLVersion,
 }
 
 #[must_use]
@@ -82,6 +83,18 @@ impl ContextDescriptor {
                              extra_config_attributes: &[EGLint])
                              -> Result<ContextDescriptor, Error> {
         let flags = attributes.flags;
+        if flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE) {
+            return Err(Error::UnsupportedGLProfile);
+        }
+
+        // FIXME(pcwalton): Unfortunately, EGL 1.5, which is not particularly widespread, is needed
+        // to specify a minor version. Until I see EGL 1.5 in the wild, let's just cap our OpenGL
+        // ES version to 3.0.
+        if attributes.version.major > 3 ||
+                attributes.version.major == 3 && attributes.version.minor > 0 {
+            return Err(Error::UnsupportedGLVersion);
+        }
+
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
@@ -148,19 +161,24 @@ impl ContextDescriptor {
 
             // Get the config ID and version.
             let egl_config_id = get_config_attr(egl_display, egl_config, egl::CONFIG_ID as EGLint);
-            let egl_context_client_version = attributes.version.major as EGLint;
+            let gl_version = attributes.version;
 
-            Ok(ContextDescriptor { egl_config_id, egl_context_client_version })
+            Ok(ContextDescriptor { egl_config_id, gl_version })
         })
     }
 
-    pub(crate) unsafe fn from_egl_context(egl_display: EGLDisplay, egl_context: EGLContext)
+    pub(crate) unsafe fn from_egl_context(gl: &Gl,
+                                          egl_display: EGLDisplay,
+                                          egl_context: EGLContext)
                                           -> ContextDescriptor {
         let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
-        let egl_context_client_version = get_context_attr(egl_display,
-                                                          egl_context,
-                                                          egl::CONTEXT_CLIENT_VERSION as EGLint);
-        ContextDescriptor { egl_config_id, egl_context_client_version }
+
+        EGL_FUNCTIONS.with(|egl| {
+            let _guard = CurrentContextGuard::new();
+            egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
+            let gl_version = GLVersion::current(gl);
+            ContextDescriptor { egl_config_id, gl_version }
+        })
     }
 
     #[allow(dead_code)]
@@ -198,10 +216,7 @@ impl ContextDescriptor {
         attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
 
         // Create appropriate context attributes.
-        ContextAttributes {
-            flags: attribute_flags,
-            version: GLVersion::new(self.egl_context_client_version as u8, 0),
-        }
+        ContextAttributes { flags: attribute_flags, version: self.gl_version }
     }
 }
 
@@ -223,13 +238,12 @@ impl CurrentContextGuard {
 pub(crate) unsafe fn create_context(egl_display: EGLDisplay, descriptor: &ContextDescriptor)
                                     -> Result<EGLContext, Error> {
     let egl_config = egl_config_from_id(egl_display, descriptor.egl_config_id);
-    let egl_context_client_version = descriptor.egl_context_client_version;
 
     // Include some extra zeroes to work around broken implementations.
     //
     // FIXME(pcwalton): Which implementations are those? (This is copied from Gecko.)
     let egl_context_attributes = [
-        egl::CONTEXT_CLIENT_VERSION as EGLint, egl_context_client_version,
+        egl::CONTEXT_CLIENT_VERSION as EGLint,      descriptor.gl_version.major as EGLint,
         egl::NONE as EGLint, 0,
         0, 0,
     ];

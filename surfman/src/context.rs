@@ -2,6 +2,7 @@
 //
 //! Declarations common to all platform contexts.
 
+use crate::gl::{self, Gl};
 use crate::info::GLVersion;
 
 use std::sync::Mutex;
@@ -59,6 +60,14 @@ impl ContextAttributes {
     #[allow(dead_code)]
     pub(crate) fn zeroed() -> ContextAttributes {
         ContextAttributes { version: GLVersion::new(0, 0), flags: ContextAttributeFlags::empty() }
+    }
+}
+
+pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
+    unsafe {
+        let mut context_profile_mask = 0;
+        gl.GetIntegerv(gl::CONTEXT_PROFILE_MASK, &mut context_profile_mask);
+        (context_profile_mask & gl::CONTEXT_COMPATIBILITY_PROFILE_BIT as i32) != 0
     }
 }
 

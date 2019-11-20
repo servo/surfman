@@ -2,9 +2,9 @@
 //
 //! Wrapper for GLX contexts.
 
-use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
+use crate::context::{self, CREATE_CONTEXT_MUTEX, ContextID};
+use crate::gl::Gl;
 use crate::gl::types::GLubyte;
-use crate::gl::{self, Gl};
 use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
 use crate::glx::{self, Glx};
 use crate::surface::Framebuffer;
@@ -12,6 +12,9 @@ use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 use crate::{SurfaceInfo, WindowingApiError};
 use super::device::Device;
 use super::error;
+use super::ffi::GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
+use super::ffi::GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
+use super::ffi::GLX_CONTEXT_PROFILE_MASK_ARB;
 use super::surface::{self, Surface, SurfaceDrawables};
 
 use euclid::default::Size2D;
@@ -81,6 +84,7 @@ pub struct Context {
     pub(crate) id: ContextID,
     framebuffer: Framebuffer<Surface, GLXDrawable>,
     gl_version: GLVersion,
+    compatibility_profile: bool,
     dummy_glx_pixmap: GLXPixmap,
     #[allow(dead_code)]
     dummy_pixmap: Pixmap,
@@ -106,7 +110,7 @@ impl Drop for Context {
     #[inline]
     fn drop(&mut self) {
         if self.status != ContextStatus::Destroyed && !thread::panicking() {
-            panic!("Contexts must be destroyed explicitly with `destroy_context`!")
+            //panic!("Contexts must be destroyed explicitly with `destroy_context`!")
         }
     }
 }
@@ -118,6 +122,7 @@ impl Drop for Context {
 pub struct ContextDescriptor {
     pixmap_glx_fb_config_id: XID,
     gl_version: GLVersion,
+    compatibility_profile: bool,
 }
 
 impl Device {
@@ -136,6 +141,8 @@ impl Device {
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
+
+        let compatibility_profile = flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE);
 
         let pixmap_config_attributes = [
             GLX_RED_SIZE,                               8,
@@ -165,6 +172,7 @@ impl Device {
             Ok(ContextDescriptor {
                 pixmap_glx_fb_config_id,
                 gl_version: attributes.version,
+                compatibility_profile,
             })
         }
     }
@@ -180,11 +188,18 @@ impl Device {
 
         GLX_FUNCTIONS.with(|glx| {
             unsafe {
+                let glx_context_profile_mask = if descriptor.compatibility_profile { 
+                    GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB
+                } else {
+                    GLX_CONTEXT_CORE_PROFILE_BIT_ARB
+                };
+
                 // TODO(pcwalton): Fall back to `glXCreateNewContext()` if the
                 // `GLX_ARB_create_context` extension isn't available.
                 let attributes = [
                     glx::CONTEXT_MAJOR_VERSION_ARB as c_int, descriptor.gl_version.major as c_int,
                     glx::CONTEXT_MINOR_VERSION_ARB as c_int, descriptor.gl_version.minor as c_int,
+                    GLX_CONTEXT_PROFILE_MASK_ARB,            glx_context_profile_mask,
                     0,
                 ];
 
@@ -218,6 +233,7 @@ impl Device {
                     id: *next_context_id,
                     framebuffer: Framebuffer::None,
                     gl_version: descriptor.gl_version,
+                    compatibility_profile: descriptor.compatibility_profile,
                     dummy_glx_pixmap,
                     dummy_pixmap,
                     status: ContextStatus::Owned,
@@ -243,7 +259,8 @@ impl Device {
 
         GLX_FUNCTIONS.with(|glx| {
             GL_FUNCTIONS.with(|gl| {
-                let gl_version = {
+                let (gl_version, compatibility_profile);
+                {
                     let _guard = CurrentContextGuard::new();
 
                     let ok = glx.MakeCurrent(glx_display,
@@ -253,12 +270,9 @@ impl Device {
                         return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
                     }
 
-                    let (mut gl_major_version, mut gl_minor_version) = (0, 0);
-                    gl.GetIntegerv(gl::MAJOR_VERSION, &mut gl_major_version);
-                    gl.GetIntegerv(gl::MINOR_VERSION, &mut gl_minor_version);
-                    assert!(gl_major_version > 0);
-
-                    GLVersion { major: gl_major_version as u8, minor: gl_minor_version as u8 }
+                    gl_version = GLVersion::current(gl);
+                    compatibility_profile =
+                        context::current_context_uses_compatibility_profile(gl);
                 };
 
                 // Introspect the context to create a context descriptor.
@@ -266,6 +280,7 @@ impl Device {
                 let context_descriptor = ContextDescriptor {
                     pixmap_glx_fb_config_id: glx_fb_config_id,
                     gl_version,
+                    compatibility_profile,
                 };
 
                 // Grab the framebuffer config from that descriptor.
@@ -285,6 +300,7 @@ impl Device {
                     id: *next_context_id,
                     framebuffer: Framebuffer::External(native_context.glx_drawable),
                     gl_version,
+                    compatibility_profile,
                     dummy_glx_pixmap,
                     dummy_pixmap,
                     status: ContextStatus::Referenced,
@@ -336,6 +352,7 @@ impl Device {
             ContextDescriptor {
                 pixmap_glx_fb_config_id: glx_fb_config_id,
                 gl_version: context.gl_version,
+                compatibility_profile: context.compatibility_profile,
             }
         }
     }
@@ -418,6 +435,10 @@ impl Device {
             attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
             attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
             attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
+
+            if context_descriptor.compatibility_profile {
+                attribute_flags.insert(ContextAttributeFlags::COMPATIBILITY_PROFILE);
+            }
 
             // Create appropriate context attributes.
             ContextAttributes { flags: attribute_flags, version: context_descriptor.gl_version }

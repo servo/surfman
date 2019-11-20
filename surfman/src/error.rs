@@ -19,6 +19,8 @@ pub enum Error {
     /// On some systems, like macOS, the compatibility profile is only supported on some GL
     /// versions.
     UnsupportedGLProfile,
+    /// The system doesn't support the requested OpenGL API version.
+    UnsupportedGLVersion,
     /// Choosing an OpenGL pixel format failed.
     PixelFormatSelectionFailed(WindowingApiError),
     /// The system couldn't choose an OpenGL pixel format.

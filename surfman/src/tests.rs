@@ -67,7 +67,7 @@ fn test_context_creation() {
             println!("Creating context with attributes: {:?}", attributes);
             let descriptor = match device.create_context_descriptor(&attributes) {
                 Ok(descriptor) => descriptor,
-                Err(Error::UnsupportedGLProfile) => {
+                Err(Error::UnsupportedGLProfile) | Err(Error::UnsupportedGLVersion) => {
                     // Nothing we can do about this. Go on to the next one.
                     continue
                 }
@@ -81,6 +81,7 @@ fn test_context_creation() {
                     let actual_attributes =
                         device.context_descriptor_attributes(&actual_descriptor);
                     if !actual_attributes.flags.contains(attributes.flags) {
+                        device.destroy_context(&mut context).unwrap();
                         panic!("Expected at least attribute flags {:?} but got {:?}",
                                attributes.flags,
                                actual_attributes.flags);
@@ -88,6 +89,7 @@ fn test_context_creation() {
                     if actual_attributes.version.major < attributes.version.major ||
                             (actual_attributes.version.major == attributes.version.major &&
                              actual_attributes.version.minor < attributes.version.minor) {
+                        device.destroy_context(&mut context).unwrap();
                         panic!("Expected at least GL version {:?} but got version {:?}",
                                attributes,
                                actual_attributes);
@@ -99,7 +101,7 @@ fn test_context_creation() {
                     // This is OK, as it just means the GL implementation didn't support the
                     // requested GL version.
                 }
-                Err(_) => panic!(),
+                Err(error) => panic!("Failed to create context: {:?}", error),
             }
         }
     }
