@@ -182,52 +182,51 @@ impl Device {
     /// Calling this method on a widget surface returns a `WidgetAttached` error.
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, (Error, Surface)> {
+        let glx = GLX_FUNCTIONS.lock();
 
-        GLX_FUNCTIONS.with(|glx| {
-            GL_FUNCTIONS.with(|gl| {
-                let mut gl_texture = 0;
-                unsafe {
-                    let glx_pixmap = match surface.drawables {
-                        SurfaceDrawables::Window { .. } => {
-                            return Err((Error::WidgetAttached, surface));
-                        }
-                        SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
-                    };
+        GL_FUNCTIONS.with(|gl| {
+            let mut gl_texture = 0;
+            unsafe {
+                let glx_pixmap = match surface.drawables {
+                    SurfaceDrawables::Window { .. } => {
+                        return Err((Error::WidgetAttached, surface));
+                    }
+                    SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
+                };
 
-                    drop(self.make_context_current(context));
+                drop(self.make_context_current(context));
 
-                    // Create a texture.
-                    gl.GenTextures(1, &mut gl_texture);
-                    debug_assert_ne!(gl_texture, 0);
-                    gl.BindTexture(gl::TEXTURE_RECTANGLE, gl_texture);
+                // Create a texture.
+                gl.GenTextures(1, &mut gl_texture);
+                debug_assert_ne!(gl_texture, 0);
+                gl.BindTexture(gl::TEXTURE_RECTANGLE, gl_texture);
 
-                    // Initialize the texture, for convenience.
-                    gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                     gl::TEXTURE_MAG_FILTER,
-                                     gl::LINEAR as GLint);
-                    gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                     gl::TEXTURE_MIN_FILTER,
-                                     gl::LINEAR as GLint);
-                    gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                     gl::TEXTURE_WRAP_S,
-                                     gl::CLAMP_TO_EDGE as GLint);
-                    gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                     gl::TEXTURE_WRAP_T,
-                                     gl::CLAMP_TO_EDGE as GLint);
+                // Initialize the texture, for convenience.
+                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
+                                 gl::TEXTURE_MAG_FILTER,
+                                 gl::LINEAR as GLint);
+                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
+                                 gl::TEXTURE_MIN_FILTER,
+                                 gl::LINEAR as GLint);
+                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
+                                 gl::TEXTURE_WRAP_S,
+                                 gl::CLAMP_TO_EDGE as GLint);
+                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
+                                 gl::TEXTURE_WRAP_T,
+                                 gl::CLAMP_TO_EDGE as GLint);
 
-                    // Bind the surface's GLX pixmap to the texture.
-                    let display_guard = self.connection.lock_display();
-                    glx.BindTexImageEXT(display_guard.glx_display(),
-                                        glx_pixmap,
-                                        glx::FRONT_EXT as c_int,
-                                        GLX_PIXMAP_ATTRIBUTES.as_ptr());
+                // Bind the surface's GLX pixmap to the texture.
+                let display_guard = self.connection.lock_display();
+                glx.BindTexImageEXT(display_guard.glx_display(),
+                                    glx_pixmap,
+                                    glx::FRONT_EXT as c_int,
+                                    GLX_PIXMAP_ATTRIBUTES.as_ptr());
 
-                    gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
-                    debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
-                }
+                gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
+                debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
+            }
 
-                Ok(SurfaceTexture { surface, gl_texture, phantom: PhantomData })
-            })
+            Ok(SurfaceTexture { surface, gl_texture, phantom: PhantomData })
         })
     }
 
@@ -249,12 +248,10 @@ impl Device {
         match surface.drawables {
             SurfaceDrawables::Pixmap { ref mut glx_pixmap, pixmap: _ } => {
                 let display_guard = self.connection.lock_display();
-                GLX_FUNCTIONS.with(|glx| {
-                    unsafe {
-                        glx.DestroyPixmap(display_guard.glx_display(), *glx_pixmap);
-                        *glx_pixmap = 0;
-                    }
-                });
+                unsafe {
+                    GLX_FUNCTIONS.lock().DestroyPixmap(display_guard.glx_display(), *glx_pixmap);
+                    *glx_pixmap = 0;
+                }
             }
             SurfaceDrawables::Window { .. } => {}
         }
@@ -277,24 +274,23 @@ impl Device {
             SurfaceDrawables::Window { .. } => unreachable!(),
         };
 
-        GLX_FUNCTIONS.with(|glx| {
-            GL_FUNCTIONS.with(|gl| {
-                unsafe {
-                    gl.BindTexture(gl::TEXTURE_RECTANGLE, surface_texture.gl_texture);
+        let glx = GLX_FUNCTIONS.lock();
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                gl.BindTexture(gl::TEXTURE_RECTANGLE, surface_texture.gl_texture);
 
-                    // Release the GLX pixmap.
-                    let display_guard = self.connection.lock_display();
-                    glx.ReleaseTexImageEXT(display_guard.glx_display(),
-                                           glx_pixmap,
-                                           glx::FRONT_EXT as c_int);
+                // Release the GLX pixmap.
+                let display_guard = self.connection.lock_display();
+                glx.ReleaseTexImageEXT(display_guard.glx_display(),
+                                       glx_pixmap,
+                                       glx::FRONT_EXT as c_int);
 
-                    gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
-                    gl.DeleteTextures(1, &mut surface_texture.gl_texture);
-                    surface_texture.gl_texture = 0;
-                }
+                gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
+                gl.DeleteTextures(1, &mut surface_texture.gl_texture);
+                surface_texture.gl_texture = 0;
+            }
 
-                Ok(surface_texture.surface)
-            })
+            Ok(surface_texture.surface)
         })
     }
 
@@ -323,16 +319,15 @@ impl Device {
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
         // TODO(pcwalton): Use the `XPRESENT` extension.
         unsafe {
-            GLX_FUNCTIONS.with(|glx| {
-                match surface.drawables {
-                    SurfaceDrawables::Window { window } => {
-                        let display_guard = self.connection.lock_display();
-                        glx.SwapBuffers(display_guard.glx_display(), window);
-                        Ok(())
-                    }
-                    SurfaceDrawables::Pixmap { .. } => Err(Error::NoWidgetAttached),
+            let glx = GLX_FUNCTIONS.lock();
+            match surface.drawables {
+                SurfaceDrawables::Window { window } => {
+                    let display_guard = self.connection.lock_display();
+                    glx.SwapBuffers(display_guard.glx_display(), window);
+                    Ok(())
                 }
-            })
+                SurfaceDrawables::Pixmap { .. } => Err(Error::NoWidgetAttached),
+            }
         }
     }
 
@@ -400,43 +395,43 @@ pub(crate) unsafe fn create_pixmaps(display: *mut Display,
                                     glx_fb_config: GLXFBConfig,
                                     size: &Size2D<i32>)
                                     -> Result<(GLXPixmap, Pixmap), Error> {
-    GLX_FUNCTIONS.with(|glx| {
-        let mut glx_visual_id = 0;
-        let result = glx.GetFBConfigAttrib(glx_display,
-                                           glx_fb_config,
-                                           GLX_VISUAL_ID,
-                                           &mut glx_visual_id);
-        if result != xlib::Success as c_int {
-            let windowing_api_error = error::glx_error_to_windowing_api_error(result);
-            return Err(Error::SurfaceCreationFailed(windowing_api_error));
-        }
+    let glx = GLX_FUNCTIONS.lock();
 
-        // Get the depth of the current visual.
-        let depth = get_depth_of_visual_with_id(display, glx_visual_id as VisualID);
-        let depth = depth.expect("GLX FB config has an invalid visual ID!");
+    let mut glx_visual_id = 0;
+    let result = glx.GetFBConfigAttrib(glx_display,
+                                       glx_fb_config,
+                                       GLX_VISUAL_ID,
+                                       &mut glx_visual_id);
+    if result != xlib::Success as c_int {
+        let windowing_api_error = error::glx_error_to_windowing_api_error(result);
+        return Err(Error::SurfaceCreationFailed(windowing_api_error));
+    }
 
-        let pixmap = XCreatePixmap(display,
-                                   XRootWindowOfScreen(XDefaultScreenOfDisplay(display)),
-                                   size.width as u32,
-                                   size.height as u32,
-                                   depth);
-        if pixmap == 0 {
-            return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-        }
+    // Get the depth of the current visual.
+    let depth = get_depth_of_visual_with_id(display, glx_visual_id as VisualID);
+    let depth = depth.expect("GLX FB config has an invalid visual ID!");
 
-        // The Khronos documentation page states that `attributes` must be null. This is a filthy
-        // lie. In reality, Mesa expects these attributes to be the same as those passed to
-        // `glXBindTexImageEXT`. Following the documentation will result in no errors but will
-        // produce a black texture.
-        let glx_pixmap = glx.CreatePixmap(glx_display,
-                                          glx_fb_config,
-                                          pixmap,
-                                          GLX_PIXMAP_ATTRIBUTES.as_ptr());
-        if glx_pixmap == 0 {
-            return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-        }
+    let pixmap = XCreatePixmap(display,
+                               XRootWindowOfScreen(XDefaultScreenOfDisplay(display)),
+                               size.width as u32,
+                               size.height as u32,
+                               depth);
+    if pixmap == 0 {
+        return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
+    }
 
-        Ok((glx_pixmap, pixmap))
-    })
+    // The Khronos documentation page states that `attributes` must be null. This is a filthy
+    // lie. In reality, Mesa expects these attributes to be the same as those passed to
+    // `glXBindTexImageEXT`. Following the documentation will result in no errors but will
+    // produce a black texture.
+    let glx_pixmap = glx.CreatePixmap(glx_display,
+                                      glx_fb_config,
+                                      pixmap,
+                                      GLX_PIXMAP_ATTRIBUTES.as_ptr());
+    if glx_pixmap == 0 {
+        return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
+    }
+
+    Ok((glx_pixmap, pixmap))
 }
 

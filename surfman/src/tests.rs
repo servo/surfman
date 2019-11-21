@@ -4,10 +4,12 @@
 
 use crate::gl::types::{GLenum, GLuint};
 use crate::gl::{self, Gl};
-use crate::{Context, ContextAttributeFlags, ContextAttributes, ContextDescriptor, Device, Error};
-use crate::{GLApi, GLVersion, Surface, SurfaceAccess, SurfaceType, WindowingApiError};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
+use crate::{SurfaceType, WindowingApiError};
 use super::connection::Connection;
-use super::device::Adapter;
+use super::context::{Context, ContextDescriptor};
+use super::device::{Adapter, Device};
+use super::surface::Surface;
 
 use euclid::default::Size2D;
 use std::os::raw::c_void;
@@ -42,14 +44,14 @@ fn test_adapter_creation() {
 fn test_device_creation() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
-    let device = match connection.create_device(&adapter) {
-        Ok(device) => device,
+    match connection.create_device(&adapter) {
+        Ok(device) => {}
         Err(Error::RequiredExtensionUnavailable) => {
             // Can't run these tests on this hardware.
             return;
         }
         Err(err) => panic!("Failed to create device: {:?}", err),
-    };
+    }
 }
 
 #[test]

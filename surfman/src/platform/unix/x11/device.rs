@@ -2,7 +2,6 @@
 //
 //! Thread-local handles to devices.
 
-use crate::glx::types::Display as GlxDisplay;
 use crate::{Error, GLApi};
 use super::connection::Connection;
 

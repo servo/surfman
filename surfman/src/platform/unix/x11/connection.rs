@@ -84,14 +84,12 @@ impl Connection {
     #[inline]
     pub unsafe fn from_native_connection(native_connection: NativeConnection)
                                          -> Result<Connection, Error> {
-        unsafe {
-            Ok(Connection {
-                display_holder: Arc::new(DisplayHolder {
-                    display: native_connection.0,
-                    display_is_owned: false,
-                }),
-            })
-        }
+        Ok(Connection {
+            display_holder: Arc::new(DisplayHolder {
+                display: native_connection.0,
+                display_is_owned: false,
+            }),
+        })
     }
 
     /// Returns the underlying native connection.
