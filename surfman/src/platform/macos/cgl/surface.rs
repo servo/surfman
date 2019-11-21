@@ -134,11 +134,13 @@ impl Device {
     /// in another context.
     /// 
     /// Calling this method on a widget surface returns a `WidgetAttached` error.
-    pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
+    pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, (Error, Surface)> {
         if surface.system_surface.view_info.is_some() {
             return Err((Error::WidgetAttached, surface));
         }
+
+        let _guard = self.temporarily_make_context_current(context).unwrap();
 
         let texture_object = self.bind_to_gl_texture(&surface.system_surface.io_surface,    
                                                      &surface.system_surface.size);

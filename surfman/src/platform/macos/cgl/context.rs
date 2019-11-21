@@ -3,8 +3,7 @@
 //! Wrapper for Core OpenGL contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::gl::types::GLint;
-use crate::gl::{self, Gl};
+use crate::gl::Gl;
 use crate::gl_utils;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
