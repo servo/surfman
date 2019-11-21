@@ -57,9 +57,5 @@ impl Device {
     pub fn gl_api(&self) -> GLApi {
         GLApi::GL
     }
-
-    pub(crate) fn glx_display(&self) -> *mut GlxDisplay {
-        self.connection.display_holder.display as *mut GlxDisplay
-    }
 }
 

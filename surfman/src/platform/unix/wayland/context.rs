@@ -6,6 +6,7 @@ use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLConfig, EGLContext, EGLint};
 use crate::egl;
 use crate::gl::Gl;
+use crate::gl_utils;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
@@ -287,20 +288,17 @@ impl Device {
         }
 
         match context.framebuffer {
-            Framebuffer::None => {
-                let is_current = self.context_is_current(context);
-                context.framebuffer = Framebuffer::Surface(surface);
-
-                if is_current {
-                    // We need to make ourselves current again, because the surface changed.
-                    drop(self.make_context_current(context));
-                }
-
-                Ok(())
-            }
-            Framebuffer::External(_) => Err((Error::ExternalRenderTarget, surface)),
-            Framebuffer::Surface(_) => Err((Error::SurfaceAlreadyBound, surface)),
+            Framebuffer::None => context.framebuffer = Framebuffer::Surface(surface),
+            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
         }
+
+        // If we're current, call `make_context_current()` again to switch to the new framebuffer.
+        if self.context_is_current(context) {
+            drop(self.make_context_current(context));
+        }
+
+        Ok(())
     }
 
     /// Removes and returns any attached surface from this context.
@@ -315,10 +313,33 @@ impl Device {
             Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
         }
 
-        match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => Ok(Some(surface)),
+        let surface = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            Framebuffer::Surface(surface) => surface,
             Framebuffer::None | Framebuffer::External(_) => unreachable!(),
+        };
+
+        // If we're current, we stay current, but with no surface attached.
+        if self.context_is_current(context) {
+            EGL_FUNCTIONS.with(|egl| {
+                unsafe {
+                    egl.MakeCurrent(self.native_connection.egl_display,
+                                    egl::NO_SURFACE,
+                                    egl::NO_SURFACE,
+                                    context.egl_context);
+
+                    match surface.wayland_objects {
+                        WaylandObjects::TextureImage { framebuffer_object, .. } => {
+                            GL_FUNCTIONS.with(|gl| {
+                                gl_utils::unbind_framebuffer_if_necessary(gl, framebuffer_object);
+                            })
+                        }
+                        WaylandObjects::Window { .. } => {}
+                    }
+                }
+            });
         }
+
+        Ok(Some(surface))
     }
 
     /// Returns a unique ID representing a context.

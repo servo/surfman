@@ -5,6 +5,7 @@
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::types::GLint;
 use crate::gl::{self, Gl};
+use crate::gl_utils;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use super::device::Device;
@@ -346,21 +347,9 @@ impl Device {
                     let _guard = self.temporarily_make_context_current(context)?;
                     unsafe {
                         gl.Flush();
-
-                        // Unbind the framebuffer if it's bound.
-                        let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
-                        gl.GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING,
-                                       &mut current_draw_framebuffer);
-                        gl.GetIntegerv(gl::READ_FRAMEBUFFER_BINDING,
-                                       &mut current_read_framebuffer);
-                        if current_draw_framebuffer == surface.framebuffer_object as GLint {
-                            gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
-                        }
-                        if current_read_framebuffer == surface.framebuffer_object as GLint {
-                            gl.BindFramebuffer(gl::READ_FRAMEBUFFER, 0);
-                        }
                     }
 
+                    gl_utils::unbind_framebuffer_if_necessary(gl, surface.framebuffer_object);
                     Ok(Some(surface))
                 })
             }

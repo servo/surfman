@@ -127,14 +127,16 @@ impl Device {
 
     fn create_generic_surface(&mut self, context: &Context, size: &Size2D<i32>)
                               -> Result<Surface, Error> {
-        let display = self.connection.display_holder.display;
-        let glx_display = self.glx_display();
+        let display_guard = self.connection.lock_display();
 
         let context_descriptor = self.context_descriptor(context);
         let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
 
         unsafe {
-            let (glx_pixmap, pixmap) = create_pixmaps(display, glx_display, glx_fb_config, size)?;
+            let (glx_pixmap, pixmap) = create_pixmaps(display_guard.display(),
+                                                      display_guard.glx_display(),
+                                                      glx_fb_config,
+                                                      size)?;
             Ok(Surface {
                 drawables: SurfaceDrawables::Pixmap { glx_pixmap, pixmap },
                 size: *size,
@@ -146,11 +148,11 @@ impl Device {
 
     fn create_widget_surface(&mut self, context: &Context, native_widget: NativeWidget)
                              -> Result<Surface, Error> {
-        let display = self.connection.display_holder.display;
+        let display_guard = self.connection.lock_display();
         unsafe {
             let (mut root_window, mut x, mut y, mut width, mut height) = (0, 0, 0, 0, 0);
             let (mut border_width, mut depth) = (0, 0);
-            XGetGeometry(display,
+            XGetGeometry(display_guard.display(),
                          native_widget.window,
                          &mut root_window,
                          &mut x,
@@ -214,8 +216,8 @@ impl Device {
                                      gl::CLAMP_TO_EDGE as GLint);
 
                     // Bind the surface's GLX pixmap to the texture.
-                    let display = self.connection.display_holder.display as *mut GlxDisplay;
-                    glx.BindTexImageEXT(display,
+                    let display_guard = self.connection.lock_display();
+                    glx.BindTexImageEXT(display_guard.glx_display(),
                                         glx_pixmap,
                                         glx::FRONT_EXT as c_int,
                                         GLX_PIXMAP_ATTRIBUTES.as_ptr());
@@ -246,10 +248,10 @@ impl Device {
 
         match surface.drawables {
             SurfaceDrawables::Pixmap { ref mut glx_pixmap, pixmap: _ } => {
-                let glx_display = self.glx_display();
+                let display_guard = self.connection.lock_display();
                 GLX_FUNCTIONS.with(|glx| {
                     unsafe {
-                        glx.DestroyPixmap(glx_display, *glx_pixmap);
+                        glx.DestroyPixmap(display_guard.glx_display(), *glx_pixmap);
                         *glx_pixmap = 0;
                     }
                 });
@@ -281,8 +283,10 @@ impl Device {
                     gl.BindTexture(gl::TEXTURE_RECTANGLE, surface_texture.gl_texture);
 
                     // Release the GLX pixmap.
-                    let display = self.connection.display_holder.display as *mut GlxDisplay;
-                    glx.ReleaseTexImageEXT(display, glx_pixmap, glx::FRONT_EXT as c_int);
+                    let display_guard = self.connection.lock_display();
+                    glx.ReleaseTexImageEXT(display_guard.glx_display(),
+                                           glx_pixmap,
+                                           glx::FRONT_EXT as c_int);
 
                     gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
                     gl.DeleteTextures(1, &mut surface_texture.gl_texture);
@@ -322,7 +326,8 @@ impl Device {
             GLX_FUNCTIONS.with(|glx| {
                 match surface.drawables {
                     SurfaceDrawables::Window { window } => {
-                        glx.SwapBuffers(self.glx_display(), window);
+                        let display_guard = self.connection.lock_display();
+                        glx.SwapBuffers(display_guard.glx_display(), window);
                         Ok(())
                     }
                     SurfaceDrawables::Pixmap { .. } => Err(Error::NoWidgetAttached),

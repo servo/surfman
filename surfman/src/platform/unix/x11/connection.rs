@@ -3,18 +3,28 @@
 //! A wrapper for X11 server connections (`DISPLAY` variables).
 
 use crate::error::Error;
+use crate::glx::types::Display as GlxDisplay;
 use crate::platform::unix::generic::device::Adapter;
 use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 
+use std::marker::PhantomData;
 use std::ptr;
 use std::sync::Arc;
-use x11::xlib::{Display, XCloseDisplay, XOpenDisplay};
+use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
+
+lazy_static! {
+    static ref X_THREADS_INIT: () = {
+        unsafe {
+            XInitThreads();
+        }
+    };
+}
 
 /// A connection to the X11 display server.
 #[derive(Clone)]
@@ -25,7 +35,7 @@ pub struct Connection {
 unsafe impl Send for Connection {}
 
 pub(crate) struct DisplayHolder {
-    pub(crate) display: *mut Display,
+    display: *mut Display,
     pub(crate) display_is_owned: bool,
 }
 
@@ -50,6 +60,8 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         unsafe {
+            *X_THREADS_INIT;
+
             let display = XOpenDisplay(ptr::null());
             if display.is_null() {
                 return Err(Error::ConnectionFailed);
@@ -62,18 +74,24 @@ impl Connection {
 
     /// Wraps an existing X11 `Display` in a `Connection`.
     ///
+    /// Important: Before calling this function, X11 must have be initialized in a thread-safe
+    /// manner by using `XInitThreads()`. Otherwise, it will not be safe to use `surfman` from
+    /// multiple threads.
+    ///
     /// The display is not retained, as there is no way to do that in the X11 API. Therefore, it is
     /// the caller's responsibility to ensure that the display connection is not closed before this
     /// `Connection` object is disposed of.
     #[inline]
     pub unsafe fn from_native_connection(native_connection: NativeConnection)
                                          -> Result<Connection, Error> {
-        Ok(Connection {
-            display_holder: Arc::new(DisplayHolder {
-                display: native_connection.0,
-                display_is_owned: false,
-            }),
-        })
+        unsafe {
+            Ok(Connection {
+                display_holder: Arc::new(DisplayHolder {
+                    display: native_connection.0,
+                    display_is_owned: false,
+                }),
+            })
+        }
     }
 
     /// Returns the underlying native connection.
@@ -148,6 +166,40 @@ impl Connection {
             Some(window) => Ok(NativeWidget { window }),
             None => Err(Error::IncompatibleNativeWidget),
         }
+    }
+
+    #[inline]
+    pub(crate) fn lock_display(&self) -> DisplayGuard {
+        unsafe {
+            let display = self.display_holder.display;
+            XLockDisplay(display);
+            DisplayGuard { display, phantom: PhantomData }
+        }
+    }
+}
+
+pub(crate) struct DisplayGuard<'a> {
+    display: *mut Display,
+    phantom: PhantomData<&'a ()>,
+}
+
+impl<'a> Drop for DisplayGuard<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            XUnlockDisplay(self.display);
+        }
+    }
+}
+
+impl<'a> DisplayGuard<'a> {
+    #[inline]
+    pub(crate) fn display(&self) -> *mut Display {
+        self.display
+    }
+
+    #[inline]
+    pub(crate) fn glx_display(&self) -> *mut GlxDisplay {
+        self.display as *mut GlxDisplay
     }
 }
 
