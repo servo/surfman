@@ -11,6 +11,8 @@ use super::device::Adapter;
 
 use euclid::default::Size2D;
 use std::os::raw::c_void;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
 
 static GL_VERSIONS: [GLVersion; 6] = [
     GLVersion { major: 2, minor: 0 },
@@ -367,6 +369,75 @@ fn test_cross_device_surface_texture_blit_framebuffer() {
                                    .unwrap();
         other_device.destroy_surface(&mut other_context, &mut green_surface).unwrap();
         other_device.destroy_context(&mut other_context).unwrap();
+        env.device.destroy_context(&mut env.context).unwrap();
+    }
+}
+
+#[test]
+fn test_cross_thread_surface_texture_blit_framebuffer() {
+    let mut env = match BasicEnvironment::new() {
+        None => return,
+        Some(env) => env,
+    };
+
+    let (to_main_sender, to_main_receiver) = mpsc::channel();
+    let (to_worker_sender, to_worker_receiver) = mpsc::channel();
+
+    let other_connection = env.connection.clone();
+    let other_adapter = env.adapter.clone();
+    let other_context_descriptor = env.context_descriptor.clone();
+    thread::spawn(move || {
+        let mut device = other_connection.create_device(&other_adapter).unwrap();
+        let mut context = device.create_context(&other_context_descriptor).unwrap();
+        let gl = Gl::load_with(|symbol| device.get_proc_address(&context, symbol));
+
+        let surface = make_surface(&mut device, &context);
+        device.bind_surface_to_context(&mut context, surface).unwrap();
+        device.make_context_current(&context).unwrap();
+        bind_context_fbo(&gl, &device, &context);
+
+        clear(&gl, &[0, 255, 0, 255]);
+        assert_eq!(get_pixel(&gl), [0, 255, 0, 255]);
+
+        let surface = device.unbind_surface_from_context(&mut context).unwrap().unwrap();
+        to_main_sender.send(surface).unwrap();
+
+        let mut surface = to_worker_receiver.recv().unwrap();
+        device.destroy_surface(&mut context, &mut surface).unwrap();
+        device.destroy_context(&mut context).unwrap();
+    });
+
+    unsafe {
+        clear(&env.gl, &[255, 0, 0, 255]);
+        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
+
+        let green_surface = to_main_receiver.recv().unwrap();
+        let green_surface_texture = env.device
+                                       .create_surface_texture(&mut env.context, green_surface)
+                                       .unwrap();
+
+        env.device.make_context_current(&env.context).unwrap();
+        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
+
+        let mut green_framebuffer_object =
+            make_fbo(&env.gl,
+                     env.device.surface_gl_texture_target(),
+                     env.device.surface_texture_object(&green_surface_texture));
+
+        // Blit to main framebuffer.
+        blit_fbo(&env.gl, context_fbo(&env.device, &env.context), green_framebuffer_object);
+        bind_context_fbo(&env.gl, &env.device, &env.context);
+        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+
+        // Clean up.
+        env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0); check_gl(&env.gl);
+        env.gl.DeleteFramebuffers(1, &mut green_framebuffer_object);
+
+        let green_surface = env.device
+                               .destroy_surface_texture(&mut env.context, green_surface_texture)
+                               .unwrap();
+        to_worker_sender.send(green_surface).unwrap();
+
         env.device.destroy_context(&mut env.context).unwrap();
     }
 }
