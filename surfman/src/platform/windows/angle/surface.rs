@@ -99,9 +99,12 @@ impl Device {
                           -> Result<Surface, Error> {
         match *surface_type {
             SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size, None),
+            #[cfg(not(target_vendor = "uwp"))]
             SurfaceType::Widget { ref native_widget } => {
                 self.create_window_surface(context, native_widget)
             }
+            #[cfg(target_vendor = "uwp")]
+            SurfaceType::Widget { .. } => Err(Error::UnsupportedOnThisPlatform)
         }
     }
 
