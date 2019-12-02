@@ -249,7 +249,7 @@ impl Device {
     /// 
     /// Calling this method on a widget surface returns a `WidgetAttached` error.
     #[allow(non_snake_case)]
-    pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
+    pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, (Error, Surface)> {
         let share_handle = match surface.win32_objects {
             Win32Objects::Window => return Err((Error::WidgetAttached, surface)),
@@ -299,6 +299,8 @@ impl Device {
                 } else {
                     None
                 };
+
+                let _guard = self.temporarily_make_context_current(context);
 
                 GL_FUNCTIONS.with(|gl| {
                     // Then bind that surface to the texture.

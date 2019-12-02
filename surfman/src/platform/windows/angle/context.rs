@@ -196,8 +196,8 @@ impl Device {
         }
     }
 
-    fn temporarily_make_context_current(&self, context: &Context)
-                                        -> Result<CurrentContextGuard, Error> {
+    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
+                                                   -> Result<CurrentContextGuard, Error> {
         let guard = CurrentContextGuard::new();
         self.make_context_current(context)?;
         Ok(guard)
