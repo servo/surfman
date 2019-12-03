@@ -13,7 +13,7 @@ use super::surface::Surface;
 
 use euclid::default::Size2D;
 use std::os::raw::c_void;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc;
 use std::thread;
 
 static GL_VERSIONS: [GLVersion; 6] = [
@@ -131,7 +131,9 @@ fn test_context_creation() {
                     // This is OK, as it just means the GL implementation didn't support the
                     // requested GL version.
                 }
-                Err(error) => panic!("Failed to create context: {:?}", error),
+                Err(error) => {
+                    panic!("Failed to create context ({:?}/{:?}): {:?}", version, flags, error)
+                }
             }
         }
     }
@@ -247,6 +249,7 @@ fn test_gl() {
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, red_framebuffer_object);
         env.gl.ClearColor(1.0, 0.0, 0.0, 1.0);
         env.gl.Clear(gl::COLOR_BUFFER_BIT);
+        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
 
         let mut red_surface = env.device
                                  .unbind_surface_from_context(&mut env.context)

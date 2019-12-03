@@ -3,22 +3,28 @@
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::gl::types::GLint;
 use crate::gl::{self, Gl};
+use crate::info::GLVersion;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceInfo, WindowingApiError};
 use super::device::Device;
 use super::surface::Surface;
 
+use euclid::default::Size2D;
 use osmesa_sys::{self, OSMESA_CONTEXT_MAJOR_VERSION, OSMESA_CONTEXT_MINOR_VERSION};
 use osmesa_sys::{OSMESA_COMPAT_PROFILE, OSMESA_CORE_PROFILE, OSMESA_DEPTH_BITS, OSMESA_FORMAT};
 use osmesa_sys::{OSMESA_PROFILE, OSMESA_STENCIL_BITS, OSMesaContext, OSMesaCreateContextAttribs};
 use osmesa_sys::{OSMesaDestroyContext, OSMesaGetColorBuffer, OSMesaGetCurrentContext};
-use osmesa_sys::{OSMesaGetDepthBuffer, OSMesaGetIntegerv, OSMesaGetProcAddress, OSMesaMakeCurrent};
+use osmesa_sys::{OSMesaGetIntegerv, OSMesaGetProcAddress, OSMesaMakeCurrent};
+use std::cell::UnsafeCell;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::sync::Arc;
 use std::thread;
+
+const DUMMY_FRAMEBUFFER_SIZE: i32 = 16;
+const DUMMY_FRAMEBUFFER_AREA: i32 = DUMMY_FRAMEBUFFER_SIZE * DUMMY_FRAMEBUFFER_SIZE;
 
 thread_local! {
     #[doc(hidden)]
@@ -45,7 +51,9 @@ pub struct Context {
     pub(crate) osmesa_context: OSMesaContext,
     pub(crate) id: ContextID,
     framebuffer: Framebuffer<Surface, ()>,
+    descriptor: ContextDescriptor,
     status: ContextStatus,
+    dummy_pixels: UnsafeCell<Vec<u32>>,
 }
 
 impl Drop for Context {
@@ -58,7 +66,30 @@ impl Drop for Context {
 }
 
 /// Wrapper for a native OSMesa context.
-pub struct NativeContext(pub OSMesaContext);
+pub struct NativeContext {
+    /// The native OSMesa context object.
+    pub osmesa_context: OSMesaContext,
+    /// Flags that represent attributes of the OSMesa context that we can't automatically detect
+    /// from the context, due to API limitations and/or bugs.
+    pub flags: NativeContextFlags,
+}
+
+bitflags! {
+    /// Various flags that represent attributes of the OSMesa context that we can't automatically
+    /// detect from the context, due to API limitations and/or bugs.
+    /// 
+    /// These correspond to a subset of the `ContextAttributeFlags`. Corresponding flags are
+    /// guaranteed to have the same bit representation.
+    pub struct NativeContextFlags: u8 {
+        /// Whether a depth buffer is present.
+        const DEPTH   = 0x02;
+        /// Whether a stencil buffer is present.
+        const STENCIL = 0x04;
+        /// Whether the OpenGL compatibility profile is in use. If this is not set, then the core
+        /// profile is assumed to be used.
+        const COMPATIBILITY_PROFILE = 0x08;
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum ContextStatus {
@@ -82,7 +113,6 @@ impl Device {
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
         let flags = attributes.flags;
-        let format = if flags.contains(ContextAttributeFlags::ALPHA) { gl::RGBA } else { gl::RGB };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 }; 
 
@@ -93,9 +123,10 @@ impl Device {
             OSMESA_CORE_PROFILE
         };
 
+        // We have to use an RGBA format because RGB crashes the Gallium state tracker.
         Ok(ContextDescriptor {
             attributes: Arc::new(vec![
-                OSMESA_FORMAT,                  format as i32,
+                OSMESA_FORMAT,                  gl::RGBA as i32,
                 OSMESA_DEPTH_BITS,              depth_size,
                 OSMESA_STENCIL_BITS,            stencil_size,
                 OSMESA_PROFILE,                 profile,
@@ -118,14 +149,16 @@ impl Device {
             let osmesa_context = OSMesaCreateContextAttribs(descriptor.attributes.as_ptr(),
                                                             ptr::null_mut());
             if osmesa_context.is_null() {
-                return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
+                return Err(Error::ContextCreationFailed(WindowingApiError::BadPixelFormat));
             }
 
             let context = Context {
                 osmesa_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
+                descriptor: (*descriptor).clone(),
                 status: ContextStatus::Owned,
+                dummy_pixels: UnsafeCell::new(vec![0; DUMMY_FRAMEBUFFER_AREA as usize]),
             };
             next_context_id.0 += 1;
             Ok(context)
@@ -142,11 +175,47 @@ impl Device {
         // Take a lock.
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
+        // Synthesize a context descriptor. The OSMesa API doesn't let us 
+        let context_descriptor = GL_FUNCTIONS.with(|gl| {
+            // Fetch the current GL version.
+            let gl_version = GLVersion::current(gl);
+
+            // Fetch the current image format.
+            let mut format = 0;
+            OSMesaGetIntegerv(OSMESA_FORMAT, &mut format);
+
+            // Synthesize appropriate attribute values.
+            let flags = native_context.flags;
+            let depth_size   = if flags.contains(NativeContextFlags::DEPTH)   { 24 } else { 0 };
+            let stencil_size = if flags.contains(NativeContextFlags::STENCIL) { 8  } else { 0 }; 
+
+            let profile = if flags.contains(NativeContextFlags::COMPATIBILITY_PROFILE) {
+                OSMESA_COMPAT_PROFILE
+            } else {
+                OSMESA_CORE_PROFILE
+            };
+
+            // Create the attributes.
+            ContextDescriptor {
+                attributes: Arc::new(vec![
+                    OSMESA_FORMAT,                  format,
+                    OSMESA_DEPTH_BITS,              depth_size,
+                    OSMESA_STENCIL_BITS,            stencil_size,
+                    OSMESA_PROFILE,                 profile,
+                    OSMESA_CONTEXT_MAJOR_VERSION,   gl_version.major as i32,
+                    OSMESA_CONTEXT_MINOR_VERSION,   gl_version.minor as i32,
+                    0,
+                ]),
+            }
+        });
+
         let context = Context {
-            osmesa_context: native_context.0,
+            osmesa_context: native_context.osmesa_context,
             id: *next_context_id,
             framebuffer: Framebuffer::None,
+            descriptor: context_descriptor,
             status: ContextStatus::Referenced,
+            dummy_pixels: UnsafeCell::new(vec![0; DUMMY_FRAMEBUFFER_AREA as usize]),
         };
         next_context_id.0 += 1;
         Ok(context)
@@ -177,52 +246,9 @@ impl Device {
     }
 
     /// Returns the descriptor that this context was created with.
+    #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        self.make_context_current(context).unwrap();
-
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                // Fetch the current GL version.
-                let (mut major_gl_version, mut minor_gl_version) = (0, 0);
-                gl.GetIntegerv(gl::MAJOR_VERSION, &mut major_gl_version);
-                gl.GetIntegerv(gl::MINOR_VERSION, &mut minor_gl_version);
-
-                // Fetch the current image format.
-                let mut format = 0;
-                OSMesaGetIntegerv(OSMESA_FORMAT, &mut format);
-
-                // Fetch the depth size.
-                let (mut depth_width, mut depth_height, mut depth_byte_size) = (0, 0, 0);
-                let mut depth_buffer = ptr::null_mut();
-                let has_depth = OSMesaGetDepthBuffer(context.osmesa_context,
-                                                    &mut depth_width,
-                                                    &mut depth_height,
-                                                    &mut depth_byte_size,
-                                                    &mut depth_buffer);
-                if has_depth == gl::FALSE {
-                    depth_byte_size = 0;
-                }
-
-                let profile = if major_gl_version < 3 { OSMESA_COMPAT_PROFILE } else { OSMESA_CORE_PROFILE };
-
-                // Create a set of attributes.
-                //
-                // FIXME(pcwalton): I don't see a way to get the current stencil size in the OSMesa
-                // API. Just guess, I suppose.
-                // FIXME(pcwalton): How does OSMesa deal with packed depth/stencil?
-                ContextDescriptor {
-                    attributes: Arc::new(vec![
-                        OSMESA_FORMAT,                  format,
-                        OSMESA_DEPTH_BITS,              depth_byte_size * 8,
-                        OSMESA_STENCIL_BITS,            8,
-                        OSMESA_PROFILE,                 profile,
-                        OSMESA_CONTEXT_MAJOR_VERSION,   major_gl_version,
-                        OSMESA_CONTEXT_MINOR_VERSION,   minor_gl_version,
-                        0,
-                    ]),
-                }
-            }
-        })
+        context.descriptor.clone()
     }
 
     /// Makes the context the current OpenGL context for this thread.
@@ -230,18 +256,25 @@ impl Device {
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let surface = match context.framebuffer {
-                Framebuffer::Surface(ref surface) => surface,
-                Framebuffer::None | Framebuffer::External(_) => {
-                    return Err(Error::ExternalRenderTarget)
+            let (surface_pixels_ptr, surface_size);
+            match context.framebuffer {
+                Framebuffer::Surface(ref surface) => {
+                    surface_pixels_ptr = (*surface.pixels.get()).as_mut_ptr() as *mut c_void;
+                    surface_size = surface.size;
                 }
+                Framebuffer::None => {
+                    surface_pixels_ptr =
+                        (*context.dummy_pixels.get()).as_mut_ptr() as *mut c_void;
+                    surface_size = Size2D::new(DUMMY_FRAMEBUFFER_SIZE, DUMMY_FRAMEBUFFER_SIZE);
+                }
+                Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
             };
 
             let ok = OSMesaMakeCurrent(context.osmesa_context,
-                                       (*surface.pixels.get()).as_mut_ptr() as *mut c_void,
+                                       surface_pixels_ptr,
                                        gl::UNSIGNED_BYTE,
-                                       surface.size.width,
-                                       surface.size.height);
+                                       surface_size.width,
+                                       surface_size.height);
             if ok == gl::FALSE {
                 return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
             }
@@ -284,6 +317,12 @@ impl Device {
                 (OSMESA_STENCIL_BITS, _) => {
                     context_attributes.flags.insert(ContextAttributeFlags::STENCIL)
                 }
+                (OSMESA_PROFILE, profile) => {
+                    if profile == OSMESA_COMPAT_PROFILE as u32 {
+                        context_attributes.flags
+                                          .insert(ContextAttributeFlags::COMPATIBILITY_PROFILE);
+                    }
+                }
                 (OSMESA_CONTEXT_MAJOR_VERSION, major_version) => {
                     context_attributes.version.major = major_version as u8
                 }
@@ -325,13 +364,18 @@ impl Device {
         }
 
         match context.framebuffer {
-            Framebuffer::None => {
-                context.framebuffer = Framebuffer::Surface(surface);
-                Ok(())
-            }
-            Framebuffer::External(_) => Err((Error::ExternalRenderTarget, surface)),
-            Framebuffer::Surface(_) => Err((Error::SurfaceAlreadyBound, surface)),
+            Framebuffer::None => context.framebuffer = Framebuffer::Surface(surface),
+            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
         }
+
+        unsafe {
+            if OSMesaGetCurrentContext() == context.osmesa_context {
+                drop(self.make_context_current(context));
+            }
+        }
+
+        Ok(())
     }
 
     /// Removes and returns any attached surface from this context.
@@ -390,7 +434,12 @@ impl Device {
     /// Given a context, returns its underlying OSMesa context object.
     #[inline]
     pub fn native_context(&self, context: &Context) -> NativeContext {
-        NativeContext(context.osmesa_context)
+        let attributes = self.context_descriptor_attributes(&context.descriptor);
+
+        NativeContext {
+            osmesa_context: context.osmesa_context,
+            flags: NativeContextFlags::from_bits_truncate(attributes.flags.bits()),
+        }
     }
 }
 
