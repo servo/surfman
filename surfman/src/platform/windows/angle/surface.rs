@@ -105,12 +105,17 @@ pub(crate) enum Win32Objects {
 }
 
 /// Wraps a Windows `HWND` window handle.
+#[cfg(not(target_vendor = "uwp"))]
 pub struct NativeWidget {
     /// A window handle.
     ///
     /// This can be a top-level window or a control.
     pub window_handle: HWND,
 }
+
+/// A placeholder native widget type for UWP, which isn't supported at the moment.
+#[cfg(target_vendor = "uwp")]
+pub struct NativeWidget;
 
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
@@ -209,6 +214,7 @@ impl Device {
         }
     }
 
+    #[cfg(not(target_vendor = "uwp"))]
     fn create_window_surface(&mut self, context: &Context, native_widget: &NativeWidget)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
@@ -236,6 +242,12 @@ impl Device {
                 })
             })
         }
+    }
+
+    #[cfg(target_vendor = "uwp")]
+    fn create_window_surface(&mut self, context: &Context, native_widget: &NativeWidget)
+                              -> Result<Surface, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.
