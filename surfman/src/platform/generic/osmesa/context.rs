@@ -363,16 +363,66 @@ impl Device {
             return Err((Error::IncompatibleSurface, surface));
         }
 
-        match context.framebuffer {
-            Framebuffer::None => context.framebuffer = Framebuffer::Surface(surface),
-            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
-            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
-        }
-
         unsafe {
-            if OSMesaGetCurrentContext() == context.osmesa_context {
+            let (surface_size, surface_pixels) = (surface.size, (*surface.pixels.get()).as_ptr());
+
+            match context.framebuffer {
+                Framebuffer::None => context.framebuffer = Framebuffer::Surface(surface),
+                Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
+                Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
+            }
+
+            if self.context_is_current(context) {
                 drop(self.make_context_current(context));
             }
+
+            // Manually copy the surface contents to the framebuffer. OSMesa does not automatically
+            // do this, which is probably a bug in OSMesa.
+            let _guard = self.temporarily_make_context_current(context);
+            GL_FUNCTIONS.with(|gl| {
+                let mut src_texture = 0;
+                gl.GenTextures(1, &mut src_texture);
+                gl.BindTexture(gl::TEXTURE_2D, src_texture);
+                gl.TexImage2D(gl::TEXTURE_2D,
+                              0,
+                              gl::RGBA as GLint,
+                              surface_size.width,
+                              surface_size.height,
+                              0,
+                              gl::RGBA,
+                              gl::UNSIGNED_BYTE,
+                              surface_pixels as *mut c_void);
+
+                let mut src_framebuffer = 0;
+                gl.GenFramebuffers(1, &mut src_framebuffer);
+                gl.BindFramebuffer(gl::FRAMEBUFFER, src_framebuffer);
+                gl.FramebufferTexture2D(gl::FRAMEBUFFER,
+                                        gl::COLOR_ATTACHMENT0,
+                                        gl::TEXTURE_2D,
+                                        src_texture,
+                                        0);
+                debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
+                                 gl::FRAMEBUFFER_COMPLETE);
+
+                gl.BindFramebuffer(gl::READ_FRAMEBUFFER, src_framebuffer);
+                gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
+                gl.BlitFramebuffer(0,
+                                   0,
+                                   surface_size.width,
+                                   surface_size.height,
+                                   0,
+                                   0,
+                                   surface_size.width,
+                                   surface_size.height,
+                                   gl::COLOR_BUFFER_BIT,
+                                   gl::NEAREST);
+
+                gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+                gl.BindTexture(gl::TEXTURE_2D, 0);
+
+                gl.DeleteFramebuffers(1, &mut src_framebuffer);
+                gl.DeleteTextures(1, &mut src_texture);
+            });
         }
 
         Ok(())
@@ -389,19 +439,28 @@ impl Device {
             Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
         }
 
-        let _guard = self.temporarily_make_context_current(context)?;
+        let context_was_current = self.context_is_current(context);
 
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.Flush();
-            }
-        });
-
-        match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => Ok(Some(surface)),
-            Framebuffer::None => Ok(None),
-            Framebuffer::External(_) => unreachable!(),
+        {
+            let _guard = self.temporarily_make_context_current(context)?;
+            GL_FUNCTIONS.with(|gl| {
+                unsafe {
+                    gl.Flush();
+                }
+            });
         }
+
+        let old_surface = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+            Framebuffer::Surface(surface) => Some(surface),
+            Framebuffer::None => None,
+            Framebuffer::External(_) => unreachable!(),
+        };
+
+        if context_was_current {
+            drop(self.make_context_current(context));
+        }
+
+        Ok(old_surface)
     }
 
     fn temporarily_make_context_current(&self, context: &Context)
@@ -409,6 +468,12 @@ impl Device {
         let guard = CurrentContextGuard::new();
         self.make_context_current(context)?;
         Ok(guard)
+    }
+
+    fn context_is_current(&self, context: &Context) -> bool {
+        unsafe {
+            OSMesaGetCurrentContext() == context.osmesa_context
+        }
     }
 
     /// Returns a unique ID representing a context.
