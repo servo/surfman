@@ -1,4 +1,4 @@
-//! surfman/surfman/src/platform/generic/mesa/surface.rs
+//! surfman/surfman/src/platform/unix/generic/surface.rs
 //! 
 //! Wrapper for EGL surfaces on Mesa.
 
@@ -224,6 +224,8 @@ impl Device {
             return Err(Error::IncompatibleSurface);
         }
 
+        let _guard = self.temporarily_make_context_current(context)?;
+
         unsafe {
             GL_FUNCTIONS.with(|gl| {
                 gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
@@ -234,6 +236,11 @@ impl Device {
                 let egl_display = self.native_connection.egl_display;
                 let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
                                                                        surface.egl_image);
+                if result == egl::FALSE {
+                    EGL_FUNCTIONS.with(|egl| {
+                        panic!("EGL error: {:x}, image={:x}", egl.GetError(), surface.egl_image as usize);
+                   })
+                }
                 assert_ne!(result, egl::FALSE);
                 surface.egl_image = EGL_NO_IMAGE_KHR;
 

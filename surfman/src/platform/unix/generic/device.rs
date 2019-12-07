@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/generic/mesa/device.rs
+// surfman/surfman/src/platform/unix/generic/device.rs
 //
 //! A wrapper around surfaceless Mesa `EGLDisplay`s.
 

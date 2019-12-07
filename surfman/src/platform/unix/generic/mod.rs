@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/unix/surfaceless/mod.rs
+// surfman/surfman/src/platform/unix/generic/mod.rs
 //
 //! The Mesa "surfaceless" backend, which only supports off-screen surfaces and cannot directly
 //! display surfaces on a screen.

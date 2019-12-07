@@ -1,14 +1,16 @@
-// surfman/surfman/src/platform/src/osmesa/connection.rs
+// surfman/surfman/src/platform/unix/generic/connection.rs
 //
 //! Represents a connection to a display server.
 
 use crate::Error;
-use crate::egl::types::EGLDisplay;
+use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::egl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_PLATFORM_SURFACELESS_MESA;
 use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
+use std::os::raw::c_void;
 use std::sync::Arc;
 
 #[cfg(feature = "sm-winit")]
@@ -25,7 +27,6 @@ pub struct Connection {
 pub struct NativeConnection(Arc<NativeConnectionWrapper>);
 
 /// Native connections.
-#[derive(Clone)]
 pub struct NativeConnectionWrapper {
     pub(crate) egl_display: EGLDisplay,
     pub(crate) is_owned: bool,
@@ -35,12 +36,15 @@ unsafe impl Send for NativeConnectionWrapper {}
 unsafe impl Sync for NativeConnectionWrapper {}
 
 impl Connection {
-    /// Connects to the default display.
+    /// Opens a surfaceless Mesa display.
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         unsafe {
             EGL_FUNCTIONS.with(|egl| {
-                let egl_display = egl.GetDisplay(egl::DEFAULT_DISPLAY);
+                let egl_display_attributes = [egl::NONE as EGLAttrib];
+                let egl_display = egl.GetPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA,
+                                                         egl::DEFAULT_DISPLAY as *mut c_void,
+                                                         egl_display_attributes.as_ptr());
                 if egl_display == egl::NO_DISPLAY {
                     return Err(Error::ConnectionFailed);
                 }
@@ -139,12 +143,3 @@ impl Connection {
     }
 }
 
-impl Drop for NativeConnectionWrapper {
-    fn drop(&mut self) {
-        unsafe {
-            if self.is_owned {
-                EGL_FUNCTIONS.with(|egl| egl.Terminate(self.egl_display));
-            }
-        }
-    }
-}

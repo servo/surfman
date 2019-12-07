@@ -228,6 +228,7 @@ fn test_gl() {
                                .unbind_surface_from_context(&mut env.context)
                                .unwrap()
                                .unwrap();
+        env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
         env.gl.ClearColor(1.0, 0.0, 0.0, 1.0); env.gl.GetError();
         env.gl.Clear(gl::COLOR_BUFFER_BIT); env.gl.GetError();
         env.device.bind_surface_to_context(&mut env.context, green_surface).unwrap();
