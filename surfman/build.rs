@@ -13,18 +13,17 @@ fn main() {
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());
 
     // Generate EGL bindings.
-    if (target_os == "android")
-        || ((target_os == "windows") && cfg!(feature = "sm-angle"))
-        || (target_family == "unix")
-        || cfg!(feature = "test_egl_in_linux") {
+    if target_os == "android" ||
+            (target_os == "windows" && cfg!(feature = "sm-angle")) ||
+            target_family == "unix" {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, []);
         registry.write_bindings(StructGenerator, &mut file).unwrap();
     }
 
     // Generate GLX bindings.
-    if cfg!(feature = "sm-x11")
-        || ((target_family == "unix") && (target_os != "macos") && (target_os != "android")) {
+    if cfg!(feature = "sm-x11") ||
+            (target_family == "unix" && target_os != "macos" && target_os != "android") {
         let mut file = File::create(&dest.join("glx_bindings.rs")).unwrap();
         Registry::new(Api::Glx, (1, 4), Profile::Core, Fallbacks::All, [
             "GLX_ARB_create_context",

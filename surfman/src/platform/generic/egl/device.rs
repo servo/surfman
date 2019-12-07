@@ -31,7 +31,7 @@ lazy_static! {
     };
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "macos")))]
 lazy_static! {
     static ref EGL_LIBRARY: EGLLibraryWrapper = {
         unsafe {

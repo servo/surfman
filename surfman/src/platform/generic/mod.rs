@@ -7,7 +7,4 @@
           all(unix, not(target_os = "macos"))))]
 pub(crate) mod egl;
 
-#[cfg(feature = "sm-osmesa")]
-pub mod osmesa;
-
 pub mod multi;

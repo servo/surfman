@@ -1,44 +1,79 @@
 // surfman/surfman/src/platform/src/osmesa/connection.rs
 //
 //! Represents a connection to a display server.
-//! 
-//! For the OSMesa backend, this is a zero-sized types. OSMesa needs no connection, as it is a
-//! CPU-based off-screen-only API.
 
 use crate::Error;
+use crate::egl::types::EGLDisplay;
+use crate::egl;
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
+
+use std::sync::Arc;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
 /// A no-op connection.
 #[derive(Clone)]
-pub struct Connection;
+pub struct Connection {
+    pub(crate) native_connection: Arc<NativeConnectionWrapper>,
+}
 
-/// An empty placeholder for native connections.
-///
-/// There is no window server for OSMesa, so this is an empty type.
+/// Native connections.
 #[derive(Clone)]
-pub struct NativeConnection;
+pub struct NativeConnection(Arc<NativeConnectionWrapper>);
+
+/// Native connections.
+#[derive(Clone)]
+pub struct NativeConnectionWrapper {
+    pub(crate) egl_display: EGLDisplay,
+    pub(crate) is_owned: bool,
+}
+
+unsafe impl Send for NativeConnectionWrapper {}
+unsafe impl Sync for NativeConnectionWrapper {}
 
 impl Connection {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection, Error> {
-        Ok(Connection)
+        unsafe {
+            EGL_FUNCTIONS.with(|egl| {
+                let egl_display = egl.GetDisplay(egl::DEFAULT_DISPLAY);
+                if egl_display == egl::NO_DISPLAY {
+                    return Err(Error::ConnectionFailed);
+                }
+
+                let (mut egl_major_version, mut egl_minor_version) = (0, 0);
+                let ok = egl.Initialize(egl_display,
+                                        &mut egl_major_version,
+                                        &mut egl_minor_version);
+                if ok == egl::FALSE {
+                    return Err(Error::ConnectionFailed);
+                }
+
+                let native_connection = NativeConnection(Arc::new(NativeConnectionWrapper {
+                    egl_display,
+                    is_owned: true,
+                }));
+
+                Connection::from_native_connection(native_connection)
+            })
+        }
     }
 
     /// An alias for `Connection::new()`, present for consistency with other backends.
     #[inline]
-    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
-        Ok(Connection)
+    pub unsafe fn from_native_connection(native_connection: NativeConnection)
+                                         -> Result<Connection, Error> {
+        Ok(Connection { native_connection: native_connection.0 })
     }
 
     /// Returns the underlying native connection.
     #[inline]
     pub fn native_connection(&self) -> NativeConnection {
-        NativeConnection
+        NativeConnection(self.native_connection.clone())
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
@@ -54,7 +89,7 @@ impl Connection {
     /// On the OSMesa backend, this returns a software adapter.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        self.create_software_adapter()
+        Ok(Adapter::hardware())
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
@@ -62,28 +97,28 @@ impl Connection {
     /// On the OSMesa backend, this returns a software adapter.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        self.create_software_adapter()
+        Ok(Adapter::low_power())
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter)
+        Ok(Adapter::software())
     }
 
     /// Opens the hardware device corresponding to the given adapter.
     /// 
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
-        Device::new()
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        Device::new(self, adapter)
     }
 
     /// An alias for `connection.create_device()` with the default adapter.
     #[inline]
     pub unsafe fn create_device_from_native_device(&self, _: NativeDevice)
                                                    -> Result<Device, Error> {
-        Device::new()
+        Device::new(self, &self.create_adapter()?) 
     }
 
     /// Opens the display connection corresponding to the given `winit` window.
@@ -101,5 +136,15 @@ impl Connection {
     pub fn create_native_widget_from_winit_window(&self, _: &Window)
                                                   -> Result<NativeWidget, Error> {
         Err(Error::IncompatibleNativeWidget)
+    }
+}
+
+impl Drop for NativeConnectionWrapper {
+    fn drop(&mut self) {
+        unsafe {
+            if self.is_owned {
+                EGL_FUNCTIONS.with(|egl| egl.Terminate(self.egl_display));
+            }
+        }
     }
 }
