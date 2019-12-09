@@ -203,7 +203,7 @@ fn test_gl() {
         // Check basic clear.
         env.gl.ClearColor(0.0, 1.0, 0.0, 1.0);
         env.gl.Clear(gl::COLOR_BUFFER_BIT);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Check that GL commands don't work after `make_no_context_current()`.
         //
@@ -219,7 +219,7 @@ fn test_gl() {
                                     .unwrap()
                                     .framebuffer_object;
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Make sure GL commands don't work when no surface is attached.
         //
@@ -233,7 +233,7 @@ fn test_gl() {
         env.gl.Clear(gl::COLOR_BUFFER_BIT); env.gl.GetError();
         env.device.bind_surface_to_context(&mut env.context, green_surface).unwrap();
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Make sure GL commands go to the right surface.
         let green_surface = env.device
@@ -250,7 +250,7 @@ fn test_gl() {
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, red_framebuffer_object);
         env.gl.ClearColor(1.0, 0.0, 0.0, 1.0);
         env.gl.Clear(gl::COLOR_BUFFER_BIT);
-        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
         let mut red_surface = env.device
                                  .unbind_surface_from_context(&mut env.context)
@@ -258,7 +258,7 @@ fn test_gl() {
                                  .unwrap();
         env.device.bind_surface_to_context(&mut env.context, green_surface).unwrap();
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Clean up.
         env.device.destroy_surface(&mut env.context, &mut red_surface).unwrap();
@@ -276,7 +276,7 @@ fn test_surface_texture_blit_framebuffer() {
 
     unsafe {
         clear(&env.gl, &[0, 255, 0, 255]);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         let green_surface = env.device
                                .unbind_surface_from_context(&mut env.context)
@@ -289,8 +289,6 @@ fn test_surface_texture_blit_framebuffer() {
         let main_surface = make_surface(&mut env.device, &env.context);
         env.device.bind_surface_to_context(&mut env.context, main_surface).unwrap();
 
-        // FIXME(pcwalton): This call shouldn't be necessary.
-        env.device.make_context_current(&env.context).unwrap();
         let main_framebuffer_object = env.device
                                          .context_surface_info(&env.context)
                                          .unwrap()
@@ -298,7 +296,7 @@ fn test_surface_texture_blit_framebuffer() {
                                          .framebuffer_object;
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
         clear(&env.gl, &[255, 0, 0, 255]);
-        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
         let mut green_framebuffer_object =
             make_fbo(&env.gl,
@@ -308,7 +306,7 @@ fn test_surface_texture_blit_framebuffer() {
         // Blit to main framebuffer.
         blit_fbo(&env.gl, main_framebuffer_object, green_framebuffer_object);
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, main_framebuffer_object); check_gl(&env.gl);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Clean up.
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0); check_gl(&env.gl);
@@ -334,7 +332,7 @@ fn test_cross_device_surface_texture_blit_framebuffer() {
 
     unsafe {
         clear(&env.gl, &[255, 0, 0, 255]);
-        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
         let mut other_context = other_device.create_context(&env.context_descriptor).unwrap();
         let other_surface = make_surface(&mut other_device, &other_context);
@@ -343,7 +341,7 @@ fn test_cross_device_surface_texture_blit_framebuffer() {
         bind_context_fbo(&env.gl, &other_device, &other_context);
 
         clear(&env.gl, &[0, 255, 0, 255]);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         let green_surface = other_device.unbind_surface_from_context(&mut other_context)
                                         .unwrap()
@@ -353,7 +351,7 @@ fn test_cross_device_surface_texture_blit_framebuffer() {
                                        .unwrap();
 
         env.device.make_context_current(&env.context).unwrap();
-        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
         let mut green_framebuffer_object =
             make_fbo(&env.gl,
@@ -363,7 +361,7 @@ fn test_cross_device_surface_texture_blit_framebuffer() {
         // Blit to main framebuffer.
         blit_fbo(&env.gl, context_fbo(&env.device, &env.context), green_framebuffer_object);
         bind_context_fbo(&env.gl, &env.device, &env.context);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Clean up.
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0); check_gl(&env.gl);
@@ -403,7 +401,7 @@ fn test_cross_thread_surface_texture_blit_framebuffer() {
         bind_context_fbo(&gl, &device, &context);
 
         clear(&gl, &[0, 255, 0, 255]);
-        assert_eq!(get_pixel(&gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&gl), [0, 255, 0, 255]);
 
         let surface = device.unbind_surface_from_context(&mut context).unwrap().unwrap();
         to_main_sender.send(surface).unwrap();
@@ -415,7 +413,7 @@ fn test_cross_thread_surface_texture_blit_framebuffer() {
 
     unsafe {
         clear(&env.gl, &[255, 0, 0, 255]);
-        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
         let green_surface = to_main_receiver.recv().unwrap();
         let green_surface_texture = env.device
@@ -423,7 +421,7 @@ fn test_cross_thread_surface_texture_blit_framebuffer() {
                                        .unwrap();
 
         env.device.make_context_current(&env.context).unwrap();
-        assert_eq!(get_pixel(&env.gl), [255, 0, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
         let mut green_framebuffer_object =
             make_fbo(&env.gl,
@@ -433,7 +431,7 @@ fn test_cross_thread_surface_texture_blit_framebuffer() {
         // Blit to main framebuffer.
         blit_fbo(&env.gl, context_fbo(&env.device, &env.context), green_framebuffer_object);
         bind_context_fbo(&env.gl, &env.device, &env.context);
-        assert_eq!(get_pixel(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Clean up.
         env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0); check_gl(&env.gl);
@@ -444,6 +442,62 @@ fn test_cross_thread_surface_texture_blit_framebuffer() {
                                .unwrap();
         to_worker_sender.send(green_surface).unwrap();
 
+        env.device.destroy_context(&mut env.context).unwrap();
+    }
+}
+
+// Tests that surface textures are not upside-down.
+#[test]
+fn test_surface_texture_right_side_up() {
+    let mut env = match BasicEnvironment::new() {
+        None => return,
+        Some(env) => env,
+    };
+
+    unsafe {
+        clear(&env.gl, &[255, 0, 0, 255]);
+        clear_bottom_row(&env.gl, &[0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
+
+        let subsurface = env.device
+                            .unbind_surface_from_context(&mut env.context)
+                            .unwrap()
+                            .unwrap();
+        let subsurface_texture = env.device
+                                    .create_surface_texture(&mut env.context, subsurface)
+                                    .unwrap();
+
+        let main_surface = make_surface(&mut env.device, &env.context);
+        env.device.bind_surface_to_context(&mut env.context, main_surface).unwrap();
+
+        let main_framebuffer_object = env.device
+                                         .context_surface_info(&env.context)
+                                         .unwrap()
+                                         .unwrap()
+                                         .framebuffer_object;
+        env.gl.BindFramebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
+        clear(&env.gl, &[255, 0, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
+
+        let mut subframebuffer_object =
+            make_fbo(&env.gl,
+                     env.device.surface_gl_texture_target(),
+                     env.device.surface_texture_object(&subsurface_texture));
+
+        // Blit to main framebuffer.
+        blit_fbo(&env.gl, main_framebuffer_object, subframebuffer_object);
+        env.gl.BindFramebuffer(gl::FRAMEBUFFER, main_framebuffer_object); check_gl(&env.gl);
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_second_from_bottom_row(&env.gl), [255, 0, 0, 255]);
+
+        // Clean up.
+        env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0); check_gl(&env.gl);
+        env.gl.DeleteFramebuffers(1, &mut subframebuffer_object);
+
+        let mut subsurface = env.device
+                                .destroy_surface_texture(&mut env.context, subsurface_texture)
+                                .unwrap();
+        env.device.destroy_surface(&mut env.context, &mut subsurface).unwrap();
         env.device.destroy_context(&mut env.context).unwrap();
     }
 }
@@ -553,7 +607,6 @@ impl BasicEnvironment {
 
 fn clear(gl: &Gl, color: &[u8; 4]) {
     unsafe {
-        gl.Viewport(0, 0, 640, 480);
         gl.ClearColor(color[0] as f32 / 255.0,
                       color[1] as f32 / 255.0,
                       color[2] as f32 / 255.0,
@@ -562,10 +615,32 @@ fn clear(gl: &Gl, color: &[u8; 4]) {
     }
 }
 
-fn get_pixel(gl: &Gl) -> [u8; 4] {
+fn clear_bottom_row(gl: &Gl, color: &[u8; 4]) {
+    unsafe {
+        gl.Scissor(0, 0, 640, 1);
+        gl.Enable(gl::SCISSOR_TEST);
+        gl.ClearColor(color[0] as f32 / 255.0,
+                      color[1] as f32 / 255.0,
+                      color[2] as f32 / 255.0,
+                      color[3] as f32 / 255.0);
+        gl.Clear(gl::COLOR_BUFFER_BIT);
+        gl.Disable(gl::SCISSOR_TEST);
+        gl.Scissor(0, 0, 640, 480);
+    }
+}
+
+fn get_pixel_from_bottom_row(gl: &Gl) -> [u8; 4] {
     unsafe {
         let mut pixel: [u8; 4] = [0; 4];
         gl.ReadPixels(0, 0, 1, 1, gl::RGBA, gl::UNSIGNED_BYTE, pixel.as_mut_ptr() as *mut c_void);
+        pixel
+    }
+}
+
+fn get_pixel_from_second_from_bottom_row(gl: &Gl) -> [u8; 4] {
+    unsafe {
+        let mut pixel: [u8; 4] = [0; 4];
+        gl.ReadPixels(0, 1, 1, 1, gl::RGBA, gl::UNSIGNED_BYTE, pixel.as_mut_ptr() as *mut c_void);
         pixel
     }
 }
