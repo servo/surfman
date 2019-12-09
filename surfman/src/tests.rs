@@ -139,6 +139,64 @@ fn test_context_creation() {
     }
 }
 
+// Tests that newly-created contexts are not immediately made current (issue #7).
+#[test]
+fn test_newly_created_contexts_are_not_current() {
+    let connection = Connection::new().unwrap();
+    let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
+    let mut device = match connection.create_device(&adapter) {
+        Ok(device) => device,
+        Err(Error::RequiredExtensionUnavailable) => {
+            // Can't run these tests on this hardware.
+            return;
+        }
+        Err(err) => panic!("Failed to create device: {:?}", err),
+    };
+
+    let context_descriptor = device.create_context_descriptor(&ContextAttributes {
+        version: GLVersion::new(3, 0),
+        flags: ContextAttributeFlags::empty(),
+    }).unwrap();
+
+    // Make no context current.
+    device.make_no_context_current().unwrap();
+
+    let mut context = device.create_context(&context_descriptor).unwrap();
+    let gl = Gl::load_with(|symbol| device.get_proc_address(&context, symbol));
+
+    unsafe {
+        // Check to make sure GL calls don't work before a context is made current.
+        clear(&gl, &[255, 0, 0, 255]);
+        assert_ne!(get_pixel_from_bottom_row(&gl), [255, 0, 0, 255]);
+
+        // Make a context current.
+        let surface = make_surface(&mut device, &context);
+        device.bind_surface_to_context(&mut context, surface).unwrap();
+        device.make_context_current(&context).unwrap();
+        let framebuffer_object = device.context_surface_info(&context)
+                                       .unwrap()
+                                       .unwrap()
+                                       .framebuffer_object;
+        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+
+        // Now that a context is current, GL calls should work.
+        clear(&gl, &[0, 255, 0, 255]);
+        assert_eq!(get_pixel_from_bottom_row(&gl), [0, 255, 0, 255]);
+
+        // Remove the surface.
+        let mut surface = device.unbind_surface_from_context(&mut context).unwrap().unwrap();
+        device.make_no_context_current().unwrap();
+
+        // GL calls shouldn't work any longer.
+        clear(&gl, &[255, 0, 0, 255]);
+        assert_ne!(get_pixel_from_bottom_row(&gl), [255, 0, 0, 255]);
+
+        // Clean up.
+        device.destroy_surface(&mut context, &mut surface).unwrap();
+        device.destroy_context(&mut context).unwrap();
+    }
+}
+
 // Tests that generic surfaces can be created.
 #[test]
 fn test_generic_surface_creation() {
