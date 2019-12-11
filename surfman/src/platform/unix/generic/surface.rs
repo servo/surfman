@@ -2,35 +2,17 @@
 //! 
 //! Wrapper for EGL surfaces on Mesa.
 
-use crate::context::ContextID;
-use crate::egl::types::{EGLSurface, EGLint};
-use crate::egl;
-use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::gl::types::{GLenum, GLuint};
 use crate::gl;
-use crate::gl_utils;
-use crate::platform::generic::egl::device::EGL_FUNCTIONS;
-use crate::platform::generic::egl::ffi::EGLClientBuffer;
-use crate::platform::generic::egl::ffi::EGLImageKHR;
-use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
-use crate::platform::generic::egl::ffi::EGL_GL_TEXTURE_2D_KHR;
-use crate::platform::generic::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
-use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
-use crate::platform::generic::egl::surface;
-use crate::platform::generic;
-use crate::renderbuffers::Renderbuffers;
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
+use crate::platform::generic::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
+use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 
 use euclid::default::Size2D;
-use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
-use std::os::raw::c_void;
-use std::ptr;
-use std::thread;
 
-pub use crate::platform::generic::egl::context::ContextDescriptor;
-
+// FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
@@ -49,14 +31,8 @@ const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 /// Depending on the platform, each surface may be internally double-buffered.
 /// 
 /// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
-pub struct Surface {
-    pub(crate) egl_image: EGLImageKHR,
-    pub(crate) framebuffer_object: GLuint,
-    pub(crate) texture_object: GLuint,
-    pub(crate) renderbuffers: Renderbuffers,
-    pub(crate) context_id: ContextID,
-    pub(crate) size: Size2D<i32>,
-}
+#[derive(Debug)]
+pub struct Surface(pub(crate) EGLBackedSurface);
 
 /// Represents an OpenGL texture that wraps a surface.
 /// 
@@ -67,35 +43,14 @@ pub struct Surface {
 /// Surface textures are local to a context, but that context does not have to be the same context
 /// as that associated with the underlying surface. The texture must be destroyed with the
 /// `destroy_surface_texture()` method, or a panic will occur.
-pub struct SurfaceTexture {
-    pub(crate) surface: Surface,
-    pub(crate) texture_object: GLuint,
-}
+#[derive(Debug)]
+pub struct SurfaceTexture(pub(crate) EGLSurfaceTexture);
+
+/// A placeholder wrapper for a native widget.
+#[derive(Clone)]
+pub struct NativeWidget;
 
 unsafe impl Send for Surface {}
-
-impl Debug for Surface {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "Surface({:x})", self.id().0)
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        if self.egl_image != EGL_NO_IMAGE_KHR && !thread::panicking() {
-            panic!("Should have destroyed the surface first with `destroy_surface()`!")
-        }
-    }
-}
-
-impl Debug for SurfaceTexture {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "SurfaceTexture({:?})", self.surface)
-    }
-}
-
-/// Dummy native widget type.
-pub struct NativeWidget;
 
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
@@ -109,68 +64,22 @@ impl Device {
                           -> Result<Surface, Error> {
         match surface_type {
             SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { native_widget } => Err(Error::UnsupportedOnThisPlatform),
+            SurfaceType::Widget { .. } => Err(Error::UnsupportedOnThisPlatform),
         }
     }
 
     fn create_generic_surface(&mut self, context: &Context, size: &Size2D<i32>)
                               -> Result<Surface, Error> {
         let _guard = self.temporarily_make_context_current(context)?;
-
-        let egl_image_attribs = [
-            EGL_IMAGE_PRESERVED_KHR as EGLint,  egl::FALSE as EGLint,
-            egl::NONE as EGLint,                0,
-        ];
-
+        let context_descriptor = self.context_descriptor(context);
+        let context_attributes = self.context_descriptor_attributes(&context_descriptor);
         GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                // Create our texture.
-                let mut texture_object = 0;
-                gl.GenTextures(1, &mut texture_object);
-                gl.BindTexture(SURFACE_GL_TEXTURE_TARGET, texture_object);
-                gl.TexImage2D(SURFACE_GL_TEXTURE_TARGET,
-                              0,
-                              gl::RGBA as GLint,
-                              size.width,
-                              size.height,
-                              0,
-                              gl::RGBA,
-                              gl::UNSIGNED_BYTE,
-                              ptr::null());
-
-                // Create our image.
-                let egl_display = self.native_connection.egl_display;
-                let egl_image =
-                    (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(egl_display,
-                                                             context.egl_context,
-                                                             EGL_GL_TEXTURE_2D_KHR,
-                                                             texture_object as EGLClientBuffer,
-                                                             egl_image_attribs.as_ptr());
-
-                // Create the framebuffer, and bind the texture to it.
-                let framebuffer_object =
-                    gl_utils::create_and_bind_framebuffer(gl,
-                                                          SURFACE_GL_TEXTURE_TARGET,
-                                                          texture_object);
-
-                // Bind renderbuffers as appropriate.
-                let context_descriptor = self.context_descriptor(context);
-                let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-                let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
-                renderbuffers.bind_to_current_framebuffer(gl);
-
-                debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
-                                 gl::FRAMEBUFFER_COMPLETE);
-
-                Ok(Surface {
-                    size: *size,
-                    context_id: context.id,
-                    egl_image,
-                    framebuffer_object,
-                    texture_object,
-                    renderbuffers,
-                })
-            }
+            Ok(Surface(EGLBackedSurface::new_generic(gl,
+                                                     self.native_connection.egl_display,
+                                                     context.0.egl_context,
+                                                     context.0.id,
+                                                     &context_attributes,
+                                                     size)))
         })
     }
 
@@ -191,24 +100,12 @@ impl Device {
             Err(err) => return Err((err, surface)),
         };
 
-        unsafe {
-            GL_FUNCTIONS.with(|gl| {
-                let egl_image = surface.egl_image;
-                let texture_object = surface::bind_egl_image_to_gl_texture(gl, egl_image);
-                Ok(SurfaceTexture { surface, texture_object })
-            })
-        }
-    }
-
-    /// Displays the contents of a widget surface on screen.
-    /// 
-    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
-    /// associated widgets until this method is called.
-    /// 
-    /// The supplied context must match the context the surface was created with, or an
-    /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(&self, _: &Context, _: &mut Surface) -> Result<(), Error> {
-        Err(Error::NoWidgetAttached)
+        GL_FUNCTIONS.with(|gl| {
+            match surface.0.to_surface_texture(gl) {
+                Ok(surface_texture) => Ok(SurfaceTexture(surface_texture)),
+                Err((err, surface)) => Err((err, Surface(surface))),
+            }
+        })
     }
 
     /// Destroys a surface.
@@ -220,36 +117,12 @@ impl Device {
     /// the `drop` method.
     pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
-        if context.id != surface.context_id {
-            return Err(Error::IncompatibleSurface);
-        }
-
-        let _guard = self.temporarily_make_context_current(context)?;
-
-        unsafe {
-            GL_FUNCTIONS.with(|gl| {
-                gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
-                gl.DeleteFramebuffers(1, &mut surface.framebuffer_object);
-                surface.framebuffer_object = 0;
-                surface.renderbuffers.destroy(gl);
-
-                let egl_display = self.native_connection.egl_display;
-                let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display,
-                                                                       surface.egl_image);
-                if result == egl::FALSE {
-                    EGL_FUNCTIONS.with(|egl| {
-                        panic!("EGL error: {:x}, image={:x}", egl.GetError(), surface.egl_image as usize);
-                   })
-                }
-                assert_ne!(result, egl::FALSE);
-                surface.egl_image = EGL_NO_IMAGE_KHR;
-
-                gl.DeleteTextures(1, &mut surface.texture_object);
-                surface.texture_object = 0;
-            });
-        }
-
-        Ok(())
+        GL_FUNCTIONS.with(|gl| {
+            let egl_display = self.native_connection.egl_display;
+            let window = surface.0.destroy(gl, egl_display, context.0.id)?;
+            debug_assert!(window.is_none());
+            Ok(())
+        })
     }
 
     /// Destroys a surface texture and returns the underlying surface.
@@ -263,21 +136,27 @@ impl Device {
                                    context: &mut Context,
                                    mut surface_texture: SurfaceTexture)
                                    -> Result<Surface, (Error, SurfaceTexture)> {
-        let _guard = self.temporarily_make_context_current(context);
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.DeleteTextures(1, &surface_texture.texture_object);
-                surface_texture.texture_object = 0;
-            }
+        match self.temporarily_make_context_current(context) {
+            Ok(_guard) => GL_FUNCTIONS.with(|gl| Ok(Surface(surface_texture.0.destroy(gl)))),
+            Err(err) => Err((err, surface_texture)),
+        }
+    }
 
-            Ok(surface_texture.surface)
-        })
+    /// Displays the contents of a widget surface on screen.
+    /// 
+    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
+    /// associated widgets until this method is called.
+    /// 
+    /// The supplied context must match the context the surface was created with, or an
+    /// `IncompatibleSurface` error is returned.
+    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
+        surface.0.present(self.native_connection.egl_display)
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
-    pub fn lock_surface_data<'s>(&self, _: &'s mut Surface) -> Result<SurfaceDataGuard<'s>, Error> {
-        // TODO(pcwalton)
+    pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
 
@@ -296,12 +175,7 @@ impl Device {
     /// on the framebuffer object returned by this function. This framebuffer object may or not be
     /// 0, the default framebuffer, depending on platform.
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        SurfaceInfo {
-            size: surface.size,
-            id: surface.id(),
-            context_id: surface.context_id,
-            framebuffer_object: surface.framebuffer_object,
-        }
+        surface.0.info()
     }
 
     /// Returns the OpenGL texture object containing the contents of this surface.
@@ -309,14 +183,7 @@ impl Device {
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
-        surface_texture.texture_object
-    }
-}
-
-impl Surface {
-    #[inline]
-    fn id(&self) -> SurfaceID {
-        SurfaceID(self.egl_image as usize)
+        surface_texture.0.texture_object
     }
 }
 

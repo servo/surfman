@@ -1,35 +1,19 @@
 // surfman/surfman/src/platform/unix/generic/context.rs
 //
-//! Wrapper for Mesa surfaceless contexts.
+//! OpenGL rendering contexts on surfaceless Mesa.
 
-use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::egl::types::{EGLConfig, EGLContext, EGLSurface, EGLint};
+use crate::context::ContextID;
+use crate::egl::types::EGLint;
 use crate::egl;
-use crate::gl::types::GLint;
-use crate::gl::{self, Gl};
-use crate::info::GLVersion;
-use crate::platform::generic::egl::context::{self, CurrentContextGuard};
-use crate::platform::generic::egl::device::EGL_FUNCTIONS;
-use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
-use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, SurfaceInfo, WindowingApiError};
+use crate::gl::Gl;
+use crate::platform::generic::egl::context::{self, CurrentContextGuard, EGLBackedContext};
+use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
 use super::surface::Surface;
 
-use euclid::default::Size2D;
-use std::cell::UnsafeCell;
-use std::ffi::CString;
-use std::mem;
-use std::os::raw::{c_char, c_int, c_void};
-use std::ptr;
-use std::sync::Arc;
-use std::thread;
+use std::os::raw::c_void;
 
 pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
-
-const DUMMY_FRAMEBUFFER_SIZE: i32 = 16;
-const DUMMY_FRAMEBUFFER_AREA: i32 = DUMMY_FRAMEBUFFER_SIZE * DUMMY_FRAMEBUFFER_SIZE;
 
 thread_local! {
     #[doc(hidden)]
@@ -52,22 +36,7 @@ thread_local! {
 /// allow for sharing of texture data. Contexts are local to a single thread and device.
 /// 
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
-pub struct Context {
-    pub(crate) egl_context: EGLContext,
-    pub(crate) id: ContextID,
-    pub(crate) pbuffer: EGLSurface,
-    framebuffer: Framebuffer<Surface, ExternalEGLSurfaces>,
-    context_is_owned: bool,
-}
-
-impl Drop for Context {
-    #[inline]
-    fn drop(&mut self) {
-        if self.egl_context != egl::NO_CONTEXT && !thread::panicking() {
-            panic!("Contexts must be destroyed explicitly with `destroy_context`!")
-        }
-    }
-}
+pub struct Context(pub(crate) EGLBackedContext);
 
 impl Device {
     /// Creates a context descriptor with the given attributes.
@@ -76,11 +45,14 @@ impl Device {
     #[inline]
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
+        // Set environment variables as appropriate.
+        self.adapter.set_environment_variables();
+
         unsafe {
             ContextDescriptor::new(self.native_connection.egl_display, attributes, &[
-                egl::COLOR_BUFFER_TYPE as EGLint,   egl::RGB_BUFFER as EGLint,
                 egl::SURFACE_TYPE as EGLint,        egl::PBUFFER_BIT as EGLint,
-                egl::RENDERABLE_TYPE as EGLint,     egl::OPENGL_ES2_BIT as EGLint,
+                egl::RENDERABLE_TYPE as EGLint,     egl::OPENGL_BIT as EGLint,
+                egl::COLOR_BUFFER_TYPE as EGLint,   egl::RGB_BUFFER as EGLint,
             ])
         }
     }
@@ -89,136 +61,63 @@ impl Device {
     /// 
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
+    #[inline]
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
-        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-
-        let egl_config = self.context_descriptor_to_egl_config(descriptor);
-        let egl_display = self.native_connection.egl_display;
-
         unsafe {
-            // Create the EGL context.
-            let egl_context = context::create_context(egl_display, descriptor)?;
-
-            // Create a dummy pbuffer.
-            let pbuffer = context::create_dummy_pbuffer(egl_display, egl_context);
-
-            // Wrap up the EGL context.
-            let context = Context {
-                egl_context,
-                id: *next_context_id,
-                pbuffer,
-                framebuffer: Framebuffer::None,
-                context_is_owned: true,
-            };
-            next_context_id.0 += 1;
-            Ok(context)
+            EGLBackedContext::new(self.native_connection.egl_display, descriptor).map(Context)
         }
     }
 
-    /// Wraps a native `EGLContext` in a context object.
+    /// Wraps an `EGLContext` in a native context and returns it.
     ///
-    /// The underlying `EGLContext` is not retained, as there is no way to do this in the EGL API.
-    /// Therefore, it is the caller's responsibility to keep it alive as long as this `Context`
-    /// remains alive.
+    /// The context is not retained, as there is no way to do this in the EGL API. Therefore,
+    /// it is the caller's responsibility to ensure that the returned `Context` object remains
+    /// alive as long as the `EGLContext` is.
+    #[inline]
     pub unsafe fn create_context_from_native_context(&self, native_context: NativeContext)
                                                      -> Result<Context, Error> {
-        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-
-        // Create a dummy pbuffer.
-        let pbuffer = context::create_dummy_pbuffer(self.native_connection.egl_display,
-                                                    native_context.egl_context);
-
-        // Create the context.
-        let context = Context {
-            egl_context: native_context.egl_context,
-            id: *next_context_id,
-            pbuffer,
-            framebuffer: Framebuffer::External(ExternalEGLSurfaces {
-                draw: native_context.egl_draw_surface,
-                read: native_context.egl_read_surface,
-            }),
-            context_is_owned: false,
-        };
-        next_context_id.0 += 1;
-
-        Ok(context)
+        Ok(Context(EGLBackedContext::from_native_context(native_context)))
     }
 
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.egl_context == egl::NO_CONTEXT {
-            return Ok(())
+        if let Ok(Some(mut surface)) = self.unbind_surface_from_context(context) {
+            self.destroy_surface(context, &mut surface)?;
         }
 
         unsafe {
-            if let Framebuffer::Surface(mut target) = mem::replace(&mut context.framebuffer,
-                                                                   Framebuffer::None) {
-                self.destroy_surface(context, &mut target)?;
-
-            }
-
-            EGL_FUNCTIONS.with(|egl| {
-                let result = egl.DestroySurface(self.native_connection.egl_display,
-                                                context.pbuffer);
-                assert_ne!(result, egl::FALSE);
-                context.pbuffer = egl::NO_SURFACE;
-
-                egl.MakeCurrent(self.native_connection.egl_display,
-                                egl::NO_SURFACE,
-                                egl::NO_SURFACE,
-                                egl::NO_CONTEXT);
-
-                if context.context_is_owned {
-                    let result = egl.DestroyContext(self.native_connection.egl_display,
-                                                    context.egl_context);
-                    egl.DestroyContext(self.native_connection.egl_display, context.egl_context);
-                    assert_ne!(result, egl::FALSE);
-                }
-
-                context.egl_context = egl::NO_CONTEXT;
-            });
+            context.0.destroy(self.native_connection.egl_display);
+            Ok(())
         }
+    }
 
-        Ok(())
+    /// Given a context, returns its underlying EGL context and attached surfaces.
+    #[inline]
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        context.0.native_context()
     }
 
     /// Returns the descriptor that this context was created with.
+    #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        unsafe {
-            GL_FUNCTIONS.with(|gl| {
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
                 ContextDescriptor::from_egl_context(gl,
                                                     self.native_connection.egl_display,
-                                                    context.egl_context)
-            })
-        }
+                                                    context.0.egl_context)
+            }
+        })
     }
 
     /// Makes the context the current OpenGL context for this thread.
     /// 
     /// After calling this function, it is valid to use OpenGL rendering commands.
+    #[inline]
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let egl_display = self.native_connection.egl_display;
-            let egl_context = context.egl_context;
-
-            let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
-                Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
-                Framebuffer::Surface(_) | Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
-            };
-
-            EGL_FUNCTIONS.with(|egl| {
-                let result = egl.MakeCurrent(egl_display,
-                                             egl_draw_surface,
-                                             egl_read_surface,
-                                             egl_context);
-                if result == egl::FALSE {
-                    let err = egl.GetError().to_windowing_api_error();
-                    return Err(Error::MakeCurrentFailed(err));
-                }
-                Ok(())
-            })
+            context.0.make_current(self.native_connection.egl_display)
         }
     }
 
@@ -226,67 +125,23 @@ impl Device {
     /// 
     /// After calling this function, OpenGL rendering commands will fail until a new context is
     /// made current.
+    #[inline]
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
             context::make_no_context_current(self.native_connection.egl_display)
         }
     }
 
-    /// Attaches a surface to a context for rendering.
-    /// 
-    /// This function takes ownership of the surface. The surface must have been created with this
-    /// context, or an `IncompatibleSurface` error is returned.
-    /// 
-    /// If this function is called with a surface already bound, a `SurfaceAlreadyBound` error is
-    /// returned. To avoid this error, first unbind the existing surface with
-    /// `unbind_surface_from_context`.
-    /// 
-    /// If an error is returned, the surface is returned alongside it.
-    pub fn bind_surface_to_context(&self, context: &mut Context, new_surface: Surface)
-                                   -> Result<(), (Error, Surface)> {
-        if context.id != new_surface.context_id {
-            return Err((Error::IncompatibleSurface, new_surface));
-        }
-
-        match context.framebuffer {
-            Framebuffer::External { .. } => return Err((Error::ExternalRenderTarget, new_surface)),
-            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, new_surface)),
-            Framebuffer::None => {}
-        }
-
-        context.framebuffer = Framebuffer::Surface(new_surface);
-        Ok(())
-    }
-
-    /// Removes and returns any attached surface from this context.
-    /// 
-    /// Any pending OpenGL commands targeting this surface will be automatically flushed, so the
-    /// surface is safe to read from immediately when this function returns.
-    pub fn unbind_surface_from_context(&self, context: &mut Context)
-                                       -> Result<Option<Surface>, Error> {
-        match context.framebuffer {
-            Framebuffer::External { .. } => return Err(Error::ExternalRenderTarget),
-            Framebuffer::None => return Ok(None),
-            Framebuffer::Surface(_) => {}
-        }
-
-        // Make sure all changes are synchronized.
-        //
-        // FIXME(pcwalton): Is this necessary?
-        let _guard = self.temporarily_make_context_current(context)?;
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.Flush();
-            }
-        });
-
-        match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => return Ok(Some(surface)),
-            Framebuffer::External { .. } | Framebuffer::None => unreachable!(),
-        }
+    #[inline]
+    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
+                                                   -> Result<CurrentContextGuard, Error> {
+        let guard = CurrentContextGuard::new();
+        self.make_context_current(context)?;
+        Ok(guard)
     }
 
     /// Returns the attributes that the context descriptor was created with.
+    #[inline]
     pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
                                          -> ContextAttributes {
         unsafe {
@@ -306,19 +161,39 @@ impl Device {
         context::get_proc_address(symbol_name)
     }
 
-    pub(crate) fn context_descriptor_to_egl_config(&self, context_descriptor: &ContextDescriptor)
-                                                   -> EGLConfig {
+    /// Attaches a surface to a context for rendering.
+    /// 
+    /// This function takes ownership of the surface. The surface must have been created with this
+    /// context, or an `IncompatibleSurface` error is returned.
+    /// 
+    /// If this function is called with a surface already bound, a `SurfaceAlreadyBound` error is
+    /// returned. To avoid this error, first unbind the existing surface with
+    /// `unbind_surface_from_context`.
+    /// 
+    /// If an error is returned, the surface is returned alongside it.
+    #[inline]
+    pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
+                                   -> Result<(), (Error, Surface)> {
         unsafe {
-            context::egl_config_from_id(self.native_connection.egl_display,
-                                        context_descriptor.egl_config_id)
+            context.0
+                   .bind_surface(self.native_connection.egl_display, surface.0)
+                   .map_err(|(err, surface)| (err, Surface(surface)))
         }
     }
 
-    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
-                                                   -> Result<CurrentContextGuard, Error> {
-        let guard = CurrentContextGuard::new();
-        self.make_context_current(context)?;
-        Ok(guard)
+    /// Removes and returns any attached surface from this context.
+    /// 
+    /// Any pending OpenGL commands targeting this surface will be automatically flushed, so the
+    /// surface is safe to read from immediately when this function returns.
+    pub fn unbind_surface_from_context(&self, context: &mut Context)
+                                       -> Result<Option<Surface>, Error> {
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                context.0
+                       .unbind_surface(gl, self.native_connection.egl_display)
+                       .map(|maybe_surface| maybe_surface.map(Surface))
+            }
+        })
     }
 
     /// Returns a unique ID representing a context.
@@ -327,31 +202,14 @@ impl Device {
     /// a new one, the new context might have the same ID as the destroyed one.
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
-        context.id
+        context.0.id
     }
 
     /// Returns various information about the surface attached to a context.
     /// 
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
+    #[inline]
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
-        match context.framebuffer {
-            Framebuffer::None => Ok(None),
-            Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
-        }
-    }
-
-    /// Given a context, returns its underlying EGL context and attached surfaces.
-    pub fn native_context(&self, context: &Context) -> NativeContext {
-        let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
-            Framebuffer::Surface(_) | Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
-            Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
-        };
-
-        NativeContext {
-            egl_context: context.egl_context,
-            egl_draw_surface,
-            egl_read_surface,
-        }
+        context.0.surface_info()
     }
 }

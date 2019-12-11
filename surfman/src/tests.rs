@@ -45,7 +45,7 @@ fn test_device_creation() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
     match connection.create_device(&adapter) {
-        Ok(device) => {}
+        Ok(_) => {}
         Err(Error::RequiredExtensionUnavailable) => {
             // Can't run these tests on this hardware.
             return;

@@ -2,20 +2,32 @@
 //
 //! Functionality common to backends using EGL contexts.
 
+use crate::context::CREATE_CONTEXT_MUTEX;
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
 use crate::gl::Gl;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
+use crate::surface::Framebuffer;
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion, SurfaceInfo};
 use super::device::EGL_FUNCTIONS;
 use super::error::ToWindowingApiError;
+use super::surface::{EGLBackedSurface, ExternalEGLSurfaces};
 
 use std::ffi::CString;
+use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
+use std::thread;
 
 #[allow(dead_code)]
 const DUMMY_PBUFFER_SIZE: EGLint = 16;
 const RGB_CHANNEL_BIT_DEPTH: EGLint = 8;
+
+pub(crate) struct EGLBackedContext {
+    pub(crate) egl_context: EGLContext,
+    pub(crate) id: ContextID,
+    framebuffer: Framebuffer<EGLBackedSurface, ExternalEGLSurfaces>,
+    context_is_owned: bool,
+}
 
 /// Wrapper for a native `EGLContext`.
 #[derive(Clone, Copy)]
@@ -45,6 +57,15 @@ pub(crate) struct CurrentContextGuard {
     old_egl_context: EGLContext,
 }
 
+impl Drop for EGLBackedContext {
+    #[inline]
+    fn drop(&mut self) {
+        if self.egl_context != egl::NO_CONTEXT && !thread::panicking() {
+            panic!("Contexts must be destroyed explicitly with `destroy_context`!")
+        }
+    }
+}
+
 impl Drop for CurrentContextGuard {
     fn drop(&mut self) {
         EGL_FUNCTIONS.with(|egl| {
@@ -57,6 +78,144 @@ impl Drop for CurrentContextGuard {
                 }
             }
         })
+    }
+}
+
+impl EGLBackedContext {
+    pub(crate) unsafe fn new(egl_display: EGLDisplay, descriptor: &ContextDescriptor)
+                             -> Result<EGLBackedContext, Error> {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+
+        // Create the context.
+        let egl_context = create_context(egl_display, descriptor)?;
+
+        // Wrap and return it.
+        let context = EGLBackedContext {
+            egl_context,
+            id: *next_context_id,
+            framebuffer: Framebuffer::None,
+            context_is_owned: true,
+        };
+        next_context_id.0 += 1;
+        Ok(context)
+    }
+
+    pub(crate) unsafe fn from_native_context(native_context: NativeContext) -> EGLBackedContext {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let context = EGLBackedContext {
+            egl_context: native_context.egl_context,
+            id: *next_context_id,
+            framebuffer: Framebuffer::External(ExternalEGLSurfaces {
+                draw: native_context.egl_draw_surface,
+                read: native_context.egl_read_surface,
+            }),
+            context_is_owned: true,
+        };
+        next_context_id.0 += 1;
+        context
+    }
+
+    pub(crate) unsafe fn destroy(&mut self, egl_display: EGLDisplay) {
+        EGL_FUNCTIONS.with(|egl| {
+            egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl::NO_CONTEXT);
+
+            if self.context_is_owned {
+                let result = egl.DestroyContext(egl_display, self.egl_context);
+                assert_ne!(result, egl::FALSE);
+            }
+
+            self.egl_context = egl::NO_CONTEXT;
+        });
+    }
+
+    pub(crate) fn native_context(&self) -> NativeContext {
+        let egl_surfaces = match self.framebuffer {
+            Framebuffer::Surface(ref surface) => surface.egl_surfaces(),
+            Framebuffer::External(ref surfaces) => (*surfaces).clone(),
+            Framebuffer::None => ExternalEGLSurfaces::default(),
+        };
+
+        NativeContext {
+            egl_context: self.egl_context,
+            egl_draw_surface: egl_surfaces.draw,
+            egl_read_surface: egl_surfaces.read,
+        }
+    }
+
+    pub(crate) unsafe fn make_current(&self, egl_display: EGLDisplay) -> Result<(), Error> {
+        let egl_surfaces = match self.framebuffer {
+            Framebuffer::Surface(ref surface) => surface.egl_surfaces(),
+            Framebuffer::External(ref surfaces) => (*surfaces).clone(),
+            Framebuffer::None => ExternalEGLSurfaces::default(),
+        };
+
+        EGL_FUNCTIONS.with(|egl| {
+            let result = egl.MakeCurrent(egl_display,
+                                         egl_surfaces.draw,
+                                         egl_surfaces.read,
+                                         self.egl_context);
+            if result == egl::FALSE {
+                let err = egl.GetError().to_windowing_api_error();
+                return Err(Error::MakeCurrentFailed(err));
+            }
+            Ok(())
+        })
+    }
+
+    #[inline]
+    pub(crate) fn is_current(&self) -> bool {
+        unsafe {
+            EGL_FUNCTIONS.with(|egl| egl.GetCurrentContext() == self.egl_context)
+        }
+    }
+
+    pub(crate) unsafe fn bind_surface(&mut self,
+                                      egl_display: EGLDisplay,
+                                      surface: EGLBackedSurface)
+                                      -> Result<(), (Error, EGLBackedSurface)> {
+        if self.id != surface.context_id {
+            return Err((Error::IncompatibleSurface, surface));
+        }
+
+        match self.framebuffer {
+            Framebuffer::None => self.framebuffer = Framebuffer::Surface(surface),
+            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
+        }
+
+        // If we're current, call `make_context_current()` again to switch to the new framebuffer.
+        if self.is_current() {
+            drop(self.make_current(egl_display))
+        }
+
+        Ok(())
+    }
+
+    pub(crate) unsafe fn unbind_surface(&mut self, gl: &Gl, egl_display: EGLDisplay)
+                                        -> Result<Option<EGLBackedSurface>, Error> {
+        match self.framebuffer {
+            Framebuffer::None => return Ok(None),
+            Framebuffer::Surface(_) => {}
+            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
+        }
+
+        let surface = match mem::replace(&mut self.framebuffer, Framebuffer::None) {
+            Framebuffer::Surface(surface) => surface,
+            Framebuffer::None | Framebuffer::External(_) => unreachable!(),
+        };
+
+        // If we're current, we stay current, but with no surface attached.
+        surface.unbind(gl, egl_display, self.egl_context);
+
+        Ok(Some(surface))
+    }
+
+    pub(crate) fn surface_info(&self) -> Result<Option<SurfaceInfo>, Error> {
+        match self.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface.info())),
+        }
     }
 }
 
