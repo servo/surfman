@@ -105,7 +105,7 @@ fn main() {
     let mut device = connection.create_device(&adapter).unwrap();
 
     let context_attributes = ContextAttributes {
-        version: GLVersion::new(3, 3),
+        version: GLVersion::new(3, 0),
         flags: ContextAttributeFlags::ALPHA,
     };
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
