@@ -29,7 +29,6 @@ pub struct NativeConnection(Arc<NativeConnectionWrapper>);
 /// Native connections.
 pub struct NativeConnectionWrapper {
     pub(crate) egl_display: EGLDisplay,
-    pub(crate) is_owned: bool,
 }
 
 unsafe impl Send for NativeConnectionWrapper {}
@@ -59,7 +58,6 @@ impl Connection {
 
                 let native_connection = NativeConnection(Arc::new(NativeConnectionWrapper {
                     egl_display,
-                    is_owned: true,
                 }));
 
                 Connection::from_native_connection(native_connection)

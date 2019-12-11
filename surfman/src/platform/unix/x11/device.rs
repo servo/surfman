@@ -1,9 +1,11 @@
 // surfman/surfman/src/platform/unix/x11/device.rs
 //
-//! Thread-local handles to devices.
+//! A wrapper around X11 `EGLDisplay`s.
 
 use crate::{Error, GLApi};
-use super::connection::Connection;
+use super::connection::{Connection, NativeConnectionWrapper};
+
+use std::sync::Arc;
 
 pub use crate::platform::unix::generic::device::Adapter;
 
@@ -11,13 +13,13 @@ pub use crate::platform::unix::generic::device::Adapter;
 ///
 /// Devices contain most of the relevant surface management methods.
 pub struct Device {
-    pub(crate) connection: Connection,
+    pub(crate) native_connection: Arc<NativeConnectionWrapper>,
     pub(crate) adapter: Adapter,
 }
 
-/// A zero-sized type that represents a native device in X11.
+/// Wraps an adapter.
 ///
-/// GLX has no explicit concept of a hardware device, so this type only contains an adapter.
+/// On X11, devices and adapters are essentially identical types.
 #[derive(Clone)]
 pub struct NativeDevice {
     /// The hardware adapter corresponding to this device.
@@ -27,13 +29,16 @@ pub struct NativeDevice {
 impl Device {
     #[inline]
     pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
-        Ok(Device { connection: (*connection).clone(), adapter: (*adapter).clone() })
+        Ok(Device {
+            native_connection: connection.native_connection.clone(),
+            adapter: (*adapter).clone(),
+        })
     }
 
     /// Returns the native device corresponding to this device.
     ///
-    /// This method is essentially an alias for the `adapter()` method on X11, since there is no
-    /// explicit concept of a device on this backend.
+    /// This method is essentially an alias for the `adapter()` method on Wayland, since there is
+    /// no explicit concept of a device on this backend.
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
         NativeDevice { adapter: self.adapter() }
@@ -42,7 +47,7 @@ impl Device {
     /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
-        self.connection.clone()
+        Connection { native_connection: self.native_connection.clone() }
     }
 
     /// Returns the adapter that this device was created with.
@@ -54,7 +59,6 @@ impl Device {
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     #[inline]
     pub fn gl_api(&self) -> GLApi {
-        GLApi::GL
+        GLApi::GLES
     }
 }
-

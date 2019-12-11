@@ -1,14 +1,11 @@
 // surfman/surfman/src/platform/unix/x11/mod.rs
 //
-//! Bindings to GLX via Xlib.
+//! Bindings to EGL via Xlib.
 
 pub mod connection;
 pub mod context;
 pub mod device;
 pub mod surface;
-
-mod error;
-mod ffi;
 
 #[path = "../../../implementation/mod.rs"]
 mod implementation;

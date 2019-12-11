@@ -2,13 +2,18 @@
 //
 //! A wrapper for X11 server connections (`DISPLAY` variables).
 
+use crate::egl::types::{EGLAttrib, EGLDisplay};
+use crate::egl;
 use crate::error::Error;
 use crate::glx::types::Display as GlxDisplay;
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_PLATFORM_X11_KHR;
 use crate::platform::unix::generic::device::Adapter;
 use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 
 use std::marker::PhantomData;
+use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Arc;
 use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
@@ -29,13 +34,14 @@ lazy_static! {
 /// A connection to the X11 display server.
 #[derive(Clone)]
 pub struct Connection {
-    pub(crate) display_holder: Arc<DisplayHolder>,
+    pub(crate) native_connection: Arc<NativeConnectionWrapper>,
 }
 
 unsafe impl Send for Connection {}
 
-pub(crate) struct DisplayHolder {
+pub(crate) struct NativeConnectionWrapper {
     display: *mut Display,
+    pub(crate) egl_display: EGLDisplay,
     pub(crate) display_is_owned: bool,
 }
 
@@ -43,7 +49,7 @@ pub(crate) struct DisplayHolder {
 #[derive(Clone)]
 pub struct NativeConnection(pub *mut Display);
 
-impl Drop for DisplayHolder {
+impl Drop for NativeConnectionWrapper {
     #[inline]
     fn drop(&mut self) {
         unsafe {
@@ -66,8 +72,15 @@ impl Connection {
             if display.is_null() {
                 return Err(Error::ConnectionFailed);
             }
+
+            let egl_display = create_egl_display(display);
+
             Ok(Connection {
-                display_holder: Arc::new(DisplayHolder { display, display_is_owned: true }),
+                native_connection: Arc::new(NativeConnectionWrapper {
+                    display,
+                    egl_display,
+                    display_is_owned: true,
+                }),
             })
         }
     }
@@ -84,9 +97,11 @@ impl Connection {
     #[inline]
     pub unsafe fn from_native_connection(native_connection: NativeConnection)
                                          -> Result<Connection, Error> {
+        let egl_display = create_egl_display(native_connection.0);
         Ok(Connection {
-            display_holder: Arc::new(DisplayHolder {
+            native_connection: Arc::new(NativeConnectionWrapper {
                 display: native_connection.0,
+                egl_display,
                 display_is_owned: false,
             }),
         })
@@ -95,7 +110,7 @@ impl Connection {
     /// Returns the underlying native connection.
     #[inline]
     pub fn native_connection(&self) -> NativeConnection {
-        NativeConnection(self.display_holder.display)
+        NativeConnection(self.native_connection.display)
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
@@ -165,11 +180,13 @@ impl Connection {
             None => Err(Error::IncompatibleNativeWidget),
         }
     }
+}
 
+impl NativeConnectionWrapper {
     #[inline]
     pub(crate) fn lock_display(&self) -> DisplayGuard {
         unsafe {
-            let display = self.display_holder.display;
+            let display = self.display;
             XLockDisplay(display);
             DisplayGuard { display, phantom: PhantomData }
         }
@@ -194,10 +211,20 @@ impl<'a> DisplayGuard<'a> {
     pub(crate) fn display(&self) -> *mut Display {
         self.display
     }
+}
 
-    #[inline]
-    pub(crate) fn glx_display(&self) -> *mut GlxDisplay {
-        self.display as *mut GlxDisplay
-    }
+unsafe fn create_egl_display(display: *mut Display) -> EGLDisplay {
+    EGL_FUNCTIONS.with(|egl| {
+        let display_attributes = [egl::NONE as EGLAttrib];
+        let egl_display = egl.GetPlatformDisplay(EGL_PLATFORM_X11_KHR,
+                                                 display as *mut c_void,
+                                                 display_attributes.as_ptr());
+
+        let (mut egl_major_version, mut egl_minor_version) = (0, 0);
+        let ok = egl.Initialize(egl_display, &mut egl_major_version, &mut egl_minor_version);
+        assert_ne!(ok, egl::FALSE);
+
+        egl_display
+    })
 }
 

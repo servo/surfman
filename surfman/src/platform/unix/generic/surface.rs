@@ -134,7 +134,7 @@ impl Device {
     /// occur.
     pub fn destroy_surface_texture(&self,
                                    context: &mut Context,
-                                   mut surface_texture: SurfaceTexture)
+                                   surface_texture: SurfaceTexture)
                                    -> Result<Surface, (Error, SurfaceTexture)> {
         match self.temporarily_make_context_current(context) {
             Ok(_guard) => GL_FUNCTIONS.with(|gl| Ok(Surface(surface_texture.0.destroy(gl)))),

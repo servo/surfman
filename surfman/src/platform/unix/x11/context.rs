@@ -1,82 +1,23 @@
 // surfman/surfman/src/platform/unix/x11/context.rs
 //
-//! Wrapper for GLX contexts.
+//! OpenGL rendering contexts on X11 via EGL.
 
-use crate::context::{self, CREATE_CONTEXT_MUTEX, ContextID};
+use crate::context::ContextID;
+use crate::egl::types::EGLint;
+use crate::egl;
 use crate::gl::Gl;
-use crate::gl::types::GLubyte;
-use crate::glx::types::{Display as GlxDisplay, GLXContext, GLXDrawable, GLXFBConfig, GLXPixmap};
-use crate::glx::{self, Glx};
-use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
-use crate::{SurfaceInfo, WindowingApiError};
+use crate::platform::generic::egl::context::{self, CurrentContextGuard, EGLBackedContext};
+use crate::{ContextAttributes, Error, SurfaceInfo};
 use super::device::Device;
-use super::error;
-use super::ffi::GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB;
-use super::ffi::GLX_CONTEXT_CORE_PROFILE_BIT_ARB;
-use super::ffi::GLX_CONTEXT_PROFILE_MASK_ARB;
-use super::surface::{self, Surface, SurfaceDrawables};
+use super::surface::Surface;
 
-use euclid::default::Size2D;
-use libc::{RTLD_LAZY, dlopen, dlsym};
-use parking_lot::{ReentrantMutex, ReentrantMutexGuard};
-use std::cell::Cell;
-use std::ffi::CString;
-use std::mem;
-use std::os::raw::{c_int, c_void};
-use std::ptr;
-use std::slice;
-use std::thread;
-use x11::glx::{GLX_ALPHA_SIZE, GLX_BLUE_SIZE, GLX_DEPTH_SIZE, GLX_DOUBLEBUFFER, GLX_DRAWABLE_TYPE};
-use x11::glx::{GLX_FBCONFIG_ID, GLX_GREEN_SIZE, GLX_PIXMAP_BIT, GLX_RED_SIZE, GLX_RENDER_TYPE};
-use x11::glx::{GLX_RGBA_BIT, GLX_STENCIL_SIZE, GLX_STEREO, GLX_TRUE_COLOR, GLX_WINDOW_BIT};
-use x11::glx::{GLX_X_RENDERABLE, GLX_X_VISUAL_TYPE};
-use x11::xlib::{self, Display, Pixmap, XDefaultScreen, XErrorEvent, XFree, XID, XSetErrorHandler};
+use std::os::raw::c_void;
 
-const DUMMY_PIXMAP_SIZE: i32 = 16;
-
-thread_local! {
-    static LAST_X_ERROR_CODE: Cell<u8> = Cell::new(0);
-}
+pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
 
 thread_local! {
     #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
-}
-
-lazy_static! {
-    #[doc(hidden)]
-    pub(crate) static ref GLX_FUNCTIONS: GlxFunctions = GlxFunctions::new();
-}
-
-lazy_static! {
-    static ref GLX_GET_PROC_ADDRESS: unsafe extern "C" fn(*const GLubyte) -> *mut c_void = {
-        unsafe {
-            let library_name = &b"libGL.so\0"[0] as *const u8 as *const i8;
-            let library = dlopen(library_name, RTLD_LAZY);
-            assert!(!library.is_null());
-
-            let symbol = &b"glXGetProcAddress\0"[0] as *const u8 as *const i8;
-            let function = dlsym(library, symbol);
-            assert!(!function.is_null());
-            mem::transmute(function)
-        }
-    };
-}
-
-// GLX is not thread-safe, even across multiple displays. We use this type to ensure that all GLX
-// access is locked.
-pub(crate) struct GlxFunctions(ReentrantMutex<Glx>);
-
-impl GlxFunctions {
-    fn new() -> GlxFunctions {
-        GlxFunctions(ReentrantMutex::new(Glx::load_with(get_proc_address)))
-    }
-
-    #[inline]
-    pub(crate) fn lock(&self) -> ReentrantMutexGuard<Glx> {
-        self.0.lock()
-    }
+    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
 }
 
 /// Represents an OpenGL rendering context.
@@ -95,100 +36,23 @@ impl GlxFunctions {
 /// allow for sharing of texture data. Contexts are local to a single thread and device.
 /// 
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
-pub struct Context {
-    pub(crate) glx_context: GLXContext,
-    pub(crate) id: ContextID,
-    framebuffer: Framebuffer<Surface, GLXDrawable>,
-    gl_version: GLVersion,
-    compatibility_profile: bool,
-    dummy_glx_pixmap: GLXPixmap,
-    #[allow(dead_code)]
-    dummy_pixmap: Pixmap,
-    status: ContextStatus,
-}
-
-/// Wraps a native GLX context and associated drawable.
-pub struct NativeContext {
-    /// The associated GLX context.
-    pub glx_context: GLXContext,
-    /// The drawable (pixmap or window) bound to the context.
-    pub glx_drawable: GLXDrawable,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ContextStatus {
-    Owned,
-    Referenced,
-    Destroyed,
-}
-
-impl Drop for Context {
-    #[inline]
-    fn drop(&mut self) {
-        if self.status != ContextStatus::Destroyed && !thread::panicking() {
-            //panic!("Contexts must be destroyed explicitly with `destroy_context`!")
-        }
-    }
-}
-
-/// Information needed to create a context. Some APIs call this a "config" or a "pixel format".
-/// 
-/// These are local to a device.
-#[derive(Clone)]
-pub struct ContextDescriptor {
-    pixmap_glx_fb_config_id: XID,
-    gl_version: GLVersion,
-    compatibility_profile: bool,
-}
+pub struct Context(pub(crate) EGLBackedContext);
 
 impl Device {
     /// Creates a context descriptor with the given attributes.
     /// 
     /// Context descriptors are local to this device.
+    #[inline]
     pub fn create_context_descriptor(&self, attributes: &ContextAttributes)
                                      -> Result<ContextDescriptor, Error> {
-        let display_guard = self.connection.lock_display();
-
         // Set environment variables as appropriate.
         self.adapter.set_environment_variables();
 
-        let flags = attributes.flags;
-        let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
-        let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
-        let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
-
-        let compatibility_profile = flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE);
-
-        let pixmap_config_attributes = [
-            GLX_RED_SIZE,                               8,
-            GLX_GREEN_SIZE,                             8,
-            GLX_BLUE_SIZE,                              8,
-            GLX_ALPHA_SIZE,                             alpha_size,
-            GLX_DEPTH_SIZE,                             depth_size,
-            GLX_STENCIL_SIZE,                           stencil_size,
-            GLX_DRAWABLE_TYPE,                          GLX_PIXMAP_BIT | GLX_WINDOW_BIT,
-            GLX_X_RENDERABLE,                           xlib::True,
-            GLX_X_VISUAL_TYPE,                          GLX_TRUE_COLOR,
-            GLX_RENDER_TYPE,                            GLX_RGBA_BIT,
-            GLX_STEREO,                                 xlib::False,
-            glx::BIND_TO_TEXTURE_RGBA_EXT as c_int,     xlib::True,
-            glx::BIND_TO_TEXTURE_TARGETS_EXT as c_int,  glx::TEXTURE_RECTANGLE_BIT_EXT as c_int,
-            // FIXME(pcwalton): We shouldn't have to double-buffer pbuffers in theory. However,
-            // there seem to be some Mesa synchronization issues if we don't.
-            GLX_DOUBLEBUFFER,                           xlib::True,
-            0,
-        ];
-
         unsafe {
-            let pixmap_glx_fb_config_id = choose_fb_config_id(display_guard.display(),
-                                                              display_guard.glx_display(),
-                                                              pixmap_config_attributes.as_ptr())?;
-
-            Ok(ContextDescriptor {
-                pixmap_glx_fb_config_id,
-                gl_version: attributes.version,
-                compatibility_profile,
-            })
+            ContextDescriptor::new(self.native_connection.egl_display, attributes, &[
+                egl::SURFACE_TYPE as EGLint,    egl::WINDOW_BIT as EGLint,
+                egl::RENDERABLE_TYPE as EGLint, egl::OPENGL_BIT as EGLint,
+            ])
         }
     }
 
@@ -196,209 +60,63 @@ impl Device {
     /// 
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
+    #[inline]
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
-        // Take a lock.
-        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-        let glx_fb_config = self.context_descriptor_to_glx_fb_config(descriptor);
-
-        let glx = GLX_FUNCTIONS.lock();
         unsafe {
-            let glx_context_profile_mask = if descriptor.compatibility_profile { 
-                GLX_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB
-            } else {
-                GLX_CONTEXT_CORE_PROFILE_BIT_ARB
-            };
-
-            // TODO(pcwalton): Fall back to `glXCreateNewContext()` if the
-            // `GLX_ARB_create_context` extension isn't available.
-            let attributes = [
-                glx::CONTEXT_MAJOR_VERSION_ARB as c_int, descriptor.gl_version.major as c_int,
-                glx::CONTEXT_MINOR_VERSION_ARB as c_int, descriptor.gl_version.minor as c_int,
-                GLX_CONTEXT_PROFILE_MASK_ARB,            glx_context_profile_mask,
-                0,
-            ];
-
-            let display_guard = self.connection.lock_display();
-
-            let prev_error_handler = XSetErrorHandler(Some(xlib_error_handler));
-
-            let glx_context = glx.CreateContextAttribsARB(display_guard.glx_display(),
-                                                          glx_fb_config as *const c_void,
-                                                          ptr::null(),
-                                                          xlib::True,
-                                                          attributes.as_ptr()) as GLXContext;
-            if glx_context.is_null() {
-                let windowing_api_error = LAST_X_ERROR_CODE.with(|last_x_error_code| {
-                    error::xlib_error_to_windowing_api_error(display_guard.display(),
-                                                             last_x_error_code.get())
-                });
-                return Err(Error::ContextCreationFailed(windowing_api_error));
-            }
-
-            XSetErrorHandler(prev_error_handler);
-
-            let dummy_pixmap_size = Size2D::new(DUMMY_PIXMAP_SIZE, DUMMY_PIXMAP_SIZE);
-            let (dummy_glx_pixmap, dummy_pixmap) =
-                surface::create_pixmaps(display_guard.display(),
-                                        display_guard.glx_display(),
-                                        glx_fb_config,
-                                        &dummy_pixmap_size)?;
-
-            let context = Context {
-                glx_context,
-                id: *next_context_id,
-                framebuffer: Framebuffer::None,
-                gl_version: descriptor.gl_version,
-                compatibility_profile: descriptor.compatibility_profile,
-                dummy_glx_pixmap,
-                dummy_pixmap,
-                status: ContextStatus::Owned,
-            };
-            next_context_id.0 += 1;
-            Ok(context)
+            EGLBackedContext::new(self.native_connection.egl_display, descriptor).map(Context)
         }
     }
 
-    /// Wraps a native `GLXContext` in a `Context`.
+    /// Wraps an `EGLContext` in a native context and returns it.
     ///
-    /// The native GLX context is not retained, as there is no way to do this in the GLX API.
-    /// Therefore, it is the caller's responsibility to ensure that the returned `Context` object
-    /// does not outlive the `GLXContext`.
+    /// The context is not retained, as there is no way to do this in the EGL API. Therefore,
+    /// it is the caller's responsibility to ensure that the returned `Context` object remains
+    /// alive as long as the `EGLContext` is.
+    #[inline]
     pub unsafe fn create_context_from_native_context(&self, native_context: NativeContext)
                                                      -> Result<Context, Error> {
-        // Take locks.
-        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-        let display_guard = self.connection.lock_display();
-
-        let glx = GLX_FUNCTIONS.lock();
-        GL_FUNCTIONS.with(|gl| {
-            let (gl_version, compatibility_profile);
-            {
-                let _guard = CurrentContextGuard::new();
-
-                let ok = glx.MakeCurrent(display_guard.glx_display(),
-                                         native_context.glx_drawable,
-                                         native_context.glx_context);
-                if ok == xlib::False {
-                    return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
-                }
-
-                gl_version = GLVersion::current(gl);
-                compatibility_profile =
-                    context::current_context_uses_compatibility_profile(gl);
-            };
-
-            // Introspect the context to create a context descriptor.
-            let glx_fb_config_id = get_fb_config_id(display_guard.glx_display(),
-                                                    native_context.glx_context);
-            let context_descriptor = ContextDescriptor {
-                pixmap_glx_fb_config_id: glx_fb_config_id,
-                gl_version,
-                compatibility_profile,
-            };
-
-            // Grab the framebuffer config from that descriptor.
-            let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
-
-            // Create dummy pixmaps as necessary.
-            let dummy_pixmap_size = Size2D::new(DUMMY_PIXMAP_SIZE, DUMMY_PIXMAP_SIZE);
-            let (dummy_glx_pixmap, dummy_pixmap) =
-                surface::create_pixmaps(display_guard.display(),
-                                        display_guard.glx_display(),
-                                        glx_fb_config,
-                                        &dummy_pixmap_size)?;
-
-
-            let context = Context {
-                glx_context: native_context.glx_context,
-                id: *next_context_id,
-                framebuffer: Framebuffer::External(native_context.glx_drawable),
-                gl_version,
-                compatibility_profile,
-                dummy_glx_pixmap,
-                dummy_pixmap,
-                status: ContextStatus::Referenced,
-            };
-            next_context_id.0 += 1;
-            Ok(context)
-        })
+        Ok(Context(EGLBackedContext::from_native_context(native_context)))
     }
 
     /// Destroys a context.
     /// 
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.status == ContextStatus::Destroyed {
-            return Ok(());
-        }
-
-        if let Framebuffer::Surface(mut surface) = mem::replace(&mut context.framebuffer,
-                                                                Framebuffer::None) {
+        if let Ok(Some(mut surface)) = self.unbind_surface_from_context(context) {
             self.destroy_surface(context, &mut surface)?;
         }
 
         unsafe {
-            let display_guard = self.connection.lock_display();
-            let glx = GLX_FUNCTIONS.lock();
-            glx.DestroyPixmap(display_guard.glx_display(), context.dummy_glx_pixmap);
-            context.dummy_glx_pixmap = 0;
-
-            glx.MakeCurrent(display_guard.glx_display(), 0, ptr::null_mut());
-
-            if context.status == ContextStatus::Owned {
-                glx.DestroyContext(display_guard.glx_display(), context.glx_context);
-            }
-
-            context.glx_context = ptr::null_mut();
+            context.0.destroy(self.native_connection.egl_display);
+            Ok(())
         }
+    }
 
-        Ok(())
+    /// Given a context, returns its underlying EGL context and attached surfaces.
+    #[inline]
+    pub fn native_context(&self, context: &Context) -> NativeContext {
+        context.0.native_context()
     }
 
     /// Returns the descriptor that this context was created with.
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        unsafe {
-            let display_guard = self.connection.lock_display();
-            let glx_context = context.glx_context;
-            let glx_fb_config_id = get_fb_config_id(display_guard.glx_display(), glx_context);
-            ContextDescriptor {
-                pixmap_glx_fb_config_id: glx_fb_config_id,
-                gl_version: context.gl_version,
-                compatibility_profile: context.compatibility_profile,
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                ContextDescriptor::from_egl_context(gl,
+                                                    self.native_connection.egl_display,
+                                                    context.0.egl_context)
             }
-        }
+        })
     }
 
     /// Makes the context the current OpenGL context for this thread.
     /// 
     /// After calling this function, it is valid to use OpenGL rendering commands.
+    #[inline]
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
-        let display_guard = self.connection.lock_display();
-        let glx = GLX_FUNCTIONS.lock();
         unsafe {
-            let glx_context = context.glx_context;
-            let glx_drawable = self.context_glx_drawable(context);
-
-            let ok = glx.MakeCurrent(display_guard.glx_display(), glx_drawable, glx_context);
-            if ok == xlib::False {
-                return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
-            }
-
-            Ok(())
-        }
-    }
-
-    fn context_glx_drawable(&self, context: &Context) -> GLXDrawable {
-        match context.framebuffer {
-            Framebuffer::Surface(ref surface) => {
-                match surface.drawables {
-                    SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
-                    SurfaceDrawables::Window { window } => window,
-                }
-            }
-            Framebuffer::None => context.dummy_glx_pixmap,
-            Framebuffer::External(glx_drawable) => glx_drawable,
+            context.0.make_current(self.native_connection.egl_display)
         }
     }
 
@@ -406,15 +124,27 @@ impl Device {
     /// 
     /// After calling this function, OpenGL rendering commands will fail until a new context is
     /// made current.
+    #[inline]
     pub fn make_no_context_current(&self) -> Result<(), Error> {
-        let display_guard = self.connection.lock_display();
-        let glx = GLX_FUNCTIONS.lock();
         unsafe {
-            let ok = glx.MakeCurrent(display_guard.glx_display(), 0, ptr::null_mut());
-            if ok == xlib::False {
-                return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
-            }
-            Ok(())
+            context::make_no_context_current(self.native_connection.egl_display)
+        }
+    }
+
+    #[inline]
+    pub(crate) fn temporarily_make_context_current(&self, context: &Context)
+                                                   -> Result<CurrentContextGuard, Error> {
+        let guard = CurrentContextGuard::new();
+        self.make_context_current(context)?;
+        Ok(guard)
+    }
+
+    /// Returns the attributes that the context descriptor was created with.
+    #[inline]
+    pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
+                                         -> ContextAttributes {
+        unsafe {
+            context_descriptor.attributes(self.native_connection.egl_display)
         }
     }
 
@@ -427,46 +157,7 @@ impl Device {
     /// load OpenGL function pointers.
     #[inline]
     pub fn get_proc_address(&self, _: &Context, symbol_name: &str) -> *const c_void {
-        get_proc_address(symbol_name)
-    }
-
-    /// Returns the attributes that the context descriptor was created with.
-    pub fn context_descriptor_attributes(&self, context_descriptor: &ContextDescriptor)
-                                         -> ContextAttributes {
-        let display_guard = self.connection.lock_display();
-        let glx_display = display_guard.glx_display();
-        let glx_fb_config = self.context_descriptor_to_glx_fb_config(context_descriptor);
-
-        unsafe {
-            let alpha_size = get_config_attr(glx_display, glx_fb_config, GLX_ALPHA_SIZE);
-            let depth_size = get_config_attr(glx_display, glx_fb_config, GLX_DEPTH_SIZE);
-            let stencil_size = get_config_attr(glx_display, glx_fb_config, GLX_STENCIL_SIZE);
-
-            // Convert to `surfman` context attribute flags.
-            let mut attribute_flags = ContextAttributeFlags::empty();
-            attribute_flags.set(ContextAttributeFlags::ALPHA, alpha_size != 0);
-            attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
-            attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
-
-            if context_descriptor.compatibility_profile {
-                attribute_flags.insert(ContextAttributeFlags::COMPATIBILITY_PROFILE);
-            }
-
-            // Create appropriate context attributes.
-            ContextAttributes { flags: attribute_flags, version: context_descriptor.gl_version }
-        }
-    }
-
-    pub(crate) fn context_descriptor_to_glx_fb_config(&self,
-                                                      context_descriptor: &ContextDescriptor)
-                                                      -> GLXFBConfig {
-        let display_guard = self.connection.lock_display();
-        let glx_fb_config_id = context_descriptor.pixmap_glx_fb_config_id;
-        unsafe {
-            get_fb_config_from_id(display_guard.display(),
-                                  display_guard.glx_display(),
-                                  glx_fb_config_id)
-        }
+        context::get_proc_address(symbol_name)
     }
 
     /// Attaches a surface to a context for rendering.
@@ -479,24 +170,14 @@ impl Device {
     /// `unbind_surface_from_context`.
     /// 
     /// If an error is returned, the surface is returned alongside it.
+    #[inline]
     pub fn bind_surface_to_context(&self, context: &mut Context, surface: Surface)
                                    -> Result<(), (Error, Surface)> {
-        if context.id != surface.context_id {
-            return Err((Error::IncompatibleSurface, surface));
+        unsafe {
+            context.0
+                   .bind_surface(self.native_connection.egl_display, surface.0)
+                   .map_err(|(err, surface)| (err, Surface(surface)))
         }
-
-        match context.framebuffer {
-            Framebuffer::None => context.framebuffer = Framebuffer::Surface(surface),
-            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
-            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
-        }
-
-        // If we're current, call `make_context_current()` again to switch to the new framebuffer.
-        if self.context_is_current(context) {
-            drop(self.make_context_current(context));
-        }
-
-        Ok(())
     }
 
     /// Removes and returns any attached surface from this context.
@@ -505,58 +186,13 @@ impl Device {
     /// surface is safe to read from immediately when this function returns.
     pub fn unbind_surface_from_context(&self, context: &mut Context)
                                        -> Result<Option<Surface>, Error> {
-        drop(self.flush_context_surface(context));
-
-        let surface = match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => surface,
-            Framebuffer::None => return Ok(None),
-            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
-        };
-
-        // If we're current, we stay current, but with the dummy GLX pixmap attached.
-        let glx = GLX_FUNCTIONS.lock();
-        unsafe {
-            let display_guard = self.connection.lock_display();
-            if self.context_is_current(context) {
-                glx.MakeCurrent(display_guard.glx_display(),
-                                context.dummy_glx_pixmap,
-                                context.glx_context);
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                context.0
+                       .unbind_surface(gl, self.native_connection.egl_display)
+                       .map(|maybe_surface| maybe_surface.map(Surface))
             }
-        }
-
-        Ok(Some(surface))
-    }
-
-    fn context_is_current(&self, context: &Context) -> bool {
-        unsafe {
-            GLX_FUNCTIONS.lock().GetCurrentContext() == context.glx_context
-        }
-    }
-
-    fn flush_context_surface(&self, context: &mut Context) -> Result<(), Error> {
-        // FIXME(pcwalton): Unbind afterward if necessary.
-        let display_guard = self.connection.lock_display();
-        self.make_context_current(context)?;
-
-        let surface = match context.framebuffer {
-            Framebuffer::Surface(ref mut surface) => surface,
-            Framebuffer::None | Framebuffer::External(_) => return Ok(()),
-        };
-
-        match surface.drawables {
-            SurfaceDrawables::Pixmap { glx_pixmap, .. } => {
-                unsafe {
-                    GL_FUNCTIONS.with(|gl| {
-                        let glx = GLX_FUNCTIONS.lock();
-                        gl.Flush();
-                        glx.SwapBuffers(display_guard.glx_display(), glx_pixmap);
-                    })
-                }
-            }
-            SurfaceDrawables::Window { .. } => {}
-        }
-
-        Ok(())
+        })
     }
 
     /// Returns a unique ID representing a context.
@@ -565,126 +201,14 @@ impl Device {
     /// a new one, the new context might have the same ID as the destroyed one.
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
-        context.id
+        context.0.id
     }
 
     /// Returns various information about the surface attached to a context.
     /// 
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
-    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
-        match context.framebuffer {
-            Framebuffer::None => Ok(None),
-            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
-        }
-    }
-
-    /// Given a context, returns its underlying GLX context object and associated drawable.
     #[inline]
-    pub fn native_context(&self, context: &Context) -> NativeContext {
-        NativeContext {
-            glx_context: context.glx_context,
-            glx_drawable: self.context_glx_drawable(context),
-        }
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        context.0.surface_info()
     }
 }
-
-pub(crate) unsafe fn get_config_attr(display: *mut GlxDisplay,
-                                     glx_fb_config: GLXFBConfig,
-                                     attr: c_int)
-                                     -> c_int {
-    let glx = GLX_FUNCTIONS.lock();
-    let mut value = 0;
-    let err = glx.GetFBConfigAttrib(display, glx_fb_config, attr, &mut value);
-    assert_eq!(err, xlib::Success as c_int);
-    value
-}
-
-unsafe fn choose_fb_config_id(display: *mut Display,
-                              glx_display: *mut GlxDisplay,
-                              config_attributes: *const c_int)
-                              -> Result<XID, Error> {
-    let glx = GLX_FUNCTIONS.lock();
-
-    let mut glx_fb_config_count = 0;
-    let glx_fb_configs = glx.ChooseFBConfig(glx_display,
-                                            XDefaultScreen(display),
-                                            config_attributes,
-                                            &mut glx_fb_config_count);
-    if glx_fb_configs.is_null() || glx_fb_config_count == 0 {
-        return Err(Error::NoPixelFormatFound);
-    }
-
-    let glx_fb_config = *glx_fb_configs;
-    XFree(glx_fb_configs as *mut c_void);
-
-    Ok(get_config_attr(glx_display, glx_fb_config, GLX_FBCONFIG_ID) as XID)
-}
-
-fn get_proc_address(symbol_name: &str) -> *const c_void {
-    unsafe {
-        let symbol_name: CString = CString::new(symbol_name).unwrap();
-        (*GLX_GET_PROC_ADDRESS)(symbol_name.as_ptr() as *const u8) as *const c_void
-    }
-}
-
-unsafe fn get_fb_config_id(glx_display: *mut GlxDisplay, glx_context: GLXContext) -> XID {
-    let glx = GLX_FUNCTIONS.lock();
-    let mut glx_fb_config_id: i32 = 0;
-    let err = glx.QueryContext(glx_display, glx_context, GLX_FBCONFIG_ID, &mut glx_fb_config_id);
-    assert_eq!(err, xlib::Success as c_int);
-    glx_fb_config_id as XID
-}
-
-unsafe fn get_fb_config_from_id(display: *mut Display,
-                                glx_display: *mut GlxDisplay,
-                                glx_fb_config_id: XID)
-                                -> GLXFBConfig {
-    let glx = GLX_FUNCTIONS.lock();
-    let mut glx_fb_config_count = 0;
-    let glx_fb_configs_ptr = glx.GetFBConfigs(glx_display,
-                                              XDefaultScreen(display),
-                                              &mut glx_fb_config_count);
-    let glx_fb_configs = slice::from_raw_parts(glx_fb_configs_ptr,
-                                                glx_fb_config_count as usize);
-    let glx_fb_config = *glx_fb_configs.iter().filter(|&glx_fb_config| {
-        get_config_attr(glx_display, *glx_fb_config, GLX_FBCONFIG_ID) as XID ==
-            glx_fb_config_id
-    }).next().expect("Where's the GLX FB config?");
-
-    XFree(glx_fb_configs_ptr as *mut c_void);
-    glx_fb_config
-}
-
-unsafe extern "C" fn xlib_error_handler(_: *mut Display, event: *mut XErrorEvent) -> c_int {
-    LAST_X_ERROR_CODE.with(|error_code| error_code.set((*event).error_code));
-    0
-}
-
-struct CurrentContextGuard {
-    display: *mut GlxDisplay,
-    glx_drawable: GLXDrawable,
-    glx_context: GLXContext,
-}
-
-impl CurrentContextGuard {
-    fn new() -> CurrentContextGuard {
-        let glx = GLX_FUNCTIONS.lock();
-        unsafe {
-            CurrentContextGuard {
-                display: glx.GetCurrentDisplay(),
-                glx_context: glx.GetCurrentContext(),
-                glx_drawable: glx.GetCurrentDrawable(),
-            }
-        }
-    }
-}
-
-impl Drop for CurrentContextGuard {
-    fn drop(&mut self) {
-        unsafe {
-            GLX_FUNCTIONS.lock().MakeCurrent(self.display, self.glx_drawable, self.glx_context);
-        }
-    }
-}
-

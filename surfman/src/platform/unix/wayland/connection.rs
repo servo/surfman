@@ -3,13 +3,15 @@
 //! A wrapper for Wayland connections (displays).
 
 use crate::Error;
-use crate::egl::types::EGLDisplay;
+use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::egl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_PLATFORM_WAYLAND_KHR;
 use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
 use euclid::default::Size2D;
+use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Arc;
 use wayland_sys::client::{WAYLAND_CLIENT_HANDLE, wl_display, wl_proxy};
@@ -113,7 +115,10 @@ impl Connection {
         }
 
         EGL_FUNCTIONS.with(|egl| {
-            let egl_display = egl.GetDisplay(wayland_display as *const _);
+            let mut display_attributes = [egl::NONE as EGLAttrib];
+            let egl_display = egl.GetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR,
+                                                     wayland_display as *mut c_void,
+                                                     display_attributes.as_ptr());
             if egl_display == egl::NO_DISPLAY {
                 return Err(Error::DeviceOpenFailed);
             }

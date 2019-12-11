@@ -1,34 +1,22 @@
 // surfman/src/platform/unix/x11/surface.rs
 //
-//! Hardware buffers of pixels.
+//! A surface implementation using X11 surfaces backed by TextureImage.
 
-use crate::context::ContextID;
-use crate::gl::types::{GLenum, GLint, GLuint};
-use crate::glx::types::{Display as GlxDisplay, GLXFBConfig};
-use crate::{gl, glx};
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
-use super::context::{Context, GLX_FUNCTIONS, GL_FUNCTIONS};
+use crate::gl::types::{GLenum, GLuint};
+use crate::gl;
+use crate::platform::generic::egl::context;
+use crate::platform::generic::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
+use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
+use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
-use super::error;
 
 use euclid::default::Size2D;
-use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
-use std::mem;
-use std::os::raw::{c_int, c_uint, c_void};
-use std::thread;
-use x11::glx::{GLX_VISUAL_ID, GLXPixmap};
-use x11::xlib::{self, Display, Pixmap, VisualID, Window, XCreatePixmap, XDefaultScreen};
-use x11::xlib::{XDefaultScreenOfDisplay, XFree, XGetGeometry, XGetVisualInfo};
-use x11::xlib::{XRootWindowOfScreen, XVisualInfo};
+use std::os::raw::c_void;
+use x11::xlib::{Window, XGetGeometry};
 
-const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
-
-static GLX_PIXMAP_ATTRIBUTES: [c_int; 5] = [
-    glx::TEXTURE_FORMAT_EXT as c_int, glx::TEXTURE_FORMAT_RGBA_EXT as c_int,
-    glx::TEXTURE_TARGET_EXT as c_int, glx::TEXTURE_RECTANGLE_EXT as c_int,
-    0,
-];
+// FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
+const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
@@ -46,12 +34,8 @@ static GLX_PIXMAP_ATTRIBUTES: [c_int; 5] = [
 /// Depending on the platform, each surface may be internally double-buffered.
 /// 
 /// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
-pub struct Surface {
-    pub(crate) size: Size2D<i32>,
-    pub(crate) context_id: ContextID,
-    pub(crate) drawables: SurfaceDrawables,
-    destroyed: bool,
-}
+#[derive(Debug)]
+pub struct Surface(pub(crate) EGLBackedSurface);
 
 /// Represents an OpenGL texture that wraps a surface.
 /// 
@@ -62,50 +46,16 @@ pub struct Surface {
 /// Surface textures are local to a context, but that context does not have to be the same context
 /// as that associated with the underlying surface. The texture must be destroyed with the
 /// `destroy_surface_texture()` method, or a panic will occur.
-pub struct SurfaceTexture {
-    pub(crate) surface: Surface,
-    pub(crate) gl_texture: GLuint,
-    pub(crate) phantom: PhantomData<*const ()>,
-}
+#[derive(Debug)]
+pub struct SurfaceTexture(pub(crate) EGLSurfaceTexture);
 
-pub(crate) enum SurfaceDrawables {
-    Pixmap {
-        glx_pixmap: GLXPixmap,
-        #[allow(dead_code)]
-        pixmap: Pixmap,
-    },
-    Window {
-        window: Window,
-    },
-}
-
-/// A wrapper for an X11 `Window`.
+/// A wrapper for a Wayland surface, with associated size.
 #[derive(Clone)]
 pub struct NativeWidget {
     pub(crate) window: Window,
 }
 
 unsafe impl Send for Surface {}
-
-impl Debug for Surface {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "Surface({:x})", self.id().0)
-    }
-}
-
-impl Debug for SurfaceTexture {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "SurfaceTexture({:?})", self.surface)
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        if !self.destroyed && !thread::panicking() {
-            panic!("Should have destroyed the surface first with `destroy_surface()`!")
-        }
-    }
-}
 
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
@@ -120,54 +70,53 @@ impl Device {
         match surface_type {
             SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
             SurfaceType::Widget { native_widget } => {
-                self.create_widget_surface(context, native_widget)
+                unsafe {
+                    self.create_window_surface(context, native_widget.window)
+                }
             }
         }
     }
 
     fn create_generic_surface(&mut self, context: &Context, size: &Size2D<i32>)
                               -> Result<Surface, Error> {
-        let display_guard = self.connection.lock_display();
-
+        let _guard = self.temporarily_make_context_current(context)?;
         let context_descriptor = self.context_descriptor(context);
-        let glx_fb_config = self.context_descriptor_to_glx_fb_config(&context_descriptor);
-
-        unsafe {
-            let (glx_pixmap, pixmap) = create_pixmaps(display_guard.display(),
-                                                      display_guard.glx_display(),
-                                                      glx_fb_config,
-                                                      size)?;
-            Ok(Surface {
-                drawables: SurfaceDrawables::Pixmap { glx_pixmap, pixmap },
-                size: *size,
-                context_id: context.id,
-                destroyed: false,
-            })
-        }
+        let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+        GL_FUNCTIONS.with(|gl| {
+            Ok(Surface(EGLBackedSurface::new_generic(gl,
+                                                     self.native_connection.egl_display,
+                                                     context.0.egl_context,
+                                                     context.0.id,
+                                                     &context_attributes,
+                                                     size)))
+        })
     }
 
-    fn create_widget_surface(&mut self, context: &Context, native_widget: NativeWidget)
-                             -> Result<Surface, Error> {
-        let display_guard = self.connection.lock_display();
-        unsafe {
-            let (mut root_window, mut x, mut y, mut width, mut height) = (0, 0, 0, 0, 0);
-            let (mut border_width, mut depth) = (0, 0);
-            XGetGeometry(display_guard.display(),
-                         native_widget.window,
-                         &mut root_window,
-                         &mut x,
-                         &mut y,
-                         &mut width,
-                         &mut height,
-                         &mut border_width,
-                         &mut depth);
-            Ok(Surface {
-                size: Size2D::new(width as i32, height as i32),
-                context_id: context.id,
-                drawables: SurfaceDrawables::Window { window: native_widget.window },
-                destroyed: false,
-            })
-        }
+    unsafe fn create_window_surface(&mut self, context: &Context, x11_window: Window)
+                                    -> Result<Surface, Error> {
+        let context_descriptor = self.context_descriptor(context);
+        let egl_config = context::egl_config_from_id(self.native_connection.egl_display,
+                                                     context_descriptor.egl_config_id);
+
+        let display_guard = self.native_connection.lock_display();
+        let (mut root_window, mut x, mut y, mut width, mut height) = (0, 0, 0, 0, 0);
+        let (mut border_width, mut depth) = (0, 0);
+        XGetGeometry(display_guard.display(),
+                     x11_window,
+                     &mut root_window,
+                     &mut x,
+                     &mut y,
+                     &mut width,
+                     &mut height,
+                     &mut border_width,
+                     &mut depth);
+        let size = Size2D::new(width as i32, height as i32);
+
+        Ok(Surface(EGLBackedSurface::new_window(self.native_connection.egl_display,
+                                                egl_config,
+                                                x11_window as *const c_void,
+                                                context.0.id,
+                                                &size)))
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.
@@ -182,51 +131,16 @@ impl Device {
     /// Calling this method on a widget surface returns a `WidgetAttached` error.
     pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
                                   -> Result<SurfaceTexture, (Error, Surface)> {
-        let glx = GLX_FUNCTIONS.lock();
+        let _guard = match self.temporarily_make_context_current(context) {
+            Ok(guard) => guard,
+            Err(err) => return Err((err, surface)),
+        };
 
         GL_FUNCTIONS.with(|gl| {
-            let mut gl_texture = 0;
-            unsafe {
-                let glx_pixmap = match surface.drawables {
-                    SurfaceDrawables::Window { .. } => {
-                        return Err((Error::WidgetAttached, surface));
-                    }
-                    SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
-                };
-
-                drop(self.make_context_current(context));
-
-                // Create a texture.
-                gl.GenTextures(1, &mut gl_texture);
-                debug_assert_ne!(gl_texture, 0);
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, gl_texture);
-
-                // Initialize the texture, for convenience.
-                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                 gl::TEXTURE_MAG_FILTER,
-                                 gl::LINEAR as GLint);
-                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                 gl::TEXTURE_MIN_FILTER,
-                                 gl::LINEAR as GLint);
-                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                 gl::TEXTURE_WRAP_S,
-                                 gl::CLAMP_TO_EDGE as GLint);
-                gl.TexParameteri(gl::TEXTURE_RECTANGLE,
-                                 gl::TEXTURE_WRAP_T,
-                                 gl::CLAMP_TO_EDGE as GLint);
-
-                // Bind the surface's GLX pixmap to the texture.
-                let display_guard = self.connection.lock_display();
-                glx.BindTexImageEXT(display_guard.glx_display(),
-                                    glx_pixmap,
-                                    glx::FRONT_EXT as c_int,
-                                    GLX_PIXMAP_ATTRIBUTES.as_ptr());
-
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
-                debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
+            match surface.0.to_surface_texture(gl) {
+                Ok(surface_texture) => Ok(SurfaceTexture(surface_texture)),
+                Err((err, surface)) => Err((err, Surface(surface))),
             }
-
-            Ok(SurfaceTexture { surface, gl_texture, phantom: PhantomData })
         })
     }
 
@@ -239,25 +153,11 @@ impl Device {
     /// the `drop` method.
     pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
-        if context.id != surface.context_id {
-            return Err(Error::IncompatibleSurface)
-        }
-
-        self.make_no_context_current()?;
-
-        match surface.drawables {
-            SurfaceDrawables::Pixmap { ref mut glx_pixmap, pixmap: _ } => {
-                let display_guard = self.connection.lock_display();
-                unsafe {
-                    GLX_FUNCTIONS.lock().DestroyPixmap(display_guard.glx_display(), *glx_pixmap);
-                    *glx_pixmap = 0;
-                }
-            }
-            SurfaceDrawables::Window { .. } => {}
-        }
-
-        surface.destroyed = true;
-        Ok(())
+        GL_FUNCTIONS.with(|gl| {
+            let egl_display = self.native_connection.egl_display;
+            surface.0.destroy(gl, egl_display, context.0.id)?;
+            Ok(())
+        })
     }
 
     /// Destroys a surface texture and returns the underlying surface.
@@ -267,46 +167,12 @@ impl Device {
     /// 
     /// All surface textures must be explicitly destroyed with this function, or a panic will
     /// occur.
-    pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
+    pub fn destroy_surface_texture(&self, context: &mut Context, surface_texture: SurfaceTexture)
                                    -> Result<Surface, (Error, SurfaceTexture)> {
-        let glx_pixmap = match surface_texture.surface.drawables {
-            SurfaceDrawables::Pixmap { glx_pixmap, .. } => glx_pixmap,
-            SurfaceDrawables::Window { .. } => unreachable!(),
-        };
-
-        let glx = GLX_FUNCTIONS.lock();
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, surface_texture.gl_texture);
-
-                // Release the GLX pixmap.
-                let display_guard = self.connection.lock_display();
-                glx.ReleaseTexImageEXT(display_guard.glx_display(),
-                                       glx_pixmap,
-                                       glx::FRONT_EXT as c_int);
-
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
-                gl.DeleteTextures(1, &mut surface_texture.gl_texture);
-                surface_texture.gl_texture = 0;
-            }
-
-            Ok(surface_texture.surface)
-        })
-    }
-
-    /// Returns the OpenGL texture target needed to read from this surface texture.
-    /// 
-    /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
-    #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
-        SURFACE_GL_TEXTURE_TARGET
-    }
-
-    /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
-    #[inline]
-    pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)
-                                 -> Result<SurfaceDataGuard<'s>, Error> {
-        Err(Error::Unimplemented)
+        match self.temporarily_make_context_current(context) {
+            Ok(_guard) => GL_FUNCTIONS.with(|gl| Ok(Surface(surface_texture.0.destroy(gl)))),
+            Err(err) => Err((err, surface_texture)),
+        }
     }
 
     /// Displays the contents of a widget surface on screen.
@@ -317,18 +183,22 @@ impl Device {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        // TODO(pcwalton): Use the `XPRESENT` extension.
-        unsafe {
-            let glx = GLX_FUNCTIONS.lock();
-            match surface.drawables {
-                SurfaceDrawables::Window { window } => {
-                    let display_guard = self.connection.lock_display();
-                    glx.SwapBuffers(display_guard.glx_display(), window);
-                    Ok(())
-                }
-                SurfaceDrawables::Pixmap { .. } => Err(Error::NoWidgetAttached),
-            }
-        }
+        surface.0.present(self.native_connection.egl_display)
+    }
+
+    /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
+    #[inline]
+    pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)
+                                 -> Result<SurfaceDataGuard<'s>, Error> {
+        Err(Error::Unimplemented)
+    }
+
+    /// Returns the OpenGL texture target needed to read from this surface texture.
+    /// 
+    /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
+    #[inline]
+    pub fn surface_gl_texture_target(&self) -> GLenum {
+        SURFACE_GL_TEXTURE_TARGET
     }
 
     /// Returns various information about the surface, including the framebuffer object needed to
@@ -337,14 +207,8 @@ impl Device {
     /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
     /// on the framebuffer object returned by this function. This framebuffer object may or not be
     /// 0, the default framebuffer, depending on platform.
-    #[inline]
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        SurfaceInfo {
-            size: surface.size,
-            id: surface.id(),
-            context_id: surface.context_id,
-            framebuffer_object: 0,
-        }
+        surface.0.info()
     }
 
     /// Returns the OpenGL texture object containing the contents of this surface.
@@ -352,16 +216,7 @@ impl Device {
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
-        surface_texture.gl_texture
-    }
-}
-
-impl Surface {
-    fn id(&self) -> SurfaceID {
-        match self.drawables {
-            SurfaceDrawables::Pixmap { glx_pixmap, .. } => SurfaceID(glx_pixmap as usize),
-            SurfaceDrawables::Window { window } => SurfaceID(window as usize),
-        }
+        surface_texture.0.texture_object
     }
 }
 
@@ -369,69 +224,3 @@ impl Surface {
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
 }
-
-unsafe fn get_depth_of_visual_with_id(display: *mut Display, visual_id: VisualID)
-                                      -> Option<c_uint> {
-    let mut visual_info_template: XVisualInfo = mem::zeroed();
-    visual_info_template.screen = XDefaultScreen(display);
-    visual_info_template.visualid = visual_id;
-
-    let mut matched_visual_infos_count = 0;
-    let matched_visual_infos = XGetVisualInfo(display,
-                                              xlib::VisualIDMask | xlib::VisualScreenMask,
-                                              &mut visual_info_template,
-                                              &mut matched_visual_infos_count);
-    if matched_visual_infos_count == 0 || matched_visual_infos.is_null() {
-        return None;
-    }
-
-    let depth = (*matched_visual_infos).depth as c_uint;
-    XFree(matched_visual_infos as *mut c_void);
-    Some(depth)
-}
-
-pub(crate) unsafe fn create_pixmaps(display: *mut Display,
-                                    glx_display: *mut GlxDisplay,
-                                    glx_fb_config: GLXFBConfig,
-                                    size: &Size2D<i32>)
-                                    -> Result<(GLXPixmap, Pixmap), Error> {
-    let glx = GLX_FUNCTIONS.lock();
-
-    let mut glx_visual_id = 0;
-    let result = glx.GetFBConfigAttrib(glx_display,
-                                       glx_fb_config,
-                                       GLX_VISUAL_ID,
-                                       &mut glx_visual_id);
-    if result != xlib::Success as c_int {
-        let windowing_api_error = error::glx_error_to_windowing_api_error(result);
-        return Err(Error::SurfaceCreationFailed(windowing_api_error));
-    }
-
-    // Get the depth of the current visual.
-    let depth = get_depth_of_visual_with_id(display, glx_visual_id as VisualID);
-    let depth = depth.expect("GLX FB config has an invalid visual ID!");
-
-    let pixmap = XCreatePixmap(display,
-                               XRootWindowOfScreen(XDefaultScreenOfDisplay(display)),
-                               size.width as u32,
-                               size.height as u32,
-                               depth);
-    if pixmap == 0 {
-        return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-    }
-
-    // The Khronos documentation page states that `attributes` must be null. This is a filthy
-    // lie. In reality, Mesa expects these attributes to be the same as those passed to
-    // `glXBindTexImageEXT`. Following the documentation will result in no errors but will
-    // produce a black texture.
-    let glx_pixmap = glx.CreatePixmap(glx_display,
-                                      glx_fb_config,
-                                      pixmap,
-                                      GLX_PIXMAP_ATTRIBUTES.as_ptr());
-    if glx_pixmap == 0 {
-        return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-    }
-
-    Ok((glx_pixmap, pixmap))
-}
-
