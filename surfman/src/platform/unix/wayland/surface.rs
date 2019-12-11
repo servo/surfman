@@ -112,7 +112,7 @@ impl Device {
 
         Ok(Surface(EGLBackedSurface::new_window(self.native_connection.egl_display,
                                                 egl_config,
-                                                egl_window as *const c_void,
+                                                egl_window as *mut c_void,
                                                 context.0.id,
                                                 size)))
     }
@@ -185,8 +185,8 @@ impl Device {
     /// 
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        surface.0.present(self.native_connection.egl_display)
+    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
+        surface.0.present(self.native_connection.egl_display, context.0.egl_context)
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.

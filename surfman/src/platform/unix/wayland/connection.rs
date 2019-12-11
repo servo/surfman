@@ -115,7 +115,7 @@ impl Connection {
         }
 
         EGL_FUNCTIONS.with(|egl| {
-            let mut display_attributes = [egl::NONE as EGLAttrib];
+            let display_attributes = [egl::NONE as EGLAttrib];
             let egl_display = egl.GetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR,
                                                      wayland_display as *mut c_void,
                                                      display_attributes.as_ptr());

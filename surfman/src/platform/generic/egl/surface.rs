@@ -2,11 +2,12 @@
 //
 //! Functionality common to backends using EGL surfaces.
 
-use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
+use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
 use crate::gl::types::{GLint, GLuint};
 use crate::gl::{self, Gl};
 use crate::gl_utils;
+use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::platform::generic::egl::ffi::EGLClientBuffer;
 use crate::platform::generic::egl::ffi::EGLImageKHR;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
@@ -15,6 +16,7 @@ use crate::platform::generic::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
 use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
 use crate::renderbuffers::Renderbuffers;
 use crate::{ContextAttributes, ContextID, Error, SurfaceID, SurfaceInfo};
+use super::context::CurrentContextGuard;
 use super::device::EGL_FUNCTIONS;
 
 use euclid::default::Size2D;
@@ -136,18 +138,18 @@ impl EGLBackedSurface {
 
     pub(crate) fn new_window(egl_display: EGLDisplay,
                              egl_config: EGLConfig,
-                             native_window: *const c_void,
+                             native_window: *mut c_void,
                              context_id: ContextID,
                              size: &Size2D<i32>)
                              -> EGLBackedSurface {
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
-                let egl_surface = egl.CreateWindowSurface(egl_display,
-                                                          egl_config,
-                                                          native_window,
-                                                          ptr::null());
+                let window_surface_attribs = [egl::NONE as EGLAttrib];
+                let egl_surface = egl.CreatePlatformWindowSurface(egl_display,
+                                                                  egl_config,
+                                                                  native_window,
+                                                                  window_surface_attribs.as_ptr());
                 assert_ne!(egl_surface, egl::NO_SURFACE);
-
 
                 EGLBackedSurface {
                     context_id,
@@ -215,12 +217,25 @@ impl EGLBackedSurface {
     }
 
     // TODO(pcwalton): Damage regions.
-    pub(crate) fn present(&self, egl_display: EGLDisplay) -> Result<(), Error> {
+    pub(crate) fn present(&self, egl_display: EGLDisplay, egl_context: EGLContext)
+                          -> Result<(), Error> {
         unsafe {
             match self.objects {
                 EGLSurfaceObjects::Window { egl_surface, .. } => {
-                    EGL_FUNCTIONS.with(|egl| egl.SwapBuffers(egl_display, egl_surface));
-                    Ok(())
+                    // The surface must be bound to the current context in EGL 1.4. Temporarily
+                    // make this surface current to enforce this.
+                    let _guard = CurrentContextGuard::new();
+
+                    EGL_FUNCTIONS.with(|egl| {
+                        egl.MakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
+
+                        let ok = egl.SwapBuffers(egl_display, egl_surface);
+                        if ok != egl::FALSE {
+                            Ok(())
+                        } else {
+                            Err(Error::PresentFailed(egl.GetError().to_windowing_api_error()))
+                        }
+                    })
                 }
                 EGLSurfaceObjects::TextureImage { .. } => Err(Error::NoWidgetAttached),
             }

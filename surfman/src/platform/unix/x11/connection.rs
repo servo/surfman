@@ -5,7 +5,6 @@
 use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::egl;
 use crate::error::Error;
-use crate::glx::types::Display as GlxDisplay;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_PLATFORM_X11_KHR;
 use crate::platform::unix::generic::device::Adapter;

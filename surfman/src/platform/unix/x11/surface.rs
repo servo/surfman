@@ -92,7 +92,7 @@ impl Device {
         })
     }
 
-    unsafe fn create_window_surface(&mut self, context: &Context, x11_window: Window)
+    unsafe fn create_window_surface(&mut self, context: &Context, mut x11_window: Window)
                                     -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = context::egl_config_from_id(self.native_connection.egl_display,
@@ -114,7 +114,7 @@ impl Device {
 
         Ok(Surface(EGLBackedSurface::new_window(self.native_connection.egl_display,
                                                 egl_config,
-                                                x11_window as *const c_void,
+                                                &mut x11_window as *mut Window as *mut c_void,
                                                 context.0.id,
                                                 &size)))
     }
@@ -182,8 +182,8 @@ impl Device {
     /// 
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        surface.0.present(self.native_connection.egl_display)
+    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
+        surface.0.present(self.native_connection.egl_display, context.0.egl_context)
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
