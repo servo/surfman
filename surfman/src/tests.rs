@@ -2,6 +2,8 @@
 //
 //! Unit tests.
 
+#![allow(missing_docs)]
+
 use crate::gl::types::{GLenum, GLuint};
 use crate::gl::{self, Gl};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
@@ -32,16 +34,16 @@ static GL_ES_VERSIONS: [GLVersion; 4] = [
     GLVersion { major: 3, minor: 2 },
 ];
 
-#[test]
-fn test_adapter_creation() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_adapter_creation() {
     let connection = Connection::new().unwrap();
     connection.create_hardware_adapter().unwrap();
     connection.create_low_power_adapter().unwrap();
     connection.create_software_adapter().unwrap();
 }
 
-#[test]
-fn test_device_creation() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_device_creation() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
     match connection.create_device(&adapter) {
@@ -54,8 +56,8 @@ fn test_device_creation() {
     }
 }
 
-#[test]
-fn test_device_accessors() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_device_accessors() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().unwrap();
     let device = match connection.create_device(&adapter) {
@@ -73,8 +75,8 @@ fn test_device_accessors() {
 
 // Tests that all combinations of flags result in the creation of valid context descriptors and
 // contexts.
-#[test]
-fn test_context_creation() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_context_creation() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
     let mut device = match connection.create_device(&adapter) {
@@ -140,8 +142,8 @@ fn test_context_creation() {
 }
 
 // Tests that newly-created contexts are not immediately made current (issue #7).
-#[test]
-fn test_newly_created_contexts_are_not_current() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_newly_created_contexts_are_not_current() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
     let mut device = match connection.create_device(&adapter) {
@@ -198,8 +200,8 @@ fn test_newly_created_contexts_are_not_current() {
 }
 
 // Tests that generic surfaces can be created.
-#[test]
-fn test_generic_surface_creation() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_generic_surface_creation() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
     let mut device = match connection.create_device(&adapter) {
@@ -250,8 +252,8 @@ fn test_generic_surface_creation() {
 }
 
 // Tests that basic GL commands work.
-#[test]
-fn test_gl() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_gl() {
     let mut env = match BasicEnvironment::new() {
         None => return,
         Some(env) => env,
@@ -325,8 +327,8 @@ fn test_gl() {
     env.device.destroy_context(&mut env.context).unwrap();
 }
 
-#[test]
-fn test_surface_texture_blit_framebuffer() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_surface_texture_blit_framebuffer() {
     let mut env = match BasicEnvironment::new() {
         None => return,
         Some(env) => env,
@@ -379,8 +381,8 @@ fn test_surface_texture_blit_framebuffer() {
     }
 }
 
-#[test]
-fn test_cross_device_surface_texture_blit_framebuffer() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_cross_device_surface_texture_blit_framebuffer() {
     let mut env = match BasicEnvironment::new() {
         None => return,
         Some(env) => env,
@@ -435,8 +437,8 @@ fn test_cross_device_surface_texture_blit_framebuffer() {
     }
 }
 
-#[test]
-fn test_cross_thread_surface_texture_blit_framebuffer() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_cross_thread_surface_texture_blit_framebuffer() {
     let mut env = match BasicEnvironment::new() {
         None => return,
         Some(env) => env,
@@ -505,8 +507,8 @@ fn test_cross_thread_surface_texture_blit_framebuffer() {
 }
 
 // Tests that surface textures are not upside-down.
-#[test]
-fn test_surface_texture_right_side_up() {
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_surface_texture_right_side_up() {
     let mut env = match BasicEnvironment::new() {
         None => return,
         Some(env) => env,

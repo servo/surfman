@@ -174,9 +174,11 @@ impl Device {
 
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        unsafe {
-            ContextDescriptor::from_egl_context(self.egl_display, context.egl_context)
-        }
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                ContextDescriptor::from_egl_context(gl, self.egl_display, context.egl_context)
+            }
+        })
     }
 
     /// Makes the context the current OpenGL context for this thread.

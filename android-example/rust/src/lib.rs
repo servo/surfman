@@ -7,6 +7,8 @@ use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue};
 use jni::{JNIEnv, JavaVM};
 use std::cell::{Cell, RefCell};
 use std::mem;
+use std::thread;
+use surfman::platform::android::tests;
 use surfman::{Connection, NativeContext, NativeDevice};
 
 #[path = "../../../surfman/examples/threads.rs"]
@@ -42,6 +44,27 @@ pub unsafe extern "system" fn
         Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_tick(_env: JNIEnv,
                                                                                   _class: JClass) {
     APP.with(|app| app.borrow_mut().as_mut().unwrap().tick(false));
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_runTests(
+            _env: JNIEnv,
+            _class: JClass) {
+    run_test(tests::test_context_creation);
+    run_test(tests::test_cross_device_surface_texture_blit_framebuffer);
+    run_test(tests::test_cross_thread_surface_texture_blit_framebuffer);
+    run_test(tests::test_device_accessors);
+    run_test(tests::test_device_creation);
+    run_test(tests::test_generic_surface_creation);
+    run_test(tests::test_gl);
+    run_test(tests::test_newly_created_contexts_are_not_current);
+    run_test(tests::test_surface_texture_blit_framebuffer);
+    run_test(tests::test_surface_texture_right_side_up);
+
+    fn run_test(test_function: extern "Rust" fn()) {
+        thread::spawn(move || test_function());
+    }
 }
 
 struct JavaResourceLoader {

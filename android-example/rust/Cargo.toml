@@ -23,3 +23,4 @@ features = []
 
 [dependencies.surfman]
 path = "../../surfman"
+features = ["sm-test"]

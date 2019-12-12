@@ -11,3 +11,7 @@ mod ffi;
 
 #[path = "../../implementation/mod.rs"]
 mod implementation;
+
+#[cfg(feature = "sm-test")]
+#[path = "../../tests.rs"]
+pub mod tests;
