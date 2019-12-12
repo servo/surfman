@@ -2,6 +2,10 @@
 //
 //! Unit tests.
 
+// NB: If you add tests to this file, add them to the Android
+// `Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_runTests` function in
+// `android-example/rust/src/lib.rs` too.
+
 #![allow(missing_docs)]
 
 use crate::gl::types::{GLenum, GLuint};
@@ -562,6 +566,96 @@ pub fn test_surface_texture_right_side_up() {
     }
 }
 
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_depth_and_stencil() {
+    let connection = Connection::new().unwrap();
+    let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
+    let mut device = match connection.create_device(&adapter) {
+        Ok(device) => device,
+        Err(Error::RequiredExtensionUnavailable) => {
+            // Can't run these tests on this hardware.
+            return;
+        }
+        Err(err) => panic!("Failed to create device: {:?}", err),
+    };
+
+    // Check depth.
+
+    let depth_context_descriptor = device.create_context_descriptor(&ContextAttributes {
+        version: GLVersion::new(3, 0),
+        flags: ContextAttributeFlags::DEPTH,
+    }).unwrap();
+
+    let mut depth_context = device.create_context(&depth_context_descriptor).unwrap();
+    let depth_surface = make_surface(&mut device, &depth_context);
+    device.bind_surface_to_context(&mut depth_context, depth_surface).unwrap();
+    device.make_context_current(&depth_context).unwrap();
+
+    let gl = Gl::load_with(|symbol| device.get_proc_address(&depth_context, symbol));
+
+    unsafe {
+        let framebuffer_object = device.context_surface_info(&depth_context)
+                                        .unwrap()
+                                        .unwrap()
+                                        .framebuffer_object;
+        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl.Viewport(0, 0, 640, 480);
+
+        gl.ClearDepth(0.5);
+        gl.Clear(gl::DEPTH_BUFFER_BIT);
+
+        let mut depth_value: f32 = -1.0;
+        gl.ReadPixels(0,
+                      0,
+                      1,
+                      1,
+                      gl::DEPTH_COMPONENT,
+                      gl::FLOAT,
+                      (&mut depth_value) as *mut f32 as *mut c_void);
+        assert!(approx_eq(depth_value, 0.5));
+    }
+
+    device.destroy_context(&mut depth_context).unwrap();
+
+    // Check stencil.
+
+    let stencil_context_descriptor = device.create_context_descriptor(&ContextAttributes {
+        version: GLVersion::new(3, 0),
+        flags: ContextAttributeFlags::STENCIL,
+    }).unwrap();
+
+    let mut stencil_context = device.create_context(&stencil_context_descriptor).unwrap();
+    let stencil_surface = make_surface(&mut device, &stencil_context);
+    device.bind_surface_to_context(&mut stencil_context, stencil_surface).unwrap();
+    device.make_context_current(&stencil_context).unwrap();
+
+    let gl = Gl::load_with(|symbol| device.get_proc_address(&stencil_context, symbol));
+
+    unsafe {
+        let framebuffer_object = device.context_surface_info(&stencil_context)
+                                       .unwrap()
+                                       .unwrap()
+                                       .framebuffer_object;
+        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl.Viewport(0, 0, 640, 480);
+
+        gl.ClearStencil(99);
+        gl.Clear(gl::STENCIL_BUFFER_BIT);
+
+        let mut stencil_value: u8 = 200;
+        gl.ReadPixels(0,
+                      0,
+                      1,
+                      1,
+                      gl::STENCIL_INDEX,
+                      gl::UNSIGNED_BYTE,
+                      (&mut stencil_value) as *mut u8 as *mut c_void);
+        assert_eq!(stencil_value, 99);
+    }
+
+    device.destroy_context(&mut stencil_context).unwrap();
+}
+
 fn bind_context_fbo(gl: &Gl, device: &Device, context: &Context) {
     unsafe {
         gl.BindFramebuffer(gl::FRAMEBUFFER, context_fbo(device, context)); check_gl(&gl);
@@ -709,4 +803,8 @@ fn check_gl(gl: &Gl) {
     unsafe {
         assert_eq!(gl.GetError(), gl::NO_ERROR);
     }
+}
+
+fn approx_eq(a: f32, b: f32) -> bool {
+    f32::abs(a - b) < 0.001
 }

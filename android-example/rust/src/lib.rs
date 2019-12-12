@@ -46,6 +46,7 @@ pub unsafe extern "system" fn
     APP.with(|app| app.borrow_mut().as_mut().unwrap().tick(false));
 }
 
+// NB: New tests should be added here.
 #[no_mangle]
 pub unsafe extern "system" fn
         Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_runTests(
@@ -54,6 +55,7 @@ pub unsafe extern "system" fn
     run_test(tests::test_context_creation);
     run_test(tests::test_cross_device_surface_texture_blit_framebuffer);
     run_test(tests::test_cross_thread_surface_texture_blit_framebuffer);
+    run_test(tests::test_depth_and_stencil);
     run_test(tests::test_device_accessors);
     run_test(tests::test_device_creation);
     run_test(tests::test_generic_surface_creation);
