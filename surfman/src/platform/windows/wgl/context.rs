@@ -9,8 +9,9 @@ use crate::{SurfaceInfo, WindowingApiError};
 use super::device::{DCGuard, Device, HiddenWindow};
 use super::surface::{Surface, Win32Objects};
 
+use crate::Gl;
 use crate::gl::types::{GLenum, GLint, GLuint};
-use crate::gl::{self, Gl};
+use crate::gl;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 use std::mem;

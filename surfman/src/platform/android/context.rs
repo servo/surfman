@@ -5,13 +5,12 @@
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
 use crate::egl::types::{EGLConfig, EGLContext, EGLSurface, EGLint};
 use crate::egl;
-use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributes, Error, SurfaceInfo};
+use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
 use super::device::Device;
 use super::surface::{Surface, SurfaceObjects};
 
@@ -145,12 +144,10 @@ impl Device {
             if let Framebuffer::Surface(mut target) = mem::replace(&mut context.framebuffer,
                                                                    Framebuffer::None) {
                 self.destroy_surface(context, &mut target)?;
-
             }
 
             EGL_FUNCTIONS.with(|egl| {
-                let result = egl.DestroySurface(self.egl_display,
-                                                context.pbuffer);
+                let result = egl.DestroySurface(self.egl_display, context.pbuffer);
                 assert_ne!(result, egl::FALSE);
                 context.pbuffer = egl::NO_SURFACE;
 
@@ -161,7 +158,6 @@ impl Device {
 
                 if context.context_is_owned {
                     let result = egl.DestroyContext(self.egl_display, context.egl_context);
-                    egl.DestroyContext(self.egl_display, context.egl_context);
                     assert_ne!(result, egl::FALSE);
                 }
 

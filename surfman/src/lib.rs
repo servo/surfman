@@ -57,6 +57,11 @@ pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, Sys
 
 pub mod macros;
 
+#[cfg(target_os = "android")]
+pub(crate) use crate::gl::Gles2 as Gl;
+#[cfg(not(target_os = "android"))]
+pub(crate) use crate::gl::Gl;
+
 mod gl_utils;
 mod renderbuffers;
 

@@ -5,9 +5,8 @@
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
 use crate::egl;
-use crate::gl::Gl;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, EGLBackedContext};
-use crate::{ContextAttributes, Error, SurfaceInfo};
+use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
 use super::device::Device;
 use super::surface::Surface;
 

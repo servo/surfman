@@ -4,8 +4,9 @@
 
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
+use crate::Gl;
 use crate::gl::types::{GLint, GLuint};
-use crate::gl::{self, Gl};
+use crate::gl;
 use crate::gl_utils;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::platform::generic::egl::ffi::EGLClientBuffer;

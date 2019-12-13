@@ -2,9 +2,10 @@
 //
 //! A utility module for backends that wrap surfaces in OpenGL FBOs.
 
+use crate::Gl;
 use crate::context::{ContextAttributeFlags, ContextAttributes};
 use crate::gl::types::GLuint;
-use crate::gl::{self, Gl};
+use crate::gl;
 
 use euclid::default::Size2D;
 
@@ -104,6 +105,7 @@ impl Renderbuffers {
     pub(crate) fn destroy(&mut self, gl: &Gl) {
         unsafe {
             gl.BindRenderbuffer(gl::RENDERBUFFER, 0);
+
             match *self {
                 Renderbuffers::CombinedDepthStencil(ref mut renderbuffer) => {
                     if *renderbuffer != 0 {

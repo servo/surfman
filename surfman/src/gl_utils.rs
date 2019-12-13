@@ -2,8 +2,9 @@
 //
 //! Various OpenGL utilities used by the different backends.
 
+use crate::Gl;
 use crate::gl::types::{GLenum, GLint, GLuint};
-use crate::gl::{self, Gl};
+use crate::gl;
 
 #[allow(dead_code)]
 pub(crate) fn create_and_bind_framebuffer(gl: &Gl, texture_target: GLenum, texture_object: GLuint)

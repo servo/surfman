@@ -9,8 +9,8 @@
 #![allow(missing_docs)]
 
 use crate::gl::types::{GLenum, GLuint};
-use crate::gl::{self, Gl};
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, SurfaceAccess};
+use crate::gl;
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, Gl, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
 use super::connection::Connection;
 use super::context::{Context, ContextDescriptor};
@@ -566,6 +566,8 @@ pub fn test_surface_texture_right_side_up() {
     }
 }
 
+// Can't readback from the depth or stencil buffer on OpenGL ES, so just disable this test.
+#[cfg(not(target_os = "android"))]
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_depth_and_stencil() {
     let connection = Connection::new().unwrap();

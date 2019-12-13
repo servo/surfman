@@ -7,12 +7,13 @@ use crate::threads::App;
 use crate::threads::common::ResourceLoader;
 
 use android_logger::Config;
+use euclid::default::Size2D;
 use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue};
 use jni::{JNIEnv, JavaVM};
 use log::Level;
 use std::cell::{Cell, RefCell};
 use std::mem;
-use std::thread;
+use std::thread::{self, JoinHandle};
 use surfman::platform::android::tests;
 use surfman::{Connection, NativeContext, NativeDevice};
 
@@ -35,6 +36,8 @@ pub unsafe extern "system" fn
 
     android_logger::init_once(Config::default().with_min_level(Level::Trace));
 
+    let window_size = Size2D::new(width, height);
+
     let connection = Connection::new().unwrap();
     let device = connection.create_device_from_native_device(NativeDevice::current()).unwrap();
     let context = device.create_context_from_native_context(NativeContext::current()).unwrap();
@@ -42,7 +45,12 @@ pub unsafe extern "system" fn
 
     APP.with(|app| {
         let resource_loader = Box::new(JavaResourceLoader::new(env, loader));
-        *app.borrow_mut() = Some(App::new(connection, adapter, device, context, resource_loader))
+        *app.borrow_mut() = Some(App::new(connection,
+                                          adapter,
+                                          device,
+                                          context,
+                                          resource_loader,
+                                          window_size))
     });
 }
 
@@ -59,20 +67,32 @@ pub unsafe extern "system" fn
         Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_runTests(
             _env: JNIEnv,
             _class: JClass) {
-    run_test(tests::test_context_creation);
-    run_test(tests::test_cross_device_surface_texture_blit_framebuffer);
-    run_test(tests::test_cross_thread_surface_texture_blit_framebuffer);
-    run_test(tests::test_depth_and_stencil);
-    run_test(tests::test_device_accessors);
-    run_test(tests::test_device_creation);
-    run_test(tests::test_generic_surface_creation);
-    run_test(tests::test_gl);
-    run_test(tests::test_newly_created_contexts_are_not_current);
-    run_test(tests::test_surface_texture_blit_framebuffer);
-    run_test(tests::test_surface_texture_right_side_up);
+    let tests = vec![
+        run_test(tests::test_context_creation, "test_context_creation"),
+        run_test(tests::test_cross_device_surface_texture_blit_framebuffer,
+                "test_cross_device_surface_texture_blit_framebuffer"),
+        run_test(tests::test_cross_thread_surface_texture_blit_framebuffer,
+                "test_cross_thread_surface_texture_blit_framebuffer"),
+        run_test(tests::test_device_accessors, "test_device_accessors"),
+        run_test(tests::test_device_creation, "test_device_creation"),
+        run_test(tests::test_generic_surface_creation, "test_generic_surface_creation"),
+        run_test(tests::test_gl, "test_gl"),
+        run_test(tests::test_newly_created_contexts_are_not_current,
+                "test_newly_created_contexts_are_not_current"),
+        run_test(tests::test_surface_texture_blit_framebuffer,
+                 "test_surface_texture_blit_framebuffer"),
+        run_test(tests::test_surface_texture_right_side_up,
+                 "test_surface_texture_right_side_up"),
+    ];
 
-    fn run_test(test_function: extern "Rust" fn()) {
-        thread::spawn(move || test_function());
+    tests.into_iter().for_each(|test| test.join().unwrap());
+
+    fn run_test(test_function: extern "Rust" fn(), test_name: &'static str) -> JoinHandle<()> {
+        thread::spawn(move || {
+            info!("TEST-START: {}", test_name);
+            test_function();
+            info!("TEST-PASS: {}", test_name);
+        })
     }
 }
 

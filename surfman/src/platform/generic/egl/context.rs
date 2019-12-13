@@ -5,9 +5,8 @@
 use crate::context::CREATE_CONTEXT_MUTEX;
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
-use crate::gl::Gl;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion, SurfaceInfo};
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion, Gl, SurfaceInfo};
 use super::device::EGL_FUNCTIONS;
 use super::error::ToWindowingApiError;
 use super::surface::{EGLBackedSurface, ExternalEGLSurfaces};

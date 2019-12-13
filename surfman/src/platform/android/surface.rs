@@ -340,6 +340,7 @@ impl Device {
                         gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
                         gl.DeleteFramebuffers(1, framebuffer_object);
                         *framebuffer_object = 0;
+
                         renderbuffers.destroy(gl);
 
                         gl.DeleteTextures(1, texture_object);

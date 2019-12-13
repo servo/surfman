@@ -3,10 +3,9 @@
 //! Wrapper for Core OpenGL contexts.
 
 use crate::context::{CREATE_CONTEXT_MUTEX, ContextID};
-use crate::gl::Gl;
 use crate::gl_utils;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, Gl, SurfaceInfo};
 use super::device::Device;
 use super::error::ToWindowingApiError;
 use super::ffi::{CGLReleaseContext, CGLRetainContext};

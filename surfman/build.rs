@@ -21,19 +21,14 @@ fn main() {
         registry.write_bindings(StructGenerator, &mut file).unwrap();
     }
 
-    // Generate GLX bindings.
-    if cfg!(feature = "sm-x11") ||
-            (target_family == "unix" && target_os != "macos" && target_os != "android") {
-        let mut file = File::create(&dest.join("glx_bindings.rs")).unwrap();
-        Registry::new(Api::Glx, (1, 4), Profile::Core, Fallbacks::All, [
-            "GLX_ARB_create_context",
-            "GLX_EXT_texture_from_pixmap",
-        ]).write_bindings(StructGenerator, &mut file).unwrap();
-        println!("cargo:rustc-link-lib=GL");
-    }
-
     // Generate GL bindings.
-    let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
-    let registry = Registry::new(Api::Gl, (3, 3), Profile::Core, Fallbacks::All, []);
-    registry.write_bindings(StructGenerator, &mut file).unwrap();
+    if target_os == "android" {
+        let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
+        let registry = Registry::new(Api::Gles2, (3, 0), Profile::Core, Fallbacks::All, []);
+        registry.write_bindings(StructGenerator, &mut file).unwrap();
+    } else {
+        let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
+        let registry = Registry::new(Api::Gl, (3, 3), Profile::Core, Fallbacks::All, []);
+        registry.write_bindings(StructGenerator, &mut file).unwrap();
+    }
 }

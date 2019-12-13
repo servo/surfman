@@ -52,11 +52,6 @@ const SPHERE_RADIUS: f32 = 96.0;
 
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1 ];
 
-static BLIT_TRANSFORM: [f32; 4] = [
-    SUBSCREEN_WIDTH as f32 / WINDOW_WIDTH as f32 * 2.0, 0.0,
-    0.0, SUBSCREEN_HEIGHT as f32 / WINDOW_HEIGHT as f32 * 2.0,
-];
-
 static CHECK_TRANSFORM: [f32; 4] = [
     SUBSCREEN_WIDTH as f32 / CHECK_SIZE as f32, 0.0,
     0.0, SUBSCREEN_HEIGHT as f32 / CHECK_SIZE as f32,
@@ -91,8 +86,9 @@ static BACKGROUND_COLOR: [f32; 4] = [
 fn main() {
     let mut event_loop = EventsLoop::new();
     let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
+    let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let logical_size =
-        PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical(dpi);
+        PhysicalSize::new(window_size.width as f64, window_size.height as f64).to_logical(dpi);
     let window = WindowBuilder::new().with_title("Multithreaded example")
                                      .with_dimensions(logical_size)
                                      .build(&event_loop)
@@ -116,8 +112,12 @@ fn main() {
     device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();
 
-    let mut app =
-        App::new(connection, adapter, device, context, Box::new(FilesystemResourceLoader));
+    let mut app = App::new(connection,
+                           adapter,
+                           device,
+                           context,
+                           Box::new(FilesystemResourceLoader),
+                           window_size);
     let mut exit = false;
 
     while !exit {
@@ -148,6 +148,7 @@ pub struct App {
     context: Context,
     texture: Option<SurfaceTexture>,
     frame: Frame,
+    window_size: Size2D<i32>,
 }
 
 impl App {
@@ -155,7 +156,8 @@ impl App {
                adapter: Adapter,
                device: Device,
                mut context: Context,
-               resource_loader: Box<dyn ResourceLoader + Send>)
+               resource_loader: Box<dyn ResourceLoader + Send>,
+               window_size: Size2D<i32>)
                -> App {
         let context_descriptor = device.context_descriptor(&context);
 
@@ -178,6 +180,7 @@ impl App {
             worker_thread(connection,
                           adapter,
                           context_descriptor,
+                          window_size,
                           resource_loader,
                           worker_to_main_sender,
                           worker_from_main_receiver)
@@ -201,6 +204,7 @@ impl App {
             texture,
             frame,
             context,
+            window_size,
         }
     }
 
@@ -229,7 +233,7 @@ impl App {
             };
 
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-            gl::Viewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+            gl::Viewport(0, 0, self.window_size.width, self.window_size.height);
 
             gl::ClearColor(0.0, 0.0, 1.0, 1.0); ck();
             gl::Clear(gl::COLOR_BUFFER_BIT); ck();
@@ -270,15 +274,20 @@ impl App {
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
 
             // Draw subscreen.
-            let subscreen_translation =
-                Point2D::new(self.frame.viewport_origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
-                             self.frame.viewport_origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
+            let blit_transform: [f32; 4] = [
+                SUBSCREEN_WIDTH as f32 / self.window_size.width as f32 * 2.0, 0.0,
+                0.0, SUBSCREEN_HEIGHT as f32 / self.window_size.height as f32 * 2.0,
+            ];
+
+            let subscreen_translation = Point2D::new(
+                self.frame.viewport_origin.x / self.window_size.width as f32 * 2.0 - 1.0,
+                self.frame.viewport_origin.y / self.window_size.height as f32 * 2.0 - 1.0);
             gl::BindVertexArray(self.blit_vertex_array.object); ck();
             gl::UseProgram(self.blit_vertex_array.blit_program.program.object); ck();
             gl::UniformMatrix2fv(self.blit_vertex_array.blit_program.transform_uniform,
                                  1,
                                  gl::FALSE,
-                                 BLIT_TRANSFORM.as_ptr());
+                                 blit_transform.as_ptr());
             gl::Uniform2fv(self.blit_vertex_array.blit_program.translation_uniform,
                            1,
                            [subscreen_translation.x, subscreen_translation.y].as_ptr());
@@ -314,6 +323,7 @@ impl App {
 fn worker_thread(connection: Connection,
                  adapter: Adapter,
                  context_descriptor: ContextDescriptor,
+                 window_size: Size2D<i32>,
                  resource_loader: Box<dyn ResourceLoader>,
                  worker_to_main_sender: Sender<Frame>,
                  worker_from_main_receiver: Receiver<Surface>) {
@@ -332,8 +342,9 @@ fn worker_thread(connection: Connection,
                                              &*resource_loader);
 
     // Initialize our origin and size.
-    let ball_origin = Point2D::new(WINDOW_WIDTH as f32 * 0.5 - BALL_WIDTH as f32 * 0.5,
-                                   WINDOW_HEIGHT as f32 * 0.65 - BALL_HEIGHT as f32 * 0.5);
+    let ball_origin =
+        Point2D::new(window_size.width as f32 * 0.5 - BALL_WIDTH as f32 * 0.5,
+                     window_size.height as f32 * 0.65 - BALL_HEIGHT as f32 * 0.5);
     let ball_size = Size2D::new(BALL_WIDTH as f32, BALL_HEIGHT as f32);
     let mut ball_rect = Rect::new(ball_origin, ball_size);
     let mut ball_velocity = Vector2D::new(INITIAL_VELOCITY_X, INITIAL_VELOCITY_Y);
@@ -432,8 +443,8 @@ fn worker_thread(connection: Connection,
             ball_rect.origin.x = 0.0;
             ball_velocity.x = f32::abs(ball_velocity.x);
         }
-        if ball_rect.max_x() >= WINDOW_WIDTH as f32 {
-            ball_rect.origin.x = (WINDOW_WIDTH - BALL_WIDTH) as f32;
+        if ball_rect.max_x() >= window_size.width as f32 {
+            ball_rect.origin.x = (window_size.width - BALL_WIDTH) as f32;
             ball_velocity.x = -f32::abs(ball_velocity.x);
         }
 

@@ -2,7 +2,8 @@
 //
 //! OpenGL information.
 
-use crate::gl::{self, Gl};
+use crate::Gl;
+use crate::gl;
 
 use std::ffi::CStr;
 use std::os::raw::c_char;

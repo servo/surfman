@@ -2,7 +2,8 @@
 //
 //! Declarations common to all platform contexts.
 
-use crate::gl::{self, Gl};
+use crate::Gl;
+use crate::gl;
 use crate::info::GLVersion;
 
 use std::sync::Mutex;
@@ -63,6 +64,12 @@ impl ContextAttributes {
     }
 }
 
+#[cfg(target_os = "android")]
+pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
+    false
+}
+
+#[cfg(not(target_os = "android"))]
 pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
     unsafe {
         let mut context_profile_mask = 0;
