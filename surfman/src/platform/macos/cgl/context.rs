@@ -85,7 +85,7 @@ pub struct Context {
 }
 
 /// Wraps a native CGL context object.
-pub struct NativeContext(CGLContextObj);
+pub struct NativeContext(pub CGLContextObj);
 
 impl Drop for Context {
     #[inline]
