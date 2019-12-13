@@ -566,7 +566,6 @@ pub fn test_surface_texture_right_side_up() {
     }
 }
 
-// Can't readback from the depth or stencil buffer on OpenGL ES, so just disable this test.
 #[cfg(not(target_os = "android"))]
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_depth_and_stencil() {
@@ -580,6 +579,11 @@ pub fn test_depth_and_stencil() {
         }
         Err(err) => panic!("Failed to create device: {:?}", err),
     };
+
+    // Can't readback from the depth or stencil buffer on OpenGL ES, so just disable this test.
+    if device.gl_api() == GLApi::GLES {
+        return;
+    }
 
     // Check depth.
 
