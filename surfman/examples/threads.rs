@@ -185,9 +185,7 @@ impl App {
 
         // Fetch our initial surface.
         let mut frame = match main_from_worker_receiver.recv() {
-            Err(_) => {
-                panic!();
-            }
+            Err(_) => panic!(),
             Ok(frame) => frame,
         };
         let texture = Some(device.create_surface_texture(&mut context,
@@ -225,11 +223,10 @@ impl App {
         unsafe {
             self.device.make_context_current(&self.context).unwrap();
 
-            let framebuffer_object = self.device
-                                         .context_surface_info(&self.context)
-                                         .unwrap()
-                                         .unwrap()
-                                         .framebuffer_object;
+            let framebuffer_object = match self.device.context_surface_info(&self.context) {
+                Ok(Some(surface_info)) => surface_info.framebuffer_object,
+                _ => 0,
+            };
 
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
             gl::Viewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);

@@ -90,7 +90,7 @@ impl Device {
             let egl_context = context::create_context(egl_display, descriptor)?;
 
             // Create a dummy pbuffer.
-            let pbuffer = context::create_dummy_pbuffer(egl_display, egl_config);
+            let pbuffer = context::create_dummy_pbuffer(egl_display, egl_context);
 
             // Wrap up the EGL context.
             let context = Context {

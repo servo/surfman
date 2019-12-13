@@ -1,10 +1,15 @@
 // surfman/android-example/rust/src/lib.rs
 
+#[macro_use]
+extern crate log;
+
 use crate::threads::App;
 use crate::threads::common::ResourceLoader;
 
+use android_logger::Config;
 use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue};
 use jni::{JNIEnv, JavaVM};
+use log::Level;
 use std::cell::{Cell, RefCell};
 use std::mem;
 use std::thread;
@@ -27,6 +32,8 @@ pub unsafe extern "system" fn
                                                                                   width: i32,
                                                                                   height: i32) {
     ATTACHED_TO_JNI.with(|attached_to_jni| attached_to_jni.set(true));
+
+    android_logger::init_once(Config::default().with_min_level(Level::Trace));
 
     let connection = Connection::new().unwrap();
     let device = connection.create_device_from_native_device(NativeDevice::current()).unwrap();
