@@ -69,11 +69,6 @@ mod gl {
     include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
 }
 
-#[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
-mod glx {
-    include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
-}
-
 #[cfg(any(target_os = "android", all(target_os = "windows", feature = "sm-angle"), unix))]
 #[allow(non_camel_case_types)]
 mod egl {
