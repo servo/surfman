@@ -187,6 +187,9 @@ impl Device {
                                        -> Result<Option<Surface>, Error> {
         GL_FUNCTIONS.with(|gl| {
             unsafe {
+                // Flush to avoid races on Mesa/Intel and possibly other GPUs.
+                gl.Flush();
+
                 context.0
                        .unbind_surface(gl, self.native_connection.egl_display)
                        .map(|maybe_surface| maybe_surface.map(Surface))
