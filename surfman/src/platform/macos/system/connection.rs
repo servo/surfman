@@ -135,3 +135,14 @@ impl Connection {
         }
     }
 }
+
+impl NativeConnection {
+    /// Returns the current native connection.
+    ///
+    /// This is a no-op on macOS, because Core Graphics window server connections are implicit in
+    /// the platform APIs.
+    #[inline]
+    pub fn current() -> NativeConnection {
+        NativeConnection
+    }
+}

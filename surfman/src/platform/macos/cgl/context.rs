@@ -484,3 +484,20 @@ impl Drop for NativeContext {
         }
     }
 }
+
+impl NativeContext {
+    /// Returns the current context, wrapped as a `NativeContext`.
+    ///
+    /// If there is no current context, this returns a `NoCurrentContext` error.
+    #[inline]
+    pub fn current() -> Result<NativeContext, Error> {
+        unsafe {
+            let cgl_context = CGLGetCurrentContext();
+            if !cgl_context.is_null() {
+                Ok(NativeContext(cgl_context))
+            } else {
+                Err(Error::NoCurrentContext)
+            }
+        }
+    }
+}
