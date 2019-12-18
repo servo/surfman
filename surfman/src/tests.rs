@@ -12,8 +12,8 @@ use crate::gl::types::{GLenum, GLuint};
 use crate::gl;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, Gl, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
-use super::connection::Connection;
-use super::context::{Context, ContextDescriptor};
+use super::connection::{Connection, NativeConnection};
+use super::context::{Context, ContextDescriptor, NativeContext};
 use super::device::{Adapter, Device};
 use super::surface::Surface;
 
@@ -660,6 +660,35 @@ pub fn test_depth_and_stencil() {
     }
 
     device.destroy_context(&mut stencil_context).unwrap();
+}
+
+// Make sure that the current native connection and context can be fetched and that they can be
+// correctly wrapped in `surfman` connections and contexts.
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_get_native_connection_and_context() {
+    let mut env = match BasicEnvironment::new() {
+        None => return,
+        Some(env) => env,
+    };
+
+    let native_context = NativeContext::current().unwrap();
+    let native_connection = NativeConnection::current().unwrap();
+
+    unsafe {
+        clear(&env.gl, &[0, 255, 0, 255]);
+
+        let other_connection = Connection::from_native_connection(native_connection).unwrap();
+        let other_device = other_connection.create_device(&env.adapter).unwrap();
+        let mut other_context = other_device.create_context_from_native_context(native_context)
+                                            .unwrap();
+
+        other_device.make_context_current(&other_context).unwrap();
+        assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
+
+        other_device.destroy_context(&mut other_context).unwrap();
+    }
+
+    env.device.destroy_context(&mut env.context).unwrap();
 }
 
 fn bind_context_fbo(gl: &Gl, device: &Device, context: &Context) {

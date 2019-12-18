@@ -142,7 +142,7 @@ impl NativeConnection {
     /// This is a no-op on macOS, because Core Graphics window server connections are implicit in
     /// the platform APIs.
     #[inline]
-    pub fn current() -> NativeConnection {
-        NativeConnection
+    pub fn current() -> Result<NativeConnection, Error> {
+        Ok(NativeConnection)
     }
 }
