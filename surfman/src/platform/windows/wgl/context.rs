@@ -568,6 +568,23 @@ impl Device {
     }
 }
 
+impl NativeContext {
+    /// Returns the current context, if there is one.
+    ///
+    /// If there is not a native context, this returns a `NoCurrentContext` error.
+    #[inline]
+    pub fn current() -> Result<NativeContext, Error> {
+        unsafe {
+            let glrc = wglGetCurrentContext();
+            if glrc != ptr::null_mut() {
+                Ok(NativeContext(glrc))
+            } else {
+                Err(Error::NoCurrentContext)
+            }
+        }
+    }
+}
+
 fn extension_loader_thread() -> WGLExtensionFunctions {
     unsafe {
         let instance = libloaderapi::GetModuleHandleA(ptr::null_mut());
@@ -807,3 +824,4 @@ pub(crate) fn set_dc_pixel_format(dc: HDC, pixel_format: c_int) {
         assert_ne!(ok, FALSE);
     }
 }
+

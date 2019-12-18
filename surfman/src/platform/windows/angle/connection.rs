@@ -126,3 +126,14 @@ impl Connection {
         }
     }
 }
+
+impl NativeConnection {
+    /// Creates a native connection.
+    ///
+    /// This is a no-op method present for consistency with other backends.
+    #[inline]
+    pub fn new() -> NativeConnection {
+        NativeConnection
+    }
+}
+
