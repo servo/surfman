@@ -108,7 +108,7 @@ impl EGLBackedContext {
                 draw: native_context.egl_draw_surface,
                 read: native_context.egl_read_surface,
             }),
-            context_is_owned: true,
+            context_is_owned: false,
         };
         next_context_id.0 += 1;
         context

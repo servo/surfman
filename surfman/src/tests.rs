@@ -662,23 +662,21 @@ pub fn test_depth_and_stencil() {
     device.destroy_context(&mut stencil_context).unwrap();
 }
 
-// Make sure that the current native connection and context can be fetched and that they can be
-// correctly wrapped in `surfman` connections and contexts.
+// Make sure that the current native context can be fetched and that they can be correctly wrapped
+// in `surfman` contexts.
 #[cfg_attr(not(feature = "sm-test"), test)]
-pub fn test_get_native_connection_and_context() {
+pub fn test_get_native_context() {
     let mut env = match BasicEnvironment::new() {
         None => return,
         Some(env) => env,
     };
 
     let native_context = NativeContext::current().unwrap();
-    let native_connection = NativeConnection::current().unwrap();
 
     unsafe {
         clear(&env.gl, &[0, 255, 0, 255]);
 
-        let other_connection = Connection::from_native_connection(native_connection).unwrap();
-        let other_device = other_connection.create_device(&env.adapter).unwrap();
+        let other_device = env.connection.create_device(&env.adapter).unwrap();
         let mut other_context = other_device.create_context_from_native_context(native_context)
                                             .unwrap();
 
