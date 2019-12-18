@@ -219,16 +219,21 @@ impl EGLBackedContext {
 }
 
 impl NativeContext {
-    /// Returns the current EGL context and surfaces.
+    /// Returns the current EGL context and surfaces, if applicable.
     ///
-    /// If there is no current EGL context, the context will be `egl::NO_CONTEXT`.
-    pub fn current() -> NativeContext {
+    /// If there is no current EGL context, this returns a `NoCurrentContext` error.
+    pub fn current() -> Result<NativeContext, Error> {
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
-                NativeContext {
-                    egl_context: egl.GetCurrentContext(),
-                    egl_read_surface: egl.GetCurrentSurface(egl::READ as EGLint),
-                    egl_draw_surface: egl.GetCurrentSurface(egl::DRAW as EGLint),
+                let egl_context = egl.GetCurrentContext();
+                if egl_context == egl::NO_CONTEXT {
+                    Err(Error::NoCurrentContext)
+                } else {
+                    Ok(NativeContext {
+                        egl_context,
+                        egl_read_surface: egl.GetCurrentSurface(egl::READ as EGLint),
+                        egl_draw_surface: egl.GetCurrentSurface(egl::DRAW as EGLint),
+                    })
                 }
             }
         })

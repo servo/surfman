@@ -39,23 +39,32 @@ pub struct Connection {
 unsafe impl Send for Connection {}
 
 pub(crate) struct NativeConnectionWrapper {
-    display: *mut Display,
     pub(crate) egl_display: EGLDisplay,
-    pub(crate) display_is_owned: bool,
+    x11_display: *mut Display,
+    x11_display_is_owned: bool,
 }
 
-/// Wrapper for an X11 `Display`.
+/// Wrapper for an X11 and EGL display.
 #[derive(Clone)]
-pub struct NativeConnection(pub *mut Display);
+pub struct NativeConnection {
+    /// The EGL display associated with that X11 display.
+    ///
+    /// You can obtain this with `eglGetPlatformDisplay()`.
+    ///
+    /// It is assumed that this EGL display is already initialized, via `eglInitialize()`.
+    pub egl_display: EGLDisplay,
+    /// The corresponding Xlib Display. This must be present; do not pass NULL.
+    pub x11_display: *mut Display,
+}
 
 impl Drop for NativeConnectionWrapper {
     #[inline]
     fn drop(&mut self) {
         unsafe {
-            if self.display_is_owned {
-                XCloseDisplay(self.display);
+            if self.x11_display_is_owned {
+                XCloseDisplay(self.x11_display);
             }
-            self.display = ptr::null_mut();
+            self.x11_display = ptr::null_mut();
         }
     }
 }
@@ -67,18 +76,18 @@ impl Connection {
         unsafe {
             *X_THREADS_INIT;
 
-            let display = XOpenDisplay(ptr::null());
-            if display.is_null() {
+            let x11_display = XOpenDisplay(ptr::null());
+            if x11_display.is_null() {
                 return Err(Error::ConnectionFailed);
             }
 
-            let egl_display = create_egl_display(display);
+            let egl_display = create_egl_display(x11_display);
 
             Ok(Connection {
                 native_connection: Arc::new(NativeConnectionWrapper {
-                    display,
+                    x11_display,
+                    x11_display_is_owned: true,
                     egl_display,
-                    display_is_owned: true,
                 }),
             })
         }
@@ -96,20 +105,35 @@ impl Connection {
     #[inline]
     pub unsafe fn from_native_connection(native_connection: NativeConnection)
                                          -> Result<Connection, Error> {
-        let egl_display = create_egl_display(native_connection.0);
         Ok(Connection {
             native_connection: Arc::new(NativeConnectionWrapper {
-                display: native_connection.0,
-                egl_display,
-                display_is_owned: false,
+                egl_display: native_connection.egl_display,
+                x11_display: native_connection.x11_display,
+                x11_display_is_owned: false,
             }),
         })
+    }
+
+    fn from_x11_display(x11_display: *mut Display, is_owned: bool) -> Result<Connection, Error> {
+        unsafe {
+            let egl_display = create_egl_display(x11_display);
+            Ok(Connection {
+                native_connection: Arc::new(NativeConnectionWrapper {
+                    egl_display,
+                    x11_display,
+                    x11_display_is_owned: is_owned,
+                }),
+            })
+        }
     }
 
     /// Returns the underlying native connection.
     #[inline]
     pub fn native_connection(&self) -> NativeConnection {
-        NativeConnection(self.native_connection.display)
+        NativeConnection {
+            egl_display: self.native_connection.egl_display,
+            x11_display: self.native_connection.x11_display,
+        }
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
@@ -159,12 +183,10 @@ impl Connection {
     /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        unsafe {
-            if let Some(display) = window.get_xlib_display() {
-                Connection::from_native_connection(NativeConnection(display as *mut Display))
-            } else {
-                Err(Error::IncompatibleWinitWindow)
-            }
+        if let Some(display) = window.get_xlib_display() {
+            Connection::from_x11_display(display as *mut Display, false)
+        } else {
+            Err(Error::IncompatibleWinitWindow)
         }
     }
 
@@ -185,7 +207,7 @@ impl NativeConnectionWrapper {
     #[inline]
     pub(crate) fn lock_display(&self) -> DisplayGuard {
         unsafe {
-            let display = self.display;
+            let display = self.x11_display;
             XLockDisplay(display);
             DisplayGuard { display, phantom: PhantomData }
         }

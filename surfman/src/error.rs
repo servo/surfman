@@ -53,8 +53,10 @@ pub enum Error {
     SurfaceTextureCreationFailed(WindowingApiError),
     /// The system couldn't present a widget surface.
     PresentFailed(WindowingApiError),
-    /// A context couldn't be created because there was no current context.
+    /// A context couldn't be created because there is no current context.
     NoCurrentContext,
+    /// The current connection couldn't be fetched because there is no current connection.
+    NoCurrentConnection,
     /// The surface was not created from this context.
     IncompatibleSurface,
     /// The context descriptor is from a hardware device, but this is a software device, or vice
