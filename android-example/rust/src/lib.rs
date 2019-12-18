@@ -63,38 +63,85 @@ pub unsafe extern "system" fn
 }
 
 // NB: New tests should be added here.
+
 #[no_mangle]
 pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_runTests(
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testContextCreation(
             _env: JNIEnv,
             _class: JClass) {
-    let tests = vec![
-        run_test(tests::test_context_creation, "test_context_creation"),
-        run_test(tests::test_cross_device_surface_texture_blit_framebuffer,
-                "test_cross_device_surface_texture_blit_framebuffer"),
-        run_test(tests::test_cross_thread_surface_texture_blit_framebuffer,
-                "test_cross_thread_surface_texture_blit_framebuffer"),
-        run_test(tests::test_device_accessors, "test_device_accessors"),
-        run_test(tests::test_device_creation, "test_device_creation"),
-        run_test(tests::test_generic_surface_creation, "test_generic_surface_creation"),
-        run_test(tests::test_gl, "test_gl"),
-        run_test(tests::test_newly_created_contexts_are_not_current,
-                "test_newly_created_contexts_are_not_current"),
-        run_test(tests::test_surface_texture_blit_framebuffer,
-                 "test_surface_texture_blit_framebuffer"),
-        run_test(tests::test_surface_texture_right_side_up,
-                 "test_surface_texture_right_side_up"),
-    ];
+    tests::test_context_creation();
+}
 
-    tests.into_iter().for_each(|test| test.join().unwrap());
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testCrossDeviceSurfaceTextureBlitFramebuffer(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_cross_device_surface_texture_blit_framebuffer();
+}
 
-    fn run_test(test_function: extern "Rust" fn(), test_name: &'static str) -> JoinHandle<()> {
-        thread::spawn(move || {
-            info!("TEST-START: {}", test_name);
-            test_function();
-            info!("TEST-PASS: {}", test_name);
-        })
-    }
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testCrossThreadSurfaceTextureBlitFramebuffer(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_cross_thread_surface_texture_blit_framebuffer();
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testDeviceAccessors(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_device_accessors();
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testDeviceCreation(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_device_creation();
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testGenericSurfaceCreation(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_generic_surface_creation();
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testGL(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_gl();
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testNewlyCreatedContextsAreNotCurrent(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_newly_created_contexts_are_not_current();
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testSurfaceTextureBlitFramebuffer(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_surface_texture_blit_framebuffer();
+}
+
+#[no_mangle]
+pub unsafe extern "system" fn
+        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testSurfaceTextureRightSideUp(
+            _env: JNIEnv,
+            _class: JClass) {
+    tests::test_surface_texture_right_side_up();
 }
 
 struct JavaResourceLoader {
