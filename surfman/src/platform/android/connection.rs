@@ -106,7 +106,7 @@ impl NativeConnection {
     ///
     /// This is a no-op method present for consistency with other backends.
     #[inline]
-    pub fn new() -> NativeConnection {
-        NativeConnection
+    pub fn current() -> Result<NativeConnection, Error> {
+        Ok(NativeConnection)
     }
 }
