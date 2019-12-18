@@ -40,7 +40,8 @@ pub unsafe extern "system" fn
 
     let connection = Connection::new().unwrap();
     let device = connection.create_device_from_native_device(NativeDevice::current()).unwrap();
-    let context = device.create_context_from_native_context(NativeContext::current()).unwrap();
+    let context =
+        device.create_context_from_native_context(NativeContext::current().unwrap()).unwrap();
     let adapter = device.adapter();
 
     APP.with(|app| {
