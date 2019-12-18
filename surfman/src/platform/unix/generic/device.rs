@@ -112,6 +112,6 @@ impl Device {
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     #[inline]
     pub fn gl_api(&self) -> GLApi {
-        GLApi::GLES
+        GLApi::GL
     }
 }

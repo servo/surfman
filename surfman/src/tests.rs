@@ -133,7 +133,8 @@ pub fn test_context_creation() {
 
                     device.destroy_context(&mut context).unwrap();
                 }
-                Err(Error::ContextCreationFailed(WindowingApiError::BadPixelFormat)) => {
+                Err(Error::ContextCreationFailed(WindowingApiError::BadPixelFormat)) |
+                Err(Error::ContextCreationFailed(WindowingApiError::BadMatch)) => {
                     // This is OK, as it just means the GL implementation didn't support the
                     // requested GL version.
                 }

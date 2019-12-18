@@ -6,9 +6,11 @@ use crate::context::CREATE_CONTEXT_MUTEX;
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
 use crate::surface::Framebuffer;
-use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersion, Gl, SurfaceInfo};
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
+use crate::{Gl, SurfaceInfo};
 use super::device::EGL_FUNCTIONS;
 use super::error::ToWindowingApiError;
+use super::ffi::EGL_CONTEXT_MINOR_VERSION_KHR;
 use super::surface::{EGLBackedSurface, ExternalEGLSurfaces};
 
 use std::ffi::CString;
@@ -81,12 +83,14 @@ impl Drop for CurrentContextGuard {
 }
 
 impl EGLBackedContext {
-    pub(crate) unsafe fn new(egl_display: EGLDisplay, descriptor: &ContextDescriptor)
+    pub(crate) unsafe fn new(egl_display: EGLDisplay,
+                             descriptor: &ContextDescriptor,
+                             gl_api: GLApi)
                              -> Result<EGLBackedContext, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Create the context.
-        let egl_context = create_context(egl_display, descriptor)?;
+        let egl_context = create_context(egl_display, descriptor, gl_api)?;
 
         // Wrap and return it.
         let context = EGLBackedContext {
@@ -250,14 +254,6 @@ impl ContextDescriptor {
             return Err(Error::UnsupportedGLProfile);
         }
 
-        // FIXME(pcwalton): Unfortunately, EGL 1.5, which is not particularly widespread, is needed
-        // to specify a minor version. Until I see EGL 1.5 in the wild, let's just cap our OpenGL
-        // ES version to 3.0.
-        if attributes.version.major > 3 ||
-                attributes.version.major == 3 && attributes.version.minor > 0 {
-            return Err(Error::UnsupportedGLVersion);
-        }
-
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
@@ -398,8 +394,18 @@ impl CurrentContextGuard {
     }
 }
 
-pub(crate) unsafe fn create_context(egl_display: EGLDisplay, descriptor: &ContextDescriptor)
+pub(crate) unsafe fn create_context(egl_display: EGLDisplay,
+                                    descriptor: &ContextDescriptor,
+                                    gl_api: GLApi)
                                     -> Result<EGLContext, Error> {
+    EGL_FUNCTIONS.with(|egl| {
+        let ok = match gl_api {
+            GLApi::GL => egl.BindAPI(egl::OPENGL_API),
+            GLApi::GLES => egl.BindAPI(egl::OPENGL_ES_API),
+        };
+        assert_ne!(ok, egl::FALSE);
+    });
+
     let egl_config = egl_config_from_id(egl_display, descriptor.egl_config_id);
 
     // Include some extra zeroes to work around broken implementations.
@@ -407,6 +413,7 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay, descriptor: &Contex
     // FIXME(pcwalton): Which implementations are those? (This is copied from Gecko.)
     let egl_context_attributes = [
         egl::CONTEXT_CLIENT_VERSION as EGLint,      descriptor.gl_version.major as EGLint,
+        EGL_CONTEXT_MINOR_VERSION_KHR as EGLint,    descriptor.gl_version.minor as EGLint,
         egl::NONE as EGLint, 0,
         0, 0,
     ];

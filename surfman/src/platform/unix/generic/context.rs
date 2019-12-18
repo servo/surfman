@@ -63,7 +63,9 @@ impl Device {
     #[inline]
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         unsafe {
-            EGLBackedContext::new(self.native_connection.egl_display, descriptor).map(Context)
+            EGLBackedContext::new(self.native_connection.egl_display,
+                                  descriptor,
+                                  self.gl_api()).map(Context)
         }
     }
 
