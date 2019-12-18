@@ -165,16 +165,16 @@ impl Device {
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         unsafe {
-            let egl_surface = match context.framebuffer {
-                Framebuffer::Surface(ref surface) => surface.egl_surface,
-                Framebuffer::None => egl::NO_SURFACE,
-                Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
+            let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
+                Framebuffer::Surface(ref surface) => (surface.egl_surface, surface.egl_surface),
+                Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
+                Framebuffer::External(ref surfaces) => (surfaces.draw, surfaces.read),
             };
 
             EGL_FUNCTIONS.with(|egl| {
                 let result = egl.MakeCurrent(self.egl_display,
-                                             egl_surface,
-                                             egl_surface,
+                                             egl_draw_surface,
+                                             egl_read_surface,
                                              context.egl_context);
                 if result == egl::FALSE {
                     let err = egl.GetError().to_windowing_api_error();

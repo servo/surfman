@@ -676,14 +676,14 @@ pub fn test_get_native_context() {
     unsafe {
         clear(&env.gl, &[0, 255, 0, 255]);
 
-        let other_device = env.connection.create_device(&env.adapter).unwrap();
-        let mut other_context = other_device.create_context_from_native_context(native_context)
-                                            .unwrap();
+        let mut other_context = env.device
+                                   .create_context_from_native_context(native_context)
+                                   .unwrap();
 
-        other_device.make_context_current(&other_context).unwrap();
+        env.device.make_context_current(&other_context).unwrap();
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
-        other_device.destroy_context(&mut other_context).unwrap();
+        env.device.destroy_context(&mut other_context).unwrap();
     }
 
     env.device.destroy_context(&mut env.context).unwrap();
