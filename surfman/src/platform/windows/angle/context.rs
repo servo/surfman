@@ -82,7 +82,9 @@ impl Device {
     pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         unsafe {
-            let egl_context = context::create_context(self.egl_display, descriptor)?;
+            let egl_context = context::create_context(self.egl_display,
+                                                      descriptor,
+                                                      self.gl_api())?;
 
             let context = Context {
                 egl_context,

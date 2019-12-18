@@ -17,6 +17,7 @@ impl ToWindowingApiError for EGLint {
             egl::BAD_ACCESS => WindowingApiError::BadAccess,
             egl::BAD_ALLOC => WindowingApiError::BadAlloc,
             egl::BAD_ATTRIBUTE => WindowingApiError::BadAttribute,
+            egl::BAD_CONFIG => WindowingApiError::BadConfig,
             egl::BAD_CONTEXT => WindowingApiError::BadContext,
             egl::BAD_CURRENT_SURFACE => WindowingApiError::BadCurrentSurface,
             egl::BAD_DISPLAY => WindowingApiError::BadDisplay,

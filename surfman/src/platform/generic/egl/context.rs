@@ -424,7 +424,9 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay,
                                             egl::NO_CONTEXT,
                                             egl_context_attributes.as_ptr());
         if egl_context == egl::NO_CONTEXT {
-            let err = egl.GetError().to_windowing_api_error();
+            let err = egl.GetError();
+            println!("err={:x}", err);
+            let err = err.to_windowing_api_error();
             return Err(Error::ContextCreationFailed(err));
         }
 

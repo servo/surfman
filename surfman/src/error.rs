@@ -184,4 +184,6 @@ pub enum WindowingApiError {
     /// GL: Given when the set of state for a command is not legal for the parameters given to that
     /// command.
     BadOperation,
+    /// EGL: The EGL configuration is unsupported.
+    BadConfig,
 }
