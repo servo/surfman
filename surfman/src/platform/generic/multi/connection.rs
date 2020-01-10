@@ -12,7 +12,6 @@ use super::surface::NativeWidget;
 use winit::Window;
 
 /// A connection to the display server.
-#[derive(Clone)]
 pub enum Connection<Def, Alt> where Def: DeviceInterface,
                                     Alt: DeviceInterface,
                                     Def::Connection: ConnectionInterface,
@@ -21,6 +20,20 @@ pub enum Connection<Def, Alt> where Def: DeviceInterface,
     Default(Def::Connection),
     /// The alternate connection to the display server.
     Alternate(Alt::Connection),
+}
+
+impl<Def, Alt> Clone for Connection<Def, Alt> where
+    Def: DeviceInterface,
+    Alt: DeviceInterface,
+    Def::Connection: Clone,
+    Alt::Connection: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+	    Connection::Default(ref connection) => Connection::Default(connection.clone()),
+	    Connection::Alternate(ref connection) => Connection::Alternate(connection.clone()),
+	}
+    }
 }
 
 /// The native connection type.
