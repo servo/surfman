@@ -23,6 +23,20 @@ pub enum Adapter<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface {
     Alternate(<Alt::Connection as ConnectionInterface>::Adapter),
 }
 
+impl<Def, Alt> Clone for Adapter<Def, Alt> where
+    Def: DeviceInterface,
+    Alt: DeviceInterface,
+    <Def::Connection as ConnectionInterface>::Adapter: Clone,
+    <Alt::Connection as ConnectionInterface>::Adapter: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+	    Adapter::Default(ref adapter) => Adapter::Default(adapter.clone()),
+	    Adapter::Alternate(ref adapter) => Adapter::Alternate(adapter.clone()),
+	}
+    }
+}
+
 /// A thread-local handle to a device.
 ///
 /// Devices contain most of the relevant surface management methods.
