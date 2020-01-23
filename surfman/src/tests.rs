@@ -92,7 +92,8 @@ pub fn test_context_creation() {
         Err(err) => panic!("Failed to create device: {:?}", err),
     };
 
-    let versions = match device.gl_api() {
+    let gl_api = device.gl_api();
+    let versions = match gl_api {
         GLApi::GL => &GL_VERSIONS[..],
         GLApi::GLES => &GL_ES_VERSIONS[..],
     };
@@ -118,8 +119,11 @@ pub fn test_context_creation() {
                         device.context_descriptor_attributes(&actual_descriptor);
                     if !actual_attributes.flags.contains(attributes.flags) {
                         device.destroy_context(&mut context).unwrap();
-                        panic!("Expected at least attribute flags {:?} but got {:?}",
+                        panic!("Expected at least attribute flags {:?} for {:?} {:?} but got \
+                                {:?}",
                                attributes.flags,
+                               gl_api,
+                               version,
                                actual_attributes.flags);
                     }
                     if actual_attributes.version.major < attributes.version.major ||

@@ -2,18 +2,21 @@
 //
 //! Functionality common to backends using EGL contexts.
 
-use crate::context::CREATE_CONTEXT_MUTEX;
+use crate::context::{self, CREATE_CONTEXT_MUTEX};
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
+use crate::gl::types::GLuint;
+use crate::gl;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
 use crate::{Gl, SurfaceInfo};
 use super::device::EGL_FUNCTIONS;
 use super::error::ToWindowingApiError;
-use super::ffi::EGL_CONTEXT_MINOR_VERSION_KHR;
+use super::ffi::{EGL_CONTEXT_MINOR_VERSION_KHR, EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT};
+use super::ffi::{EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT, EGL_CONTEXT_OPENGL_PROFILE_MASK};
 use super::surface::{EGLBackedSurface, ExternalEGLSurfaces};
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
@@ -48,6 +51,7 @@ pub struct NativeContext {
 pub struct ContextDescriptor {
     pub(crate) egl_config_id: EGLint,
     pub(crate) gl_version: GLVersion,
+    pub(crate) compatibility_profile: bool,
 }
 
 #[must_use]
@@ -250,13 +254,20 @@ impl ContextDescriptor {
                              extra_config_attributes: &[EGLint])
                              -> Result<ContextDescriptor, Error> {
         let flags = attributes.flags;
-        if flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE) {
-            return Err(Error::UnsupportedGLProfile);
-        }
 
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
+
+        let compatibility_profile = flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE);
+
+        // Mesa doesn't support the OpenGL compatibility profile post version 3.0. Take that into
+        // account.
+        if compatibility_profile &&
+                (attributes.version.major > 3 ||
+                 attributes.version.major == 3 && attributes.version.minor > 0) {
+            return Err(Error::UnsupportedGLProfile);
+        }
 
         // Create required config attributes.
         //
@@ -322,7 +333,11 @@ impl ContextDescriptor {
             let egl_config_id = get_config_attr(egl_display, egl_config, egl::CONFIG_ID as EGLint);
             let gl_version = attributes.version;
 
-            Ok(ContextDescriptor { egl_config_id, gl_version })
+            Ok(ContextDescriptor {
+                egl_config_id,
+                gl_version,
+                compatibility_profile,
+            })
         })
     }
 
@@ -336,7 +351,9 @@ impl ContextDescriptor {
             let _guard = CurrentContextGuard::new();
             egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
             let gl_version = GLVersion::current(gl);
-            ContextDescriptor { egl_config_id, gl_version }
+            let compatibility_profile = context::current_context_uses_compatibility_profile(gl);
+
+            ContextDescriptor { egl_config_id, gl_version, compatibility_profile }
         })
     }
 
@@ -374,6 +391,9 @@ impl ContextDescriptor {
         attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
         attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
 
+        attribute_flags.set(ContextAttributeFlags::COMPATIBILITY_PROFILE,
+                            self.compatibility_profile);
+
         // Create appropriate context attributes.
         ContextAttributes { flags: attribute_flags, version: self.gl_version }
     }
@@ -408,12 +428,18 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay,
 
     let egl_config = egl_config_from_id(egl_display, descriptor.egl_config_id);
 
+    let mut profile_mask = EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT;
+    if descriptor.compatibility_profile {
+        profile_mask |= EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT;
+    }
+
     // Include some extra zeroes to work around broken implementations.
     //
     // FIXME(pcwalton): Which implementations are those? (This is copied from Gecko.)
     let egl_context_attributes = [
         egl::CONTEXT_CLIENT_VERSION as EGLint,      descriptor.gl_version.major as EGLint,
         EGL_CONTEXT_MINOR_VERSION_KHR as EGLint,    descriptor.gl_version.minor as EGLint,
+        EGL_CONTEXT_OPENGL_PROFILE_MASK as EGLint,  profile_mask,
         egl::NONE as EGLint, 0,
         0, 0,
     ];
@@ -425,7 +451,6 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay,
                                             egl_context_attributes.as_ptr());
         if egl_context == egl::NO_CONTEXT {
             let err = egl.GetError();
-            println!("err={:x}", err);
             let err = err.to_windowing_api_error();
             return Err(Error::ContextCreationFailed(err));
         }
