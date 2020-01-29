@@ -8,14 +8,14 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, Surface, SurfaceAccess};
-use surfman::{SurfaceTexture, SurfaceType};
+use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, GLApi, Surface};
+use surfman::{SurfaceAccess, SurfaceTexture, SurfaceType, declare_surfman};
 
 #[cfg(not(target_os = "android"))]
 use self::common::FilesystemResourceLoader;
 
 #[cfg(not(target_os = "android"))]
-use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion, NativeWidget};
+use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
 #[cfg(not(target_os = "android"))]
 use winit::dpi::PhysicalSize;
 #[cfg(not(target_os = "android"))]
@@ -24,6 +24,8 @@ use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 use winit::{WindowBuilder, WindowEvent};
 
 pub mod common;
+
+declare_surfman!();
 
 const WINDOW_WIDTH:  i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
@@ -49,11 +51,6 @@ const ROTATION_SPEED_Z: f32 = 0.05;
 const SPHERE_RADIUS: f32 = 96.0;
 
 static QUAD_VERTEX_POSITIONS: [u8; 8] = [0, 0, 1, 0, 0, 1, 1, 1 ];
-
-static BLIT_TRANSFORM: [f32; 4] = [
-    SUBSCREEN_WIDTH as f32 / WINDOW_WIDTH as f32 * 2.0, 0.0,
-    0.0, SUBSCREEN_HEIGHT as f32 / WINDOW_HEIGHT as f32 * 2.0,
-];
 
 static CHECK_TRANSFORM: [f32; 4] = [
     SUBSCREEN_WIDTH as f32 / CHECK_SIZE as f32, 0.0,
@@ -89,8 +86,9 @@ static BACKGROUND_COLOR: [f32; 4] = [
 fn main() {
     let mut event_loop = EventsLoop::new();
     let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
+    let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let logical_size =
-        PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical(dpi);
+        PhysicalSize::new(window_size.width as f64, window_size.height as f64).to_logical(dpi);
     let window = WindowBuilder::new().with_title("Multithreaded example")
                                      .with_dimensions(logical_size)
                                      .build(&event_loop)
@@ -98,24 +96,28 @@ fn main() {
     window.show();
 
     let connection = Connection::from_winit_window(&window).unwrap();
-    let native_widget = NativeWidget::from_winit_window(&window);
-    let adapter = Adapter::default().unwrap();
-    let mut device = Device::new(&connection, &adapter).unwrap();
+    let native_widget = connection.create_native_widget_from_winit_window(&window).unwrap();
+    let adapter = connection.create_low_power_adapter().unwrap();
+    let mut device = connection.create_device(&adapter).unwrap();
 
     let context_attributes = ContextAttributes {
-        version: GLVersion::new(3, 3),
+        version: GLVersion::new(3, 0),
         flags: ContextAttributeFlags::ALPHA,
     };
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
     let mut context = device.create_context(&context_descriptor).unwrap();
-    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type).unwrap();
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, surface_type).unwrap();
     device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();
 
-    let mut app =
-        App::new(connection, adapter, device, context, Box::new(FilesystemResourceLoader));
+    let mut app = App::new(connection,
+                           adapter,
+                           device,
+                           context,
+                           Box::new(FilesystemResourceLoader),
+                           window_size);
     let mut exit = false;
 
     while !exit {
@@ -146,6 +148,7 @@ pub struct App {
     context: Context,
     texture: Option<SurfaceTexture>,
     frame: Frame,
+    window_size: Size2D<i32>,
 }
 
 impl App {
@@ -153,16 +156,22 @@ impl App {
                adapter: Adapter,
                device: Device,
                mut context: Context,
-               resource_loader: Box<dyn ResourceLoader + Send>)
+               resource_loader: Box<dyn ResourceLoader + Send>,
+               window_size: Size2D<i32>)
                -> App {
         let context_descriptor = device.context_descriptor(&context);
 
         gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
 
         // Set up GL objects and state.
+        let gl_api = device.gl_api();
         let surface_gl_texture_target = device.surface_gl_texture_target();
-        let grid_vertex_array = GridVertexArray::new(surface_gl_texture_target, &*resource_loader);
-        let blit_vertex_array = BlitVertexArray::new(surface_gl_texture_target, &*resource_loader);
+        let grid_vertex_array = GridVertexArray::new(gl_api,
+                                                     surface_gl_texture_target,
+                                                     &*resource_loader);
+        let blit_vertex_array = BlitVertexArray::new(gl_api,
+                                                     surface_gl_texture_target,
+                                                     &*resource_loader);
 
         // Set up communication channels, and spawn our worker thread.
         let (worker_to_main_sender, main_from_worker_receiver) = mpsc::channel();
@@ -171,6 +180,7 @@ impl App {
             worker_thread(connection,
                           adapter,
                           context_descriptor,
+                          window_size,
                           resource_loader,
                           worker_to_main_sender,
                           worker_from_main_receiver)
@@ -178,9 +188,7 @@ impl App {
 
         // Fetch our initial surface.
         let mut frame = match main_from_worker_receiver.recv() {
-            Err(_) => {
-                panic!();
-            }
+            Err(_) => panic!(),
             Ok(frame) => frame,
         };
         let texture = Some(device.create_surface_texture(&mut context,
@@ -196,6 +204,7 @@ impl App {
             texture,
             frame,
             context,
+            window_size,
         }
     }
 
@@ -218,14 +227,13 @@ impl App {
         unsafe {
             self.device.make_context_current(&self.context).unwrap();
 
-            let framebuffer_object = self.device
-                                         .context_surface_info(&self.context)
-                                         .unwrap()
-                                         .unwrap()
-                                         .framebuffer_object;
+            let framebuffer_object = match self.device.context_surface_info(&self.context) {
+                Ok(Some(surface_info)) => surface_info.framebuffer_object,
+                _ => 0,
+            };
 
             gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-            gl::Viewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+            gl::Viewport(0, 0, self.window_size.width, self.window_size.height);
 
             gl::ClearColor(0.0, 0.0, 1.0, 1.0); ck();
             gl::Clear(gl::COLOR_BUFFER_BIT); ck();
@@ -266,15 +274,20 @@ impl App {
             gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4); ck();
 
             // Draw subscreen.
-            let subscreen_translation =
-                Point2D::new(self.frame.viewport_origin.x / WINDOW_WIDTH as f32 * 2.0 - 1.0,
-                             self.frame.viewport_origin.y / WINDOW_HEIGHT as f32 * 2.0 - 1.0);
+            let blit_transform: [f32; 4] = [
+                SUBSCREEN_WIDTH as f32 / self.window_size.width as f32 * 2.0, 0.0,
+                0.0, SUBSCREEN_HEIGHT as f32 / self.window_size.height as f32 * 2.0,
+            ];
+
+            let subscreen_translation = Point2D::new(
+                self.frame.viewport_origin.x / self.window_size.width as f32 * 2.0 - 1.0,
+                self.frame.viewport_origin.y / self.window_size.height as f32 * 2.0 - 1.0);
             gl::BindVertexArray(self.blit_vertex_array.object); ck();
             gl::UseProgram(self.blit_vertex_array.blit_program.program.object); ck();
             gl::UniformMatrix2fv(self.blit_vertex_array.blit_program.transform_uniform,
                                  1,
                                  gl::FALSE,
-                                 BLIT_TRANSFORM.as_ptr());
+                                 blit_transform.as_ptr());
             gl::Uniform2fv(self.blit_vertex_array.blit_program.translation_uniform,
                            1,
                            [subscreen_translation.x, subscreen_translation.y].as_ptr());
@@ -287,7 +300,7 @@ impl App {
                            ZERO_TRANSLATION.as_ptr());
             gl::ActiveTexture(gl::TEXTURE0); ck();
             gl::BindTexture(self.device.surface_gl_texture_target(),
-                            self.texture.as_ref().unwrap().gl_texture()); ck();
+                            self.device.surface_texture_object(self.texture.as_ref().unwrap()));
             gl::Uniform1i(self.blit_vertex_array.blit_program.source_uniform, 0); ck();
             gl::Enable(gl::BLEND);
             gl::BlendEquation(gl::FUNC_ADD);
@@ -310,25 +323,28 @@ impl App {
 fn worker_thread(connection: Connection,
                  adapter: Adapter,
                  context_descriptor: ContextDescriptor,
+                 window_size: Size2D<i32>,
                  resource_loader: Box<dyn ResourceLoader>,
                  worker_to_main_sender: Sender<Frame>,
                  worker_from_main_receiver: Receiver<Surface>) {
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
     let surface_type = SurfaceType::Generic { size };
-    let mut device = Device::new(&connection, &adapter).unwrap();
+    let mut device = connection.create_device(&adapter).unwrap();
     let mut context = device.create_context(&context_descriptor).unwrap();
-    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type).unwrap();
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, surface_type).unwrap();
     device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();
 
     // Set up GL objects and state.
-    let vertex_array = CheckVertexArray::new(device.surface_gl_texture_target(),
+    let vertex_array = CheckVertexArray::new(device.gl_api(),
+                                             device.surface_gl_texture_target(),
                                              &*resource_loader);
 
     // Initialize our origin and size.
-    let ball_origin = Point2D::new(WINDOW_WIDTH as f32 * 0.5 - BALL_WIDTH as f32 * 0.5,
-                                   WINDOW_HEIGHT as f32 * 0.65 - BALL_HEIGHT as f32 * 0.5);
+    let ball_origin =
+        Point2D::new(window_size.width as f32 * 0.5 - BALL_WIDTH as f32 * 0.5,
+                     window_size.height as f32 * 0.65 - BALL_HEIGHT as f32 * 0.5);
     let ball_size = Size2D::new(BALL_WIDTH as f32, BALL_HEIGHT as f32);
     let mut ball_rect = Rect::new(ball_origin, ball_size);
     let mut ball_velocity = Vector2D::new(INITIAL_VELOCITY_X, INITIAL_VELOCITY_Y);
@@ -341,7 +357,8 @@ fn worker_thread(connection: Connection,
     let mut theta_z = INITIAL_ROTATION_Z;
 
     // Send an initial surface back to the main thread.
-    let surface = Some(device.create_surface(&context, SurfaceAccess::GPUOnly, &surface_type)
+    let surface_type = SurfaceType::Generic { size };
+    let surface = Some(device.create_surface(&context, SurfaceAccess::GPUOnly, surface_type)
                              .unwrap());
     worker_to_main_sender.send(Frame {
         surface,
@@ -426,8 +443,8 @@ fn worker_thread(connection: Connection,
             ball_rect.origin.x = 0.0;
             ball_velocity.x = f32::abs(ball_velocity.x);
         }
-        if ball_rect.max_x() >= WINDOW_WIDTH as f32 {
-            ball_rect.origin.x = (WINDOW_WIDTH - BALL_WIDTH) as f32;
+        if ball_rect.max_x() >= window_size.width as f32 {
+            ball_rect.origin.x = (window_size.width - BALL_WIDTH) as f32;
             ball_velocity.x = -f32::abs(ball_velocity.x);
         }
 
@@ -452,8 +469,9 @@ struct BlitVertexArray {
 }
 
 impl BlitVertexArray {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> BlitVertexArray {
-        let blit_program = BlitProgram::new(gl_texture_target, resource_loader);
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> BlitVertexArray {
+        let blit_program = BlitProgram::new(gl_api, gl_texture_target, resource_loader);
         unsafe {
             let mut vertex_array = 0;
             gl::GenVertexArrays(1, &mut vertex_array); ck();
@@ -482,8 +500,9 @@ struct GridVertexArray {
 }
 
 impl GridVertexArray {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> GridVertexArray {
-        let grid_program = GridProgram::new(gl_texture_target, resource_loader);
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> GridVertexArray {
+        let grid_program = GridProgram::new(gl_api, gl_texture_target, resource_loader);
         unsafe {
             let mut vertex_array = 0;
             gl::GenVertexArrays(1, &mut vertex_array); ck();
@@ -512,8 +531,9 @@ struct CheckVertexArray {
 }
 
 impl CheckVertexArray {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> CheckVertexArray {
-        let check_program = CheckProgram::new(gl_texture_target, resource_loader);
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> CheckVertexArray {
+        let check_program = CheckProgram::new(gl_api, gl_texture_target, resource_loader);
         unsafe {
             let mut vertex_array = 0;
             gl::GenVertexArrays(1, &mut vertex_array); ck();
@@ -545,13 +565,16 @@ struct BlitProgram {
 }
 
 impl BlitProgram {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> BlitProgram {
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> BlitProgram {
         let vertex_shader = Shader::new("quad",
                                         ShaderKind::Vertex,
+                                        gl_api,
                                         gl_texture_target,
                                         resource_loader);
         let fragment_shader = Shader::new("blit",
                                           ShaderKind::Fragment,
+                                          gl_api,
                                           gl_texture_target,
                                           resource_loader);
         let program = Program::new(vertex_shader, fragment_shader);
@@ -603,13 +626,16 @@ struct GridProgram {
 }
 
 impl GridProgram {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> GridProgram {
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> GridProgram {
         let vertex_shader = Shader::new("quad",
                                         ShaderKind::Vertex,
+                                        gl_api,
                                         gl_texture_target,
                                         resource_loader);
         let fragment_shader = Shader::new("grid",
                                           ShaderKind::Fragment,
+                                          gl_api,
                                           gl_texture_target,
                                           resource_loader);
         let program = Program::new(vertex_shader, fragment_shader);
@@ -683,13 +709,16 @@ struct CheckProgram {
 }
 
 impl CheckProgram {
-    fn new(gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader) -> CheckProgram {
+    fn new(gl_api: GLApi, gl_texture_target: GLenum, resource_loader: &dyn ResourceLoader)
+           -> CheckProgram {
         let vertex_shader = Shader::new("quad",
                                         ShaderKind::Vertex,
+                                        gl_api,
                                         gl_texture_target,
                                         resource_loader);
         let fragment_shader = Shader::new("check",
                                           ShaderKind::Fragment,
+                                          gl_api,
                                           gl_texture_target,
                                           resource_loader);
         let program = Program::new(vertex_shader, fragment_shader);

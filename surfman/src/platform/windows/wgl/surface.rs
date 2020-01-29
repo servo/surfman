@@ -34,16 +34,27 @@ use winapi::um::wingdi;
 use winapi::um::winuser;
 use wio::com::ComPtr;
 
-#[cfg(feature = "sm-winit")]
-use winit::Window;
-#[cfg(feature = "sm-winit")]
-use winit::os::windows::WindowExt;
-
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 const WGL_ACCESS_READ_ONLY_NV:  GLenum = 0x0000;
 const WGL_ACCESS_READ_WRITE_NV: GLenum = 0x0001;
 
+/// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
+/// displayed in a native widget or bound to a texture for reading.
+/// 
+/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
+/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
+/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
+/// widget but not bound to a texture.
+/// 
+/// Surfaces are specific to a given context and cannot be rendered to from any context other than
+/// the one they were created with. However, they can be *read* from any context on any thread (as
+/// long as that context shares the same adapter and connection), by wrapping them in a
+/// `SurfaceTexture`.
+/// 
+/// Depending on the platform, each surface may be internally double-buffered.
+/// 
+/// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
 pub struct Surface {
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
@@ -65,6 +76,15 @@ pub(crate) enum Win32Objects {
     },
 }
 
+/// Represents an OpenGL texture that wraps a surface.
+/// 
+/// Reading from the associated OpenGL texture reads from the surface. It is undefined behavior to
+/// write to such a texture (e.g. by binding it to a framebuffer and rendering to that
+/// framebuffer).
+/// 
+/// Surface textures are local to a context, but that context does not have to be the same context
+/// as that associated with the underlying surface. The texture must be destroyed with the
+/// `destroy_surface_texture()` method, or a panic will occur.
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     #[allow(dead_code)]
@@ -90,19 +110,33 @@ impl Drop for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
+/// Wraps a Windows `HWND` window handle.
 pub struct NativeWidget {
-    pub(crate) window_handle: HWND,
+    /// A window handle.
+    ///
+    /// This can be a top-level window or a control.
+    pub window_handle: HWND,
 }
 
 impl Device {
+    /// Creates either a generic or a widget surface, depending on the supplied surface type.
+    /// 
+    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
+    /// up in a `SurfaceTexture` for reading by other contexts.
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
+                          surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        match *surface_type {
-            SurfaceType::Generic { ref size } => self.create_generic_surface(context, size),
-            SurfaceType::Widget { ref native_widget } => {
+        match surface_type {
+            SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
+            SurfaceType::Widget { native_widget } => {
                 self.create_widget_surface(context, native_widget)
             }
         }
@@ -213,7 +247,7 @@ impl Device {
         }
     }
 
-    fn create_widget_surface(&mut self, context: &Context, native_widget: &NativeWidget)
+    fn create_widget_surface(&mut self, context: &Context, native_widget: NativeWidget)
                               -> Result<Surface, Error> {
         unsafe {
             // Get the bounds of the native HWND.
@@ -243,7 +277,14 @@ impl Device {
         }
     }
 
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+    /// Destroys a surface.
+    /// 
+    /// The supplied context must be the context the surface is associated with, or this returns
+    /// an `IncompatibleSurface` error.
+    /// 
+    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
+    /// the `drop` method.
+    pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         let dx_interop_functions =
             WGL_EXTENSION_FUNCTIONS.dx_interop_functions
@@ -251,8 +292,6 @@ impl Device {
                                    .expect("How did you make a surface without DX interop?");
 
         if context.id != surface.context_id {
-            // Leak the surface, and return an error.
-            surface.destroyed = true;
             return Err(Error::IncompatibleSurface);
         }
 
@@ -290,13 +329,20 @@ impl Device {
         Ok(())
     }
 
-    pub fn create_surface_texture(&self, context: &mut Context, mut surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+    /// Creates a surface texture from an existing generic surface for use with the given context.
+    /// 
+    /// The surface texture is local to the supplied context and takes ownership of the surface.
+    /// Destroying the surface texture allows you to retrieve the surface again.
+    /// 
+    /// *The supplied context does not have to be the same context that the surface is associated
+    /// with.* This allows you to render to a surface in one context and sample from that surface
+    /// in another context.
+    /// 
+    /// Calling this method on a widget surface returns a `WidgetAttached` error.
+    pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
         let dxgi_share_handle = match surface.win32_objects {
-            Win32Objects::Widget { .. } => {
-                surface.destroyed = true;
-                return Err(Error::WidgetAttached);
-            }
+            Win32Objects::Widget { .. } => return Err((Error::WidgetAttached, surface)),
             Win32Objects::Texture { dxgi_share_handle, .. } => dxgi_share_handle,
         };
 
@@ -305,7 +351,10 @@ impl Device {
                                    .as_ref()
                                    .expect("How did you make a surface without DX interop?");
 
-        let _guard = self.temporarily_make_context_current(context)?;
+        let _guard = match self.temporarily_make_context_current(context) {
+            Ok(guard) => guard,
+            Err(err) => return Err((err, surface)),
+        };
 
         unsafe {
             // Create a new texture wrapping the shared handle.
@@ -314,8 +363,7 @@ impl Device {
                                                               &ID3D11Texture2D::uuidof(),
                                                               &mut local_d3d11_texture);
             if !winerror::SUCCEEDED(result) || local_d3d11_texture.is_null() {
-                surface.destroyed = true;
-                return Err(Error::SurfaceImportFailed(WindowingApiError::Failed));
+                return Err((Error::SurfaceImportFailed(WindowingApiError::Failed), surface));
             }
             let local_d3d11_texture =
                 ComPtr::from_raw(local_d3d11_texture as *mut ID3D11Texture2D);
@@ -367,16 +415,26 @@ impl Device {
         }
     }
 
+    /// Destroys a surface texture and returns the underlying surface.
+    /// 
+    /// The supplied context must be the same context the surface texture was created with, or an
+    /// `IncompatibleSurfaceTexture` error is returned.
+    /// 
+    /// All surface textures must be explicitly destroyed with this function, or a panic will
+    /// occur.
     pub fn destroy_surface_texture(&self,
                                    context: &mut Context,
                                    mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         let dx_interop_functions =
             WGL_EXTENSION_FUNCTIONS.dx_interop_functions
                                    .as_ref()
                                    .expect("How did you make a surface without DX interop?");
 
-        let _guard = self.temporarily_make_context_current(context)?;
+        let _guard = match self.temporarily_make_context_current(context) {
+            Ok(guard) => guard,
+            Err(err) => return Err((err, surface_texture)),
+        };
 
         unsafe {
             // Unlock the texture.
@@ -439,17 +497,28 @@ impl Device {
         }
     }
 
+    /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
     pub fn lock_surface_data<'s>(&self, _surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
 
+    /// Returns the OpenGL texture target needed to read from this surface texture.
+    /// 
+    /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         gl::TEXTURE_2D
     }
 
+    /// Displays the contents of a widget surface on screen.
+    /// 
+    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
+    /// associated widgets until this method is called.
+    /// 
+    /// The supplied context must match the context the surface was created with, or an
+    /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
         let window_handle = match surface.win32_objects {
             Win32Objects::Widget { window_handle } => window_handle,
@@ -465,6 +534,12 @@ impl Device {
         }
     }
 
+    /// Returns various information about the surface, including the framebuffer object needed to
+    /// render to this surface.
+    /// 
+    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
+    /// on the framebuffer object returned by this function. This framebuffer object may or not be
+    /// 0, the default framebuffer, depending on platform.
     #[inline]
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
         SurfaceInfo {
@@ -477,10 +552,18 @@ impl Device {
             },
         }
     }
+
+    /// Returns the OpenGL texture object containing the contents of this surface.
+    /// 
+    /// It is only legal to read from, not write to, this texture object.
+    #[inline]
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+        surface_texture.gl_texture
+    }
 }
 
 impl Surface {
-    pub fn id(&self) -> SurfaceID {
+    pub(crate) fn id(&self) -> SurfaceID {
         match self.win32_objects {
             Win32Objects::Texture { ref d3d11_texture, .. } => {
                 SurfaceID((*d3d11_texture).as_raw() as usize)
@@ -490,21 +573,7 @@ impl Surface {
     }
 }
 
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.gl_texture
-    }
-}
-
-impl NativeWidget {
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn from_winit_window(window: &Window) -> NativeWidget {
-        NativeWidget { window_handle: window.get_hwnd() as HWND }
-    }
-}
-
+/// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
 }

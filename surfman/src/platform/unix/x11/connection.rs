@@ -2,34 +2,70 @@
 //
 //! A wrapper for X11 server connections (`DISPLAY` variables).
 
+use crate::egl::types::{EGLAttrib, EGLDisplay};
+use crate::egl;
 use crate::error::Error;
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_PLATFORM_X11_KHR;
+use crate::platform::unix::generic::device::Adapter;
+use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 
+use std::marker::PhantomData;
+use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Arc;
-use x11::xlib::{Display, XCloseDisplay, XOpenDisplay};
+use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
 
+lazy_static! {
+    static ref X_THREADS_INIT: () = {
+        unsafe {
+            XInitThreads();
+        }
+    };
+}
+
+/// A connection to the X11 display server.
+#[derive(Clone)]
 pub struct Connection {
-    pub(crate) native_display: Box<dyn NativeDisplay>,
+    pub(crate) native_connection: Arc<NativeConnectionWrapper>,
 }
 
 unsafe impl Send for Connection {}
 
-pub(crate) trait NativeDisplay {
-    fn display(&self) -> *mut Display;
-    fn is_destroyed(&self) -> bool;
-    fn retain(&self) -> Box<dyn NativeDisplay>;
-    unsafe fn destroy(&mut self);
+pub(crate) struct NativeConnectionWrapper {
+    pub(crate) egl_display: EGLDisplay,
+    x11_display: *mut Display,
+    x11_display_is_owned: bool,
 }
 
-impl Clone for Connection {
-    fn clone(&self) -> Connection {
-        Connection { native_display: self.native_display.retain() }
+/// Wrapper for an X11 and EGL display.
+#[derive(Clone)]
+pub struct NativeConnection {
+    /// The EGL display associated with that X11 display.
+    ///
+    /// You can obtain this with `eglGetPlatformDisplay()`.
+    ///
+    /// It is assumed that this EGL display is already initialized, via `eglInitialize()`.
+    pub egl_display: EGLDisplay,
+    /// The corresponding Xlib Display. This must be present; do not pass NULL.
+    pub x11_display: *mut Display,
+}
+
+impl Drop for NativeConnectionWrapper {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            if self.x11_display_is_owned {
+                XCloseDisplay(self.x11_display);
+            }
+            self.x11_display = ptr::null_mut();
+        }
     }
 }
 
@@ -38,25 +74,125 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         unsafe {
-            let display = XOpenDisplay(ptr::null());
-            if display.is_null() {
+            *X_THREADS_INIT;
+
+            let x11_display = XOpenDisplay(ptr::null());
+            if x11_display.is_null() {
                 return Err(Error::ConnectionFailed);
             }
-            let display = Some(Arc::new(OwnedDisplay(display)));
-            Ok(Connection { native_display: Box::new(SharedDisplay { display }) })
+
+            let egl_display = create_egl_display(x11_display);
+
+            Ok(Connection {
+                native_connection: Arc::new(NativeConnectionWrapper {
+                    x11_display,
+                    x11_display_is_owned: true,
+                    egl_display,
+                }),
+            })
         }
     }
 
+    /// Wraps an existing X11 `Display` in a `Connection`.
+    ///
+    /// Important: Before calling this function, X11 must have be initialized in a thread-safe
+    /// manner by using `XInitThreads()`. Otherwise, it will not be safe to use `surfman` from
+    /// multiple threads.
+    ///
+    /// The display is not retained, as there is no way to do that in the X11 API. Therefore, it is
+    /// the caller's responsibility to ensure that the display connection is not closed before this
+    /// `Connection` object is disposed of.
+    #[inline]
+    pub unsafe fn from_native_connection(native_connection: NativeConnection)
+                                         -> Result<Connection, Error> {
+        Ok(Connection {
+            native_connection: Arc::new(NativeConnectionWrapper {
+                egl_display: native_connection.egl_display,
+                x11_display: native_connection.x11_display,
+                x11_display_is_owned: false,
+            }),
+        })
+    }
+
+    fn from_x11_display(x11_display: *mut Display, is_owned: bool) -> Result<Connection, Error> {
+        unsafe {
+            let egl_display = create_egl_display(x11_display);
+            Ok(Connection {
+                native_connection: Arc::new(NativeConnectionWrapper {
+                    egl_display,
+                    x11_display,
+                    x11_display_is_owned: is_owned,
+                }),
+            })
+        }
+    }
+
+    /// Returns the underlying native connection.
+    #[inline]
+    pub fn native_connection(&self) -> NativeConnection {
+        NativeConnection {
+            egl_display: self.native_connection.egl_display,
+            x11_display: self.native_connection.x11_display,
+        }
+    }
+
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
+    /// 
+    /// This is an alias for `Connection::create_hardware_adapter()`.
+    #[inline]
+    pub fn create_adapter(&self) -> Result<Adapter, Error> {
+        self.create_hardware_adapter()
+    }
+
+    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
+    #[inline]
+    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
+        Ok(Adapter::hardware())
+    }
+
+    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
+    #[inline]
+    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
+        Ok(Adapter::low_power())
+    }
+
+    /// Returns the "best" adapter on this system, preferring software adapters.
+    #[inline]
+    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
+        Ok(Adapter::software())
+    }
+
+    /// Opens the hardware device corresponding to the given adapter.
+    /// 
+    /// Device handles are local to a single thread.
+    #[inline]
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        Device::new(self, adapter)
+    }
+
+    /// Opens the hardware device corresponding to the adapter wrapped in the given native
+    /// device.
+    ///
+    /// This is present for compatibility with other backends.
+    #[inline]
+    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
+                                                   -> Result<Device, Error> {
+        Device::new(self, &native_device.adapter)
+    }
+
+    /// Opens the display connection corresponding to the given `winit` window.
+    #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
         if let Some(display) = window.get_xlib_display() {
-            Ok(Connection {
-                native_display: Box::new(UnsafeDisplayRef { display: display as *mut Display }),
-            })
+            Connection::from_x11_display(display as *mut Display, false)
         } else {
             Err(Error::IncompatibleWinitWindow)
         }
     }
 
+    /// Creates a native widget type from the given `winit` window.
+    /// 
+    /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
@@ -67,67 +203,49 @@ impl Connection {
     }
 }
 
-pub(crate) struct SharedDisplay {
-    pub(crate) display: Option<Arc<OwnedDisplay>>,
-}
-
-pub(crate) struct OwnedDisplay(*mut Display);
-
-impl NativeDisplay for SharedDisplay {
+impl NativeConnectionWrapper {
     #[inline]
-    fn display(&self) -> *mut Display {
-        debug_assert!(!self.is_destroyed());
-        self.display.as_ref().unwrap().0
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.display.is_none()
-    }
-
-    #[inline]
-    fn retain(&self) -> Box<dyn NativeDisplay> {
-        Box::new(SharedDisplay { display: self.display.clone() })
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        self.display = None;
-    }
-}
-
-impl Drop for OwnedDisplay {
-    fn drop(&mut self) {
+    pub(crate) fn lock_display(&self) -> DisplayGuard {
         unsafe {
-            XCloseDisplay(self.0);
+            let display = self.x11_display;
+            XLockDisplay(display);
+            DisplayGuard { display, phantom: PhantomData }
         }
     }
 }
 
-pub(crate) struct UnsafeDisplayRef {
-    pub(crate) display: *mut Display,
+pub(crate) struct DisplayGuard<'a> {
+    display: *mut Display,
+    phantom: PhantomData<&'a ()>,
 }
 
-impl NativeDisplay for UnsafeDisplayRef {
+impl<'a> Drop for DisplayGuard<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            XUnlockDisplay(self.display);
+        }
+    }
+}
+
+impl<'a> DisplayGuard<'a> {
     #[inline]
-    fn display(&self) -> *mut Display {
-        debug_assert!(!self.is_destroyed());
+    pub(crate) fn display(&self) -> *mut Display {
         self.display
     }
+}
 
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.display.is_null()
-    }
+unsafe fn create_egl_display(display: *mut Display) -> EGLDisplay {
+    EGL_FUNCTIONS.with(|egl| {
+        let display_attributes = [egl::NONE as EGLAttrib];
+        let egl_display = egl.GetPlatformDisplay(EGL_PLATFORM_X11_KHR,
+                                                 display as *mut c_void,
+                                                 display_attributes.as_ptr());
 
-    #[inline]
-    fn retain(&self) -> Box<dyn NativeDisplay> {
-        Box::new(UnsafeDisplayRef { display: self.display })
-    }
+        let (mut egl_major_version, mut egl_minor_version) = (0, 0);
+        let ok = egl.Initialize(egl_display, &mut egl_major_version, &mut egl_minor_version);
+        assert_ne!(ok, egl::FALSE);
 
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        self.display = ptr::null_mut();
-    }
+        egl_display
+    })
 }
 

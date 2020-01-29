@@ -3,13 +3,14 @@
 //! Demonstrates how to use `surfman` to draw to a window surface via the CPU.
 
 use euclid::default::Point2D;
-
 use rand::{self, Rng};
-use surfman::{Adapter, Connection, ContextAttributeFlags, ContextAttributes, Device, GLVersion};
-use surfman::{NativeWidget, SurfaceAccess, SurfaceType};
+use surfman::{SurfaceAccess, SurfaceType};
 use winit::dpi::PhysicalSize;
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
 use winit::{WindowBuilder, WindowEvent};
+
+#[cfg(target_os = "macos")]
+use surfman::SystemConnection;
 
 const WINDOW_WIDTH:  i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
@@ -18,7 +19,7 @@ const BYTES_PER_PIXEL: usize = 4;
 
 const FOREGROUND_COLOR: u32 = !0;
 
-const ITERATIONS_PER_FRAME: usize = 200;
+const ITERATIONS_PER_FRAME: usize = 20;
 
 static TRIANGLE_POINTS: [(f32, f32); 3] = [
     (400.0,          300.0 + 75.0 + 150.0),
@@ -26,9 +27,16 @@ static TRIANGLE_POINTS: [(f32, f32); 3] = [
     (400.0 - 259.81, 300.0 + 75.0 - 300.0),
 ];
 
+#[cfg(not(target_os = "macos"))]
 fn main() {
-    let (connection, adapter) = (Connection::new().unwrap(), Adapter::default().unwrap());
-    let mut device = Device::new(&connection, &adapter).unwrap();
+    println!("The `chaos_game` demo is not yet supported on this platform.");
+}
+
+#[cfg(target_os = "macos")]
+fn main() {
+    let connection = SystemConnection::new().unwrap();
+    let adapter = connection.create_adapter().unwrap();
+    let mut device = connection.create_device(&adapter).unwrap();
 
     let mut event_loop = EventsLoop::new();
     let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
@@ -40,16 +48,10 @@ fn main() {
                                      .unwrap();
     window.show();
 
-    let native_widget = NativeWidget::from_winit_window(&window);
-    let context_descriptor = device.create_context_descriptor(&ContextAttributes {
-        version: GLVersion::new(2, 0),
-        flags: ContextAttributeFlags::empty(),
-    }).unwrap();
+    let native_widget = connection.create_native_widget_from_winit_window(&window).unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
-    let context = device.create_context(&context_descriptor).unwrap();
-    let mut surface = device.create_surface(&context, SurfaceAccess::GPUCPU, &surface_type)
-                            .unwrap();
+    let mut surface = device.create_surface(SurfaceAccess::GPUCPU, surface_type).unwrap();
 
     let mut rng = rand::thread_rng();
     let mut point = Point2D::new(WINDOW_WIDTH as f32 * 0.5, WINDOW_HEIGHT as f32 * 0.5);
@@ -64,7 +66,7 @@ fn main() {
         }
 
         device.lock_surface_data(&mut surface).unwrap().data().copy_from_slice(&data);
-        device.present_surface(&context, &mut surface).unwrap();
+        device.present_surface(&mut surface).unwrap();
 
         event_loop.poll_events(|event| {
             match event {

@@ -1,9 +1,10 @@
-// surfman/src/gl_utils.rs
+// surfman/surfman/src/gl_utils.rs
 //
 //! Various OpenGL utilities used by the different backends.
 
-use crate::gl::types::{GLenum, GLuint};
-use crate::gl::{self, Gl};
+use crate::Gl;
+use crate::gl::types::{GLenum, GLint, GLuint};
+use crate::gl;
 
 #[allow(dead_code)]
 pub(crate) fn create_and_bind_framebuffer(gl: &Gl, texture_target: GLenum, texture_object: GLuint)
@@ -21,20 +22,25 @@ pub(crate) fn create_and_bind_framebuffer(gl: &Gl, texture_target: GLenum, textu
     }
 }
 
-#[allow(dead_code)]
-pub(crate) fn destroy_framebuffer(gl: &Gl, framebuffer_object: GLuint) {
+pub(crate) fn unbind_framebuffer_if_necessary(gl: &Gl, framebuffer_object: GLuint) {
     unsafe {
-        // Unbind the framebuffer if currently bound.
+        // Unbind the framebuffer if it's bound.
         let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
         gl.GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut current_draw_framebuffer);
         gl.GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut current_read_framebuffer);
-        if current_draw_framebuffer as GLuint == framebuffer_object {
+        if current_draw_framebuffer == framebuffer_object as GLint {
             gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
         }
-        if current_read_framebuffer as GLuint == framebuffer_object {
+        if current_read_framebuffer == framebuffer_object as GLint {
             gl.BindFramebuffer(gl::READ_FRAMEBUFFER, 0);
         }
+    }
+}
 
+#[allow(dead_code)]
+pub(crate) fn destroy_framebuffer(gl: &Gl, framebuffer_object: GLuint) {
+    unbind_framebuffer_if_necessary(gl, framebuffer_object);
+    unsafe {
         gl.DeleteFramebuffers(1, &framebuffer_object);
     }
 }

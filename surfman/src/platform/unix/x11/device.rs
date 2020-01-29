@@ -1,93 +1,64 @@
-//! A wrapper around X11 Displays.
+// surfman/surfman/src/platform/unix/x11/device.rs
+//
+//! A wrapper around X11 `EGLDisplay`s.
 
-use crate::glx::types::Display as GlxDisplay;
 use crate::{Error, GLApi};
-use super::adapter::Adapter;
-use super::connection::Connection;
+use super::connection::{Connection, NativeConnectionWrapper};
 
-use std::os::raw::c_int;
-use std::ptr;
-use x11::xlib::{self, Display, XCloseDisplay};
+use std::sync::Arc;
 
+pub use crate::platform::unix::generic::device::Adapter;
+
+/// A thread-local handle to a device.
+///
+/// Devices contain most of the relevant surface management methods.
 pub struct Device {
-    pub(crate) connection: Connection,
+    pub(crate) native_connection: Arc<NativeConnectionWrapper>,
+    pub(crate) adapter: Adapter,
 }
 
-pub(crate) trait NativeDisplay {
-    fn display(&self) -> *mut Display;
-    fn is_destroyed(&self) -> bool;
-    unsafe fn destroy(&mut self);
+/// Wraps an adapter.
+///
+/// On X11, devices and adapters are essentially identical types.
+#[derive(Clone)]
+pub struct NativeDevice {
+    /// The hardware adapter corresponding to this device.
+    pub adapter: Adapter,
 }
 
 impl Device {
     #[inline]
-    pub fn new(connection: &Connection, _: &Adapter) -> Result<Device, Error> {
-        Ok(Device { connection: (*connection).clone() })
+    pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
+        Ok(Device {
+            native_connection: connection.native_connection.clone(),
+            adapter: (*adapter).clone(),
+        })
     }
 
+    /// Returns the native device corresponding to this device.
+    ///
+    /// This method is essentially an alias for the `adapter()` method on Wayland, since there is
+    /// no explicit concept of a device on this backend.
     #[inline]
-    pub fn adapter(&self) -> Adapter {
-        Adapter
+    pub fn native_device(&self) -> NativeDevice {
+        NativeDevice { adapter: self.adapter() }
     }
 
+    /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
-        self.connection.clone()
+        Connection { native_connection: self.native_connection.clone() }
     }
 
+    /// Returns the adapter that this device was created with.
     #[inline]
-    pub fn gl_api() -> GLApi {
+    pub fn adapter(&self) -> Adapter {
+        self.adapter.clone()
+    }
+
+    /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
+    #[inline]
+    pub fn gl_api(&self) -> GLApi {
         GLApi::GL
     }
-
-    pub(crate) fn glx_display(&self) -> *mut GlxDisplay {
-        self.connection.native_display.display() as *mut GlxDisplay
-    }
 }
-
-pub(crate) struct OwnedDisplay {
-    pub(crate) display: *mut Display,
-}
-
-impl NativeDisplay for OwnedDisplay {
-    #[inline]
-    fn display(&self) -> *mut Display {
-        debug_assert!(!self.is_destroyed());
-        self.display
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.display.is_null()
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        let result = XCloseDisplay(self.display);
-        assert_eq!(result, xlib::Success as c_int);
-        self.display = ptr::null_mut();
-    }
-}
-
-pub(crate) struct UnsafeDisplayRef {
-    pub(crate) display: *mut Display,
-}
-
-impl NativeDisplay for UnsafeDisplayRef {
-    #[inline]
-    fn display(&self) -> *mut Display {
-        debug_assert!(!self.is_destroyed());
-        self.display
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.display.is_null()
-    }
-
-    unsafe fn destroy(&mut self) {
-        assert!(!self.is_destroyed());
-        self.display = ptr::null_mut();
-    }
-}
-

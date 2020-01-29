@@ -2,30 +2,56 @@
 //
 //! Functionality common to backends using EGL contexts.
 
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
+use crate::context::{self, CREATE_CONTEXT_MUTEX};
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
+use crate::gl::types::GLuint;
+use crate::gl;
+use crate::surface::Framebuffer;
+use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
+use crate::{Gl, SurfaceInfo};
 use super::device::EGL_FUNCTIONS;
 use super::error::ToWindowingApiError;
+use super::ffi::{EGL_CONTEXT_MINOR_VERSION_KHR, EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT};
+use super::ffi::{EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT, EGL_CONTEXT_OPENGL_PROFILE_MASK};
+use super::surface::{EGLBackedSurface, ExternalEGLSurfaces};
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
+use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
+use std::thread;
 
 #[allow(dead_code)]
 const DUMMY_PBUFFER_SIZE: EGLint = 16;
 const RGB_CHANNEL_BIT_DEPTH: EGLint = 8;
 
-pub(crate) trait NativeContext {
-    fn egl_context(&self) -> EGLContext;
-    fn is_destroyed(&self) -> bool;
-    unsafe fn destroy(&mut self, egl_display: EGLDisplay);
+pub(crate) struct EGLBackedContext {
+    pub(crate) egl_context: EGLContext,
+    pub(crate) id: ContextID,
+    framebuffer: Framebuffer<EGLBackedSurface, ExternalEGLSurfaces>,
+    context_is_owned: bool,
 }
 
+/// Wrapper for a native `EGLContext`.
+#[derive(Clone, Copy)]
+pub struct NativeContext {
+    /// The EGL context.
+    pub egl_context: EGLContext,
+    /// The EGL read surface that is to be attached to that context.
+    pub egl_read_surface: EGLSurface,
+    /// The EGL draw surface that is to be attached to that context.
+    pub egl_draw_surface: EGLSurface,
+}
+
+/// Information needed to create a context. Some APIs call this a "config" or a "pixel format".
+/// 
+/// These are local to a device.
 #[derive(Clone)]
 pub struct ContextDescriptor {
     pub(crate) egl_config_id: EGLint,
-    pub(crate) egl_context_client_version: EGLint,
+    pub(crate) gl_version: GLVersion,
+    pub(crate) compatibility_profile: bool,
 }
 
 #[must_use]
@@ -34,6 +60,15 @@ pub(crate) struct CurrentContextGuard {
     old_egl_draw_surface: EGLSurface,
     old_egl_read_surface: EGLSurface,
     old_egl_context: EGLContext,
+}
+
+impl Drop for EGLBackedContext {
+    #[inline]
+    fn drop(&mut self) {
+        if self.egl_context != egl::NO_CONTEXT && !thread::panicking() {
+            panic!("Contexts must be destroyed explicitly with `destroy_context`!")
+        }
+    }
 }
 
 impl Drop for CurrentContextGuard {
@@ -51,15 +86,188 @@ impl Drop for CurrentContextGuard {
     }
 }
 
+impl EGLBackedContext {
+    pub(crate) unsafe fn new(egl_display: EGLDisplay,
+                             descriptor: &ContextDescriptor,
+                             gl_api: GLApi)
+                             -> Result<EGLBackedContext, Error> {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+
+        // Create the context.
+        let egl_context = create_context(egl_display, descriptor, gl_api)?;
+
+        // Wrap and return it.
+        let context = EGLBackedContext {
+            egl_context,
+            id: *next_context_id,
+            framebuffer: Framebuffer::None,
+            context_is_owned: true,
+        };
+        next_context_id.0 += 1;
+        Ok(context)
+    }
+
+    pub(crate) unsafe fn from_native_context(native_context: NativeContext) -> EGLBackedContext {
+        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let context = EGLBackedContext {
+            egl_context: native_context.egl_context,
+            id: *next_context_id,
+            framebuffer: Framebuffer::External(ExternalEGLSurfaces {
+                draw: native_context.egl_draw_surface,
+                read: native_context.egl_read_surface,
+            }),
+            context_is_owned: false,
+        };
+        next_context_id.0 += 1;
+        context
+    }
+
+    pub(crate) unsafe fn destroy(&mut self, egl_display: EGLDisplay) {
+        EGL_FUNCTIONS.with(|egl| {
+            egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl::NO_CONTEXT);
+
+            if self.context_is_owned {
+                let result = egl.DestroyContext(egl_display, self.egl_context);
+                assert_ne!(result, egl::FALSE);
+            }
+
+            self.egl_context = egl::NO_CONTEXT;
+        });
+    }
+
+    pub(crate) fn native_context(&self) -> NativeContext {
+        let egl_surfaces = match self.framebuffer {
+            Framebuffer::Surface(ref surface) => surface.egl_surfaces(),
+            Framebuffer::External(ref surfaces) => (*surfaces).clone(),
+            Framebuffer::None => ExternalEGLSurfaces::default(),
+        };
+
+        NativeContext {
+            egl_context: self.egl_context,
+            egl_draw_surface: egl_surfaces.draw,
+            egl_read_surface: egl_surfaces.read,
+        }
+    }
+
+    pub(crate) unsafe fn make_current(&self, egl_display: EGLDisplay) -> Result<(), Error> {
+        let egl_surfaces = match self.framebuffer {
+            Framebuffer::Surface(ref surface) => surface.egl_surfaces(),
+            Framebuffer::External(ref surfaces) => (*surfaces).clone(),
+            Framebuffer::None => ExternalEGLSurfaces::default(),
+        };
+
+        EGL_FUNCTIONS.with(|egl| {
+            let result = egl.MakeCurrent(egl_display,
+                                         egl_surfaces.draw,
+                                         egl_surfaces.read,
+                                         self.egl_context);
+            if result == egl::FALSE {
+                let err = egl.GetError().to_windowing_api_error();
+                return Err(Error::MakeCurrentFailed(err));
+            }
+            Ok(())
+        })
+    }
+
+    #[inline]
+    pub(crate) fn is_current(&self) -> bool {
+        unsafe {
+            EGL_FUNCTIONS.with(|egl| egl.GetCurrentContext() == self.egl_context)
+        }
+    }
+
+    pub(crate) unsafe fn bind_surface(&mut self,
+                                      egl_display: EGLDisplay,
+                                      surface: EGLBackedSurface)
+                                      -> Result<(), (Error, EGLBackedSurface)> {
+        if self.id != surface.context_id {
+            return Err((Error::IncompatibleSurface, surface));
+        }
+
+        match self.framebuffer {
+            Framebuffer::None => self.framebuffer = Framebuffer::Surface(surface),
+            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
+            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
+        }
+
+        // If we're current, call `make_context_current()` again to switch to the new framebuffer.
+        if self.is_current() {
+            drop(self.make_current(egl_display))
+        }
+
+        Ok(())
+    }
+
+    pub(crate) unsafe fn unbind_surface(&mut self, gl: &Gl, egl_display: EGLDisplay)
+                                        -> Result<Option<EGLBackedSurface>, Error> {
+        match self.framebuffer {
+            Framebuffer::None => return Ok(None),
+            Framebuffer::Surface(_) => {}
+            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
+        }
+
+        let surface = match mem::replace(&mut self.framebuffer, Framebuffer::None) {
+            Framebuffer::Surface(surface) => surface,
+            Framebuffer::None | Framebuffer::External(_) => unreachable!(),
+        };
+
+        // If we're current, we stay current, but with no surface attached.
+        surface.unbind(gl, egl_display, self.egl_context);
+
+        Ok(Some(surface))
+    }
+
+    pub(crate) fn surface_info(&self) -> Result<Option<SurfaceInfo>, Error> {
+        match self.framebuffer {
+            Framebuffer::None => Ok(None),
+            Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface.info())),
+        }
+    }
+}
+
+impl NativeContext {
+    /// Returns the current EGL context and surfaces, if applicable.
+    ///
+    /// If there is no current EGL context, this returns a `NoCurrentContext` error.
+    pub fn current() -> Result<NativeContext, Error> {
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
+                let egl_context = egl.GetCurrentContext();
+                if egl_context == egl::NO_CONTEXT {
+                    Err(Error::NoCurrentContext)
+                } else {
+                    Ok(NativeContext {
+                        egl_context,
+                        egl_read_surface: egl.GetCurrentSurface(egl::READ as EGLint),
+                        egl_draw_surface: egl.GetCurrentSurface(egl::DRAW as EGLint),
+                    })
+                }
+            }
+        })
+    }
+}
+
 impl ContextDescriptor {
     pub(crate) unsafe fn new(egl_display: EGLDisplay,
                              attributes: &ContextAttributes,
                              extra_config_attributes: &[EGLint])
                              -> Result<ContextDescriptor, Error> {
         let flags = attributes.flags;
+
         let alpha_size   = if flags.contains(ContextAttributeFlags::ALPHA)   { 8  } else { 0 };
         let depth_size   = if flags.contains(ContextAttributeFlags::DEPTH)   { 24 } else { 0 };
         let stencil_size = if flags.contains(ContextAttributeFlags::STENCIL) { 8  } else { 0 };
+
+        let compatibility_profile = flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE);
+
+        // Mesa doesn't support the OpenGL compatibility profile post version 3.0. Take that into
+        // account.
+        if compatibility_profile &&
+                (attributes.version.major > 3 ||
+                 attributes.version.major == 3 && attributes.version.minor > 0) {
+            return Err(Error::UnsupportedGLProfile);
+        }
 
         // Create required config attributes.
         //
@@ -123,19 +331,30 @@ impl ContextDescriptor {
 
             // Get the config ID and version.
             let egl_config_id = get_config_attr(egl_display, egl_config, egl::CONFIG_ID as EGLint);
-            let egl_context_client_version = attributes.version.major as EGLint;
+            let gl_version = attributes.version;
 
-            Ok(ContextDescriptor { egl_config_id, egl_context_client_version })
+            Ok(ContextDescriptor {
+                egl_config_id,
+                gl_version,
+                compatibility_profile,
+            })
         })
     }
 
-    pub(crate) unsafe fn from_egl_context(egl_display: EGLDisplay, egl_context: EGLContext)
+    pub(crate) unsafe fn from_egl_context(gl: &Gl,
+                                          egl_display: EGLDisplay,
+                                          egl_context: EGLContext)
                                           -> ContextDescriptor {
         let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
-        let egl_context_client_version = get_context_attr(egl_display,
-                                                          egl_context,
-                                                          egl::CONTEXT_CLIENT_VERSION as EGLint);
-        ContextDescriptor { egl_config_id, egl_context_client_version }
+
+        EGL_FUNCTIONS.with(|egl| {
+            let _guard = CurrentContextGuard::new();
+            egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
+            let gl_version = GLVersion::current(gl);
+            let compatibility_profile = context::current_context_uses_compatibility_profile(gl);
+
+            ContextDescriptor { egl_config_id, gl_version, compatibility_profile }
+        })
     }
 
     #[allow(dead_code)]
@@ -172,11 +391,11 @@ impl ContextDescriptor {
         attribute_flags.set(ContextAttributeFlags::DEPTH, depth_size != 0);
         attribute_flags.set(ContextAttributeFlags::STENCIL, stencil_size != 0);
 
+        attribute_flags.set(ContextAttributeFlags::COMPATIBILITY_PROFILE,
+                            self.compatibility_profile);
+
         // Create appropriate context attributes.
-        ContextAttributes {
-            flags: attribute_flags,
-            version: GLVersion::new(self.egl_context_client_version as u8, 0),
-        }
+        ContextAttributes { flags: attribute_flags, version: self.gl_version }
     }
 }
 
@@ -195,64 +414,32 @@ impl CurrentContextGuard {
     }
 }
 
-pub(crate) struct OwnedEGLContext {
-    pub(crate) egl_context: EGLContext,
-}
-
-impl NativeContext for OwnedEGLContext {
-    #[inline]
-    fn egl_context(&self) -> EGLContext {
-        self.egl_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.egl_context == egl::NO_CONTEXT
-    }
-
-    unsafe fn destroy(&mut self, egl_display: EGLDisplay) {
-        assert!(!self.is_destroyed());
-
-        EGL_FUNCTIONS.with(|egl| {
-            egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl::NO_CONTEXT);
-            let result = egl.DestroyContext(egl_display, self.egl_context);
-            assert_ne!(result, egl::FALSE);
-            self.egl_context = egl::NO_CONTEXT;
-        })
-    }
-}
-
-pub(crate) struct UnsafeEGLContextRef {
-    pub(crate) egl_context: EGLContext,
-}
-
-impl NativeContext for UnsafeEGLContextRef {
-    #[inline]
-    fn egl_context(&self) -> EGLContext {
-        self.egl_context
-    }
-
-    #[inline]
-    fn is_destroyed(&self) -> bool {
-        self.egl_context == egl::NO_CONTEXT
-    }
-
-    unsafe fn destroy(&mut self, _: EGLDisplay) {
-        assert!(!self.is_destroyed());
-        self.egl_context = egl::NO_CONTEXT;
-    }
-}
-
-pub(crate) unsafe fn create_context(egl_display: EGLDisplay, descriptor: &ContextDescriptor)
+pub(crate) unsafe fn create_context(egl_display: EGLDisplay,
+                                    descriptor: &ContextDescriptor,
+                                    gl_api: GLApi)
                                     -> Result<EGLContext, Error> {
+    EGL_FUNCTIONS.with(|egl| {
+        let ok = match gl_api {
+            GLApi::GL => egl.BindAPI(egl::OPENGL_API),
+            GLApi::GLES => egl.BindAPI(egl::OPENGL_ES_API),
+        };
+        assert_ne!(ok, egl::FALSE);
+    });
+
     let egl_config = egl_config_from_id(egl_display, descriptor.egl_config_id);
-    let egl_context_client_version = descriptor.egl_context_client_version;
+
+    let mut profile_mask = EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT;
+    if descriptor.compatibility_profile {
+        profile_mask |= EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT;
+    }
 
     // Include some extra zeroes to work around broken implementations.
     //
     // FIXME(pcwalton): Which implementations are those? (This is copied from Gecko.)
     let egl_context_attributes = [
-        egl::CONTEXT_CLIENT_VERSION as EGLint, egl_context_client_version,
+        egl::CONTEXT_CLIENT_VERSION as EGLint,      descriptor.gl_version.major as EGLint,
+        EGL_CONTEXT_MINOR_VERSION_KHR as EGLint,    descriptor.gl_version.minor as EGLint,
+        EGL_CONTEXT_OPENGL_PROFILE_MASK as EGLint,  profile_mask,
         egl::NONE as EGLint, 0,
         0, 0,
     ];
@@ -263,7 +450,8 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay, descriptor: &Contex
                                             egl::NO_CONTEXT,
                                             egl_context_attributes.as_ptr());
         if egl_context == egl::NO_CONTEXT {
-            let err = egl.GetError().to_windowing_api_error();
+            let err = egl.GetError();
+            let err = err.to_windowing_api_error();
             return Err(Error::ContextCreationFailed(err));
         }
 

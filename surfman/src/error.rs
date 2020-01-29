@@ -1,5 +1,8 @@
+// surfman/surfman/src/error.rs
+//
 //! Various errors that methods can produce.
 
+/// Various errors that methods can produce.
 #[derive(Debug)]
 pub enum Error {
     /// The method failed for a miscellaneous reason.
@@ -10,6 +13,14 @@ pub enum Error {
     Unimplemented,
     /// The system doesn't support the requested OpenGL API type (OpenGL or OpenGL ES).
     UnsupportedGLType,
+    /// The system doesn't support the requested OpenGL compatibility profile for the supplied
+    /// OpenGL version.
+    /// 
+    /// On some systems, like macOS, the compatibility profile is only supported on some GL
+    /// versions.
+    UnsupportedGLProfile,
+    /// The system doesn't support the requested OpenGL API version.
+    UnsupportedGLVersion,
     /// Choosing an OpenGL pixel format failed.
     PixelFormatSelectionFailed(WindowingApiError),
     /// The system couldn't choose an OpenGL pixel format.
@@ -40,8 +51,12 @@ pub enum Error {
     SurfaceImportFailed(WindowingApiError),
     /// The system couldn't create a surface texture from a surface.
     SurfaceTextureCreationFailed(WindowingApiError),
-    /// A context couldn't be created because there was no current context.
+    /// The system couldn't present a widget surface.
+    PresentFailed(WindowingApiError),
+    /// A context couldn't be created because there is no current context.
     NoCurrentContext,
+    /// The current connection couldn't be fetched because there is no current connection.
+    NoCurrentConnection,
     /// The surface was not created from this context.
     IncompatibleSurface,
     /// The context descriptor is from a hardware device, but this is a software device, or vice
@@ -52,13 +67,9 @@ pub enum Error {
     /// The surface texture is from a hardware device, but this is a software device, or vice
     /// versa.
     IncompatibleSurfaceTexture,
-    /// There is no hardware adapter available with this backend.
-    NoHardwareAdapters,
-    /// There is no software adapter available with this backend.
-    NoSoftwareAdapters,
     /// The surface has no window attachment.
     NoWidgetAttached,
-    /// The surface has a window attachement.
+    /// The surface has a window attachment.
     WidgetAttached,
     /// The native widget is invalid.
     InvalidNativeWidget,
@@ -71,10 +82,16 @@ pub enum Error {
     ConnectionFailed,
     /// A connection to the window server is required to open a hardware device.
     ConnectionRequired,
+    /// The adapter type does not match the supplied connection.
+    IncompatibleAdapter,
     /// The native widget type does not match the supplied device.
     IncompatibleNativeWidget,
     /// The `winit` window is incompatible with this backend.
     IncompatibleWinitWindow,
+    /// The native context does not match the supplied device.
+    IncompatibleNativeContext,
+    /// The native device does not match the supplied connection.
+    IncompatibleNativeDevice,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
@@ -91,6 +108,7 @@ pub enum WindowingApiError {
     /// CGL: Invalid renderer property.
 	BadProperty,
     /// CGL: Invalid pixel format object.
+    /// X11: Invalid framebuffer configuration, including an unsupported OpenGL version.
 	BadPixelFormat,
     /// CGL: Invalid renderer information object.
 	BadRendererInfo,
@@ -166,4 +184,6 @@ pub enum WindowingApiError {
     /// GL: Given when the set of state for a command is not legal for the parameters given to that
     /// command.
     BadOperation,
+    /// EGL: The EGL configuration is unsupported.
+    BadConfig,
 }

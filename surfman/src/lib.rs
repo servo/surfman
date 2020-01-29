@@ -1,3 +1,5 @@
+// surfman/surfman/src/lib.rs
+//
 //! Cross-platform GPU device and surface management.
 //!
 //! You can use this crate to multithread a graphics application so that rendering happens on
@@ -6,21 +8,40 @@
 //! This is in contrast to crates like SDL, GLFW, winit, and Glutin, all of which have a broader
 //! focus in that they manage windowing and the event loop as well.
 
+#![warn(missing_docs)]
+
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
+#[allow(unused_imports)]
+#[macro_use]
+extern crate log;
 
 #[cfg(target_os = "macos")]
 #[macro_use]
 extern crate objc;
 
 pub mod platform;
-pub use platform::default::adapter::Adapter;
 pub use platform::default::connection::Connection;
 pub use platform::default::context::{Context, ContextDescriptor};
-pub use platform::default::device::Device;
-pub use platform::default::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture};
+pub use platform::default::device::{Adapter, Device};
+pub use platform::default::surface::{NativeWidget, Surface, SurfaceTexture};
+
+// TODO(pcwalton): Fill this in with other OS's.
+#[cfg(target_os = "android")]
+pub use platform::default::context::NativeContext;
+#[cfg(target_os = "android")]
+pub use platform::default::device::NativeDevice;
+#[cfg(target_os = "macos")]
+pub use platform::system::connection::Connection as SystemConnection;
+#[cfg(target_os = "macos")]
+pub use platform::system::device::{Adapter as SystemAdapter, Device as SystemDevice};
+#[cfg(target_os = "macos")]
+pub use platform::system::surface::Surface as SystemSurface;
+
+pub mod connection;
+pub mod device;
 
 pub mod error;
 pub use crate::error::{Error, WindowingApiError};
@@ -32,18 +53,20 @@ mod info;
 pub use crate::info::{GLApi, GLVersion};
 
 mod surface;
-pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
+pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
+
+pub mod macros;
+
+#[cfg(target_os = "android")]
+pub(crate) use crate::gl::Gles2 as Gl;
+#[cfg(not(target_os = "android"))]
+pub(crate) use crate::gl::Gl;
 
 mod gl_utils;
 mod renderbuffers;
 
 mod gl {
     include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
-}
-
-#[cfg(any(feature = "sm-x11", all(unix, not(any(target_os = "macos", target_os = "android")))))]
-mod glx {
-    include!(concat!(env!("OUT_DIR"), "/glx_bindings.rs"));
 }
 
 #[cfg(any(target_os = "android", all(target_os = "windows", feature = "sm-angle"), unix))]
@@ -62,6 +85,3 @@ mod egl {
     pub type NativeWindowType = EGLNativeWindowType;
     include!(concat!(env!("OUT_DIR"), "/egl_bindings.rs"));
 }
-
-#[cfg(test)]
-mod tests;

@@ -9,7 +9,6 @@ use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
-use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_DXGI_KEYED_MUTEX_ANGLE;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
@@ -26,20 +25,30 @@ use std::thread;
 use winapi::shared::dxgi::IDXGIKeyedMutex;
 use winapi::shared::windef::{HWND, RECT};
 use winapi::shared::winerror::S_OK;
-use winapi::um::d3d11;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::HANDLE;
 use winapi::um::winuser;
 use wio::com::ComPtr;
 
-#[cfg(feature = "sm-winit")]
-use winit::Window;
-#[cfg(feature = "sm-winit")]
-use winit::os::windows::WindowExt;
-
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
+/// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
+/// displayed in a native widget or bound to a texture for reading.
+/// 
+/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
+/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
+/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
+/// widget but not bound to a texture.
+/// 
+/// Surfaces are specific to a given context and cannot be rendered to from any context other than
+/// the one they were created with. However, they can be *read* from any context on any thread (as
+/// long as that context shares the same adapter and connection), by wrapping them in a
+/// `SurfaceTexture`.
+/// 
+/// Depending on the platform, each surface may be internally double-buffered.
+/// 
+/// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
 pub struct Surface {
     pub(crate) egl_surface: EGLSurface,
     pub(crate) size: Size2D<i32>,
@@ -48,7 +57,15 @@ pub struct Surface {
     pub(crate) win32_objects: Win32Objects,
 }
 
-#[derive(Debug)]
+/// Represents an OpenGL texture that wraps a surface.
+/// 
+/// Reading from the associated OpenGL texture reads from the surface. It is undefined behavior to
+/// write to such a texture (e.g. by binding it to a framebuffer and rendering to that
+/// framebuffer).
+/// 
+/// Surface textures are local to a context, but that context does not have to be the same context
+/// as that associated with the underlying surface. The texture must be destroyed with the
+/// `destroy_surface_texture()` method, or a panic will occur.
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_surface: EGLSurface,
@@ -73,31 +90,44 @@ impl Drop for Surface {
     }
 }
 
+impl Debug for SurfaceTexture {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
 pub(crate) enum Win32Objects {
     Window,
     Pbuffer {
-        share_handle: HandleOrTexture,
+        share_handle: HANDLE,
         keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
     }
 }
 
-#[derive(Copy, Clone)]
-pub(crate) enum HandleOrTexture {
-    Handle(HANDLE),
-    Texture(*mut d3d11::ID3D11Texture2D)
+/// Wraps a Windows `HWND` window handle.
+#[cfg(not(target_vendor = "uwp"))]
+pub struct NativeWidget {
+    /// A window handle.
+    ///
+    /// This can be a top-level window or a control.
+    pub window_handle: HWND,
 }
 
-pub struct NativeWidget {
-    pub(crate) window_handle: HWND,
-}
+/// A placeholder native widget type for UWP, which isn't supported at the moment.
+#[cfg(target_vendor = "uwp")]
+pub struct NativeWidget;
 
 impl Device {
+    /// Creates either a generic or a widget surface, depending on the supplied surface type.
+    /// 
+    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
+    /// up in a `SurfaceTexture` for reading by other contexts.
     pub fn create_surface(&mut self,
                           context: &Context,
                           _: SurfaceAccess,
-                          surface_type: &SurfaceType<NativeWidget>)
+                          surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        match *surface_type {
+        match surface_type {
             SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size, None),
             #[cfg(not(target_vendor = "uwp"))]
             SurfaceType::Widget { ref native_widget } => {
@@ -112,7 +142,7 @@ impl Device {
     fn create_pbuffer_surface(&mut self,
                               context: &Context,
                               size: &Size2D<i32>,
-                              share_handle: Option<HandleOrTexture>)
+                              share_handle: Option<HANDLE>)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -131,7 +161,7 @@ impl Device {
                 let egl_surface = if share_handle.is_some() {
                     egl::NO_SURFACE
                 } else {
-                    let surface = egl.CreatePbufferSurface(self.native_display.egl_display(),
+                    let surface = egl.CreatePbufferSurface(self.egl_display,
                                                            egl_config,
                                                            attributes.as_ptr());
                     assert_ne!(surface, egl::NO_SURFACE);
@@ -141,27 +171,27 @@ impl Device {
                 let eglQuerySurfacePointerANGLE =
                     EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE
                                         .expect("Where's the `EGL_ANGLE_query_surface_pointer` \
-                                                    extension?");
+                                                 extension?");
 
                 let share_handle = if let Some(share_handle) = share_handle {
                     share_handle
                 } else {
                     let mut share_handle = INVALID_HANDLE_VALUE;
                     let result =
-                        eglQuerySurfacePointerANGLE(self.native_display.egl_display(),
+                        eglQuerySurfacePointerANGLE(self.egl_display,
                                                     egl_surface,
                                                     EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
                                                     &mut share_handle);
                     assert_ne!(result, egl::FALSE);
                     assert_ne!(share_handle, INVALID_HANDLE_VALUE);
-                    HandleOrTexture::Handle(share_handle)
+                    share_handle
                 };
 
                 // `mozangle` builds ANGLE with keyed mutexes for sharing. Use the
                 // `EGL_ANGLE_keyed_mutex` extension to fetch the keyed mutex so we can grab it.
                 let mut keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
                 let result = eglQuerySurfacePointerANGLE(
-                    self.native_display.egl_display(),
+                    self.egl_display,
                     egl_surface,
                     EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
                     &mut keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
@@ -187,6 +217,7 @@ impl Device {
         }
     }
 
+    #[cfg(not(target_vendor = "uwp"))]
     fn create_window_surface(&mut self, context: &Context, native_widget: &NativeWidget)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
@@ -199,7 +230,7 @@ impl Device {
 
             EGL_FUNCTIONS.with(|egl| {
                 let attributes = [egl::NONE as EGLint];
-                let egl_surface = egl.CreateWindowSurface(self.native_display.egl_display(),
+                let egl_surface = egl.CreateWindowSurface(self.egl_display,
                                                           egl_config,
                                                           native_widget.window_handle as _,
                                                           attributes.as_ptr());
@@ -216,20 +247,27 @@ impl Device {
         }
     }
 
-    pub unsafe fn create_surface_from_texture(
-        &mut self,
-        context: &Context,
-        size: &Size2D<i32>,
-        texture: *mut d3d11::ID3D11Texture2D
-    ) -> Result<Surface, Error> {
-        self.create_pbuffer_surface(context, size, Some(HandleOrTexture::Texture(texture)))
+    #[cfg(target_vendor = "uwp")]
+    fn create_window_surface(&mut self, context: &Context, native_widget: &NativeWidget)
+                              -> Result<Surface, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
     }
 
+    /// Creates a surface texture from an existing generic surface for use with the given context.
+    /// 
+    /// The surface texture is local to the supplied context and takes ownership of the surface.
+    /// Destroying the surface texture allows you to retrieve the surface again.
+    /// 
+    /// *The supplied context does not have to be the same context that the surface is associated
+    /// with.* This allows you to render to a surface in one context and sample from that surface
+    /// in another context.
+    /// 
+    /// Calling this method on a widget surface returns a `WidgetAttached` error.
     #[allow(non_snake_case)]
-    pub fn create_surface_texture(&self, _: &mut Context, surface: Surface)
-                                  -> Result<SurfaceTexture, Error> {
+    pub fn create_surface_texture(&self, context: &mut Context, surface: Surface)
+                                  -> Result<SurfaceTexture, (Error, Surface)> {
         let share_handle = match surface.win32_objects {
-            Win32Objects::Window => return Err(Error::WidgetAttached),
+            Win32Objects::Window => return Err((Error::WidgetAttached, surface)),
             Win32Objects::Pbuffer { share_handle, .. } => share_handle,
         };
 
@@ -246,33 +284,22 @@ impl Device {
                     0,                              0,
                 ];
 
-                // FIXME(pcwalton): I'm fairly sure this is undefined behavior! We need to figure
-                // out how to use share handles for jdm's use case.
-                let (buffer_type, client_buffer) = match share_handle {
-                    HandleOrTexture::Handle(handle) => {
-                        (EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, handle)
-                    }
-                    HandleOrTexture::Texture(texture) => {
-                        (EGL_D3D_TEXTURE_ANGLE, texture as _)
-                    }
-                };
-
                 let local_egl_surface =
-                    egl.CreatePbufferFromClientBuffer(self.native_display.egl_display(),
-                                                      buffer_type,
-                                                      client_buffer,
+                    egl.CreatePbufferFromClientBuffer(self.egl_display,
+                                                      EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
+                                                      share_handle,
                                                       local_egl_config,
                                                       pbuffer_attributes.as_ptr());
                 if local_egl_surface == egl::NO_SURFACE {
                     let windowing_api_error = egl.GetError().to_windowing_api_error();
-                    return Err(Error::SurfaceImportFailed(windowing_api_error));
+                    return Err((Error::SurfaceImportFailed(windowing_api_error), surface));
                 }
 
                 let mut local_keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
                 let eglQuerySurfacePointerANGLE = EGL_EXTENSION_FUNCTIONS.QuerySurfacePointerANGLE
                                                                          .unwrap();
                 let result = eglQuerySurfacePointerANGLE(
-                    self.native_display.egl_display(),
+                    self.egl_display,
                     local_egl_surface,
                     EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
                     &mut local_keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
@@ -288,6 +315,8 @@ impl Device {
                     None
                 };
 
+                let _guard = self.temporarily_make_context_current(context);
+
                 GL_FUNCTIONS.with(|gl| {
                     // Then bind that surface to the texture.
                     let mut texture = 0;
@@ -295,11 +324,12 @@ impl Device {
                     debug_assert_ne!(texture, 0);
 
                     gl.BindTexture(gl::TEXTURE_2D, texture);
-                    if egl.BindTexImage(self.native_display.egl_display(),
+                    if egl.BindTexImage(self.egl_display,
                                         local_egl_surface,
                                         egl::BACK_BUFFER as GLint) == egl::FALSE {
                         let windowing_api_error = egl.GetError().to_windowing_api_error();
-                        return Err(Error::SurfaceTextureCreationFailed(windowing_api_error));
+                        return Err((Error::SurfaceTextureCreationFailed(windowing_api_error),
+                                    surface));
                     }
 
                     // Initialize the texture, for convenience.
@@ -327,11 +357,16 @@ impl Device {
         })
     }
 
-    pub fn destroy_surface(&self, context: &mut Context, mut surface: Surface)
+    /// Destroys a surface.
+    /// 
+    /// The supplied context must be the context the surface is associated with, or this returns
+    /// an `IncompatibleSurface` error.
+    /// 
+    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
+    /// the `drop` method.
+    pub fn destroy_surface(&self, context: &mut Context, surface: &mut Surface)
                            -> Result<(), Error> {
         if context.id != surface.context_id {
-            // Leak!
-            surface.egl_surface = egl::NO_SURFACE;
             return Err(Error::IncompatibleSurface);
         }
 
@@ -343,15 +378,22 @@ impl Device {
                     self.make_no_context_current()?;
                 }
 
-                egl.DestroySurface(self.native_display.egl_display(), surface.egl_surface);
+                egl.DestroySurface(self.egl_display, surface.egl_surface);
                 surface.egl_surface = egl::NO_SURFACE;
             }
             Ok(())
         })
     }
 
+    /// Destroys a surface texture and returns the underlying surface.
+    /// 
+    /// The supplied context must be the same context the surface texture was created with, or an
+    /// `IncompatibleSurfaceTexture` error is returned.
+    /// 
+    /// All surface textures must be explicitly destroyed with this function, or a panic will
+    /// occur.
     pub fn destroy_surface_texture(&self, _: &mut Context, mut surface_texture: SurfaceTexture)
-                                   -> Result<Surface, Error> {
+                                   -> Result<Surface, (Error, SurfaceTexture)> {
         unsafe {
             GL_FUNCTIONS.with(|gl| gl.DeleteTextures(1, &surface_texture.gl_texture));
             surface_texture.gl_texture = 0;
@@ -362,7 +404,7 @@ impl Device {
             }
 
             EGL_FUNCTIONS.with(|egl| {
-                egl.DestroySurface(self.native_display.egl_display(),
+                egl.DestroySurface(self.egl_display,
                                    surface_texture.local_egl_surface);
             })
         }
@@ -370,17 +412,28 @@ impl Device {
         Ok(surface_texture.surface)
     }
 
+    /// Returns the OpenGL texture target needed to read from this surface texture.
+    /// 
+    /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
     pub fn surface_gl_texture_target(&self) -> GLenum {
         SURFACE_GL_TEXTURE_TARGET
     }
 
+    /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
     pub fn lock_surface_data<'s>(&self, _surface: &'s mut Surface)
                                  -> Result<SurfaceDataGuard<'s>, Error> {
         Err(Error::Unimplemented)
     }
 
+    /// Displays the contents of a widget surface on screen.
+    /// 
+    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
+    /// associated widgets until this method is called.
+    /// 
+    /// The supplied context must match the context the surface was created with, or an
+    /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
         match surface.win32_objects {
             Win32Objects::Window { .. } => {}
@@ -389,13 +442,19 @@ impl Device {
 
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
-                let ok = egl.SwapBuffers(self.native_display.egl_display(), surface.egl_surface);
+                let ok = egl.SwapBuffers(self.egl_display, surface.egl_surface);
                 assert_ne!(ok, egl::FALSE);
                 Ok(())
             }
         })
     }
 
+    /// Returns various information about the surface, including the framebuffer object needed to
+    /// render to this surface.
+    /// 
+    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
+    /// on the framebuffer object returned by this function. This framebuffer object may or not be
+    /// 0, the default framebuffer, depending on platform.
     #[inline]
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
         SurfaceInfo {
@@ -404,6 +463,14 @@ impl Device {
             context_id: surface.context_id,
             framebuffer_object: 0,
         }
+    }
+
+    /// Returns the OpenGL texture object containing the contents of this surface.
+    /// 
+    /// It is only legal to read from, not write to, this texture object.
+    #[inline]
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+        surface_texture.gl_texture
     }
 }
 
@@ -422,21 +489,7 @@ impl Surface {
     }
 }
 
-impl SurfaceTexture {
-    #[inline]
-    pub fn gl_texture(&self) -> GLuint {
-        self.gl_texture
-    }
-}
-
-impl NativeWidget {
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn from_winit_window(window: &Window) -> NativeWidget {
-        NativeWidget { window_handle: window.get_hwnd() as HWND }
-    }
-}
-
+/// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
 }

@@ -1,15 +1,11 @@
-// surfman/src/renderbuffers.rs
-
+// surfman/surfman/src/renderbuffers.rs
+//
 //! A utility module for backends that wrap surfaces in OpenGL FBOs.
-//!
-//! FIXME(pcwalton): This can only really be used by one backend at a
-//! time, thanks to the use of `GL_FUNCTIONS`. This works for now, but
-//! it will need to be revisited if a platform can ever have two
-//! backends that need renderbuffers.
 
+use crate::Gl;
 use crate::context::{ContextAttributeFlags, ContextAttributes};
 use crate::gl::types::GLuint;
-use crate::gl::{self, Gl};
+use crate::gl;
 
 use euclid::default::Size2D;
 
@@ -109,6 +105,7 @@ impl Renderbuffers {
     pub(crate) fn destroy(&mut self, gl: &Gl) {
         unsafe {
             gl.BindRenderbuffer(gl::RENDERBUFFER, 0);
+
             match *self {
                 Renderbuffers::CombinedDepthStencil(ref mut renderbuffer) => {
                     if *renderbuffer != 0 {
@@ -129,20 +126,6 @@ impl Renderbuffers {
                         *depth_renderbuffer = 0;
                     }
                 }
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn leak(&mut self) {
-        match *self {
-            Renderbuffers::CombinedDepthStencil(ref mut renderbuffer) => *renderbuffer = 0,
-            Renderbuffers::IndividualDepthStencil {
-                depth: ref mut depth_renderbuffer,
-                stencil: ref mut stencil_renderbuffer,
-            } => {
-                *stencil_renderbuffer = 0;
-                *depth_renderbuffer = 0;
             }
         }
     }

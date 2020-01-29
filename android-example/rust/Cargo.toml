@@ -14,8 +14,10 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
+android_logger = "0.8"
 gl = "0.13"
 jni = "0.13"
+log = "0.4"
 
 [dependencies.euclid]
 version = "0.20"
@@ -23,3 +25,4 @@ features = []
 
 [dependencies.surfman]
 path = "../../surfman"
+features = ["sm-test"]

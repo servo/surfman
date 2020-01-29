@@ -9,6 +9,7 @@ public class SurfmanThreadsExampleRenderer implements Renderer {
                                     int width,
                                     int height);
     private static native void tick();
+    static native void runTests();
 
     private final MainActivity mActivity;
 

@@ -14,7 +14,7 @@ use std::fs::File;
 use std::mem;
 use std::path::Path;
 use std::slice;
-use surfman::{Adapter, Connection, ContextAttributeFlags, ContextAttributes, Device, GLVersion};
+use surfman::{Connection, ContextAttributeFlags, ContextAttributes, GLApi, GLVersion};
 use surfman::{SurfaceAccess, SurfaceType};
 
 mod common;
@@ -57,17 +57,17 @@ fn main() {
     let connection = Connection::new().unwrap();
 
     let adapter = if matches.is_present("software") {
-        Adapter::software().unwrap()
+        connection.create_software_adapter().unwrap()
     } else if matches.is_present("hardware") {
-        Adapter::hardware().unwrap()
+        connection.create_hardware_adapter().unwrap()
     } else {
-        Adapter::default().unwrap()
+        connection.create_adapter().unwrap()
     };
 
     let output_path = Path::new(matches.value_of("OUTPUT").unwrap()).to_owned();
     let output_file = File::create(output_path).unwrap();
 
-    let mut device = Device::new(&connection, &adapter).unwrap();
+    let mut device = connection.create_device(&adapter).unwrap();
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 3),
@@ -75,7 +75,7 @@ fn main() {
     };
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
     let mut context = device.create_context(&context_descriptor).unwrap();
-    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, &SurfaceType::Generic {
+    let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, SurfaceType::Generic {
         size: Size2D::new(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT),
     }).unwrap();
     device.bind_surface_to_context(&mut context, surface).unwrap();
@@ -85,7 +85,8 @@ fn main() {
 
     let mut pixels: Vec<u8> =
         vec![0; FRAMEBUFFER_WIDTH as usize * FRAMEBUFFER_HEIGHT as usize * 4];
-    let tri_vertex_array = TriVertexArray::new(device.surface_gl_texture_target());
+    let tri_vertex_array = TriVertexArray::new(device.gl_api(),
+                                               device.surface_gl_texture_target());
 
     unsafe {
         gl::Viewport(0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT); ck();
@@ -124,8 +125,8 @@ struct TriVertexArray {
 }
 
 impl TriVertexArray {
-    fn new(gl_texture_target: GLenum) -> TriVertexArray {
-        let tri_program = TriProgram::new(gl_texture_target);
+    fn new(gl_api: GLApi, gl_texture_target: GLenum) -> TriVertexArray {
+        let tri_program = TriProgram::new(gl_api, gl_texture_target);
         unsafe {
             let mut vertex_array = 0;
             gl::GenVertexArrays(1, &mut vertex_array); ck();
@@ -163,13 +164,15 @@ struct TriProgram {
 }
 
 impl TriProgram {
-    fn new(gl_texture_target: GLenum) -> TriProgram {
+    fn new(gl_api: GLApi, gl_texture_target: GLenum) -> TriProgram {
         let vertex_shader = Shader::new("tri",
                                         ShaderKind::Vertex,
+                                        gl_api,
                                         gl_texture_target,
                                         &FilesystemResourceLoader);
         let fragment_shader = Shader::new("tri",
                                           ShaderKind::Fragment,
+                                          gl_api,
                                           gl_texture_target,
                                           &FilesystemResourceLoader);
         let program = Program::new(vertex_shader, fragment_shader);
