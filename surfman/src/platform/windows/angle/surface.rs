@@ -158,7 +158,16 @@ impl Device {
             ];
 
             EGL_FUNCTIONS.with(|egl| {
-                let egl_surface = if share_handle.is_some() {
+                let egl_surface = if let Some(HandleOrTexture::Texture(texture)) = share_handle {
+                    let surface =
+                        egl.CreatePbufferFromClientBuffer(self.native_display.egl_display(),
+                                                          EGL_D3D_TEXTURE_ANGLE,
+                                                          texture as *const _,
+                                                          egl_config,
+                                                          attributes.as_ptr());
+                    assert_ne!(surface, egl::NO_SURFACE);
+                    surface
+                } else if share_handle.is_some() {
                     egl::NO_SURFACE
                 } else {
                     let surface = egl.CreatePbufferSurface(self.egl_display,
