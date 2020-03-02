@@ -112,4 +112,13 @@ impl Connection {
     pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget {
         self.0.create_native_widget_from_ptr(raw, size)
     }
+
+    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle")]
+    #[inline]
+    pub fn create_native_widget_from_rwh(&self, _: raw_window_handle::RawWindowHandle)
+                                                  -> Result<NativeWidget, Error> {
+        // TODO: support raw window handle on cgl
+        Err(Error::UnsupportedOnThisPlatform)
+    }
 }

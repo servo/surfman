@@ -129,6 +129,22 @@ impl Connection {
             window_handle: raw as HWND,
         }
     }
+
+    /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle")]
+    pub fn create_native_widget_from_rwh(
+        &self,
+        raw_handle: raw_window_handle::RawWindowHandle,
+    ) -> Result<NativeWidget, Error> {
+        use raw_window_handle::RawWindowHandle::Xlib;
+
+        match raw_handle {
+            Xlib(handle) => Ok(NativeWidget {
+                window: handle.window,
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
+    }
 }
 
 impl NativeConnection {

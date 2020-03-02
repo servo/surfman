@@ -187,6 +187,25 @@ impl Connection {
             size,
         }
     }
+
+    /// Creates a native widget type from the given `raw_window_handle::HasRawWindowHandle`
+    #[cfg(feature = "sm-raw-window-handle")]
+    pub fn create_native_widget_from_rwh(
+            &self,
+            raw_handle: raw_window_handle::RawWindowHandle)
+                                                  -> Result<NativeWidget, Error> {
+        use raw_window_handle::RawWindowHandle::Wayland;
+
+        let wayland_surface = match raw_handle {
+            Wayland(handle) => handle.surface as *mut wl_proxy,
+            _ => return Err(Error::IncompatibleNativeWidget),
+        };
+        
+        // TODO: Find out how to get actual size from the raw window handle
+        let window_size = Size2D::new(400, 500);
+
+        Ok(NativeWidget { wayland_surface, size: window_size })
+    }
 }
 
 impl Drop for NativeConnectionWrapper {

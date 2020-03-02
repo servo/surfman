@@ -25,6 +25,7 @@ sm-test = []
 sm-wayland-default = []
 sm-winit = ["winit"]
 sm-x11 = ["x11"]
+sm-raw-window-handle = ["raw-window-handle"]
 
 [dependencies]
 bitflags = "1.1"
@@ -43,6 +44,10 @@ optional = true
 
 [dependencies.winit]
 version = "<0.19.4" # 0.19.4 causes build errors https://github.com/rust-windowing/winit/pull/1105
+optional = true
+
+[dependencies.raw-window-handle]
+version = "0.3.3"
 optional = true
 
 [dev-dependencies]
