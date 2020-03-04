@@ -37,6 +37,20 @@ thread_local! {
     pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
 }
 
+#[cfg(feature = "sm-angle-flush")]
+fn flush_surface_contents() {
+    unsafe {
+        GL_FUNCTIONS.with(|gl| gl.Flush());
+    }
+}
+
+#[cfg(not(feature = "sm-angle-flush"))]
+fn flush_surface_contents() {
+    unsafe {
+        GL_FUNCTIONS.with(|gl| gl.Finish());
+    }
+}
+
 pub struct Context {
     pub(crate) native_context: Box<dyn NativeContext>,
     pub(crate) id: ContextID,
@@ -260,9 +274,7 @@ impl Device {
         // FIXME(pcwalton): Is this necessary and sufficient?
         if !surface.uses_keyed_mutex() {
             let _guard = self.temporarily_make_context_current(context)?;
-            unsafe {
-                GL_FUNCTIONS.with(|gl| gl.Finish());
-            }
+            flush_surface_contents();
         }
 
         let is_current = self.context_is_current(context);
