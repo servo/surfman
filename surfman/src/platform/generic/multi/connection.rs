@@ -3,6 +3,7 @@
 //! A connection abstraction that allows the choice of backends dynamically.
 
 use crate::Error;
+use crate::GLApi;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use super::device::{Adapter, Device, NativeDevice};
@@ -70,6 +71,14 @@ impl<Def, Alt> Connection<Def, Alt>
             Connection::Alternate(ref connection) => {
                 NativeConnection::Alternate(connection.native_connection())
             }
+        }
+    }
+
+    /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
+    pub fn gl_api(&self) -> GLApi {
+        match *self {
+            Connection::Default(ref connection) => connection.gl_api(),
+            Connection::Alternate(ref connection) => connection.gl_api(),
         }
     }
 
@@ -211,6 +220,11 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
     #[inline]
     fn native_connection(&self) -> NativeConnection<Def, Alt> {
         Connection::native_connection(self)
+    }
+
+    #[inline]
+    fn gl_api(&self) -> GLApi {
+        Connection::gl_api(self)
     }
 
     #[inline]

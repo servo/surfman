@@ -3,6 +3,7 @@
 //! The abstract interface that all connections conform to.
 
 use crate::Error;
+use crate::GLApi;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
@@ -25,6 +26,9 @@ pub trait Connection: Sized {
 
     /// Returns the native connection corresponding to this connection.
     fn native_connection(&self) -> Self::NativeConnection;
+
+    /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
+    fn gl_api(&self) -> GLApi;
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     /// 

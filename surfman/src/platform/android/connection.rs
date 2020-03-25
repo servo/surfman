@@ -5,6 +5,7 @@
 //! FIXME(pcwalton): Should this instead wrap `EGLDisplay`? Is that thread-safe on Android?
 
 use crate::Error;
+use crate::GLApi;
 use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
@@ -36,6 +37,12 @@ impl Connection {
     #[inline]
     pub fn native_connection(&self) -> NativeConnection {
         NativeConnection
+    }
+
+    /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
+    #[inline]
+    pub fn gl_api(&self) -> GLApi {
+        GLApi::GLES
     }
 
     /// Returns the "best" adapter on this system.

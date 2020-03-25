@@ -5,6 +5,7 @@
 
 use crate::Error;
 use crate::connection::Connection as ConnectionInterface;
+use crate::info::GLApi;
 use super::super::connection::{Connection, NativeConnection};
 use super::super::device::{Adapter, Device, NativeDevice};
 use super::super::surface::NativeWidget;
@@ -27,6 +28,11 @@ impl ConnectionInterface for Connection {
     #[inline]
     fn native_connection(&self) -> Self::NativeConnection {
         Connection::native_connection(self)
+    }
+
+    #[inline]
+    fn gl_api(&self) -> GLApi {
+        Connection::gl_api(self)
     }
 
     #[inline]
