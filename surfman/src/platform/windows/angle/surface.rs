@@ -3,6 +3,7 @@
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
 use crate::context::ContextID;
+use crate::egl::types::EGLNativeWindowType;
 use crate::egl::types::EGLSurface;
 use crate::egl::{self, EGLint};
 use crate::gl::types::{GLenum, GLint, GLuint};
@@ -105,18 +106,14 @@ pub(crate) enum Win32Objects {
     }
 }
 
-/// Wraps a Windows `HWND` window handle.
-#[cfg(not(target_vendor = "uwp"))]
+/// Wraps an `EGLNativeWindowType`
+#[repr(C)]
 pub struct NativeWidget {
-    /// A window handle.
+    /// A native window
     ///
     /// This can be a top-level window or a control.
-    pub window_handle: HWND,
+    pub egl_native_window: EGLNativeWindowType,
 }
-
-/// A placeholder native widget type for UWP, which isn't supported at the moment.
-#[cfg(target_vendor = "uwp")]
-pub struct NativeWidget;
 
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
@@ -130,12 +127,9 @@ impl Device {
                           -> Result<Surface, Error> {
         match surface_type {
             SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size, None),
-            #[cfg(not(target_vendor = "uwp"))]
             SurfaceType::Widget { ref native_widget } => {
                 self.create_window_surface(context, native_widget)
             }
-            #[cfg(target_vendor = "uwp")]
-            SurfaceType::Widget { .. } => Err(Error::UnsupportedOnThisPlatform)
         }
     }
 
@@ -227,40 +221,36 @@ impl Device {
         }
     }
 
-    #[cfg(not(target_vendor = "uwp"))]
     fn create_window_surface(&mut self, context: &Context, native_widget: &NativeWidget)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
         unsafe {
-            let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-            let ok = winuser::GetWindowRect(native_widget.window_handle, &mut rect);
-            assert_ne!(ok, 0);
-
             EGL_FUNCTIONS.with(|egl| {
                 let attributes = [egl::NONE as EGLint];
                 let egl_surface = egl.CreateWindowSurface(self.egl_display,
                                                           egl_config,
-                                                          native_widget.window_handle as _,
+                                                          native_widget.egl_native_window,
                                                           attributes.as_ptr());
                 assert_ne!(egl_surface, egl::NO_SURFACE);
 
+                let mut width = 0;
+                let mut height = 0;
+                egl.QuerySurface(self.egl_display, egl_surface, egl::WIDTH as EGLint, &mut width);
+                egl.QuerySurface(self.egl_display, egl_surface, egl::HEIGHT as EGLint, &mut height);
+                assert_ne!(width, 0);
+                assert_ne!(height, 0);
+
                 Ok(Surface {
                     egl_surface,
-                    size: Size2D::new(rect.right - rect.left, rect.bottom - rect.top),
+                    size: Size2D::new(width, height),
                     context_id: context.id,
                     context_descriptor,
                     win32_objects: Win32Objects::Window,
                 })
             })
         }
-    }
-
-    #[cfg(target_vendor = "uwp")]
-    fn create_window_surface(&mut self, context: &Context, native_widget: &NativeWidget)
-                              -> Result<Surface, Error> {
-        Err(Error::UnsupportedOnThisPlatform)
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.

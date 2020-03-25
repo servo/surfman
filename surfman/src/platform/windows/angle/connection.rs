@@ -7,12 +7,12 @@
 //! thread-safe. So we need to use the DXGI/Direct3D concept of a connection instead. These are
 //! implicit in the Win32 API, and as such this type is a no-op.
 
+use crate::egl::types::EGLNativeWindowType;
 use crate::Error;
 use super::device::{Adapter, Device, NativeDevice, VendorPreference};
 use super::surface::NativeWidget;
 
 use winapi::shared::minwindef::UINT;
-use winapi::shared::windef::HWND;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
 #[cfg(feature = "sm-winit")]
@@ -118,11 +118,11 @@ impl Connection {
     #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
-        let hwnd = window.get_hwnd() as HWND;
+        let hwnd = window.get_hwnd() as EGLNativeWindowType;
         if hwnd.is_null() {
             Err(Error::IncompatibleNativeWidget)
         } else {
-            Ok(NativeWidget { window_handle: hwnd })
+            Ok(NativeWidget { egl_native_window: hwnd })
         }
     }
 }
