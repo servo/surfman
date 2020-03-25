@@ -1,4 +1,4 @@
-# surfman
+# surfman [![Build Status](https://travis-ci.com/servo/surfman.svg?branch=master)](https://travis-ci.com/servo/surfman)
 
 ![surfman logo](https://i.imgur.com/t0xcJ6D.png)
 
