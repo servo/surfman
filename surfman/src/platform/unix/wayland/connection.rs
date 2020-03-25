@@ -179,6 +179,14 @@ impl Connection {
 
         Ok(NativeWidget { wayland_surface, size: window_size })
     }
+
+    /// Create a native widget from a raw pointer
+    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget {
+        NativeWidget {
+            wayland_surface: raw as *mut wl_proxy,
+            size,
+        }
+    }
 }
 
 impl Drop for NativeConnectionWrapper {

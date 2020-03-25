@@ -12,6 +12,8 @@ use crate::platform::unix::generic::device::Adapter;
 use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 
+use euclid::default::Size2D;
+
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
@@ -206,6 +208,13 @@ impl Connection {
         match window.get_xlib_window() {
             Some(window) => Ok(NativeWidget { window }),
             None => Err(Error::IncompatibleNativeWidget),
+        }
+    }
+
+    /// Create a native widget from a raw pointer
+    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, _size: Size2D<i32>) -> NativeWidget {
+        NativeWidget {
+            window: std::mem::transmute(raw),
         }
     }
 }

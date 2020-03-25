@@ -12,6 +12,10 @@ use crate::platform::macos::system::device::NativeDevice;
 use crate::platform::macos::system::surface::NativeWidget;
 use super::device::{Adapter, Device};
 
+use euclid::default::Size2D;
+
+use std::os::raw::c_void;
+
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
@@ -102,5 +106,10 @@ impl Connection {
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
         self.0.create_native_widget_from_winit_window(window)
+    }
+
+    /// Creates a native widget from a raw pointer
+    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget {
+        self.0.create_native_widget_from_ptr(raw, size)
     }
 }
