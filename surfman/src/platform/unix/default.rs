@@ -1,23 +1,33 @@
 // surfman/src/platform/unix/default.rs
 //
-//! The default backend for Unix, which dynamically switches between Wayland and X11.
+//! The default backend for Unix, which dynamically switches between Wayland, X11 and surfaceless.
 
 /// Wayland or X11 display server connections.
 pub mod connection {
     use crate::platform::generic::multi::connection::Connection as MultiConnection;
+    use crate::platform::generic::multi::connection::NativeConnection as MultiNativeConnection;
     use crate::platform::unix::wayland::device::Device as WaylandDevice;
     use crate::platform::unix::x11::device::Device as X11Device;
+    use crate::platform::unix::generic::device::Device as SWDevice;
+    use crate::platform::generic::multi::device::Device as MultiDevice;
+    type HWDevice = MultiDevice<WaylandDevice, X11Device>;
 
     /// Either a Wayland or an X11 display server connection.
-    pub type Connection = MultiConnection<WaylandDevice, X11Device>;
+    pub type Connection = MultiConnection<HWDevice, SWDevice>;
+
+    pub type NativeConnection = MultiNativeConnection<HWDevice, SWDevice>;
 }
 
 /// OpenGL rendering contexts.
 pub mod context {
     use crate::platform::generic::multi::context::Context as MultiContext;
     use crate::platform::generic::multi::context::ContextDescriptor as MultiContextDescriptor;
+    use crate::platform::generic::multi::context::NativeContext as MultiNativeContext;
     use crate::platform::unix::wayland::device::Device as WaylandDevice;
     use crate::platform::unix::x11::device::Device as X11Device;
+    use crate::platform::unix::generic::device::Device as SWDevice;
+    use crate::platform::generic::multi::device::Device as MultiDevice;
+    type HWDevice = MultiDevice<WaylandDevice, X11Device>;
 
     /// Represents an OpenGL rendering context.
     /// 
@@ -36,31 +46,39 @@ pub mod context {
     /// allow for sharing of texture data. Contexts are local to a single thread and device.
     /// 
     /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
-    pub type Context = MultiContext<WaylandDevice, X11Device>;
+    pub type Context = MultiContext<HWDevice, SWDevice>;
 
     /// Information needed to create a context. Some APIs call this a "config" or a "pixel format".
     /// 
     /// These are local to a device.
-    pub type ContextDescriptor = MultiContextDescriptor<WaylandDevice, X11Device>;
+    pub type ContextDescriptor = MultiContextDescriptor<HWDevice, SWDevice>;
+
+    pub type NativeContext = MultiNativeContext<HWDevice, SWDevice>;
 }
 
 /// Thread-local handles to devices.
 pub mod device {
     use crate::platform::generic::multi::device::Adapter as MultiAdapter;
-    use crate::platform::generic::multi::device::Device as MultiDevice;
+    use crate::platform::generic::multi::device::NativeDevice as MultiNativeDevice;
     use crate::platform::unix::wayland::device::Device as WaylandDevice;
     use crate::platform::unix::x11::device::Device as X11Device;
+    use crate::platform::unix::generic::device::Device as SWDevice;
+
+    use crate::platform::generic::multi::device::Device as MultiDevice;
+    type HWDevice = MultiDevice<WaylandDevice, X11Device>;
 
     /// Represents a hardware display adapter that can be used for rendering (including the CPU).
     ///
     /// Adapters can be sent between threads. To render with an adapter, open a thread-local
     /// `Device`.
-    pub type Adapter = MultiAdapter<WaylandDevice, X11Device>;
+    pub type Adapter = MultiAdapter<HWDevice, SWDevice>;
 
     /// A thread-local handle to a device.
     ///
     /// Devices contain most of the relevant surface management methods.
-    pub type Device = MultiDevice<WaylandDevice, X11Device>;
+    pub type Device = MultiDevice<HWDevice, SWDevice>;
+
+    pub type NativeDevice = MultiNativeDevice<HWDevice, SWDevice>;
 }
 
 /// Hardware buffers of pixels.
@@ -70,9 +88,12 @@ pub mod surface {
     use crate::platform::generic::multi::surface::SurfaceTexture as MultiSurfaceTexture;
     use crate::platform::unix::wayland::device::Device as WaylandDevice;
     use crate::platform::unix::x11::device::Device as X11Device;
+    use crate::platform::unix::generic::device::Device as SWDevice;
+    use crate::platform::generic::multi::device::Device as MultiDevice;
+    type HWDevice = MultiDevice<WaylandDevice, X11Device>;
 
     /// A wrapper for a Wayland surface or an X11 `Window`, as appropriate.
-    pub type NativeWidget = MultiNativeWidget<WaylandDevice, X11Device>;
+    pub type NativeWidget = MultiNativeWidget<HWDevice, SWDevice>;
 
     /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and
     /// either displayed in a native widget or bound to a texture for reading.
@@ -90,7 +111,7 @@ pub mod surface {
     /// Depending on the platform, each surface may be internally double-buffered.
     /// 
     /// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
-    pub type Surface = MultiSurface<WaylandDevice, X11Device>;
+    pub type Surface = MultiSurface<HWDevice, SWDevice>;
 
     /// Represents an OpenGL texture that wraps a surface.
     /// 
@@ -101,7 +122,7 @@ pub mod surface {
     /// Surface textures are local to a context, but that context does not have to be the same
     /// context as that associated with the underlying surface. The texture must be destroyed with
     /// the `destroy_surface_texture()` method, or a panic will occur.
-    pub type SurfaceTexture = MultiSurfaceTexture<WaylandDevice, X11Device>;
+    pub type SurfaceTexture = MultiSurfaceTexture<HWDevice, SWDevice>;
 
     // FIXME(pcwalton): Revamp how this works.
     #[doc(hidden)]
