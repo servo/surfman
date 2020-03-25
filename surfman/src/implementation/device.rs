@@ -14,6 +14,7 @@ use super::super::surface::{NativeWidget, Surface, SurfaceTexture};
 
 use std::os::raw::c_void;
 
+#[deny(unconditional_recursion)]
 impl DeviceInterface for Device {
     type Connection = Connection;
     type Context = Context;
