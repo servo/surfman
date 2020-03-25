@@ -27,9 +27,9 @@ os:
 script:
   - cd surfman
   - cargo build --verbose
-  - cargo build --verbose --features=sm-osmesa
   - cargo build --verbose --features=sm-angle-default
   - cargo build --verbose --features=sm-wayland-default
+  - cargo build --verbose --features=sm-winit
   - rustup target add arm-linux-androideabi
   - cargo build --verbose --target=arm-linux-androideabi
   - rustup target add aarch64-pc-windows-msvc
