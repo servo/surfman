@@ -92,7 +92,16 @@ impl EGLBackedSurface {
             // Create our texture.
             let mut texture_object = 0;
             gl.GenTextures(1, &mut texture_object);
+            // Save the current texture binding
+            let mut old_texture_object = 0;
+            gl.GetIntegerv(gl::TEXTURE_BINDING_2D, &mut old_texture_object);
             gl.BindTexture(gl::TEXTURE_2D, texture_object);
+            // Unbind PIXEL_UNPACK_BUFFER, because if it is bound,
+            // it can cause errors in glTexImage2D.
+            // TODO: should this be inside a check for GL 2.0?
+            let mut unpack_buffer = 0;
+            gl.GetIntegerv(gl::PIXEL_UNPACK_BUFFER_BINDING, &mut unpack_buffer);
+            if unpack_buffer != 0 { gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0); }
             gl.TexImage2D(gl::TEXTURE_2D,
                           0,
                           gl::RGBA as GLint,
@@ -102,6 +111,9 @@ impl EGLBackedSurface {
                           gl::RGBA,
                           gl::UNSIGNED_BYTE,
                           ptr::null());
+            // Restore the old bindings
+            gl.BindTexture(gl::TEXTURE_2D, old_texture_object as _);
+            if unpack_buffer != 0 { gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, unpack_buffer as _); }
 
             // Create our image.
             let egl_client_buffer = texture_object as usize as EGLClientBuffer;
@@ -336,6 +348,9 @@ pub(crate) unsafe fn bind_egl_image_to_gl_texture(gl: &Gl, egl_image: EGLImageKH
     gl.GenTextures(1, &mut texture);
     debug_assert_ne!(texture, 0);
 
+    let mut texture_binding = 0;
+    gl.GetIntegerv(gl::TEXTURE_BINDING_2D, &mut texture_binding);
+
     // FIXME(pcwalton): Should this be `GL_TEXTURE_EXTERNAL_OES`?
     gl.BindTexture(gl::TEXTURE_2D, texture);
     (EGL_EXTENSION_FUNCTIONS.ImageTargetTexture2DOES)(gl::TEXTURE_2D, egl_image);
@@ -343,7 +358,7 @@ pub(crate) unsafe fn bind_egl_image_to_gl_texture(gl: &Gl, egl_image: EGLImageKH
     gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
     gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
     gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
-    gl.BindTexture(gl::TEXTURE_2D, 0);
+    gl.BindTexture(gl::TEXTURE_2D, texture_binding as GLuint);
 
     debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
     texture
