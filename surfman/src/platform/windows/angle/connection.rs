@@ -9,6 +9,7 @@
 
 use crate::egl::types::EGLNativeWindowType;
 use crate::Error;
+use crate::GLApi;
 use super::device::{Adapter, Device, NativeDevice, VendorPreference};
 use super::surface::NativeWidget;
 
@@ -57,6 +58,12 @@ impl Connection {
     #[inline]
     pub fn native_connection(&self) -> NativeConnection {
         NativeConnection
+    }
+
+    /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
+    #[inline]
+    pub fn gl_api(&self) -> GLApi {
+        GLApi::GLES
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.

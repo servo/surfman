@@ -5,6 +5,7 @@
 use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::egl;
 use crate::error::Error;
+use crate::info::GLApi;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_PLATFORM_X11_KHR;
 use crate::platform::unix::generic::device::Adapter;
@@ -134,6 +135,12 @@ impl Connection {
             egl_display: self.native_connection.egl_display,
             x11_display: self.native_connection.x11_display,
         }
+    }
+
+    /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
+    #[inline]
+    pub fn gl_api(&self) -> GLApi {
+        GLApi::GL
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.

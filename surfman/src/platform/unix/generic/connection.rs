@@ -5,6 +5,7 @@
 use crate::Error;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::egl;
+use crate::info::GLApi;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_PLATFORM_SURFACELESS_MESA;
 use super::device::{Adapter, Device, NativeDevice};
@@ -76,6 +77,12 @@ impl Connection {
     #[inline]
     pub fn native_connection(&self) -> NativeConnection {
         NativeConnection(self.native_connection.clone())
+    }
+
+    /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
+    #[inline]
+    pub fn gl_api(&self) -> GLApi {
+        GLApi::GL
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.

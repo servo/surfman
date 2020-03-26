@@ -6,6 +6,7 @@
 //! global window server connection.
 
 use crate::Error;
+use crate::GLApi;
 use crate::platform::macos::system::connection::Connection as SystemConnection;
 use crate::platform::macos::system::device::NativeDevice;
 use crate::platform::macos::system::surface::NativeWidget;
@@ -38,6 +39,12 @@ impl Connection {
     #[inline]
     pub fn native_connection(&self) -> NativeConnection {
         self.0.native_connection()
+    }
+
+    /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
+    #[inline]
+    pub fn gl_api(&self) -> GLApi {
+        GLApi::GL
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
