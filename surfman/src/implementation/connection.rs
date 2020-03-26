@@ -12,6 +12,7 @@ use super::super::surface::NativeWidget;
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
+#[deny(unconditional_recursion)]
 impl ConnectionInterface for Connection {
     type Adapter = Adapter;
     type Device = Device;
