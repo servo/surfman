@@ -27,6 +27,7 @@ use std::thread;
 use winapi::shared::dxgi::IDXGIKeyedMutex;
 use winapi::shared::windef::{HWND, RECT};
 use winapi::shared::winerror::S_OK;
+use winapi::um::d3d11;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::HANDLE;
@@ -137,7 +138,7 @@ impl Device {
     fn create_pbuffer_surface(&mut self,
                               context: &Context,
                               size: &Size2D<i32>,
-                              share_handle: Option<HANDLE>)
+                              texture: Option<*mut d3d11::ID3D11Texture2D>)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -153,17 +154,15 @@ impl Device {
             ];
 
             EGL_FUNCTIONS.with(|egl| {
-                let egl_surface = if let Some(share_handle) = share_handle {
+                let egl_surface = if let Some(texture) = texture {
                     let surface =
                         egl.CreatePbufferFromClientBuffer(self.egl_display,
                                                           EGL_D3D_TEXTURE_ANGLE,
-                                                          share_handle as *const _,
+                                                          texture as *const _,
                                                           egl_config,
                                                           attributes.as_ptr());
                     assert_ne!(surface, egl::NO_SURFACE);
                     surface
-                } else if share_handle.is_some() {
-                    egl::NO_SURFACE
                 } else {
                     let surface = egl.CreatePbufferSurface(self.egl_display,
                                                            egl_config,
@@ -177,19 +176,14 @@ impl Device {
                                         .expect("Where's the `EGL_ANGLE_query_surface_pointer` \
                                                  extension?");
 
-                let share_handle = if let Some(share_handle) = share_handle {
-                    share_handle
-                } else {
-                    let mut share_handle = INVALID_HANDLE_VALUE;
-                    let result =
-                        eglQuerySurfacePointerANGLE(self.egl_display,
-                                                    egl_surface,
-                                                    EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
-                                                    &mut share_handle);
-                    assert_ne!(result, egl::FALSE);
-                    assert_ne!(share_handle, INVALID_HANDLE_VALUE);
-                    share_handle
-                };
+                let mut share_handle = INVALID_HANDLE_VALUE;
+                let result =
+                    eglQuerySurfacePointerANGLE(self.egl_display,
+                                                egl_surface,
+                                                EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
+                                                &mut share_handle);
+                assert_ne!(result, egl::FALSE);
+                assert_ne!(share_handle, INVALID_HANDLE_VALUE);
 
                 // `mozangle` builds ANGLE with keyed mutexes for sharing. Use the
                 // `EGL_ANGLE_keyed_mutex` extension to fetch the keyed mutex so we can grab it.
@@ -219,6 +213,17 @@ impl Device {
                 })
             })
         }
+    }
+
+    /// Given a D3D11 texture, create a surface that wraps that texture. This method is unsafe
+    /// in that the resulting surface is only valid on the current thread.
+    pub unsafe fn create_surface_from_texture(
+        &mut self,
+        context: &Context,
+        size: &Size2D<i32>,
+        texture: *mut d3d11::ID3D11Texture2D
+    ) -> Result<Surface, Error> {
+        self.create_pbuffer_surface(context, size, Some(texture))
     }
 
     fn create_window_surface(&mut self, context: &Context, native_widget: &NativeWidget)
