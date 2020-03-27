@@ -7,7 +7,7 @@ use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
 use crate::platform::macos::system::surface::Surface as SystemSurface;
 use crate::renderbuffers::Renderbuffers;
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, gl};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError, gl};
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 
@@ -84,12 +84,12 @@ impl Device {
                           access: SurfaceAccess,
                           surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
-        let system_surface = self.0.create_surface(access, surface_type)?;
+        let mut system_surface = self.0.create_surface(access, surface_type)?;
 
         let _guard = self.temporarily_make_context_current(context);
         GL_FUNCTIONS.with(|gl| {
             unsafe {
-                let texture_object = self.bind_to_gl_texture(&system_surface.io_surface,
+                let mut texture_object = self.bind_to_gl_texture(&system_surface.io_surface,
                                                              &system_surface.size);
 
                 let mut framebuffer_object = 0;
@@ -105,13 +105,28 @@ impl Device {
                 let context_descriptor = self.context_descriptor(context);
                 let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
-                let renderbuffers = Renderbuffers::new(gl,
-                                                       &system_surface.size,
-                                                       &context_attributes);
+                let mut renderbuffers = Renderbuffers::new(gl,
+                                                           &system_surface.size,
+                                                           &context_attributes);
                 renderbuffers.bind_to_current_framebuffer(gl);
 
-                debug_assert_eq!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
-                                 gl::FRAMEBUFFER_COMPLETE);
+                if gl.GetError() != gl::NO_ERROR ||
+                    gl.CheckFramebufferStatus(gl::FRAMEBUFFER) != gl::FRAMEBUFFER_COMPLETE
+                {
+                    // On macos, surface creation can fail silently (e.g. due to OOM) and AFAICT
+                    // the way to tell that it has failed is to look at the framebuffer status
+                    // while the surface is attached.
+                    renderbuffers.destroy(gl);
+                    if framebuffer_object != 0 {
+                        gl.DeleteFramebuffers(1, &mut framebuffer_object);
+                    }
+                    if texture_object != 0 {
+                        gl.DeleteTextures(1, &mut texture_object);
+                    }
+                    self.0.destroy_surface(&mut system_surface);
+                    // TODO: convert the GL error into a surfman error?
+                    return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
+                }
 
                 Ok(Surface {
                     system_surface,
