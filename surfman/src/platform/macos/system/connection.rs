@@ -16,7 +16,11 @@ use core_foundation::bundle::CFBundleGetInfoDictionary;
 use core_foundation::bundle::CFBundleGetMainBundle;
 use core_foundation::dictionary::{CFMutableDictionary, CFMutableDictionaryRef};
 use core_foundation::string::CFString;
+
+use euclid::default::Size2D;
+
 use std::str::FromStr;
+use std::os::raw::c_void;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
@@ -132,6 +136,13 @@ impl Connection {
         }
         unsafe {
             Ok(NativeWidget { view: NSView(msg_send![ns_view, retain]) })
+        }
+    }
+
+    /// Create a native widget from a raw pointer
+    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, _size: Size2D<i32>) -> NativeWidget {
+        NativeWidget {
+            view: NSView(raw as id),
         }
     }
 }

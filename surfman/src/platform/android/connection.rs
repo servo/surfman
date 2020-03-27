@@ -7,7 +7,12 @@
 use crate::Error;
 use crate::GLApi;
 use super::device::{Adapter, Device, NativeDevice};
+use super::ffi::ANativeWindow;
 use super::surface::NativeWidget;
+
+use euclid::default::Size2D;
+
+use std::os::raw::c_void;
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
@@ -105,6 +110,13 @@ impl Connection {
     pub fn create_native_widget_from_winit_window(&self, _: &Window)
                                                   -> Result<NativeWidget, Error> {
         Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    /// Create a native widget from a raw pointer
+    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, _size: Size2D<i32>) -> NativeWidget {
+        NativeWidget {
+            native_window: raw as *mut ANativeWindow,
+        }
     }
 }
 

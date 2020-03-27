@@ -5,6 +5,10 @@
 use crate::Error;
 use crate::GLApi;
 
+use euclid::default::Size2D;
+
+use std::os::raw::c_void;
+
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
@@ -61,4 +65,7 @@ pub trait Connection: Sized {
     #[cfg(feature = "sm-winit")]
     fn create_native_widget_from_winit_window(&self, window: &Window)
                                               -> Result<Self::NativeWidget, Error>;
+
+    /// Creates a native widget from a raw pointer
+    unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> Self::NativeWidget;
 }

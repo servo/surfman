@@ -11,6 +11,8 @@ use crate::platform::generic::egl::ffi::EGL_PLATFORM_SURFACELESS_MESA;
 use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
+use euclid::default::Size2D;
+
 use std::os::raw::c_void;
 use std::sync::Arc;
 
@@ -145,6 +147,11 @@ impl Connection {
     pub fn create_native_widget_from_winit_window(&self, _: &Window)
                                                   -> Result<NativeWidget, Error> {
         Err(Error::IncompatibleNativeWidget)
+    }
+
+    /// Create a native widget from a raw pointer
+    pub unsafe fn create_native_widget_from_ptr(&self, _raw: *mut c_void, size: Size2D<i32>) -> NativeWidget {
+        NativeWidget
     }
 }
 

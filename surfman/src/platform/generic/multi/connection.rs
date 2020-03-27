@@ -9,6 +9,10 @@ use crate::device::Device as DeviceInterface;
 use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
 
+use euclid::default::Size2D;
+
+use std::os::raw::c_void;
+
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
@@ -199,6 +203,18 @@ impl<Def, Alt> Connection<Def, Alt>
             }
         }
     }
+
+    /// Create a native widget from a raw pointer
+    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget<Def, Alt> {
+        match *self {
+            Connection::Default(ref connection) => {
+                NativeWidget::Default(connection.create_native_widget_from_ptr(raw, size))
+            }
+            Connection::Alternate(ref connection) => {
+                NativeWidget::Alternate(connection.create_native_widget_from_ptr(raw, size))
+            }
+        }
+    }
 }
 
 impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
@@ -268,5 +284,10 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
     fn create_native_widget_from_winit_window(&self, window: &Window)
                                               -> Result<Self::NativeWidget, Error> {
         Connection::create_native_widget_from_winit_window(self, window)
+    }
+
+    #[inline]
+    unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget<Def, Alt> {
+        Connection::create_native_widget_from_ptr(self, raw, size)
     }
 }

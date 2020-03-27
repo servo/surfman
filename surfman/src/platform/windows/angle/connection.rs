@@ -13,6 +13,10 @@ use crate::GLApi;
 use super::device::{Adapter, Device, NativeDevice, VendorPreference};
 use super::surface::NativeWidget;
 
+use euclid::default::Size2D;
+
+use std::os::raw::c_void;
+
 use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
@@ -121,7 +125,8 @@ impl Connection {
     /// Creates a native widget type from the given `winit` window.
     /// 
     /// This type can be later used to create surfaces that render to the window.
-    #[cfg(feature = "sm-winit")]
+    // This is not implemented for UWP
+    #[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
     #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
@@ -130,6 +135,13 @@ impl Connection {
             Err(Error::IncompatibleNativeWidget)
         } else {
             Ok(NativeWidget { egl_native_window: hwnd })
+        }
+    }
+
+    /// Create a native widget from a raw pointer
+    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, _size: Size2D<i32>) -> NativeWidget {
+        NativeWidget {
+            egl_native_window: raw as EGLNativeWindowType,
         }
     }
 }
