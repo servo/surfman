@@ -122,9 +122,16 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(&self, _: raw_window_handle::RawWindowHandle)
-                                                  -> Result<NativeWidget, Error> {
-        Err(Error::UnsupportedOnThisPlatform)
+    pub fn create_native_widget_from_rwh(&self, raw_handle: raw_window_handle::RawWindowHandle)
+                                         -> Result<NativeWidget, Error> {
+        use raw_window_handle::RawWindowHandle::Android;
+
+        match raw_handle {
+            Android(handle) => Ok(NativeWidget {
+                native_window: handle.a_native_window as *mut _,
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
     }
 }
 

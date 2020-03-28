@@ -16,6 +16,11 @@ use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 
+#[cfg(feature = "sm-raw-window-handle")]
+use crate::platform::macos::system::surface::NSView;
+#[cfg(feature = "sm-raw-window-handle")]
+use cocoa::base::id;
+
 #[cfg(feature = "sm-winit")]
 use winit::Window;
 
@@ -116,9 +121,17 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(&self, _: raw_window_handle::RawWindowHandle)
-                                                  -> Result<NativeWidget, Error> {
-        // TODO: support raw window handle on cgl
-        Err(Error::UnsupportedOnThisPlatform)
+    pub fn create_native_widget_from_rwh(&self, raw_handle: raw_window_handle::RawWindowHandle)
+                                         -> Result<NativeWidget, Error> {
+        use raw_window_handle::RawWindowHandle::MacOS;
+
+        match raw_handle {
+            MacOS(handle) => Ok(NativeWidget {
+                view: NSView(unsafe {
+                    msg_send![handle.ns_view as id, retain]
+                }),
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
     }
 }
