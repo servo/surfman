@@ -454,6 +454,12 @@ impl Device {
         })
     }
 
+    /// Resizes a widget surface.
+    pub fn resize_surface(&self, context: &Context, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
+        surface.size = size;
+        Ok(())
+    }
+
     /// Returns various information about the surface, including the framebuffer object needed to
     /// render to this surface.
     /// 

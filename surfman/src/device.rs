@@ -4,6 +4,7 @@
 
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use crate::gl::types::{GLenum, GLuint};
+use euclid::default::Size2D;
 use super::connection::Connection as ConnectionInterface;
 
 use std::os::raw::c_void;
@@ -185,6 +186,10 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     fn present_surface(&self, context: &Self::Context, surface: &mut Self::Surface)
+                       -> Result<(), Error>;
+
+    /// Resizes a widget surface.
+    fn resize_surface(&self, context: &Self::Context, surface: &mut Self::Surface, size: Size2D<i32>)
                        -> Result<(), Error>;
 
     /// Returns various information about the surface, including the framebuffer object needed to

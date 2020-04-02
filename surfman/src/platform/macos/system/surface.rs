@@ -71,7 +71,9 @@ impl Drop for Surface {
 }
 
 pub(crate) struct ViewInfo {
+    view: NSView,
     layer: CALayer,
+    superlayer: CALayer,
     front_surface: IOSurface,
     display_link: DisplayLink,
     next_vblank: Arc<VblankCond>,
@@ -83,9 +85,11 @@ struct VblankCond {
 }
 
 /// Wraps an `NSView` object.
+#[derive(Clone)]
 pub struct NSView(pub(crate) id);
 
 /// A native widget on macOS (`NSView`).
+#[derive(Clone)]
 pub struct NativeWidget {
     /// The `NSView` object.
     pub view: NSView,
@@ -174,9 +178,10 @@ impl Device {
         layer.set_contents_opaque(true);
         superlayer.add_sublayer(&layer);
 
+        let view = native_widget.view.clone();
         transaction::commit();
 
-        ViewInfo { layer, front_surface, display_link, next_vblank }
+        ViewInfo { view, layer, superlayer, front_surface, display_link, next_vblank }
     }
 
     /// Destroys a surface.
@@ -194,6 +199,44 @@ impl Device {
     /// associated widgets until this method is called.
     pub fn present_surface(&self, surface: &mut Surface) -> Result<(), Error> {
         surface.present()
+    }
+
+    /// Resizes a widget surface
+    pub fn resize_surface(&self, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
+        let view_info = match surface.view_info {
+            None => return Err(Error::NoWidgetAttached),
+            Some(ref mut view_info) => view_info,
+        };
+
+        transaction::begin();
+        transaction::set_disable_actions(true);
+
+        unsafe {
+            // Compute logical size.
+            let window: id = msg_send![view_info.view.0, window];
+            let logical_rect: NSRect = msg_send![window, convertRectFromBacking:NSRect {
+                origin: NSPoint { x: 0.0, y: 0.0 },
+                size: NSSize { width: size.width as f64, height: size.height as f64 },
+            }];
+            let logical_size = logical_rect.size;
+            let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
+
+            // Flip contents right-side-up.
+            let sublayer_transform =
+                CATransform3D::from_scale(1.0, -1.0, 1.0).translate(0.0, -logical_size.height, 0.0);
+            view_info.superlayer.set_sublayer_transform(sublayer_transform);
+
+            view_info.front_surface = self.create_io_surface(&size, surface.access);
+            view_info.layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
+            view_info.layer.set_contents(view_info.front_surface.obj as id);
+            view_info.layer.set_opaque(true);
+            view_info.layer.set_contents_opaque(true);
+            surface.io_surface = self.create_io_surface(&size, surface.access);
+            surface.size = size;
+	}
+
+        transaction::commit();
+        Ok(())
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.

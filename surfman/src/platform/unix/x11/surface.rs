@@ -186,6 +186,11 @@ impl Device {
         surface.0.present(self.native_connection.egl_display, context.0.egl_context)
     }
 
+    /// Resizes a widget surface.
+    pub fn resize_surface(&self, context: &Context, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
+        Ok(())
+    }
+
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
     pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)

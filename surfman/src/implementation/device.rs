@@ -7,6 +7,7 @@ use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
+use euclid::default::Size2D;
 use super::super::connection::Connection;
 use super::super::context::{Context, ContextDescriptor, NativeContext};
 use super::super::device::{Adapter, Device};
@@ -164,6 +165,12 @@ impl DeviceInterface for Device {
     fn present_surface(&self, context: &Self::Context, surface: &mut Self::Surface)
                        -> Result<(), Error> {
         Device::present_surface(self, context, surface)
+    }
+
+    #[inline]
+    fn resize_surface(&self, context: &Context, surface: &mut Surface, size: Size2D<i32>)
+                       -> Result<(), Error> {
+        Device::resize_surface(self, context, surface, size)
     }
 
     #[inline]

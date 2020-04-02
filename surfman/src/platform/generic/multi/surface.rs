@@ -6,6 +6,7 @@ use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
+use euclid::default::Size2D;
 use super::context::Context;
 use super::device::Device;
 
@@ -242,6 +243,28 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
                 match *surface {
                     Surface::Alternate(ref mut surface) => {
                         device.present_surface(context, surface)
+                    }
+                    _ => Err(Error::IncompatibleSurface),
+                }
+            }
+            _ => Err(Error::IncompatibleContext),
+        }
+    }
+
+    /// Resizes a widget surface.
+    pub fn resize_surface(&self, context: &Context<Def, Alt>, surface: &mut Surface<Def, Alt>, size: Size2D<i32>)
+                           -> Result<(), Error> {
+        match (self, context) {
+            (&Device::Default(ref device), &Context::Default(ref context)) => {
+                match *surface {
+                    Surface::Default(ref mut surface) => device.resize_surface(context, surface, size),
+                    _ => Err(Error::IncompatibleSurface),
+                }
+            }
+            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+                match *surface {
+                    Surface::Alternate(ref mut surface) => {
+                        device.resize_surface(context, surface, size)
                     }
                     _ => Err(Error::IncompatibleSurface),
                 }
