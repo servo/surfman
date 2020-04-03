@@ -428,21 +428,27 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay,
 
     let egl_config = egl_config_from_id(egl_display, descriptor.egl_config_id);
 
-    let mut profile_mask = EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT;
+    let mut egl_context_attributes = vec![
+        egl::CONTEXT_CLIENT_VERSION as EGLint,      descriptor.gl_version.major as EGLint,
+        EGL_CONTEXT_MINOR_VERSION_KHR as EGLint,    descriptor.gl_version.minor as EGLint,
+    ];
+
+    // D3D11 ANGLE doesn't seem happy if EGL_CONTEXT_OPENGL_PROFILE_MASK is set
+    // to be a core profile.
     if descriptor.compatibility_profile {
-        profile_mask |= EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT;
+        egl_context_attributes.extend(&[
+            EGL_CONTEXT_OPENGL_PROFILE_MASK as EGLint,
+            EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT,
+        ]);
     }
 
     // Include some extra zeroes to work around broken implementations.
     //
     // FIXME(pcwalton): Which implementations are those? (This is copied from Gecko.)
-    let egl_context_attributes = [
-        egl::CONTEXT_CLIENT_VERSION as EGLint,      descriptor.gl_version.major as EGLint,
-        EGL_CONTEXT_MINOR_VERSION_KHR as EGLint,    descriptor.gl_version.minor as EGLint,
-        EGL_CONTEXT_OPENGL_PROFILE_MASK as EGLint,  profile_mask,
+    egl_context_attributes.extend(&[
         egl::NONE as EGLint, 0,
         0, 0,
-    ];
+    ]);
 
     EGL_FUNCTIONS.with(|egl| {
         let egl_context = egl.CreateContext(egl_display,
