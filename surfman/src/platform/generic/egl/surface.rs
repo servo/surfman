@@ -274,6 +274,13 @@ impl EGLBackedSurface {
         }
     }
 
+    pub(crate) fn native_window(&self) -> Result<*const c_void, Error> {
+        match self.objects {
+            EGLSurfaceObjects::TextureImage { .. } => Err(Error::NoWidgetAttached),
+            EGLSurfaceObjects::Window { native_window, .. } => Ok(native_window),
+        }
+    }
+
     pub(crate) fn unbind(&self, gl: &Gl, egl_display: EGLDisplay, egl_context: EGLContext) {
         // If we're current, we stay current, but with no surface attached.
         unsafe {
