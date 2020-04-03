@@ -189,6 +189,14 @@ impl Device {
         surface.0.present(self.native_connection.egl_display, context.0.egl_context)
     }
 
+    /// Resizes a widget surface.
+    pub fn resize_surface(&self, context: &Context, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
+        let wayland_egl_window = surface.0.native_window()? as *mut c_void as *mut wl_egl_window;
+	unsafe { (WAYLAND_EGL_HANDLE.wl_egl_window_resize)(wayland_egl_window, size.width, size.height, 0, 0) };
+	surface.0.size = size;
+	Ok(())
+    }
+
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
     pub fn lock_surface_data<'s>(&self, _: &'s mut Surface)

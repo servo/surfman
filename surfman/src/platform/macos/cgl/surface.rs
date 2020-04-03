@@ -284,6 +284,50 @@ impl Device {
         })
     }
 
+    /// Resizes a widget surface.
+    pub fn resize_surface(&self, context: &Context, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
+        let _guard = self.temporarily_make_context_current(context);
+        let _guard = self.temporarily_bind_framebuffer(surface.framebuffer_object);
+
+        self.0.resize_surface(&mut surface.system_surface, size)?;
+
+        let context_descriptor = self.context_descriptor(context);
+        let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                // Recreate the GL texture and bind it to the FBO
+                let texture_object = self.bind_to_gl_texture(&surface.system_surface.io_surface, &size);
+                gl.FramebufferTexture2D(gl::FRAMEBUFFER,
+                                        gl::COLOR_ATTACHMENT0,
+                                        SURFACE_GL_TEXTURE_TARGET,
+                                        texture_object,
+                                        0);
+
+                // Recreate the GL renderbuffers and bind them to the FBO
+                let renderbuffers = Renderbuffers::new(gl, &size, &context_attributes);
+                renderbuffers.bind_to_current_framebuffer(gl);
+
+                gl.DeleteTextures(1, &surface.texture_object);
+                surface.renderbuffers.destroy(gl);
+
+                surface.texture_object = texture_object;
+                surface.renderbuffers = renderbuffers;
+		
+                debug_assert_eq!(
+		    (gl.GetError(), gl.CheckFramebufferStatus(gl::FRAMEBUFFER)),
+		    (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE),
+		);
+            }
+
+            Ok(())
+        })
+    }
+
     fn temporarily_bind_framebuffer(&self, new_framebuffer: GLuint) -> FramebufferGuard {
         GL_FUNCTIONS.with(|gl| {
             unsafe {
