@@ -103,8 +103,14 @@ pub(crate) enum Win32Objects {
     Window,
     Pbuffer {
         share_handle: HANDLE,
-        keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
+        synchronization: Synchronization,
     }
+}
+
+pub(crate) enum Synchronization {
+    KeyedMutex(ComPtr<IDXGIKeyedMutex>),
+    GLFinish,
+    None,
 }
 
 /// Wraps an `EGLNativeWindowType`
@@ -193,12 +199,14 @@ impl Device {
                     egl_surface,
                     EGL_DXGI_KEYED_MUTEX_ANGLE as EGLint,
                     &mut keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void);
-                let keyed_mutex = if result != egl::FALSE && !keyed_mutex.is_null() {
+                let synchronization = if result != egl::FALSE && !keyed_mutex.is_null() {
                     let keyed_mutex = ComPtr::from_raw(keyed_mutex);
                     keyed_mutex.AddRef();
-                    Some(keyed_mutex)
+                    Synchronization::KeyedMutex(keyed_mutex)
+                } else if texture.is_none() {
+                    Synchronization::GLFinish
                 } else {
-                    None
+                    Synchronization::None
                 };
 
                 Ok(Surface {
@@ -208,7 +216,7 @@ impl Device {
                     context_descriptor,
                     win32_objects: Win32Objects::Pbuffer {
                         share_handle,
-                        keyed_mutex
+                        synchronization,
                     },
                 })
             })
@@ -492,10 +500,10 @@ impl Surface {
     }
 
     #[inline]
-    pub(crate) fn uses_keyed_mutex(&self) -> bool {
+    pub(crate) fn uses_gl_finish(&self) -> bool {
         match self.win32_objects {
-            Win32Objects::Pbuffer { keyed_mutex: Some(_), .. } => true,
-            Win32Objects::Pbuffer { keyed_mutex: None, .. } | Win32Objects::Window => false,
+            Win32Objects::Pbuffer { synchronization: Synchronization::GLFinish, .. } => true,
+            _ => false,
         }
     }
 }
