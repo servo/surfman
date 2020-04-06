@@ -264,7 +264,7 @@ impl Device {
             Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
         }
 
-        // If the surface is synhronized with GLFinish, then finish.
+        // If the surface is synchronized with GLFinish, then finish.
         // FIXME(pcwalton): Is this necessary and sufficient?
         if surface.uses_gl_finish() {
             if let Ok(_guard) = self.temporarily_make_context_current(context) {
