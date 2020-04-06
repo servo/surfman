@@ -25,13 +25,11 @@ use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
 use winapi::shared::dxgi::IDXGIKeyedMutex;
-use winapi::shared::windef::{HWND, RECT};
 use winapi::shared::winerror::S_OK;
 use winapi::um::d3d11;
 use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::HANDLE;
-use winapi::um::winuser;
 use wio::com::ComPtr;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
@@ -463,7 +461,7 @@ impl Device {
     }
 
     /// Resizes a widget surface.
-    pub fn resize_surface(&self, context: &Context, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
+    pub fn resize_surface(&self, _context: &Context, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
         surface.size = size;
         Ok(())
     }

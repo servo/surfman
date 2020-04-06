@@ -123,7 +123,7 @@ impl Device {
                     if texture_object != 0 {
                         gl.DeleteTextures(1, &mut texture_object);
                     }
-                    self.0.destroy_surface(&mut system_surface);
+                    let _ = self.0.destroy_surface(&mut system_surface);
                     // TODO: convert the GL error into a surfman error?
                     return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
                 }

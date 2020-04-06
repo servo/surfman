@@ -289,7 +289,7 @@ impl Device {
     }
 
     /// Resizes a widget surface.
-    pub fn resize_surface(&self, context: &Context, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
+    pub fn resize_surface(&self, _context: &Context, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
         surface.size = size;
         Ok(())
     }

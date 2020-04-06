@@ -2,6 +2,8 @@
 //
 //! Declarations common to all platform contexts.
 
+#![allow(unused_imports)]
+
 use crate::Gl;
 use crate::gl::types::GLuint;
 use crate::gl;
@@ -68,11 +70,12 @@ impl ContextAttributes {
 }
 
 #[cfg(target_os = "android")]
-pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
+pub(crate) fn current_context_uses_compatibility_profile(_gl: &Gl) -> bool {
     false
 }
 
 #[cfg(not(target_os = "android"))]
+#[allow(dead_code)]
 pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
     unsafe {
         // First, try `GL_CONTEXT_PROFILE_MASK`.
@@ -84,7 +87,6 @@ pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
         }
 
         // Second, look for the `GL_ARB_compatibility` extension.
-        let mut compatibility_profile = false;
         let mut num_extensions = 0;
         gl.GetIntegerv(gl::NUM_EXTENSIONS, &mut num_extensions);
         if gl.GetError() == gl::NO_ERROR {
