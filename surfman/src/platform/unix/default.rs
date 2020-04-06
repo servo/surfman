@@ -15,6 +15,7 @@ pub mod connection {
     /// Either a Wayland or an X11 display server connection.
     pub type Connection = MultiConnection<HWDevice, SWDevice>;
 
+    /// Either a Wayland or an X11 native connection
     pub type NativeConnection = MultiNativeConnection<HWDevice, SWDevice>;
 }
 
@@ -53,6 +54,7 @@ pub mod context {
     /// These are local to a device.
     pub type ContextDescriptor = MultiContextDescriptor<HWDevice, SWDevice>;
 
+    /// Either a Wayland or an X11 native context
     pub type NativeContext = MultiNativeContext<HWDevice, SWDevice>;
 }
 
@@ -78,6 +80,7 @@ pub mod device {
     /// Devices contain most of the relevant surface management methods.
     pub type Device = MultiDevice<HWDevice, SWDevice>;
 
+    /// Either a Wayland or an X11 native device
     pub type NativeDevice = MultiNativeDevice<HWDevice, SWDevice>;
 }
 

@@ -5,18 +5,16 @@
 use crate::context::{self, CREATE_CONTEXT_MUTEX};
 use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::egl;
-use crate::gl::types::GLuint;
-use crate::gl;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
 use crate::{Gl, SurfaceInfo};
 use super::device::EGL_FUNCTIONS;
 use super::error::ToWindowingApiError;
 use super::ffi::{EGL_CONTEXT_MINOR_VERSION_KHR, EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT};
-use super::ffi::{EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT, EGL_CONTEXT_OPENGL_PROFILE_MASK};
+use super::ffi::EGL_CONTEXT_OPENGL_PROFILE_MASK;
 use super::surface::{EGLBackedSurface, ExternalEGLSurfaces};
 
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
