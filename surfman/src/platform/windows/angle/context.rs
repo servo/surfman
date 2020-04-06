@@ -12,7 +12,7 @@ use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
 use super::device::Device;
-use super::surface::{Surface, Win32Objects};
+use super::surface::{Surface, Synchronization, Win32Objects};
 
 use std::mem;
 use std::os::raw::c_void;
@@ -264,9 +264,9 @@ impl Device {
             Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
         }
 
-        // If the surface does not use a DXGI keyed mutex, then finish.
+        // If the surface is synchronized with GLFinish, then finish.
         // FIXME(pcwalton): Is this necessary and sufficient?
-        if !surface.uses_keyed_mutex() {
+        if surface.uses_gl_finish() {
             if let Ok(_guard) = self.temporarily_make_context_current(context) {
                 unsafe {
                     GL_FUNCTIONS.with(|gl| gl.Finish());
@@ -277,7 +277,7 @@ impl Device {
         let is_current = self.context_is_current(context);
 
         match surface.win32_objects {
-            Win32Objects::Pbuffer { keyed_mutex: Some(ref keyed_mutex), .. } => {
+            Win32Objects::Pbuffer { synchronization: Synchronization::KeyedMutex(ref keyed_mutex), .. } => {
                 unsafe {
                     let result = keyed_mutex.AcquireSync(0, INFINITE);
                     assert_eq!(result, S_OK);
@@ -314,7 +314,7 @@ impl Device {
         };
 
         match surface.win32_objects {
-            Win32Objects::Pbuffer { keyed_mutex: Some(ref keyed_mutex), .. } => {
+            Win32Objects::Pbuffer { synchronization: Synchronization::KeyedMutex(ref keyed_mutex), .. } => {
                 unsafe {
                     let result = keyed_mutex.ReleaseSync(0);
                     assert_eq!(result, S_OK);
