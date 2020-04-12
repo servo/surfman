@@ -2,9 +2,7 @@
 //
 //! Backends that are not specific to any operating system.
 
-#[cfg(any(target_os = "android",
-          all(target_os = "windows", feature = "sm-angle"),
-          all(unix, not(target_os = "macos"))))]
+#[cfg(any(android, angle, linux))]
 pub(crate) mod egl;
 
 pub mod multi;

@@ -145,6 +145,23 @@ impl Connection {
             view: NSView(raw as id),
         }
     }
+
+    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle")]
+    #[inline]
+    pub fn create_native_widget_from_rwh(&self, raw_handle: raw_window_handle::RawWindowHandle)
+                                         -> Result<NativeWidget, Error> {
+        use raw_window_handle::RawWindowHandle::MacOS;
+
+        match raw_handle {
+            MacOS(handle) => Ok(NativeWidget {
+                view: NSView(unsafe {
+                    msg_send![handle.ns_view as id, retain]
+                }),
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
+    }
 }
 
 impl NativeConnection {

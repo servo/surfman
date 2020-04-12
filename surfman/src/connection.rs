@@ -68,4 +68,9 @@ pub trait Connection: Sized {
 
     /// Creates a native widget from a raw pointer
     unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> Self::NativeWidget;
+
+    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle")]
+    fn create_native_widget_from_rwh(&self, window: raw_window_handle::RawWindowHandle)
+                                              -> Result<Self::NativeWidget, Error>;
 }

@@ -14,6 +14,7 @@ build = "build.rs"
 
 [build-dependencies]
 gl_generator = "0.13"
+cfg_aliases = "0.1.0"
 
 [features]
 default = ["sm-winit"]
@@ -25,6 +26,7 @@ sm-test = []
 sm-wayland-default = []
 sm-winit = ["winit"]
 sm-x11 = ["x11"]
+sm-raw-window-handle = ["raw-window-handle"]
 
 [dependencies]
 bitflags = "1.1"
@@ -43,6 +45,10 @@ optional = true
 
 [dependencies.winit]
 version = "<0.19.4" # 0.19.4 causes build errors https://github.com/rust-windowing/winit/pull/1105
+optional = true
+
+[dependencies.raw-window-handle]
+version = "0.3.3"
 optional = true
 
 [dev-dependencies]
@@ -68,11 +74,7 @@ features = ["client", "dlopen", "egl"]
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
 version = "2.3.0"
 features = ["xlib"]
-
-[target.'cfg(any(not(unix), target_os = "macos", target_os = "android"))'.dependencies.x11]
 optional = true
-version = "2.3.0"
-features = ["xlib"]
 
 # Ensure that we have a static libEGL.lib present for linking with EGL bindings.
 [target.'cfg(target_os = "windows")'.dependencies.mozangle]

@@ -215,6 +215,22 @@ impl<Def, Alt> Connection<Def, Alt>
             }
         }
     }
+
+    /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle")]
+    pub fn create_native_widget_from_rwh(&self, raw_handle: raw_window_handle::RawWindowHandle)
+                                        -> Result<NativeWidget<Def, Alt>, Error> {
+        match *self {
+            Connection::Default(ref connection) => {
+                connection.create_native_widget_from_rwh(raw_handle)
+                    .map(NativeWidget::Default)
+            }
+            Connection::Alternate(ref connection) => {
+                connection.create_native_widget_from_rwh(raw_handle)
+                    .map(NativeWidget::Alternate)
+            }
+        }
+    }
 }
 
 impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
@@ -289,5 +305,13 @@ impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
     #[inline]
     unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget<Def, Alt> {
         Connection::create_native_widget_from_ptr(self, raw, size)
+    }
+
+    #[cfg(feature = "sm-raw-window-handle")]
+    fn create_native_widget_from_rwh(
+        &self,
+        raw_handle: raw_window_handle::RawWindowHandle,
+    ) -> Result<Self::NativeWidget, Error> {
+        Connection::create_native_widget_from_rwh(self, raw_handle)
     }
 }

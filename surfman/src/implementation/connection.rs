@@ -88,4 +88,11 @@ impl ConnectionInterface for Connection {
     unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget {
         Connection::create_native_widget_from_ptr(self, raw, size)
     }
+
+    #[inline]
+    #[cfg(feature = "sm-raw-window-handle")]
+    fn create_native_widget_from_rwh(&self, window: raw_window_handle::RawWindowHandle)
+                                              -> Result<NativeWidget, Error> {
+        Connection::create_native_widget_from_rwh(self, window)
+    }
 }

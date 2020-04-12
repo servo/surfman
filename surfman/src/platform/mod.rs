@@ -4,26 +4,26 @@
 
 pub mod generic;
 
-#[cfg(target_os = "android")]
+#[cfg(android)]
 pub mod android;
-#[cfg(target_os = "android")]
+#[cfg(android)]
 pub use android as default;
 
-#[cfg(target_os = "macos")]
+#[cfg(macos)]
 pub mod macos;
-#[cfg(all(target_os = "macos", not(feature = "sm-x11")))]
+#[cfg(macos)]
 pub use macos::cgl as default;
-#[cfg(target_os = "macos")]
+#[cfg(macos)]
 pub use macos::system;
 
-#[cfg(unix)]
+#[cfg(linux)]
 pub mod unix;
-#[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
+#[cfg(linux)]
 pub use unix::default;
 
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 pub mod windows;
-#[cfg(all(target_os = "windows", feature = "sm-angle-default"))]
+#[cfg(angle_default)]
 pub use windows::angle as default;
-#[cfg(all(target_os = "windows", not(feature = "sm-angle-default")))]
+#[cfg(all(windows, not(angle_default)))]
 pub use windows::wgl as default;

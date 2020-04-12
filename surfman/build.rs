@@ -3,11 +3,32 @@
 //! The `surfman` build script.
 
 use gl_generator::{Api, Fallbacks, Profile, Registry, StructGenerator};
+use cfg_aliases::cfg_aliases;
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
 
 fn main() {
+    // Setup aliases for #[cfg] checks
+    cfg_aliases! {
+        // Platforms
+        windows: { target_os = "windows" },
+        macos: { target_os = "macos" },
+        android: { target_os = "android" },
+        // TODO: is `target_os = "linux"` the same as the following check?
+        linux: { all(unix, not(any(macos, android))) },
+        
+        // Features:
+        // Here we collect the features that are only valid on certain platforms and
+        // we add aliases that include checks for the correct platform.
+        angle: { all(windows, feature = "sm-angle") },
+        angle_builtin: { all(windows, feature = "sm-angle-builtin") },
+        angle_default: { all(windows, feature = "sm-angle-default") },
+        no_wgl: { all(windows, feature = "sm-no-wgl") },
+        wayland_default: { all(linux, feature = "sm-wayland-default") },
+        x11: { all(linux, feature = "sm-x11") },
+    }
+
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_family = env::var("CARGO_CFG_TARGET_FAMILY").unwrap();
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());

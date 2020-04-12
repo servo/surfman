@@ -2,12 +2,18 @@
 //
 //! Backends specific to Unix-like systems, particularly Linux.
 
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))]
+// The default when x11 is enabled
+#[cfg(x11)]
 pub mod default;
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))]
+
+// The default when x11 is not enabled
+#[cfg(not(x11))]
+pub use wayland as default;
+
+#[cfg(linux)]
 pub mod generic;
-#[cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))]
+
+#[cfg(linux)]
 pub mod wayland;
-#[cfg(all(any(feature = "sm-x11",
-              all(unix, not(any(target_os = "macos", target_os = "android"))))))]
+#[cfg(x11)]
 pub mod x11;
