@@ -9,7 +9,7 @@ authors = [
     "The Servo Project Developers",
 ]
 description = "A cross-platform, low-level toolkit for GPU surface management"
-repository = "https://github.com/pcwalton/surfman"
+repository = "https://github.com/servo/surfman"
 build = "build.rs"
 
 [build-dependencies]
