@@ -115,7 +115,16 @@ impl Device {
                 SurfaceType::Widget { ref native_widget } => {
                     let window: id = msg_send![native_widget.view.0, window];
                     let bounds = window.convertRectToBacking(native_widget.view.0.bounds());
-                    Size2D::new(bounds.size.width.round(), bounds.size.height.round()).to_i32()
+
+                    // The surface will not appear if its width is not a multiple of 4 (i.e. stride
+                    // is a multiple of 16 bytes). Enforce this.
+                    let mut width = bounds.size.width as i32;
+                    let height = bounds.size.height as i32;
+                    if width % 4 != 0 {
+                        width += 4 - width % 4;
+                    }
+
+                    Size2D::new(width, height)
                 }
             };
 
