@@ -5,6 +5,7 @@
 use crate::Error;
 use super::connection::Connection;
 
+use metal::Device as MetalDevice;
 use std::marker::PhantomData;
 
 /// Represents a hardware display adapter that can be used for rendering (including the CPU).
@@ -24,11 +25,9 @@ pub struct Device {
     phantom: PhantomData<*mut ()>,
 }
 
-/// An empty type representing the native device.
-///
-/// Since display server connections are implicit on macOS, this type doesn't contain anything.
+/// The Metal device corresponding to this device.
 #[derive(Clone)]
-pub struct NativeDevice;
+pub struct NativeDevice(pub MetalDevice);
 
 impl Device {
     #[inline]
@@ -37,9 +36,10 @@ impl Device {
     }
 
     /// Returns the native device corresponding to this device.
-    #[inline]
     pub fn native_device(&self) -> NativeDevice {
-        NativeDevice
+        NativeDevice(MetalDevice::all().into_iter().filter(|device| {
+            device.is_low_power() == self.adapter.is_low_power
+        }).next().expect("No Metal device found!"))
     }
 
     /// Returns the display server connection that this device was created with.
