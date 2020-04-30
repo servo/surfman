@@ -75,6 +75,7 @@ pub(crate) struct ViewInfo {
     layer: CALayer,
     superlayer: CALayer,
     front_surface: IOSurface,
+    logical_size: NSSize,
     display_link: DisplayLink,
     next_vblank: Arc<VblankCond>,
 }
@@ -141,6 +142,20 @@ impl Device {
         }
     }
 
+    pub(crate) fn set_surface_flipped(&self, surface: &mut Surface, flipped: bool) {
+        if let Some(ref mut view_info) = surface.view_info {
+            let (scale_y, translate_y) = if flipped {
+                (-1.0, -view_info.logical_size.height)
+            } else {
+                (1.0, 0.0)
+            };
+
+            let sublayer_transform =
+                CATransform3D::from_scale(1.0, scale_y, 1.0).translate(0.0, translate_y, 0.0);
+            view_info.superlayer.set_sublayer_transform(sublayer_transform);
+        }
+    }
+
     unsafe fn create_view_info(&mut self,
                                size: &Size2D<i32>,
                                surface_access: SurfaceAccess,
@@ -174,11 +189,6 @@ impl Device {
         }];
         let logical_size = logical_rect.size;
 
-        // Flip contents right-side-up.
-        let sublayer_transform =
-            CATransform3D::from_scale(1.0, -1.0, 1.0).translate(0.0, -logical_size.height, 0.0);
-        superlayer.set_sublayer_transform(sublayer_transform);
-
         let layer = CALayer::new();
         let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
         layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
@@ -190,7 +200,15 @@ impl Device {
         let view = native_widget.view.clone();
         transaction::commit();
 
-        ViewInfo { view, layer, superlayer, front_surface, display_link, next_vblank }
+        ViewInfo {
+            view,
+            layer,
+            superlayer,
+            front_surface,
+            logical_size,
+            display_link,
+            next_vblank,
+        }
     }
 
     /// Destroys a surface.
@@ -308,7 +326,6 @@ impl Surface {
         SurfaceID(self.io_surface.as_concrete_TypeRef() as usize)
     }
 
-    // Assumes the context is current.
     fn present(&mut self) -> Result<(), Error> {
         unsafe {
             transaction::begin();

@@ -24,7 +24,7 @@ impl Device {
     /// Returns the native device corresponding to this device.
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
-        NativeDevice
+        self.0.native_device()
     }
 
     /// Returns the display server connection that this device was created with.

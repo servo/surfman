@@ -85,6 +85,7 @@ impl Device {
                           surface_type: SurfaceType<NativeWidget>)
                           -> Result<Surface, Error> {
         let mut system_surface = self.0.create_surface(access, surface_type)?;
+        self.0.set_surface_flipped(&mut system_surface, true);
 
         let _guard = self.temporarily_make_context_current(context);
         GL_FUNCTIONS.with(|gl| {
