@@ -21,9 +21,9 @@ use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 #[cfg(feature = "sm-winit")]
-use winit::os::windows::WindowExt;
+use winit::platform::windows::WindowExtWindows;
 
 const INTEL_PCI_ID: UINT = 0x8086;
 
@@ -130,7 +130,7 @@ impl Connection {
     #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
-        let hwnd = window.get_hwnd() as EGLNativeWindowType;
+        let hwnd = window.hwnd() as EGLNativeWindowType;
         if hwnd.is_null() {
             Err(Error::IncompatibleNativeWidget)
         } else {

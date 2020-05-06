@@ -1,7 +1,7 @@
 // surfman/surfman/src/platform/macos/system/connection.rs
 //
 //! Represents the connection to the Core Graphics window server.
-//! 
+//!
 //! Connection types are zero-sized on macOS, because the system APIs automatically manage the
 //! global window server connection.
 
@@ -23,9 +23,9 @@ use std::str::FromStr;
 use std::os::raw::c_void;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 #[cfg(feature = "sm-winit")]
-use winit::os::macos::WindowExt;
+use winit::platform::macos::WindowExtMacOS;
 
 /// A no-op connection.
 ///
@@ -125,12 +125,12 @@ impl Connection {
     }
 
     /// Creates a native widget type from the given `winit` window.
-    /// 
+    ///
     /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
-        let ns_view = window.get_nsview() as id;
+        let ns_view = window.ns_view() as id;
         if ns_view.is_null() {
             return Err(Error::IncompatibleNativeWidget);
         }

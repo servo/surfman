@@ -6,8 +6,9 @@ use euclid::default::Point2D;
 use rand::{self, Rng};
 use surfman::{SurfaceAccess, SurfaceType};
 use winit::dpi::PhysicalSize;
-use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
-use winit::{WindowBuilder, WindowEvent};
+use winit::event::{DeviceEvent, Event, WindowEvent, KeyboardInput, VirtualKeyCode};
+use winit::event_loop::{ControlFlow, EventLoop};
+use winit::window::WindowBuilder;
 
 #[cfg(target_os = "macos")]
 use surfman::SystemConnection;
@@ -38,15 +39,14 @@ fn main() {
     let adapter = connection.create_adapter().unwrap();
     let mut device = connection.create_device(&adapter).unwrap();
 
-    let mut event_loop = EventsLoop::new();
-    let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
+    let event_loop = EventLoop::new();
+    let dpi = event_loop.primary_monitor().scale_factor();
     let logical_size =
-        PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical(dpi);
+        PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical::<f64>(dpi);
     let window = WindowBuilder::new().with_title("Chaos game example")
-                                     .with_dimensions(logical_size)
+                                     .with_inner_size(logical_size)
                                      .build(&event_loop)
                                      .unwrap();
-    window.show();
 
     let native_widget = connection.create_native_widget_from_winit_window(&window).unwrap();
 
@@ -57,8 +57,9 @@ fn main() {
     let mut point = Point2D::new(WINDOW_WIDTH as f32 * 0.5, WINDOW_HEIGHT as f32 * 0.5);
     let mut data = vec![0; WINDOW_WIDTH as usize * WINDOW_HEIGHT as usize * 4];
 
-    let mut exit = false;
-    while !exit {
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+
         for _ in 0..ITERATIONS_PER_FRAME {
             let (dest_x, dest_y) = TRIANGLE_POINTS[rng.gen_range(0, 3)];
             point = point.lerp(Point2D::new(dest_x, dest_y), 0.5);
@@ -68,20 +69,25 @@ fn main() {
         device.lock_surface_data(&mut surface).unwrap().data().copy_from_slice(&data);
         device.present_surface(&mut surface).unwrap();
 
-        event_loop.poll_events(|event| {
-            match event {
-                Event::WindowEvent { event: WindowEvent::Destroyed, .. } |
-                Event::DeviceEvent {
-                    event: DeviceEvent::Key(KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                        ..
-                    }),
+        match event {
+            Event::WindowEvent { event: WindowEvent::Destroyed, .. } |
+            Event::DeviceEvent {
+                event: DeviceEvent::Key(KeyboardInput {
+                    virtual_keycode: Some(VirtualKeyCode::Escape),
                     ..
-                } => exit = true,
-                _ => {}
-            }
-        });
-    }
+                }),
+                ..
+            } | Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                device.destroy_surface(&mut surface).expect("Couldn't destroy surface");
+                *control_flow = ControlFlow::Exit
+            },
+            _ => {}
+        }
+    });
+
 }
 
 fn put_pixel(data: &mut [u8], point: &Point2D<f32>, color: u32) {

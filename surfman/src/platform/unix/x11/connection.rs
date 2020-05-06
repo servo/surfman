@@ -21,9 +21,9 @@ use std::sync::Arc;
 use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 #[cfg(feature = "sm-winit")]
-use winit::os::unix::WindowExt;
+use winit::platform::unix::WindowExtUnix;
 
 lazy_static! {
     static ref X_THREADS_INIT: () = {
@@ -192,7 +192,7 @@ impl Connection {
     /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        if let Some(display) = window.get_xlib_display() {
+        if let Some(display) = window.xlib_display() {
             Connection::from_x11_display(display as *mut Display, false)
         } else {
             Err(Error::IncompatibleWinitWindow)
@@ -205,7 +205,7 @@ impl Connection {
     #[cfg(feature = "sm-winit")]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
-        match window.get_xlib_window() {
+        match window.xlib_window() {
             Some(window) => Ok(NativeWidget { window }),
             None => Err(Error::IncompatibleNativeWidget),
         }

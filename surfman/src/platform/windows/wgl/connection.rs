@@ -16,9 +16,9 @@ use std::os::raw::c_void;
 use winapi::shared::windef::HWND;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 #[cfg(feature = "sm-winit")]
-use winit::os::windows::WindowExt;
+use winit::platform::windows::WindowExtWindows;
 
 /// Represents a connection to the display server.
 /// 
@@ -115,7 +115,7 @@ impl Connection {
     #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
-        let hwnd = window.get_hwnd() as HWND;
+        let hwnd = window.hwnd() as HWND;
         if hwnd.is_null() {
             Err(Error::IncompatibleNativeWidget)
         } else {
