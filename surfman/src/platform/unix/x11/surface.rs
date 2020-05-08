@@ -4,6 +4,8 @@
 
 use crate::gl::types::{GLenum, GLuint};
 use crate::gl;
+use crate::egl;
+use crate::egl::types::EGLint;
 use crate::platform::generic::egl::context;
 use crate::platform::generic::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
@@ -94,9 +96,8 @@ impl Device {
 
     unsafe fn create_window_surface(&mut self, context: &Context, mut x11_window: Window)
                                     -> Result<Surface, Error> {
-        let context_descriptor = self.context_descriptor(context);
-        let egl_config = context::egl_config_from_id(self.native_connection.egl_display,
-                                                     context_descriptor.egl_config_id);
+        let egl_config_id = context::get_context_attr(self.native_connection.egl_display, context.0.egl_context, egl::CONFIG_ID as EGLint);
+        let egl_config = context::egl_config_from_id(self.native_connection.egl_display, egl_config_id);
 
         let display_guard = self.native_connection.lock_display();
         let (mut root_window, mut x, mut y, mut width, mut height) = (0, 0, 0, 0, 0);
