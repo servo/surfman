@@ -22,7 +22,7 @@ use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
 #[cfg(feature = "sm-winit")]
 use winit::Window;
-#[cfg(feature = "sm-winit")]
+#[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
 use winit::os::windows::WindowExt;
 
 const INTEL_PCI_ID: UINT = 0x8086;
@@ -125,7 +125,6 @@ impl Connection {
     /// Creates a native widget type from the given `winit` window.
     /// 
     /// This type can be later used to create surfaces that render to the window.
-    // This is not implemented for UWP
     #[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
     #[inline]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
@@ -136,6 +135,15 @@ impl Connection {
         } else {
             Ok(NativeWidget { egl_native_window: hwnd })
         }
+    }
+
+    /// Creates a native widget type from the given `winit` window.
+    /// This is unsupported on UWP.
+    #[cfg(all(feature = "sm-winit", target_vendor = "uwp"))]
+    #[inline]
+    pub fn create_native_widget_from_winit_window(&self, _window: &Window)
+                                                  -> Result<NativeWidget, Error> {
+        Err(Error::IncompatibleNativeWidget)
     }
 
     /// Create a native widget from a raw pointer
