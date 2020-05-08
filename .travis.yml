@@ -34,11 +34,11 @@ script:
   - cargo build --verbose --features=sm-wayland-default
   - cargo build --verbose --features=sm-winit
   - rustup target add arm-linux-androideabi
-  - cargo build --verbose --target=arm-linux-androideabi
+  - cargo build --verbose --target=arm-linux-androideabi --no-default-features
   - rustup target add aarch64-pc-windows-msvc
-  - cargo build --verbose --target=aarch64-pc-windows-msvc
+  - cargo build --verbose --target=aarch64-pc-windows-msvc --no-default-features
   - if [ $TRAVIS_RUST_VERSION == "nightly" ]; then rustup component add rust-src --target=aarch64-uwp-windows-msvc; fi
-  - if [ $TRAVIS_RUST_VERSION == "nightly" ]; then cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc; fi
+  - if [ $TRAVIS_RUST_VERSION == "nightly" ]; then cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc --no-default-features; fi
   # TODO: tests
   # - cargo test --verbose
   # - cargo test --verbose --features test_egl_in_linux
