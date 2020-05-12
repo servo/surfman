@@ -19,7 +19,7 @@ use winapi::shared::dxgi::{self, IDXGIAdapter, IDXGIDevice, IDXGIFactory1};
 use winapi::shared::minwindef::UINT;
 use winapi::shared::winerror::{self, S_OK};
 use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device};
-use winapi::um::d3dcommon::{D3D_DRIVER_TYPE, D3D_FEATURE_LEVEL_9_3};
+use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE, D3D_FEATURE_LEVEL_9_3};
 use wio::com::ComPtr;
 
 thread_local! {
@@ -136,6 +136,14 @@ impl Adapter {
             let dxgi_adapter = ComPtr::from_raw(dxgi_adapter);
 
             Ok(Adapter { dxgi_adapter, d3d_driver_type })
+        }
+    }
+
+    /// Create an Adapter instance wrapping an existing DXGI adapter.
+    pub fn from_dxgi_adapter(adapter: ComPtr<IDXGIAdapter>) -> Adapter {
+        Adapter {
+            dxgi_adapter: adapter,
+            d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
         }
     }
 }
