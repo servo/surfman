@@ -71,16 +71,30 @@ impl<Def, Alt> Device<Def, Alt> where Def: DeviceInterface, Alt: DeviceInterface
     /// 
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor<Def, Alt>)
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor<Def, Alt>, share_with: Option<&Context<Def, Alt>>)
                           -> Result<Context<Def, Alt>, Error> {
         match (&mut *self, descriptor) {
             (&mut Device::Default(ref mut device),
              &ContextDescriptor::Default(ref descriptor)) => {
-                 device.create_context(descriptor).map(Context::Default)
+                let shared = match share_with {
+                    Some(&Context::Default(ref other)) => Some(other),
+                    Some(_) => {
+                        return Err(Error::IncompatibleSharedContext);
+                    }
+                    None => None,
+                };
+                device.create_context(descriptor, shared).map(Context::Default)
             }
             (&mut Device::Alternate(ref mut device),
              &ContextDescriptor::Alternate(ref descriptor)) => {
-                device.create_context(descriptor).map(Context::Alternate)
+                let shared = match share_with {
+                    Some(&Context::Alternate(ref other)) => Some(other),
+                    Some(_) => {
+                        return Err(Error::IncompatibleSharedContext);
+                    }
+                    None => None,
+                };
+                device.create_context(descriptor, shared).map(Context::Alternate)
             }
             _ => Err(Error::IncompatibleContextDescriptor),
         }

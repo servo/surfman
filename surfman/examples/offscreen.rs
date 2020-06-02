@@ -74,7 +74,7 @@ fn main() {
         flags: ContextAttributeFlags::empty(),
     };
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
-    let mut context = device.create_context(&context_descriptor).unwrap();
+    let mut context = device.create_context(&context_descriptor, None).unwrap();
     let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, SurfaceType::Generic {
         size: Size2D::new(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT),
     }).unwrap();

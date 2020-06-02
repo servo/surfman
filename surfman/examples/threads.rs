@@ -107,7 +107,7 @@ fn main() {
     let context_descriptor = device.create_context_descriptor(&context_attributes).unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
-    let mut context = device.create_context(&context_descriptor).unwrap();
+    let mut context = device.create_context(&context_descriptor, None).unwrap();
     let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, surface_type).unwrap();
     device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();
@@ -331,7 +331,7 @@ fn worker_thread(connection: Connection,
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
     let surface_type = SurfaceType::Generic { size };
     let mut device = connection.create_device(&adapter).unwrap();
-    let mut context = device.create_context(&context_descriptor).unwrap();
+    let mut context = device.create_context(&context_descriptor, None).unwrap();
     let surface = device.create_surface(&context, SurfaceAccess::GPUOnly, surface_type).unwrap();
     device.bind_surface_to_context(&mut context, surface).unwrap();
     device.make_context_current(&context).unwrap();

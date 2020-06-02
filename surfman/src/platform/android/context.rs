@@ -78,7 +78,7 @@ impl Device {
     /// 
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, share_with: Option<&Context>) -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         let egl_display = self.egl_display;
@@ -86,7 +86,12 @@ impl Device {
         unsafe {
             // Create the EGL context.
             let gl_api = self.gl_api();
-            let egl_context = context::create_context(egl_display, descriptor, gl_api)?;
+            let egl_context = context::create_context(
+                egl_display,
+                descriptor,
+                share_with.map_or(egl::NO_CONTEXT, |ctx| ctx.egl_context),
+                gl_api,
+            )?;
 
             // Create a dummy pbuffer.
             let pbuffer = context::create_dummy_pbuffer(egl_display, egl_context);

@@ -52,7 +52,7 @@ pub trait Device: Sized where Self::Connection: ConnectionInterface {
     /// 
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
-    fn create_context(&mut self, descriptor: &Self::ContextDescriptor)
+    fn create_context(&mut self, descriptor: &Self::ContextDescriptor, share_with: Option<&Self::Context>)
                       -> Result<Self::Context, Error>;
 
     /// Wraps a native context object in an OpenGL context.

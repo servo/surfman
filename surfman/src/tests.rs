@@ -12,7 +12,7 @@ use crate::gl::types::{GLenum, GLuint};
 use crate::gl;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, Gl, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
-use super::connection::{Connection, NativeConnection};
+use super::connection::Connection;
 use super::context::{Context, ContextDescriptor, NativeContext};
 use super::device::{Adapter, Device};
 use super::surface::Surface;
@@ -111,7 +111,7 @@ pub fn test_context_creation() {
                 Err(err) => panic!("Context descriptor creation failed: {:?}", err),
             };
 
-            match device.create_context(&descriptor) {
+            match device.create_context(&descriptor, None) {
                 Ok(mut context) => {
                     // Verify that the attributes round-trip.
                     let actual_descriptor = device.context_descriptor(&context);
@@ -173,7 +173,7 @@ pub fn test_newly_created_contexts_are_not_current() {
     // Make no context current.
     device.make_no_context_current().unwrap();
 
-    let mut context = device.create_context(&context_descriptor).unwrap();
+    let mut context = device.create_context(&context_descriptor, None).unwrap();
     let gl = Gl::load_with(|symbol| device.get_proc_address(&context, symbol));
 
     unsafe {
@@ -209,6 +209,36 @@ pub fn test_newly_created_contexts_are_not_current() {
     }
 }
 
+// Tests a simple case of one context being shared with another.
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_context_sharing() {
+    let connection = Connection::new().unwrap();
+    let adapter = connection.create_low_power_adapter().expect("Failed to create adapter!");
+    let mut device = match connection.create_device(&adapter) {
+        Ok(device) => device,
+        Err(Error::RequiredExtensionUnavailable) => {
+            // Can't run these tests on this hardware.
+            return;
+        }
+        Err(err) => panic!("Failed to create device: {:?}", err),
+    };
+
+    let context_descriptor = device.create_context_descriptor(&ContextAttributes {
+        version: GLVersion::new(3, 0),
+        flags: ContextAttributeFlags::empty(),
+    }).unwrap();
+
+    let mut parent_context = device.create_context(&context_descriptor, None).unwrap();
+    let mut child1_context = device.create_context(&context_descriptor, Some(&parent_context)).unwrap();
+    let mut child2_context = device.create_context(&context_descriptor, Some(&parent_context)).unwrap();
+    let mut child3_context = device.create_context(&context_descriptor, Some(&child1_context)).unwrap();
+
+    device.destroy_context(&mut child3_context).unwrap();
+    device.destroy_context(&mut child2_context).unwrap();
+    device.destroy_context(&mut child1_context).unwrap();
+    device.destroy_context(&mut parent_context).unwrap();
+}
+
 // Tests that generic surfaces can be created.
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_generic_surface_creation() {
@@ -228,7 +258,7 @@ pub fn test_generic_surface_creation() {
         flags: ContextAttributeFlags::empty(),
     }).unwrap();
 
-    let mut context = device.create_context(&descriptor).unwrap();
+    let mut context = device.create_context(&descriptor, None).unwrap();
     let context_id = device.context_id(&context);
 
     let surfaces: Vec<_> = [
@@ -404,7 +434,7 @@ pub fn test_cross_device_surface_texture_blit_framebuffer() {
         clear(&env.gl, &[255, 0, 0, 255]);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
-        let mut other_context = other_device.create_context(&env.context_descriptor).unwrap();
+        let mut other_context = other_device.create_context(&env.context_descriptor, None).unwrap();
         let other_surface = make_surface(&mut other_device, &other_context);
         other_device.bind_surface_to_context(&mut other_context, other_surface).unwrap();
         other_device.make_context_current(&other_context).unwrap();
@@ -462,7 +492,7 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
     let other_context_descriptor = env.context_descriptor.clone();
     thread::spawn(move || {
         let mut device = other_connection.create_device(&other_adapter).unwrap();
-        let mut context = device.create_context(&other_context_descriptor).unwrap();
+        let mut context = device.create_context(&other_context_descriptor, None).unwrap();
         let gl = Gl::load_with(|symbol| device.get_proc_address(&context, symbol));
 
         let surface = make_surface(&mut device, &context);
@@ -598,7 +628,7 @@ pub fn test_depth_and_stencil() {
         flags: ContextAttributeFlags::DEPTH,
     }).unwrap();
 
-    let mut depth_context = device.create_context(&depth_context_descriptor).unwrap();
+    let mut depth_context = device.create_context(&depth_context_descriptor, None).unwrap();
     let depth_surface = make_surface(&mut device, &depth_context);
     device.bind_surface_to_context(&mut depth_context, depth_surface).unwrap();
     device.make_context_current(&depth_context).unwrap();
@@ -636,7 +666,7 @@ pub fn test_depth_and_stencil() {
         flags: ContextAttributeFlags::STENCIL,
     }).unwrap();
 
-    let mut stencil_context = device.create_context(&stencil_context_descriptor).unwrap();
+    let mut stencil_context = device.create_context(&stencil_context_descriptor, None).unwrap();
     let stencil_surface = make_surface(&mut device, &stencil_context);
     device.bind_surface_to_context(&mut stencil_context, stencil_surface).unwrap();
     device.make_context_current(&stencil_context).unwrap();
@@ -771,7 +801,7 @@ impl BasicEnvironment {
             flags: ContextAttributeFlags::empty(),
         }).unwrap();
 
-        let mut context = device.create_context(&context_descriptor).unwrap();
+        let mut context = device.create_context(&context_descriptor, None).unwrap();
         let surface = make_surface(&mut device, &context);
         device.bind_surface_to_context(&mut context, surface).unwrap();
         device.make_context_current(&context).unwrap();

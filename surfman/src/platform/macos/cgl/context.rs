@@ -185,7 +185,7 @@ impl Device {
     /// 
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, share_with: Option<&Context>) -> Result<Context, Error> {
         // Take a lock so that we're only creating one context at a time. `CGLChoosePixelFormat`
         // will fail, returning `kCGLBadConnection`, if multiple threads try to open a display
         // connection simultaneously.
@@ -195,7 +195,7 @@ impl Device {
             // Create the CGL context.
             let mut cgl_context = ptr::null_mut();
             let err = CGLCreateContext(descriptor.cgl_pixel_format,
-                                       ptr::null_mut(),
+                                       share_with.map_or(ptr::null_mut(), |ctx| ctx.cgl_context),
                                        &mut cgl_context);
             if err != kCGLNoError {
                 return Err(Error::ContextCreationFailed(err.to_windowing_api_error()));

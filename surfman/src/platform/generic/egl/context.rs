@@ -87,12 +87,18 @@ impl Drop for CurrentContextGuard {
 impl EGLBackedContext {
     pub(crate) unsafe fn new(egl_display: EGLDisplay,
                              descriptor: &ContextDescriptor,
+                             share_with: Option<&EGLBackedContext>,
                              gl_api: GLApi)
                              -> Result<EGLBackedContext, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Create the context.
-        let egl_context = create_context(egl_display, descriptor, gl_api)?;
+        let egl_context = create_context(
+            egl_display,
+            descriptor,
+            share_with.map_or(egl::NO_CONTEXT, |ctx| ctx.egl_context),
+            gl_api,
+        )?;
 
         // Wrap and return it.
         let context = EGLBackedContext {
@@ -414,13 +420,14 @@ impl CurrentContextGuard {
 
 pub(crate) unsafe fn create_context(egl_display: EGLDisplay,
                                     descriptor: &ContextDescriptor,
+                                    share_with: EGLContext,
                                     gl_api: GLApi)
                                     -> Result<EGLContext, Error> {
     EGL_FUNCTIONS.with(|egl| {
-        let ok = match gl_api {
-            GLApi::GL => egl.BindAPI(egl::OPENGL_API),
-            GLApi::GLES => egl.BindAPI(egl::OPENGL_ES_API),
-        };
+        let ok = egl.BindAPI(match gl_api {
+            GLApi::GL => egl::OPENGL_API,
+            GLApi::GLES => egl::OPENGL_ES_API,
+        });
         assert_ne!(ok, egl::FALSE);
     });
 
@@ -451,7 +458,7 @@ pub(crate) unsafe fn create_context(egl_display: EGLDisplay,
     EGL_FUNCTIONS.with(|egl| {
         let egl_context = egl.CreateContext(egl_display,
                                             egl_config,
-                                            egl::NO_CONTEXT,
+                                            share_with,
                                             egl_context_attributes.as_ptr());
         if egl_context == egl::NO_CONTEXT {
             let err = egl.GetError();
