@@ -2,8 +2,8 @@
 //
 //! A wrapper around surfaceless Mesa `EGLDisplay`s.
 
-use crate::{Error, GLApi};
 use super::connection::{Connection, NativeConnectionWrapper};
+use crate::{Error, GLApi};
 
 use std::env;
 use std::sync::Arc;
@@ -94,13 +94,17 @@ impl Device {
     /// no explicit concept of a device on this backend.
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
-        NativeDevice { adapter: self.adapter() }
+        NativeDevice {
+            adapter: self.adapter(),
+        }
     }
 
     /// Returns the display server connection that this device was created with.
     #[inline]
     pub fn connection(&self) -> Connection {
-        Connection { native_connection: self.native_connection.clone() }
+        Connection {
+            native_connection: self.native_connection.clone(),
+        }
     }
 
     /// Returns the adapter that this device was created with.

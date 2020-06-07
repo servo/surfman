@@ -2,16 +2,16 @@
 //
 //! Surface management for macOS.
 
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, SystemSurfaceInfo};
 use super::device::Device;
+use super::ffi::{kCVPixelFormatType_32BGRA, kIOMapDefaultCache, IOSurfaceLock, IOSurfaceUnlock};
+use super::ffi::{kCVReturnSuccess, kIOMapWriteCombineCache};
 use super::ffi::{IOSurfaceGetAllocSize, IOSurfaceGetBaseAddress, IOSurfaceGetBytesPerRow};
-use super::ffi::{IOSurfaceLock, IOSurfaceUnlock, kCVPixelFormatType_32BGRA, kIOMapDefaultCache};
-use super::ffi::{kIOMapWriteCombineCache, kCVReturnSuccess};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, SystemSurfaceInfo};
 
 use cocoa::appkit::{NSScreen, NSView as NSViewMethods, NSWindow};
-use cocoa::base::{YES, id};
+use cocoa::base::{id, YES};
 use cocoa::foundation::{NSPoint, NSRect, NSSize};
-use cocoa::quartzcore::{CALayer, CATransform3D, transaction};
+use cocoa::quartzcore::{transaction, CALayer, CATransform3D};
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
@@ -19,7 +19,7 @@ use core_foundation::string::CFString;
 use core_graphics::geometry::{CGRect, CGSize, CG_ZERO_POINT};
 use display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use euclid::default::Size2D;
-use io_surface::{self, IOSurface, IOSurfaceRef, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow};
+use io_surface::{self, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow, IOSurface, IOSurfaceRef};
 use io_surface::{kIOSurfaceCacheMode, kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
 use mach::kern_return::KERN_SUCCESS;
 use std::fmt::{self, Debug, Formatter};
@@ -33,14 +33,14 @@ const BYTES_PER_PIXEL: i32 = 4;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
-/// 
+///
 /// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
 /// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
 /// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
 /// widget but not bound to a texture.
-/// 
+///
 /// Depending on the platform, each surface may be internally double-buffered.
-/// 
+///
 /// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
 pub struct Surface {
     pub(crate) io_surface: IOSurface,
@@ -106,10 +106,11 @@ pub struct SurfaceDataGuard<'a> {
 
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
-    pub fn create_surface(&mut self,
-                          access: SurfaceAccess,
-                          surface_type: SurfaceType<NativeWidget>)
-                          -> Result<Surface, Error> {
+    pub fn create_surface(
+        &mut self,
+        access: SurfaceAccess,
+        surface_type: SurfaceType<NativeWidget>,
+    ) -> Result<Surface, Error> {
         unsafe {
             let size = match surface_type {
                 SurfaceType::Generic { size } => size,
@@ -133,12 +134,18 @@ impl Device {
 
             let view_info = match surface_type {
                 SurfaceType::Generic { .. } => None,
-                SurfaceType::Widget { ref native_widget, .. } => {
-                    Some(self.create_view_info(&size, access, native_widget))
-                }
+                SurfaceType::Widget {
+                    ref native_widget, ..
+                } => Some(self.create_view_info(&size, access, native_widget)),
             };
 
-            Ok(Surface { io_surface, size, access, destroyed: false, view_info })
+            Ok(Surface {
+                io_surface,
+                size,
+                access,
+                destroyed: false,
+                view_info,
+            })
         }
     }
 
@@ -152,15 +159,18 @@ impl Device {
 
             let sublayer_transform =
                 CATransform3D::from_scale(1.0, scale_y, 1.0).translate(0.0, translate_y, 0.0);
-            view_info.superlayer.set_sublayer_transform(sublayer_transform);
+            view_info
+                .superlayer
+                .set_sublayer_transform(sublayer_transform);
         }
     }
 
-    unsafe fn create_view_info(&mut self,
-                               size: &Size2D<i32>,
-                               surface_access: SurfaceAccess,
-                               native_widget: &NativeWidget)
-                               -> ViewInfo {
+    unsafe fn create_view_info(
+        &mut self,
+        size: &Size2D<i32>,
+        surface_access: SurfaceAccess,
+        native_widget: &NativeWidget,
+    ) -> ViewInfo {
         let front_surface = self.create_io_surface(&size, surface_access);
 
         let window: id = msg_send![native_widget.view.0, window];
@@ -169,9 +179,14 @@ impl Device {
         let description_key: CFString = CFString::from("NSScreenNumber");
         let display_id = device_description.get(description_key).to_i64().unwrap() as u32;
         let mut display_link = DisplayLink::on_display(display_id).unwrap();
-        let next_vblank = Arc::new(VblankCond { mutex: Mutex::new(()), cond: Condvar::new() });
-        display_link.set_output_callback(display_link_output_callback,
-                                         mem::transmute(next_vblank.clone()));
+        let next_vblank = Arc::new(VblankCond {
+            mutex: Mutex::new(()),
+            cond: Condvar::new(),
+        });
+        display_link.set_output_callback(
+            display_link_output_callback,
+            mem::transmute(next_vblank.clone()),
+        );
         display_link.start();
 
         transaction::begin();
@@ -212,7 +227,7 @@ impl Device {
     }
 
     /// Destroys a surface.
-    /// 
+    ///
     /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
     /// the `drop` method.
     pub fn destroy_surface(&self, surface: &mut Surface) -> Result<(), Error> {
@@ -221,7 +236,7 @@ impl Device {
     }
 
     /// Displays the contents of a widget surface on screen.
-    /// 
+    ///
     /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
     /// associated widgets until this method is called.
     pub fn present_surface(&self, surface: &mut Surface) -> Result<(), Error> {
@@ -251,16 +266,22 @@ impl Device {
             // Flip contents right-side-up.
             let sublayer_transform =
                 CATransform3D::from_scale(1.0, -1.0, 1.0).translate(0.0, -logical_size.height, 0.0);
-            view_info.superlayer.set_sublayer_transform(sublayer_transform);
+            view_info
+                .superlayer
+                .set_sublayer_transform(sublayer_transform);
 
             view_info.front_surface = self.create_io_surface(&size, surface.access);
-            view_info.layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
-            view_info.layer.set_contents(view_info.front_surface.obj as id);
+            view_info
+                .layer
+                .set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
+            view_info
+                .layer
+                .set_contents(view_info.front_surface.obj as id);
             view_info.layer.set_opaque(true);
             view_info.layer.set_contents_opaque(true);
             surface.io_surface = self.create_io_surface(&size, surface.access);
             surface.size = size;
-	}
+        }
 
         transaction::commit();
         Ok(())
@@ -268,8 +289,10 @@ impl Device {
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
     #[inline]
-    pub fn lock_surface_data<'s>(&self, surface: &'s mut Surface)
-                                 -> Result<SurfaceDataGuard<'s>, Error> {
+    pub fn lock_surface_data<'s>(
+        &self,
+        surface: &'s mut Surface,
+    ) -> Result<SurfaceDataGuard<'s>, Error> {
         surface.lock_data()
     }
 
@@ -281,18 +304,30 @@ impl Device {
 
         unsafe {
             let properties = CFDictionary::from_CFType_pairs(&[
-                (CFString::wrap_under_get_rule(kIOSurfaceWidth),
-                 CFNumber::from(size.width).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceHeight),
-                 CFNumber::from(size.height).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceBytesPerElement),
-                 CFNumber::from(BYTES_PER_PIXEL).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
-                 CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfacePixelFormat),
-                 CFNumber::from(kCVPixelFormatType_32BGRA).as_CFType()),
-                (CFString::wrap_under_get_rule(kIOSurfaceCacheMode),
-                 CFNumber::from(cache_mode).as_CFType()),
+                (
+                    CFString::wrap_under_get_rule(kIOSurfaceWidth),
+                    CFNumber::from(size.width).as_CFType(),
+                ),
+                (
+                    CFString::wrap_under_get_rule(kIOSurfaceHeight),
+                    CFNumber::from(size.height).as_CFType(),
+                ),
+                (
+                    CFString::wrap_under_get_rule(kIOSurfaceBytesPerElement),
+                    CFNumber::from(BYTES_PER_PIXEL).as_CFType(),
+                ),
+                (
+                    CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
+                    CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType(),
+                ),
+                (
+                    CFString::wrap_under_get_rule(kIOSurfacePixelFormat),
+                    CFNumber::from(kCVPixelFormatType_32BGRA).as_CFType(),
+                ),
+                (
+                    CFString::wrap_under_get_rule(kIOSurfaceCacheMode),
+                    CFNumber::from(cache_mode).as_CFType(),
+                ),
             ]);
 
             io_surface::new(&properties)
@@ -336,13 +371,21 @@ impl Surface {
                 Some(ref mut view_info) => view_info,
             };
             mem::swap(&mut view_info.front_surface, &mut self.io_surface);
-            view_info.layer.set_contents(view_info.front_surface.obj as id);
+            view_info
+                .layer
+                .set_contents(view_info.front_surface.obj as id);
 
             transaction::commit();
 
             // Wait for the next swap interval.
             let next_vblank_mutex_guard = view_info.next_vblank.mutex.lock().unwrap();
-            drop(view_info.next_vblank.cond.wait(next_vblank_mutex_guard).unwrap());
+            drop(
+                view_info
+                    .next_vblank
+                    .cond
+                    .wait(next_vblank_mutex_guard)
+                    .unwrap(),
+            );
 
             Ok(())
         }
@@ -364,7 +407,12 @@ impl Surface {
             let len = IOSurfaceGetAllocSize(self.io_surface.as_concrete_TypeRef());
             let stride = IOSurfaceGetBytesPerRow(self.io_surface.as_concrete_TypeRef());
 
-            Ok(SurfaceDataGuard { surface: &mut *self, stride, ptr, len })
+            Ok(SurfaceDataGuard {
+                surface: &mut *self,
+                stride,
+                ptr,
+                len,
+            })
         }
     }
 }
@@ -372,14 +420,14 @@ impl Surface {
 impl<'a> SurfaceDataGuard<'a> {
     /// Returns the number of bytes per row of the surface.
     #[inline]
-    pub fn stride(&self) -> usize { self.stride }
+    pub fn stride(&self) -> usize {
+        self.stride
+    }
 
     /// Returns a mutable slice of the pixel data in this surface, in BGRA format.
     #[inline]
     pub fn data(&mut self) -> &mut [u8] {
-        unsafe {
-            slice::from_raw_parts_mut(self.ptr, self.len)
-        }
+        unsafe { slice::from_raw_parts_mut(self.ptr, self.len) }
     }
 }
 
@@ -418,13 +466,14 @@ impl Drop for ViewInfo {
     }
 }
 
-unsafe extern "C" fn display_link_output_callback(_: *mut CVDisplayLink,
-                                                  _: *const CVTimeStamp,
-                                                  _: *const CVTimeStamp,
-                                                  _: i64,
-                                                  _: *mut i64,
-                                                  user_data: *mut c_void)
-                                                  -> i32 {
+unsafe extern "C" fn display_link_output_callback(
+    _: *mut CVDisplayLink,
+    _: *const CVTimeStamp,
+    _: *const CVTimeStamp,
+    _: i64,
+    _: *mut i64,
+    user_data: *mut c_void,
+) -> i32 {
     let next_vblank: Arc<VblankCond> = mem::transmute(user_data);
     {
         let _guard = next_vblank.mutex.lock().unwrap();

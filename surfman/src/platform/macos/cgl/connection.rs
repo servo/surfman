@@ -1,16 +1,16 @@
 // surfman/surfman/src/platform/macos/cgl/connection.rs
 //
 //! Represents the connection to the Core Graphics window server.
-//! 
+//!
 //! Connection types are zero-sized on macOS, because the system APIs automatically manage the
 //! global window server connection.
 
-use crate::Error;
-use crate::GLApi;
+use super::device::{Adapter, Device};
 use crate::platform::macos::system::connection::Connection as SystemConnection;
 use crate::platform::macos::system::device::NativeDevice;
 use crate::platform::macos::system::surface::NativeWidget;
-use super::device::{Adapter, Device};
+use crate::Error;
+use crate::GLApi;
 
 use euclid::default::Size2D;
 
@@ -39,8 +39,9 @@ impl Connection {
 
     /// An alias for `Connection::new()`, present for consistency with other backends.
     #[inline]
-    pub unsafe fn from_native_connection(native_connection: NativeConnection)
-                                         -> Result<Connection, Error> {
+    pub unsafe fn from_native_connection(
+        native_connection: NativeConnection,
+    ) -> Result<Connection, Error> {
         SystemConnection::from_native_connection(native_connection).map(Connection)
     }
 
@@ -57,7 +58,7 @@ impl Connection {
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    /// 
+    ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
@@ -83,7 +84,7 @@ impl Connection {
     }
 
     /// Opens the hardware device corresponding to the given adapter.
-    /// 
+    ///
     /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
@@ -92,9 +93,13 @@ impl Connection {
 
     /// An alias for `connection.create_device()` with the default adapter.
     #[inline]
-    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
-                                                   -> Result<Device, Error> {
-        self.0.create_device_from_native_device(native_device).map(Device)
+    pub unsafe fn create_device_from_native_device(
+        &self,
+        native_device: NativeDevice,
+    ) -> Result<Device, Error> {
+        self.0
+            .create_device_from_native_device(native_device)
+            .map(Device)
     }
 
     /// Opens the display connection corresponding to the given `winit` window.
@@ -104,32 +109,38 @@ impl Connection {
     }
 
     /// Creates a native widget type from the given `winit` window.
-    /// 
+    ///
     /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn create_native_widget_from_winit_window(&self, window: &Window)
-                                                  -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_winit_window(
+        &self,
+        window: &Window,
+    ) -> Result<NativeWidget, Error> {
         self.0.create_native_widget_from_winit_window(window)
     }
 
     /// Creates a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget {
+    pub unsafe fn create_native_widget_from_ptr(
+        &self,
+        raw: *mut c_void,
+        size: Size2D<i32>,
+    ) -> NativeWidget {
         self.0.create_native_widget_from_ptr(raw, size)
     }
 
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(&self, raw_handle: raw_window_handle::RawWindowHandle)
-                                         -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_rwh(
+        &self,
+        raw_handle: raw_window_handle::RawWindowHandle,
+    ) -> Result<NativeWidget, Error> {
         use raw_window_handle::RawWindowHandle::MacOS;
 
         match raw_handle {
             MacOS(handle) => Ok(NativeWidget {
-                view: NSView(unsafe {
-                    msg_send![handle.ns_view as id, retain]
-                }),
+                view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }

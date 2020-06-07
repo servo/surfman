@@ -2,11 +2,11 @@
 //
 //! A thread-local handle to the device.
 
-use crate::egl::types::EGLDisplay;
+use super::connection::Connection;
 use crate::egl;
+use crate::egl::types::EGLDisplay;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::{Error, GLApi};
-use super::connection::Connection;
 
 /// Represents a hardware display adapter that can be used for rendering (including the CPU).
 ///
@@ -28,15 +28,13 @@ pub struct NativeDevice(pub EGLDisplay);
 
 impl Drop for Device {
     fn drop(&mut self) {
-        EGL_FUNCTIONS.with(|egl| {
-            unsafe {
-                if !self.display_is_owned {
-                    return;
-                }
-                let result = egl.Terminate(self.egl_display);
-                assert_ne!(result, egl::FALSE);
-                self.egl_display = egl::NO_DISPLAY;
+        EGL_FUNCTIONS.with(|egl| unsafe {
+            if !self.display_is_owned {
+                return;
             }
+            let result = egl.Terminate(self.egl_display);
+            assert_ne!(result, egl::FALSE);
+            self.egl_display = egl::NO_DISPLAY;
         })
     }
 }
@@ -46,11 +44,7 @@ impl NativeDevice {
     ///
     /// If there is no current EGL display, `egl::NO_DISPLAY` is returned.
     pub fn current() -> NativeDevice {
-        EGL_FUNCTIONS.with(|egl| {
-            unsafe {
-                NativeDevice(egl.GetCurrentDisplay())
-            }
-        })
+        EGL_FUNCTIONS.with(|egl| unsafe { NativeDevice(egl.GetCurrentDisplay()) })
     }
 }
 
@@ -67,7 +61,10 @@ impl Device {
                 let result = egl.Initialize(egl_display, &mut major_version, &mut minor_version);
                 assert_ne!(result, egl::FALSE);
 
-                Ok(Device { egl_display, display_is_owned: true })
+                Ok(Device {
+                    egl_display,
+                    display_is_owned: true,
+                })
             }
         })
     }

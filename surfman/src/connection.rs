@@ -35,7 +35,7 @@ pub trait Connection: Sized {
     fn gl_api(&self) -> GLApi;
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    /// 
+    ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
     fn create_adapter(&self) -> Result<Self::Adapter, Error>;
 
@@ -52,25 +52,35 @@ pub trait Connection: Sized {
     fn create_device(&self, adapter: &Self::Adapter) -> Result<Self::Device, Error>;
 
     /// Wraps an existing native device type in a device.
-    unsafe fn create_device_from_native_device(&self, native_device: Self::NativeDevice)
-                                               -> Result<Self::Device, Error>;
+    unsafe fn create_device_from_native_device(
+        &self,
+        native_device: Self::NativeDevice,
+    ) -> Result<Self::Device, Error>;
 
     /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     fn from_winit_window(window: &Window) -> Result<Self, Error>;
 
     /// Creates a native widget type from the given `winit` window.
-    /// 
+    ///
     /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
-    fn create_native_widget_from_winit_window(&self, window: &Window)
-                                              -> Result<Self::NativeWidget, Error>;
+    fn create_native_widget_from_winit_window(
+        &self,
+        window: &Window,
+    ) -> Result<Self::NativeWidget, Error>;
 
     /// Creates a native widget from a raw pointer
-    unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> Self::NativeWidget;
+    unsafe fn create_native_widget_from_ptr(
+        &self,
+        raw: *mut c_void,
+        size: Size2D<i32>,
+    ) -> Self::NativeWidget;
 
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
-    fn create_native_widget_from_rwh(&self, window: raw_window_handle::RawWindowHandle)
-                                              -> Result<Self::NativeWidget, Error>;
+    fn create_native_widget_from_rwh(
+        &self,
+        window: raw_window_handle::RawWindowHandle,
+    ) -> Result<Self::NativeWidget, Error>;
 }

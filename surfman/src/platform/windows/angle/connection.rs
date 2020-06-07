@@ -1,17 +1,17 @@
 // surfman/surfman/src/platform/windows/angle/connection.rs
 //
 //! A connection to the window server.
-//! 
+//!
 //! It might seem like this should wrap an `EGLDisplay`, but it doesn't. Unfortunately, in the
 //! ANGLE implementation `EGLDisplay` is not thread-safe, while `surfman` connections must be
 //! thread-safe. So we need to use the DXGI/Direct3D concept of a connection instead. These are
 //! implicit in the Win32 API, and as such this type is a no-op.
 
+use super::device::{Adapter, Device, NativeDevice, VendorPreference};
+use super::surface::NativeWidget;
 use crate::egl::types::EGLNativeWindowType;
 use crate::Error;
 use crate::GLApi;
-use super::device::{Adapter, Device, NativeDevice, VendorPreference};
-use super::surface::NativeWidget;
 
 use euclid::default::Size2D;
 
@@ -20,10 +20,10 @@ use std::os::raw::c_void;
 use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
-#[cfg(feature = "sm-winit")]
-use winit::Window;
 #[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
 use winit::os::windows::WindowExt;
+#[cfg(feature = "sm-winit")]
+use winit::Window;
 
 const INTEL_PCI_ID: UINT = 0x8086;
 
@@ -71,7 +71,7 @@ impl Connection {
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    /// 
+    ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
@@ -81,13 +81,19 @@ impl Connection {
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::new(D3D_DRIVER_TYPE_UNKNOWN, VendorPreference::Avoid(INTEL_PCI_ID))
+        Adapter::new(
+            D3D_DRIVER_TYPE_UNKNOWN,
+            VendorPreference::Avoid(INTEL_PCI_ID),
+        )
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::new(D3D_DRIVER_TYPE_UNKNOWN, VendorPreference::Prefer(INTEL_PCI_ID))
+        Adapter::new(
+            D3D_DRIVER_TYPE_UNKNOWN,
+            VendorPreference::Prefer(INTEL_PCI_ID),
+        )
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
@@ -97,7 +103,7 @@ impl Connection {
     }
 
     /// Opens the hardware device corresponding to the given adapter.
-    /// 
+    ///
     /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
@@ -111,8 +117,10 @@ impl Connection {
     /// Therefore, it is the caller's responsibility to keep it alive as long as this `Device`
     /// remains alive. This function does, however, call `AddRef` on the Direct3D device.
     #[inline]
-    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
-                                                   -> Result<Device, Error> {
+    pub unsafe fn create_device_from_native_device(
+        &self,
+        native_device: NativeDevice,
+    ) -> Result<Device, Error> {
         Device::from_native_device(native_device)
     }
 
@@ -123,17 +131,21 @@ impl Connection {
     }
 
     /// Creates a native widget type from the given `winit` window.
-    /// 
+    ///
     /// This type can be later used to create surfaces that render to the window.
     #[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
     #[inline]
-    pub fn create_native_widget_from_winit_window(&self, window: &Window)
-                                                  -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_winit_window(
+        &self,
+        window: &Window,
+    ) -> Result<NativeWidget, Error> {
         let hwnd = window.get_hwnd() as EGLNativeWindowType;
         if hwnd.is_null() {
             Err(Error::IncompatibleNativeWidget)
         } else {
-            Ok(NativeWidget { egl_native_window: hwnd })
+            Ok(NativeWidget {
+                egl_native_window: hwnd,
+            })
         }
     }
 
@@ -141,13 +153,19 @@ impl Connection {
     /// This is unsupported on UWP.
     #[cfg(all(feature = "sm-winit", target_vendor = "uwp"))]
     #[inline]
-    pub fn create_native_widget_from_winit_window(&self, _window: &Window)
-                                                  -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_winit_window(
+        &self,
+        _window: &Window,
+    ) -> Result<NativeWidget, Error> {
         Err(Error::IncompatibleNativeWidget)
     }
 
     /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, _size: Size2D<i32>) -> NativeWidget {
+    pub unsafe fn create_native_widget_from_ptr(
+        &self,
+        raw: *mut c_void,
+        _size: Size2D<i32>,
+    ) -> NativeWidget {
         NativeWidget {
             egl_native_window: raw as EGLNativeWindowType,
         }
@@ -156,8 +174,10 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(&self, _: raw_window_handle::RawWindowHandle)
-                                                  -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_rwh(
+        &self,
+        _: raw_window_handle::RawWindowHandle,
+    ) -> Result<NativeWidget, Error> {
         // TODO: support raw window handle on windows angle
         Err(Error::UnsupportedOnThisPlatform)
     }
@@ -172,4 +192,3 @@ impl NativeConnection {
         NativeConnection
     }
 }
-

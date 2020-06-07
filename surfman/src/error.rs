@@ -15,7 +15,7 @@ pub enum Error {
     UnsupportedGLType,
     /// The system doesn't support the requested OpenGL compatibility profile for the supplied
     /// OpenGL version.
-    /// 
+    ///
     /// On some systems, like macOS, the compatibility profile is only supported on some GL
     /// versions.
     UnsupportedGLProfile,
@@ -106,64 +106,64 @@ pub enum WindowingApiError {
     /// CGL: Invalid pixel format attribute.
     /// EGL: An unrecognized attribute or attribute value was passed in the attribute list.
     /// X11: Attribute to get is bad.
-	BadAttribute,
+    BadAttribute,
     /// CGL: Invalid renderer property.
-	BadProperty,
+    BadProperty,
     /// CGL: Invalid pixel format object.
     /// X11: Invalid framebuffer configuration, including an unsupported OpenGL version.
-	BadPixelFormat,
+    BadPixelFormat,
     /// CGL: Invalid renderer information object.
-	BadRendererInfo,
+    BadRendererInfo,
     /// CGL: Invalid context object.
     /// EGL: An EGLContext argument does not name a valid EGL rendering context.
     /// X11: The context is invalid.
-	BadContext,
+    BadContext,
     /// Invalid drawable.
-	BadDrawable,
+    BadDrawable,
     /// CGL: Invalid display.
-    /// EGL: An EGLDisplay argument does not name a valid EGL display connection. 
-	BadDisplay,
+    /// EGL: An EGLDisplay argument does not name a valid EGL display connection.
+    BadDisplay,
     /// CGL: Invalid context state.
-	BadState,
+    BadState,
     /// CGL: Invalid numerical value.
     /// X11: Invalid value.
     /// GL: Given when a value parameter is not a legal value for that function.
-	BadValue,
+    BadValue,
     /// CGL: Invalid share context.
     /// EGL: Arguments are inconsistent (for example, a valid context requires
-    /// buffers not supplied by a valid surface). 
-	BadMatch,
+    /// buffers not supplied by a valid surface).
+    BadMatch,
     /// CGL: Invalid enumerant (constant).
     /// X11: Invalid enum value.
     /// GL: Given when an enumeration parameter is not a legal enumeration for that function.
-	BadEnumeration,
+    BadEnumeration,
     /// CGL: Invalid off-screen drawable.
-	BadOffScreen,
+    BadOffScreen,
     /// CGL: Invalid full-screen drawable.
-	BadFullScreen,
+    BadFullScreen,
     /// CGL: Invalid window.
-	BadWindow,
+    BadWindow,
     /// CGL: Invalid address; e.g. null pointer passed to function requiring
     /// a non-null pointer argument.
-	BadAddress,
+    BadAddress,
     /// CGL: Invalid code module.
-	BadCodeModule,
+    BadCodeModule,
     /// CGL: Invalid memory allocation; i.e. CGL couldn't allocate memory.
     /// EGL: EGL failed to allocate resources for the requested operation.
-	BadAlloc,
+    BadAlloc,
     /// CGL: Invalid Core Graphics connection.
-	BadConnection,
+    BadConnection,
     /// EGL: EGL is not initialized, or could not be initialized, for the
-    /// specified EGL display connection. 
+    /// specified EGL display connection.
     NotInitialized,
     /// EGL: EGL cannot access a requested resource (for example a context is
-    /// bound in another thread). 
+    /// bound in another thread).
     BadAccess,
     /// EGL: The current surface of the calling thread is a window, pixel
-    /// buffer or pixmap that is no longer valid. 
+    /// buffer or pixmap that is no longer valid.
     BadCurrentSurface,
     /// EGL: An EGLSurface argument does not name a valid surface (window,
-    /// pixel buffer or pixmap) configured for GL rendering. 
+    /// pixel buffer or pixmap) configured for GL rendering.
     BadSurface,
     /// EGL: One or more argument values are invalid.
     BadParameter,
@@ -175,7 +175,7 @@ pub enum WindowingApiError {
     BadNativeWindow,
     /// EGL: A power management event has occurred. The application must
     /// destroy all contexts and reinitialise OpenGL ES state and objects to
-    /// continue rendering. 
+    /// continue rendering.
     ContextLost,
     /// X11: Screen number is bad.
     BadScreen,

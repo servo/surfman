@@ -1,13 +1,13 @@
 // surfman/surfman/src/platform/windows/wgl/connection.rs
 //
 //! A connection to the window server.
-//! 
+//!
 //! Window server connections are implicit in the Win32 API, so this is a zero-sized type.
 
-use crate::Error;
-use crate::GLApi;
 use super::device::{Adapter, Device, NativeDevice};
 use super::surface::NativeWidget;
+use crate::Error;
+use crate::GLApi;
 
 use euclid::default::Size2D;
 
@@ -16,12 +16,12 @@ use std::os::raw::c_void;
 use winapi::shared::windef::HWND;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
-#[cfg(feature = "sm-winit")]
 use winit::os::windows::WindowExt;
+#[cfg(feature = "sm-winit")]
+use winit::Window;
 
 /// Represents a connection to the display server.
-/// 
+///
 /// Window server connections are implicit in the Win32 API, so this is a zero-sized type.
 #[derive(Clone)]
 pub struct Connection;
@@ -58,7 +58,7 @@ impl Connection {
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    /// 
+    ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
@@ -97,8 +97,10 @@ impl Connection {
     /// This method increases the reference count on the Direct3D 11 device and takes ownership of
     /// the GL/DX interop handle.
     #[inline]
-    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
-                                                   -> Result<Device, Error> {
+    pub unsafe fn create_device_from_native_device(
+        &self,
+        native_device: NativeDevice,
+    ) -> Result<Device, Error> {
         Device::from_native_device(native_device)
     }
 
@@ -109,22 +111,30 @@ impl Connection {
     }
 
     /// Creates a native widget type from the given `winit` window.
-    /// 
+    ///
     /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn create_native_widget_from_winit_window(&self, window: &Window)
-                                                  -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_winit_window(
+        &self,
+        window: &Window,
+    ) -> Result<NativeWidget, Error> {
         let hwnd = window.get_hwnd() as HWND;
         if hwnd.is_null() {
             Err(Error::IncompatibleNativeWidget)
         } else {
-            Ok(NativeWidget { window_handle: hwnd })
+            Ok(NativeWidget {
+                window_handle: hwnd,
+            })
         }
     }
 
     /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, _size: Size2D<i32>) -> NativeWidget {
+    pub unsafe fn create_native_widget_from_ptr(
+        &self,
+        raw: *mut c_void,
+        _size: Size2D<i32>,
+    ) -> NativeWidget {
         NativeWidget {
             window_handle: raw as HWND,
         }
