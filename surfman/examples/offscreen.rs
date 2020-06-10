@@ -80,8 +80,8 @@ fn main() {
     }).unwrap();
     device.bind_surface_to_context(&mut context, surface).unwrap();
 
-    gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
     device.make_context_current(&context).unwrap();
+    gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
 
     let mut pixels: Vec<u8> =
         vec![0; FRAMEBUFFER_WIDTH as usize * FRAMEBUFFER_HEIGHT as usize * 4];
@@ -89,6 +89,8 @@ fn main() {
                                                device.surface_gl_texture_target());
 
     unsafe {
+        let surface_info = device.context_surface_info(&context).unwrap().unwrap();
+        gl::BindFramebuffer(gl::FRAMEBUFFER, surface_info.framebuffer_object);
         gl::Viewport(0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT); ck();
         gl::ClearColor(0.0, 0.0, 0.0, 1.0); ck();
         gl::Clear(gl::COLOR_BUFFER_BIT); ck();
