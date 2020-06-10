@@ -223,7 +223,7 @@ impl Device {
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
     #[allow(non_snake_case)]
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, share_with: Option<&Context>) -> Result<Context, Error> {
         let wglCreateContextAttribsARB = match WGL_EXTENSION_FUNCTIONS.CreateContextAttribsARB {
             None => return Err(Error::RequiredExtensionUnavailable),
             Some(wglCreateContextAttribsARB) => wglCreateContextAttribsARB,
@@ -254,7 +254,11 @@ impl Device {
                     WGL_CONTEXT_PROFILE_MASK_ARB as c_int,  profile_mask as c_int,
                     0,
                 ];
-                glrc = wglCreateContextAttribsARB(dc, ptr::null_mut(), wgl_attributes.as_ptr());
+                glrc = wglCreateContextAttribsARB(
+                    dc,
+                    share_with.map_or(ptr::null_mut(), |ctx| ctx.glrc),
+                    wgl_attributes.as_ptr(),
+                );
                 if glrc.is_null() {
                     return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
                 }

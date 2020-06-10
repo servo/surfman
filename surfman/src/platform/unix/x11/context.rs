@@ -60,10 +60,11 @@ impl Device {
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
     #[inline]
-    pub fn create_context(&mut self, descriptor: &ContextDescriptor) -> Result<Context, Error> {
+    pub fn create_context(&mut self, descriptor: &ContextDescriptor, share_with: Option<&Context>) -> Result<Context, Error> {
         unsafe {
             EGLBackedContext::new(self.native_connection.egl_display,
                                   descriptor,
+                                  share_with.map(|ctx| &ctx.0),
                                   self.gl_api()).map(Context)
         }
     }

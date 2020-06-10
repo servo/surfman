@@ -64,6 +64,8 @@ pub enum Error {
     IncompatibleContextDescriptor,
     /// The context is from a hardware device, but this is a software device, or vice versa.
     IncompatibleContext,
+    /// The shared context is not compatible for sharing.
+    IncompatibleSharedContext,
     /// The surface texture is from a hardware device, but this is a software device, or vice
     /// versa.
     IncompatibleSurfaceTexture,

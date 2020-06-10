@@ -56,9 +56,9 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn create_context(&mut self, descriptor: &Self::ContextDescriptor)
+    fn create_context(&mut self, descriptor: &Self::ContextDescriptor, share_with: Option<&Self::Context>)
                       -> Result<Self::Context, Error> {
-        Device::create_context(self, descriptor)
+        Device::create_context(self, descriptor, share_with)
     }
 
     #[inline]
