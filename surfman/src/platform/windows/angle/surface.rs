@@ -325,7 +325,25 @@ impl Device {
                 } else {
                     None
                 };
+                self.create_surface_texture_from_local_surface(
+                    context,
+                    surface,
+                    local_egl_surface,
+                    local_keyed_mutex,
+                )
+            }
+        })
+    }
 
+    fn create_surface_texture_from_local_surface(
+        &self,
+        context: &Context,
+        surface: Surface,
+        local_egl_surface: EGLSurface,
+        local_keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
+    ) -> Result<SurfaceTexture, (Error, Surface)> {
+        EGL_FUNCTIONS.with(|egl| {
+            unsafe {
                 let _guard = self.temporarily_make_context_current(context);
 
                 GL_FUNCTIONS.with(|gl| {
@@ -366,6 +384,24 @@ impl Device {
                 })
             }
         })
+    }
+
+    /// Given a D3D11 texture, create a surface texture that wraps that texture. This method is unsafe
+    /// in that the resulting surface is only valid on the current thread, for the lifetime of `texture`.
+    /// It is the caller's responsibility to ensure that `texture` is not freed while the `SurfaceTexture` is live.
+    pub unsafe fn create_surface_texture_from_texture(
+        &mut self,
+        context: &mut Context,
+        size: &Size2D<i32>,
+        texture: *mut d3d11::ID3D11Texture2D
+    ) -> Result<SurfaceTexture, Error> {
+        let surface = self.create_pbuffer_surface(context, size, Some(texture))?;
+        let local_egl_surface = surface.egl_surface;
+        self.create_surface_texture_from_local_surface(context, surface, local_egl_surface, None)
+            .map_err(|(err, mut surface)| {
+                let _ = self.destroy_surface(context, &mut surface);
+                err
+            })
     }
 
     /// Destroys a surface.
