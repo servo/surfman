@@ -102,6 +102,8 @@ pub(crate) enum Win32Objects {
     Pbuffer {
         share_handle: HANDLE,
         synchronization: Synchronization,
+        // We keep a reference to the ComPtr in order to keep its refcount from becoming zero
+        texture: Option<ComPtr<d3d11::ID3D11Texture2D>>,
     }
 }
 
@@ -142,7 +144,7 @@ impl Device {
     fn create_pbuffer_surface(&mut self,
                               context: &Context,
                               size: &Size2D<i32>,
-                              texture: Option<*mut d3d11::ID3D11Texture2D>)
+                              texture: Option<ComPtr<d3d11::ID3D11Texture2D>>)
                               -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -158,11 +160,11 @@ impl Device {
             ];
 
             EGL_FUNCTIONS.with(|egl| {
-                let egl_surface = if let Some(texture) = texture {
+                let egl_surface = if let Some(ref texture) = texture {
                     let surface =
                         egl.CreatePbufferFromClientBuffer(self.egl_display,
                                                           EGL_D3D_TEXTURE_ANGLE,
-                                                          texture as *const _,
+                                                          texture.as_raw() as *const _,
                                                           egl_config,
                                                           attributes.as_ptr());
                     assert_ne!(surface, egl::NO_SURFACE);
@@ -215,6 +217,7 @@ impl Device {
                     win32_objects: Win32Objects::Pbuffer {
                         share_handle,
                         synchronization,
+                        texture,
                     },
                 })
             })
@@ -227,7 +230,7 @@ impl Device {
         &mut self,
         context: &Context,
         size: &Size2D<i32>,
-        texture: *mut d3d11::ID3D11Texture2D
+        texture: ComPtr<d3d11::ID3D11Texture2D>,
     ) -> Result<Surface, Error> {
         self.create_pbuffer_surface(context, size, Some(texture))
     }
@@ -393,7 +396,7 @@ impl Device {
         &mut self,
         context: &mut Context,
         size: &Size2D<i32>,
-        texture: *mut d3d11::ID3D11Texture2D
+        texture: ComPtr<d3d11::ID3D11Texture2D>,
     ) -> Result<SurfaceTexture, Error> {
         let surface = self.create_pbuffer_surface(context, size, Some(texture))?;
         let local_egl_surface = surface.egl_surface;
@@ -427,6 +430,9 @@ impl Device {
 
                 egl.DestroySurface(self.egl_display, surface.egl_surface);
                 surface.egl_surface = egl::NO_SURFACE;
+                if let Win32Objects::Pbuffer { ref mut texture, .. } = surface.win32_objects {
+                    texture.take();
+                }
             }
             Ok(())
         })
