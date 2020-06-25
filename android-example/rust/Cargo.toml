@@ -15,7 +15,7 @@ panic = "abort"
 
 [dependencies]
 android_logger = "0.8"
-gl = "0.13"
+gl = "0.14"
 jni = "0.13"
 log = "0.4"
 

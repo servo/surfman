@@ -53,7 +53,7 @@ optional = true
 
 [dev-dependencies]
 clap = "2"
-gl = "0.13"
+gl = "0.14"
 png = "0.15"
 rand = "0.7"
 
