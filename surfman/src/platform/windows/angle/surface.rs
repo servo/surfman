@@ -387,7 +387,8 @@ impl Device {
     }
 
     /// Given a D3D11 texture, create a surface texture that wraps that texture. This method is unsafe
-    /// in that the resulting surface is only valid on the current thread.
+    /// in that the resulting surface is only valid on the current thread, for the lifetime of `texture`.
+    /// It is the caller's responsibility to ensure that `texture` is not freed while the `SurfaceTexture` is live.
     pub unsafe fn create_surface_texture_from_texture(
         &mut self,
         context: &mut Context,
