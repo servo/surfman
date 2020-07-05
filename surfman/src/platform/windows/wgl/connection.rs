@@ -136,11 +136,11 @@ impl Connection {
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Xlib;
+        use raw_window_handle::RawWindowHandle::Windows;
 
         match raw_handle {
-            Xlib(handle) => Ok(NativeWidget {
-                window: handle.window,
+            Windows(handle) => Ok(NativeWidget {
+                window_handle: handle.hwnd as HWND,
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }
