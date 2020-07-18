@@ -229,7 +229,14 @@ impl Device {
     }
 
     /// Resizes a widget surface
-    pub fn resize_surface(&self, surface: &mut Surface, size: Size2D<i32>) -> Result<(), Error> {
+    pub fn resize_surface(&self, surface: &mut Surface, mut size: Size2D<i32>) -> Result<(), Error> {
+        // The surface will not appear if its width is not a multiple of 4 (i.e. stride is a
+        // multiple of 16 bytes). Enforce this.
+        let width = size.width as i32;
+        if width % 4 != 0 {
+            size.width = width + 4 - width % 4;
+        }
+
         let view_info = match surface.view_info {
             None => return Err(Error::NoWidgetAttached),
             Some(ref mut view_info) => view_info,
