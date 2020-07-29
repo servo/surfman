@@ -2,7 +2,7 @@
 name = "surfman"
 license = "MIT / Apache-2.0"
 edition = "2018"
-version = "0.3.0"
+version = "0.4.0"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
@@ -59,13 +59,13 @@ rand = "0.7"
 
 [target.x86_64-apple-darwin.dependencies]
 cgl = "0.3.2"
-cocoa = "0.19"
-core-foundation = "0.6"
-core-graphics = "0.17"
+cocoa = "0.23"
+core-foundation = "0.9"
+core-graphics-types = "0.1"
 display-link = "0.2"
-io-surface = "0.12"
+io-surface = "0.15"
 mach = "0.3"
-metal = "0.18"
+metal = "0.20"
 objc = "0.2"
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.wayland-sys]
