@@ -1,10 +1,8 @@
 language: rust
 rust:
-  - nightly-2020-07-26
-  - nightly-2020-07-27
-  - nightly-2020-07-28
-  - nightly-2020-07-29
-  - nightly-2020-07-30
+  - nightly-2020-07-06
+  - nightly-2020-07-15
+  - nightly-2020-07-25
 sudo: false
 
 notifications:
@@ -29,8 +27,8 @@ os:
 
 script:
   - cd surfman
-  - if [ $TRAVIS_RUST_VERSION == "nightly" ]; then rustup component add rust-src --target=aarch64-uwp-windows-msvc; fi
-  - if [ $TRAVIS_RUST_VERSION == "nightly" ]; then cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc; fi
+  - rustup component add rust-src --target=aarch64-uwp-windows-msvc
+  - cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
   # TODO: tests
   # - cargo test --verbose
   # - cargo test --verbose --features test_egl_in_linux
