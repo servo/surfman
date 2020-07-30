@@ -1,8 +1,8 @@
 language: rust
 rust:
-  - nightly-2020-07-06-x86_64-apple-darwin
-  - nightly-2020-07-15-x86_64-apple-darwin
-  - nightly-2020-07-25-x86_64-apple-darwin
+  - nightly-2020-07-06
+  - nightly-2020-07-15
+  - nightly-2020-07-25
 sudo: false
 
 notifications:
@@ -18,10 +18,9 @@ addons:
       - libxxf86vm-dev
       - libosmesa6-dev
       - libgles2-mesa-dev
-      - gcc-arm-linux-androideabi
 
 before_install:
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then export CXX=g++-4.8; rustup target add arm-linux-androideabi; fi
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then export CXX=g++-4.8; fi
 
 os:
   - linux
