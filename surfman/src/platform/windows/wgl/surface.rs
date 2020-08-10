@@ -208,7 +208,12 @@ impl Device {
                                                           gl_texture,
                                                           gl::TEXTURE_2D,
                                                           WGL_ACCESS_READ_WRITE_NV);
-            assert_ne!(gl_dx_interop_object, INVALID_HANDLE_VALUE);
+			// Per the spec, and unlike other HANDLEs, null indicates an error.
+			if gl_dx_interop_object.is_null() {
+				let msg = std::io::Error::last_os_error(); // Equivalent to GetLastError().
+				error!("Unable to share surface between OpenGL and DirectX. OS error '{}'.", msg);
+				return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
+			}
 
             // Build our FBO.
             let mut gl_framebuffer = 0;
