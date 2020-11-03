@@ -17,7 +17,7 @@ gl_generator = "0.14"
 cfg_aliases = "0.1.0"
 
 [features]
-default = ["sm-winit"]
+default = []
 sm-angle = []
 sm-angle-builtin = ["mozangle"]
 sm-angle-default = ["sm-angle"]
@@ -28,12 +28,23 @@ sm-winit = ["winit"]
 sm-x11 = ["x11"]
 sm-raw-window-handle = ["raw-window-handle"]
 
+[[example]]
+name = "chaos_game"
+required-features = ["sm-winit"]
+
+[[example]]
+name = "offscreen"
+
+[[example]]
+name = "threads"
+required-features = ["sm-winit"]
+
 [dependencies]
 bitflags = "1.1"
 lazy_static = "1"
 libc = "0.2"
 log = "0.4"
-parking_lot = "0.10.2"
+parking_lot = "0.11"
 
 [dependencies.euclid]
 version = "0.20"

@@ -25,4 +25,4 @@ features = []
 
 [dependencies.surfman]
 path = "../../surfman"
-features = ["sm-test"]
+features = ["sm-test", "sm-winit"]
