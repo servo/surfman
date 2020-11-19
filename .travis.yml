@@ -1,6 +1,6 @@
 language: rust
 rust:
-  - nightly
+  - nightly-2020-09-30
   - stable
 sudo: false
 
