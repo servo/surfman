@@ -255,7 +255,7 @@ pub(crate) struct DCGuard<'a> {
 impl Drop for HiddenWindow {
     fn drop(&mut self) {
         unsafe {
-            winuser::SendMessageA(self.window, WM_CLOSE, 0, 0);
+            winuser::PostMessageA(self.window, WM_CLOSE, 0, 0);
             if let Some(join_handle) = self.join_handle.take() {
                 drop(join_handle.join());
             }
