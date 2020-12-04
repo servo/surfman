@@ -15,7 +15,7 @@ use euclid::default::Size2D;
 use std::os::raw::c_void;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 #[deny(unconditional_recursion)]
 impl ConnectionInterface for Connection {

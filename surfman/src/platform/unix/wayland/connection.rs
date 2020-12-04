@@ -18,9 +18,10 @@ use std::sync::Arc;
 use wayland_sys::client::{WAYLAND_CLIENT_HANDLE, wl_display, wl_proxy};
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 #[cfg(feature = "sm-winit")]
-use winit::os::unix::WindowExt;
+// use winit::os::unix::WindowExt;
+use winit::platform::unix::WindowExtUnix;
 
 /// A connection to the Wayland server.
 #[derive(Clone)]
@@ -149,7 +150,7 @@ impl Connection {
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
         unsafe {
-            let wayland_display = match window.get_wayland_display() {
+            let wayland_display = match window.wayland_display() {
                 Some(wayland_display) => wayland_display as *mut wl_display,
                 None => return Err(Error::IncompatibleWinitWindow),
             };
@@ -163,7 +164,7 @@ impl Connection {
     #[cfg(feature = "sm-winit")]
     pub fn create_native_widget_from_winit_window(&self, window: &Window)
                                                   -> Result<NativeWidget, Error> {
-        let wayland_surface = match window.get_wayland_surface() {
+        let wayland_surface = match window.wayland_surface() {
             Some(wayland_surface) => wayland_surface as *mut wl_proxy,
             None => return Err(Error::IncompatibleNativeWidget),
         };
@@ -173,8 +174,8 @@ impl Connection {
         // when actually displayed. (The user might move it somewhere else later, of course.)
         //
         // FIXME(pcwalton): Is it true that the window will go the primary monitor first?
-        let hidpi_factor = window.get_primary_monitor().get_hidpi_factor();
-        let window_size = window.get_inner_size().unwrap().to_physical(hidpi_factor);
+        // let hidpi_factor = window.primary_monitor().unwrap().scale_factor();
+        let window_size = window.inner_size();
         let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
 
         Ok(NativeWidget { wayland_surface, size: window_size })

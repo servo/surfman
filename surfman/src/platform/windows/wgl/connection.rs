@@ -16,7 +16,7 @@ use std::os::raw::c_void;
 use winapi::shared::windef::HWND;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 #[cfg(feature = "sm-winit")]
 use winit::os::windows::WindowExt;
 

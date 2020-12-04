@@ -21,7 +21,7 @@ use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 #[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
 use winit::os::windows::WindowExt;
 

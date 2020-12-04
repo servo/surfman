@@ -14,7 +14,7 @@ use euclid::default::Size2D;
 use std::os::raw::c_void;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 /// A connection to the display server.
 pub enum Connection<Def, Alt> where Def: DeviceInterface,
