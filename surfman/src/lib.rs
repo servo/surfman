@@ -43,7 +43,7 @@ pub mod error;
 pub use crate::error::{Error, WindowingApiError};
 
 mod context;
-pub use crate::context::{ContextAttributes, ContextAttributeFlags, ContextID};
+pub use crate::context::{ContextAttributeFlags, ContextAttributes, ContextID};
 
 mod info;
 pub use crate::info::{GLApi, GLVersion};
@@ -53,10 +53,10 @@ pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, Sys
 
 pub mod macros;
 
-#[cfg(target_os = "android")]
-pub(crate) use crate::gl::Gles2 as Gl;
 #[cfg(not(target_os = "android"))]
 pub(crate) use crate::gl::Gl;
+#[cfg(target_os = "android")]
+pub(crate) use crate::gl::Gles2 as Gl;
 
 mod gl_utils;
 mod renderbuffers;
@@ -65,7 +65,11 @@ mod gl {
     include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
 }
 
-#[cfg(any(target_os = "android", all(target_os = "windows", feature = "sm-angle"), unix))]
+#[cfg(any(
+    target_os = "android",
+    all(target_os = "windows", feature = "sm-angle"),
+    unix
+))]
 #[allow(non_camel_case_types)]
 mod egl {
     use std::os::raw::{c_long, c_void};

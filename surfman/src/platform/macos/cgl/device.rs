@@ -2,9 +2,9 @@
 //
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
-use crate::GLApi;
-use crate::platform::macos::system::device::{Adapter as SystemAdapter, Device as SystemDevice};
 use super::connection::Connection;
+use crate::platform::macos::system::device::{Adapter as SystemAdapter, Device as SystemDevice};
+use crate::GLApi;
 
 pub use crate::platform::macos::system::device::NativeDevice;
 

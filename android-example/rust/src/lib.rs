@@ -3,8 +3,8 @@
 #[macro_use]
 extern crate log;
 
-use crate::threads::App;
 use crate::threads::common::ResourceLoader;
+use crate::threads::App;
 
 use android_logger::Config;
 use euclid::default::Size2D;
@@ -26,12 +26,13 @@ thread_local! {
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_init(env: JNIEnv,
-                                                                                  _class: JClass,
-                                                                                  loader: JObject,
-                                                                                  width: i32,
-                                                                                  height: i32) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_init(
+    env: JNIEnv,
+    _class: JClass,
+    loader: JObject,
+    width: i32,
+    height: i32,
+) {
     ATTACHED_TO_JNI.with(|attached_to_jni| attached_to_jni.set(true));
 
     android_logger::init_once(Config::default().with_min_level(Level::Trace));
@@ -39,108 +40,114 @@ pub unsafe extern "system" fn
     let window_size = Size2D::new(width, height);
 
     let connection = Connection::new().unwrap();
-    let device = connection.create_device_from_native_device(NativeDevice::current()).unwrap();
-    let context =
-        device.create_context_from_native_context(NativeContext::current().unwrap()).unwrap();
+    let device = connection
+        .create_device_from_native_device(NativeDevice::current())
+        .unwrap();
+    let context = device
+        .create_context_from_native_context(NativeContext::current().unwrap())
+        .unwrap();
     let adapter = device.adapter();
 
     APP.with(|app| {
         let resource_loader = Box::new(JavaResourceLoader::new(env, loader));
-        *app.borrow_mut() = Some(App::new(connection,
-                                          adapter,
-                                          device,
-                                          context,
-                                          resource_loader,
-                                          window_size))
+        *app.borrow_mut() = Some(App::new(
+            connection,
+            adapter,
+            device,
+            context,
+            resource_loader,
+            window_size,
+        ))
     });
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_tick(_env: JNIEnv,
-                                                                                  _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_tick(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     APP.with(|app| app.borrow_mut().as_mut().unwrap().tick(false));
 }
 
 // NB: New tests should be added here.
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testContextCreation(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testContextCreation(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_context_creation();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testCrossDeviceSurfaceTextureBlitFramebuffer(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testCrossDeviceSurfaceTextureBlitFramebuffer(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_cross_device_surface_texture_blit_framebuffer();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testCrossThreadSurfaceTextureBlitFramebuffer(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testCrossThreadSurfaceTextureBlitFramebuffer(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_cross_thread_surface_texture_blit_framebuffer();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testDeviceAccessors(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testDeviceAccessors(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_device_accessors();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testDeviceCreation(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testDeviceCreation(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_device_creation();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testGenericSurfaceCreation(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testGenericSurfaceCreation(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_generic_surface_creation();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testGL(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testGL(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_gl();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testNewlyCreatedContextsAreNotCurrent(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testNewlyCreatedContextsAreNotCurrent(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_newly_created_contexts_are_not_current();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testSurfaceTextureBlitFramebuffer(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testSurfaceTextureBlitFramebuffer(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_surface_texture_blit_framebuffer();
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn
-        Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testSurfaceTextureRightSideUp(
-            _env: JNIEnv,
-            _class: JClass) {
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testSurfaceTextureRightSideUp(
+    _env: JNIEnv,
+    _class: JClass,
+) {
     tests::test_surface_texture_right_side_up();
 }
 

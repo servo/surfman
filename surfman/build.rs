@@ -2,8 +2,8 @@
 //
 //! The `surfman` build script.
 
-use gl_generator::{Api, Fallbacks, Profile, Registry, StructGenerator};
 use cfg_aliases::cfg_aliases;
+use gl_generator::{Api, Fallbacks, Profile, Registry, StructGenerator};
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ fn main() {
         android: { target_os = "android" },
         // TODO: is `target_os = "linux"` the same as the following check?
         linux: { all(unix, not(any(macos, android))) },
-        
+
         // Features:
         // Here we collect the features that are only valid on certain platforms and
         // we add aliases that include checks for the correct platform.
@@ -34,9 +34,10 @@ fn main() {
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());
 
     // Generate EGL bindings.
-    if target_os == "android" ||
-            (target_os == "windows" && cfg!(feature = "sm-angle")) ||
-            target_family == "unix" {
+    if target_os == "android"
+        || (target_os == "windows" && cfg!(feature = "sm-angle"))
+        || target_family == "unix"
+    {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, []);
         registry.write_bindings(StructGenerator, &mut file).unwrap();

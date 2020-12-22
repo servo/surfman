@@ -2,44 +2,51 @@
 //
 //! A utility module for backends that wrap surfaces in OpenGL FBOs.
 
-use crate::Gl;
 use crate::context::{ContextAttributeFlags, ContextAttributes};
-use crate::gl::types::GLuint;
 use crate::gl;
+use crate::gl::types::GLuint;
+use crate::Gl;
 
 use euclid::default::Size2D;
 
 pub(crate) enum Renderbuffers {
-    IndividualDepthStencil {
-        depth: GLuint,
-        stencil: GLuint,
-    },
+    IndividualDepthStencil { depth: GLuint, stencil: GLuint },
     CombinedDepthStencil(GLuint),
 }
 
 impl Drop for Renderbuffers {
     fn drop(&mut self) {
         match *self {
-            Renderbuffers::IndividualDepthStencil { depth: 0, stencil: 0 } |
-            Renderbuffers::CombinedDepthStencil(0) => {}
+            Renderbuffers::IndividualDepthStencil {
+                depth: 0,
+                stencil: 0,
+            }
+            | Renderbuffers::CombinedDepthStencil(0) => {}
             _ => panic!("Should have destroyed the FBO renderbuffers with `destroy()`!"),
         }
     }
 }
 
 impl Renderbuffers {
-    pub(crate) fn new(gl: &Gl, size: &Size2D<i32>, attributes: &ContextAttributes)
-                      -> Renderbuffers {
+    pub(crate) fn new(
+        gl: &Gl,
+        size: &Size2D<i32>,
+        attributes: &ContextAttributes,
+    ) -> Renderbuffers {
         unsafe {
-            if attributes.flags.contains(ContextAttributeFlags::DEPTH |
-                                         ContextAttributeFlags::STENCIL) {
+            if attributes
+                .flags
+                .contains(ContextAttributeFlags::DEPTH | ContextAttributeFlags::STENCIL)
+            {
                 let mut renderbuffer = 0;
                 gl.GenRenderbuffers(1, &mut renderbuffer);
                 gl.BindRenderbuffer(gl::RENDERBUFFER, renderbuffer);
-                gl.RenderbufferStorage(gl::RENDERBUFFER,
-                                       gl::DEPTH24_STENCIL8,
-                                       size.width,
-                                       size.height);
+                gl.RenderbufferStorage(
+                    gl::RENDERBUFFER,
+                    gl::DEPTH24_STENCIL8,
+                    size.width,
+                    size.height,
+                );
                 gl.BindRenderbuffer(gl::RENDERBUFFER, 0);
                 return Renderbuffers::CombinedDepthStencil(renderbuffer);
             }
@@ -48,18 +55,22 @@ impl Renderbuffers {
             if attributes.flags.contains(ContextAttributeFlags::DEPTH) {
                 gl.GenRenderbuffers(1, &mut depth_renderbuffer);
                 gl.BindRenderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
-                gl.RenderbufferStorage(gl::RENDERBUFFER,
-                                       gl::DEPTH_COMPONENT24,
-                                       size.width,
-                                       size.height);
+                gl.RenderbufferStorage(
+                    gl::RENDERBUFFER,
+                    gl::DEPTH_COMPONENT24,
+                    size.width,
+                    size.height,
+                );
             }
             if attributes.flags.contains(ContextAttributeFlags::STENCIL) {
                 gl.GenRenderbuffers(1, &mut stencil_renderbuffer);
                 gl.BindRenderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
-                gl.RenderbufferStorage(gl::RENDERBUFFER,
-                                       gl::STENCIL_INDEX8,
-                                       size.width,
-                                       size.height);
+                gl.RenderbufferStorage(
+                    gl::RENDERBUFFER,
+                    gl::STENCIL_INDEX8,
+                    size.width,
+                    size.height,
+                );
             }
             gl.BindRenderbuffer(gl::RENDERBUFFER, 0);
 
@@ -75,10 +86,12 @@ impl Renderbuffers {
             match *self {
                 Renderbuffers::CombinedDepthStencil(renderbuffer) => {
                     if renderbuffer != 0 {
-                        gl.FramebufferRenderbuffer(gl::FRAMEBUFFER,
-                                                   gl::DEPTH_STENCIL_ATTACHMENT,
-                                                   gl::RENDERBUFFER,
-                                                   renderbuffer);
+                        gl.FramebufferRenderbuffer(
+                            gl::FRAMEBUFFER,
+                            gl::DEPTH_STENCIL_ATTACHMENT,
+                            gl::RENDERBUFFER,
+                            renderbuffer,
+                        );
                     }
                 }
                 Renderbuffers::IndividualDepthStencil {
@@ -86,16 +99,20 @@ impl Renderbuffers {
                     stencil: stencil_renderbuffer,
                 } => {
                     if depth_renderbuffer != 0 {
-                        gl.FramebufferRenderbuffer(gl::FRAMEBUFFER,
-                                                   gl::DEPTH_ATTACHMENT,
-                                                   gl::RENDERBUFFER,
-                                                   depth_renderbuffer);
+                        gl.FramebufferRenderbuffer(
+                            gl::FRAMEBUFFER,
+                            gl::DEPTH_ATTACHMENT,
+                            gl::RENDERBUFFER,
+                            depth_renderbuffer,
+                        );
                     }
                     if stencil_renderbuffer != 0 {
-                        gl.FramebufferRenderbuffer(gl::FRAMEBUFFER,
-                                                   gl::STENCIL_ATTACHMENT,
-                                                   gl::RENDERBUFFER,
-                                                   stencil_renderbuffer);
+                        gl.FramebufferRenderbuffer(
+                            gl::FRAMEBUFFER,
+                            gl::STENCIL_ATTACHMENT,
+                            gl::RENDERBUFFER,
+                            stencil_renderbuffer,
+                        );
                     }
                 }
             }

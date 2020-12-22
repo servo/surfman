@@ -2,15 +2,15 @@
 //
 //! A wrapper for X11 server connections (`DISPLAY` variables).
 
-use crate::egl::types::{EGLAttrib, EGLDisplay};
+use super::device::{Device, NativeDevice};
+use super::surface::NativeWidget;
 use crate::egl;
+use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::error::Error;
 use crate::info::GLApi;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_PLATFORM_X11_KHR;
 use crate::platform::unix::generic::device::Adapter;
-use super::device::{Device, NativeDevice};
-use super::surface::NativeWidget;
 
 use euclid::default::Size2D;
 
@@ -21,9 +21,9 @@ use std::sync::Arc;
 use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
-#[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
+#[cfg(feature = "sm-winit")]
+use winit::Window;
 
 lazy_static! {
     static ref X_THREADS_INIT: () = {
@@ -106,8 +106,9 @@ impl Connection {
     /// the caller's responsibility to ensure that the display connection is not closed before this
     /// `Connection` object is disposed of.
     #[inline]
-    pub unsafe fn from_native_connection(native_connection: NativeConnection)
-                                         -> Result<Connection, Error> {
+    pub unsafe fn from_native_connection(
+        native_connection: NativeConnection,
+    ) -> Result<Connection, Error> {
         Ok(Connection {
             native_connection: Arc::new(NativeConnectionWrapper {
                 egl_display: native_connection.egl_display,
@@ -146,7 +147,7 @@ impl Connection {
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    /// 
+    ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
@@ -172,7 +173,7 @@ impl Connection {
     }
 
     /// Opens the hardware device corresponding to the given adapter.
-    /// 
+    ///
     /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
@@ -184,8 +185,10 @@ impl Connection {
     ///
     /// This is present for compatibility with other backends.
     #[inline]
-    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
-                                                   -> Result<Device, Error> {
+    pub unsafe fn create_device_from_native_device(
+        &self,
+        native_device: NativeDevice,
+    ) -> Result<Device, Error> {
         Device::new(self, &native_device.adapter)
     }
 
@@ -200,11 +203,13 @@ impl Connection {
     }
 
     /// Creates a native widget type from the given `winit` window.
-    /// 
+    ///
     /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
-    pub fn create_native_widget_from_winit_window(&self, window: &Window)
-                                                  -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_winit_window(
+        &self,
+        window: &Window,
+    ) -> Result<NativeWidget, Error> {
         match window.get_xlib_window() {
             Some(window) => Ok(NativeWidget { window }),
             None => Err(Error::IncompatibleNativeWidget),
@@ -212,7 +217,11 @@ impl Connection {
     }
 
     /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, _size: Size2D<i32>) -> NativeWidget {
+    pub unsafe fn create_native_widget_from_ptr(
+        &self,
+        raw: *mut c_void,
+        _size: Size2D<i32>,
+    ) -> NativeWidget {
         NativeWidget {
             window: std::mem::transmute(raw),
         }
@@ -220,8 +229,10 @@ impl Connection {
 
     /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
-    pub fn create_native_widget_from_rwh(&self, raw_handle: raw_window_handle::RawWindowHandle,)
-                                        -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_rwh(
+        &self,
+        raw_handle: raw_window_handle::RawWindowHandle,
+    ) -> Result<NativeWidget, Error> {
         use raw_window_handle::RawWindowHandle::Xlib;
 
         match raw_handle {
@@ -239,7 +250,10 @@ impl NativeConnectionWrapper {
         unsafe {
             let display = self.x11_display;
             XLockDisplay(display);
-            DisplayGuard { display, phantom: PhantomData }
+            DisplayGuard {
+                display,
+                phantom: PhantomData,
+            }
         }
     }
 }
@@ -267,9 +281,11 @@ impl<'a> DisplayGuard<'a> {
 unsafe fn create_egl_display(display: *mut Display) -> EGLDisplay {
     EGL_FUNCTIONS.with(|egl| {
         let display_attributes = [egl::NONE as EGLAttrib];
-        let egl_display = egl.GetPlatformDisplay(EGL_PLATFORM_X11_KHR,
-                                                 display as *mut c_void,
-                                                 display_attributes.as_ptr());
+        let egl_display = egl.GetPlatformDisplay(
+            EGL_PLATFORM_X11_KHR,
+            display as *mut c_void,
+            display_attributes.as_ptr(),
+        );
 
         let (mut egl_major_version, mut egl_minor_version) = (0, 0);
         let ok = egl.Initialize(egl_display, &mut egl_major_version, &mut egl_minor_version);
@@ -278,4 +294,3 @@ unsafe fn create_egl_display(display: *mut Display) -> EGLDisplay {
         egl_display
     })
 }
-

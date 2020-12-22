@@ -12,7 +12,7 @@ use winit::{WindowBuilder, WindowEvent};
 #[cfg(target_os = "macos")]
 use surfman::SystemConnection;
 
-const WINDOW_WIDTH:  i32 = 800;
+const WINDOW_WIDTH: i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
 
 const BYTES_PER_PIXEL: usize = 4;
@@ -22,7 +22,7 @@ const FOREGROUND_COLOR: u32 = !0;
 const ITERATIONS_PER_FRAME: usize = 20;
 
 static TRIANGLE_POINTS: [(f32, f32); 3] = [
-    (400.0,          300.0 + 75.0 + 150.0),
+    (400.0, 300.0 + 75.0 + 150.0),
     (400.0 + 259.81, 300.0 + 75.0 - 300.0),
     (400.0 - 259.81, 300.0 + 75.0 - 300.0),
 ];
@@ -40,18 +40,22 @@ fn main() {
 
     let mut event_loop = EventsLoop::new();
     let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
-    let logical_size =
-        PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical(dpi);
-    let window = WindowBuilder::new().with_title("Chaos game example")
-                                     .with_dimensions(logical_size)
-                                     .build(&event_loop)
-                                     .unwrap();
+    let logical_size = PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical(dpi);
+    let window = WindowBuilder::new()
+        .with_title("Chaos game example")
+        .with_dimensions(logical_size)
+        .build(&event_loop)
+        .unwrap();
     window.show();
 
-    let native_widget = connection.create_native_widget_from_winit_window(&window).unwrap();
+    let native_widget = connection
+        .create_native_widget_from_winit_window(&window)
+        .unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
-    let mut surface = device.create_surface(SurfaceAccess::GPUCPU, surface_type).unwrap();
+    let mut surface = device
+        .create_surface(SurfaceAccess::GPUCPU, surface_type)
+        .unwrap();
 
     let mut rng = rand::thread_rng();
     let mut point = Point2D::new(WINDOW_WIDTH as f32 * 0.5, WINDOW_HEIGHT as f32 * 0.5);
@@ -65,21 +69,27 @@ fn main() {
             put_pixel(&mut data, &point, FOREGROUND_COLOR);
         }
 
-        device.lock_surface_data(&mut surface).unwrap().data().copy_from_slice(&data);
+        device
+            .lock_surface_data(&mut surface)
+            .unwrap()
+            .data()
+            .copy_from_slice(&data);
         device.present_surface(&mut surface).unwrap();
 
-        event_loop.poll_events(|event| {
-            match event {
-                Event::WindowEvent { event: WindowEvent::Destroyed, .. } |
-                Event::DeviceEvent {
-                    event: DeviceEvent::Key(KeyboardInput {
+        event_loop.poll_events(|event| match event {
+            Event::WindowEvent {
+                event: WindowEvent::Destroyed,
+                ..
+            }
+            | Event::DeviceEvent {
+                event:
+                    DeviceEvent::Key(KeyboardInput {
                         virtual_keycode: Some(VirtualKeyCode::Escape),
                         ..
                     }),
-                    ..
-                } => exit = true,
-                _ => {}
-            }
+                ..
+            } => exit = true,
+            _ => {}
         });
     }
 }

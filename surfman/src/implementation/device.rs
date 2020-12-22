@@ -3,15 +3,15 @@
 //! This is an included private module that automatically produces the implementation of the
 //! `Device` trait for a backend.
 
+use super::super::connection::Connection;
+use super::super::context::{Context, ContextDescriptor, NativeContext};
+use super::super::device::{Adapter, Device};
+use super::super::surface::{NativeWidget, Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
-use super::super::connection::Connection;
-use super::super::context::{Context, ContextDescriptor, NativeContext};
-use super::super::device::{Adapter, Device};
-use super::super::surface::{NativeWidget, Surface, SurfaceTexture};
 
 use std::os::raw::c_void;
 
@@ -50,20 +50,27 @@ impl DeviceInterface for Device {
     // context.rs
 
     #[inline]
-    fn create_context_descriptor(&self, attributes: &ContextAttributes)
-                                 -> Result<Self::ContextDescriptor, Error> {
+    fn create_context_descriptor(
+        &self,
+        attributes: &ContextAttributes,
+    ) -> Result<Self::ContextDescriptor, Error> {
         Device::create_context_descriptor(self, attributes)
     }
 
     #[inline]
-    fn create_context(&mut self, descriptor: &Self::ContextDescriptor, share_with: Option<&Self::Context>)
-                      -> Result<Self::Context, Error> {
+    fn create_context(
+        &mut self,
+        descriptor: &Self::ContextDescriptor,
+        share_with: Option<&Self::Context>,
+    ) -> Result<Self::Context, Error> {
         Device::create_context(self, descriptor, share_with)
     }
 
     #[inline]
-    unsafe fn create_context_from_native_context(&self, native_context: Self::NativeContext)
-                                                 -> Result<Self::Context, Error> {
+    unsafe fn create_context_from_native_context(
+        &self,
+        native_context: Self::NativeContext,
+    ) -> Result<Self::Context, Error> {
         Device::create_context_from_native_context(self, native_context)
     }
 
@@ -88,8 +95,10 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn context_descriptor_attributes(&self, context_descriptor: &Self::ContextDescriptor)
-                                     -> ContextAttributes {
+    fn context_descriptor_attributes(
+        &self,
+        context_descriptor: &Self::ContextDescriptor,
+    ) -> ContextAttributes {
         Device::context_descriptor_attributes(self, context_descriptor)
     }
 
@@ -99,14 +108,19 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn bind_surface_to_context(&self, context: &mut Self::Context, surface: Self::Surface)
-                               -> Result<(), (Error, Self::Surface)> {
+    fn bind_surface_to_context(
+        &self,
+        context: &mut Self::Context,
+        surface: Self::Surface,
+    ) -> Result<(), (Error, Self::Surface)> {
         Device::bind_surface_to_context(self, context, surface)
     }
 
     #[inline]
-    fn unbind_surface_from_context(&self, context: &mut Self::Context)
-                                   -> Result<Option<Self::Surface>, Error> {
+    fn unbind_surface_from_context(
+        &self,
+        context: &mut Self::Context,
+    ) -> Result<Option<Self::Surface>, Error> {
         Device::unbind_surface_from_context(self, context)
     }
 
@@ -128,31 +142,39 @@ impl DeviceInterface for Device {
     // surface.rs
 
     #[inline]
-    fn create_surface(&mut self,
-                      context: &Self::Context,
-                      surface_access: SurfaceAccess,
-                      surface_type: SurfaceType<NativeWidget>)
-                      -> Result<Self::Surface, Error> {
+    fn create_surface(
+        &mut self,
+        context: &Self::Context,
+        surface_access: SurfaceAccess,
+        surface_type: SurfaceType<NativeWidget>,
+    ) -> Result<Self::Surface, Error> {
         Device::create_surface(self, context, surface_access, surface_type)
     }
 
     #[inline]
-    fn create_surface_texture(&self, context: &mut Self::Context, surface: Self::Surface)
-                              -> Result<Self::SurfaceTexture, (Error, Self::Surface)> {
+    fn create_surface_texture(
+        &self,
+        context: &mut Self::Context,
+        surface: Self::Surface,
+    ) -> Result<Self::SurfaceTexture, (Error, Self::Surface)> {
         Device::create_surface_texture(self, context, surface)
     }
 
     #[inline]
-    fn destroy_surface(&self, context: &mut Self::Context, surface: &mut Self::Surface)
-                       -> Result<(), Error> {
+    fn destroy_surface(
+        &self,
+        context: &mut Self::Context,
+        surface: &mut Self::Surface,
+    ) -> Result<(), Error> {
         Device::destroy_surface(self, context, surface)
     }
 
     #[inline]
-    fn destroy_surface_texture(&self,
-                               context: &mut Self::Context,
-                               surface_texture: Self::SurfaceTexture)
-                               -> Result<Self::Surface, (Error, Self::SurfaceTexture)> {
+    fn destroy_surface_texture(
+        &self,
+        context: &mut Self::Context,
+        surface_texture: Self::SurfaceTexture,
+    ) -> Result<Self::Surface, (Error, Self::SurfaceTexture)> {
         Device::destroy_surface_texture(self, context, surface_texture)
     }
 
@@ -162,14 +184,21 @@ impl DeviceInterface for Device {
     }
 
     #[inline]
-    fn present_surface(&self, context: &Self::Context, surface: &mut Self::Surface)
-                       -> Result<(), Error> {
+    fn present_surface(
+        &self,
+        context: &Self::Context,
+        surface: &mut Self::Surface,
+    ) -> Result<(), Error> {
         Device::present_surface(self, context, surface)
     }
 
     #[inline]
-    fn resize_surface(&self, context: &Context, surface: &mut Surface, size: Size2D<i32>)
-                       -> Result<(), Error> {
+    fn resize_surface(
+        &self,
+        context: &Context,
+        surface: &mut Surface,
+        size: Size2D<i32>,
+    ) -> Result<(), Error> {
         Device::resize_surface(self, context, surface, size)
     }
 

@@ -2,12 +2,12 @@
 
 use std::os::raw::c_int;
 
-pub(crate) const AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM:     u32 = 1;
+pub(crate) const AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM: u32 = 1;
 
-pub(crate) const AHARDWAREBUFFER_USAGE_CPU_READ_NEVER:      u64 = 0;
-pub(crate) const AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER:     u64 = 0 << 4;
-pub(crate) const AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE:   u64 = 1 << 8;
-pub(crate) const AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER:     u64 = 1 << 9;
+pub(crate) const AHARDWAREBUFFER_USAGE_CPU_READ_NEVER: u64 = 0;
+pub(crate) const AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER: u64 = 0 << 4;
+pub(crate) const AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE: u64 = 1 << 8;
+pub(crate) const AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER: u64 = 1 << 9;
 
 #[repr(C)]
 pub struct AHardwareBuffer {
@@ -32,12 +32,12 @@ pub struct ANativeWindow {
 }
 
 #[link(name = "android")]
-extern {
-    pub(crate) fn AHardwareBuffer_allocate(desc: *const AHardwareBuffer_Desc,
-                                           outBuffer: *mut *mut AHardwareBuffer)
-                                           -> c_int;
+extern "C" {
+    pub(crate) fn AHardwareBuffer_allocate(
+        desc: *const AHardwareBuffer_Desc,
+        outBuffer: *mut *mut AHardwareBuffer,
+    ) -> c_int;
     pub(crate) fn AHardwareBuffer_release(buffer: *mut AHardwareBuffer);
-    
 
     pub(crate) fn ANativeWindow_getWidth(window: *mut ANativeWindow) -> i32;
     pub(crate) fn ANativeWindow_getHeight(window: *mut ANativeWindow) -> i32;

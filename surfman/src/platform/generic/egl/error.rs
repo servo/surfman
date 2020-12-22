@@ -2,9 +2,9 @@
 
 //! Translation of errors from the EGL API to `surfman` errors.
 
-use crate::WindowingApiError;
-use crate::egl::types::{EGLenum, EGLint};
 use crate::egl;
+use crate::egl::types::{EGLenum, EGLint};
+use crate::WindowingApiError;
 
 pub(crate) trait ToWindowingApiError {
     fn to_windowing_api_error(self) -> WindowingApiError;
