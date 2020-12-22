@@ -5,10 +5,10 @@
 /// When using `surfman`, you should place this macro at the top of your crate, like so:
 ///
 /// ```ignore
-/// use surfman::macros::declare_surfman; 
-/// 
+/// use surfman::macros::declare_surfman;
+///
 /// declare_surfman!();
-/// 
+///
 /// fn main() { ... }
 /// ```
 ///
@@ -29,6 +29,5 @@ macro_rules! declare_surfman {
         #[cfg(target_os = "windows")]
         #[no_mangle]
         pub static mut AmdPowerXpressRequestHighPerformance: i32 = 1;
-    }
+    };
 }
-

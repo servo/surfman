@@ -1,14 +1,14 @@
 // surfman/surfman/src/platform/android/connection.rs
 //
 //! A no-op connection for Android.
-//! 
+//!
 //! FIXME(pcwalton): Should this instead wrap `EGLDisplay`? Is that thread-safe on Android?
 
-use crate::Error;
-use crate::GLApi;
 use super::device::{Adapter, Device, NativeDevice};
 use super::ffi::ANativeWindow;
 use super::surface::NativeWidget;
+use crate::Error;
+use crate::GLApi;
 
 use euclid::default::Size2D;
 
@@ -51,7 +51,7 @@ impl Connection {
     }
 
     /// Returns the "best" adapter on this system.
-    /// 
+    ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
@@ -77,7 +77,7 @@ impl Connection {
     }
 
     /// Opens the hardware device corresponding to the given adapter.
-    /// 
+    ///
     /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
@@ -90,9 +90,14 @@ impl Connection {
     /// Therefore, it is the caller's responsibility to keep it alive as long as this `Device`
     /// remains alive.
     #[inline]
-    pub unsafe fn create_device_from_native_device(&self, native_device: NativeDevice)
-                                                   -> Result<Device, Error> {
-        Ok(Device { egl_display: native_device.0, display_is_owned: false })
+    pub unsafe fn create_device_from_native_device(
+        &self,
+        native_device: NativeDevice,
+    ) -> Result<Device, Error> {
+        Ok(Device {
+            egl_display: native_device.0,
+            display_is_owned: false,
+        })
     }
 
     /// Opens the display connection corresponding to the given `winit` window.
@@ -103,17 +108,23 @@ impl Connection {
     }
 
     /// Creates a native widget type from the given `winit` window.
-    /// 
+    ///
     /// This type can be later used to create surfaces that render to the window.
     #[cfg(feature = "sm-winit")]
     #[inline]
-    pub fn create_native_widget_from_winit_window(&self, _: &Window)
-                                                  -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_winit_window(
+        &self,
+        _: &Window,
+    ) -> Result<NativeWidget, Error> {
         Err(Error::UnsupportedOnThisPlatform)
     }
 
     /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, _size: Size2D<i32>) -> NativeWidget {
+    pub unsafe fn create_native_widget_from_ptr(
+        &self,
+        raw: *mut c_void,
+        _size: Size2D<i32>,
+    ) -> NativeWidget {
         NativeWidget {
             native_window: raw as *mut ANativeWindow,
         }
@@ -122,8 +133,10 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(&self, raw_handle: raw_window_handle::RawWindowHandle)
-                                         -> Result<NativeWidget, Error> {
+    pub fn create_native_widget_from_rwh(
+        &self,
+        raw_handle: raw_window_handle::RawWindowHandle,
+    ) -> Result<NativeWidget, Error> {
         use raw_window_handle::RawWindowHandle::Android;
 
         match raw_handle {

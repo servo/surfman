@@ -30,7 +30,7 @@ impl ToWindowingApiError for CGLError {
             10015 => WindowingApiError::BadCodeModule,
             10016 => WindowingApiError::BadAlloc,
             10017 => WindowingApiError::BadConnection,
-            _     => WindowingApiError::Failed,
+            _ => WindowingApiError::Failed,
         }
     }
 }

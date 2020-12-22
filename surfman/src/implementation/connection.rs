@@ -3,12 +3,12 @@
 //! This is an included private module that automatically produces the implementation of the
 //! `Connection` trait for a backend.
 
-use crate::Error;
-use crate::connection::Connection as ConnectionInterface;
-use crate::info::GLApi;
 use super::super::connection::{Connection, NativeConnection};
 use super::super::device::{Adapter, Device, NativeDevice};
 use super::super::surface::NativeWidget;
+use crate::connection::Connection as ConnectionInterface;
+use crate::info::GLApi;
+use crate::Error;
 
 use euclid::default::Size2D;
 
@@ -66,8 +66,10 @@ impl ConnectionInterface for Connection {
     }
 
     #[inline]
-    unsafe fn create_device_from_native_device(&self, native_device: Self::NativeDevice)
-                                               -> Result<Device, Error> {
+    unsafe fn create_device_from_native_device(
+        &self,
+        native_device: Self::NativeDevice,
+    ) -> Result<Device, Error> {
         Connection::create_device_from_native_device(self, native_device)
     }
 
@@ -79,20 +81,28 @@ impl ConnectionInterface for Connection {
 
     #[inline]
     #[cfg(feature = "sm-winit")]
-    fn create_native_widget_from_winit_window(&self, window: &Window)
-                                              -> Result<NativeWidget, Error> {
+    fn create_native_widget_from_winit_window(
+        &self,
+        window: &Window,
+    ) -> Result<NativeWidget, Error> {
         Connection::create_native_widget_from_winit_window(self, window)
     }
 
     #[inline]
-    unsafe fn create_native_widget_from_ptr(&self, raw: *mut c_void, size: Size2D<i32>) -> NativeWidget {
+    unsafe fn create_native_widget_from_ptr(
+        &self,
+        raw: *mut c_void,
+        size: Size2D<i32>,
+    ) -> NativeWidget {
         Connection::create_native_widget_from_ptr(self, raw, size)
     }
 
     #[inline]
     #[cfg(feature = "sm-raw-window-handle")]
-    fn create_native_widget_from_rwh(&self, window: raw_window_handle::RawWindowHandle)
-                                              -> Result<NativeWidget, Error> {
+    fn create_native_widget_from_rwh(
+        &self,
+        window: raw_window_handle::RawWindowHandle,
+    ) -> Result<NativeWidget, Error> {
         Connection::create_native_widget_from_rwh(self, window)
     }
 }

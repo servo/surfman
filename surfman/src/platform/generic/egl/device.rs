@@ -8,14 +8,14 @@ use std::ffi::CString;
 use std::mem;
 use std::os::raw::{c_char, c_void};
 
+#[cfg(not(target_os = "windows"))]
+use libc::{dlopen, dlsym, RTLD_LAZY};
 #[cfg(target_os = "windows")]
 use winapi::shared::minwindef::HMODULE;
 #[cfg(target_os = "windows")]
 use winapi::shared::ntdef::LPCSTR;
 #[cfg(target_os = "windows")]
 use winapi::um::libloaderapi;
-#[cfg(not(target_os = "windows"))]
-use libc::{RTLD_LAZY, dlopen, dlsym};
 
 thread_local! {
     pub static EGL_FUNCTIONS: Egl = Egl::load_with(get_proc_address);
@@ -35,7 +35,10 @@ lazy_static! {
 lazy_static! {
     static ref EGL_LIBRARY: EGLLibraryWrapper = {
         unsafe {
-            EGLLibraryWrapper(dlopen(&b"libEGL.so\0"[0] as *const u8 as *const _, RTLD_LAZY))
+            EGLLibraryWrapper(dlopen(
+                &b"libEGL.so\0"[0] as *const u8 as *const _,
+                RTLD_LAZY,
+            ))
         }
     };
 }
@@ -67,7 +70,6 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
 }
 
 pub(crate) unsafe fn lookup_egl_extension(name: &'static [u8]) -> *mut c_void {
-    EGL_FUNCTIONS.with(|egl| {
-        mem::transmute(egl.GetProcAddress(&name[0] as *const u8 as *const c_char))
-    })
+    EGL_FUNCTIONS
+        .with(|egl| mem::transmute(egl.GetProcAddress(&name[0] as *const u8 as *const c_char)))
 }

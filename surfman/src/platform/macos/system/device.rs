@@ -2,8 +2,8 @@
 //
 //! A handle to the device. (This is a no-op, because handles are implicit in `IOSurface`.)
 
-use crate::Error;
 use super::connection::Connection;
+use crate::Error;
 
 use metal::Device as MetalDevice;
 use std::marker::PhantomData;
@@ -32,14 +32,21 @@ pub struct NativeDevice(pub MetalDevice);
 impl Device {
     #[inline]
     pub(crate) fn new(adapter: Adapter) -> Result<Device, Error> {
-        Ok(Device { adapter, phantom: PhantomData })
+        Ok(Device {
+            adapter,
+            phantom: PhantomData,
+        })
     }
 
     /// Returns the native device corresponding to this device.
     pub fn native_device(&self) -> NativeDevice {
-        NativeDevice(MetalDevice::all().into_iter().filter(|device| {
-            device.is_low_power() == self.adapter.is_low_power
-        }).next().expect("No Metal device found!"))
+        NativeDevice(
+            MetalDevice::all()
+                .into_iter()
+                .filter(|device| device.is_low_power() == self.adapter.is_low_power)
+                .next()
+                .expect("No Metal device found!"),
+        )
     }
 
     /// Returns the display server connection that this device was created with.

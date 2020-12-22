@@ -2,9 +2,9 @@
 //
 //! An implementation of the GPU device for Windows using the WGL API.
 
-use crate::{Error, GLApi};
 use super::connection::Connection;
 use super::context::WGL_EXTENSION_FUNCTIONS;
+use crate::{Error, GLApi};
 
 use std::marker::PhantomData;
 use std::mem;
@@ -17,7 +17,7 @@ use winapi::shared::minwindef::{self, FALSE, UINT};
 use winapi::shared::ntdef::{HANDLE, LPCSTR};
 use winapi::shared::windef::{HBRUSH, HDC, HWND};
 use winapi::shared::winerror::{self, S_OK};
-use winapi::um::d3d11::{D3D11CreateDevice, D3D11_SDK_VERSION, ID3D11Device, ID3D11DeviceContext};
+use winapi::um::d3d11::{D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_SDK_VERSION};
 use winapi::um::d3dcommon::D3D_DRIVER_TYPE_HARDWARE;
 use winapi::um::libloaderapi;
 use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CLOSE};
@@ -78,21 +78,27 @@ impl Adapter {
             assert!(!current_module.is_null());
             let nvidia_gpu_select_variable: *mut i32 = libloaderapi::GetProcAddress(
                 current_module,
-                NVIDIA_GPU_SELECT_SYMBOL.as_ptr() as LPCSTR) as *mut i32;
+                NVIDIA_GPU_SELECT_SYMBOL.as_ptr() as LPCSTR,
+            ) as *mut i32;
             let amd_gpu_select_variable: *mut i32 = libloaderapi::GetProcAddress(
                 current_module,
-                AMD_GPU_SELECT_SYMBOL.as_ptr() as LPCSTR) as *mut i32;
+                AMD_GPU_SELECT_SYMBOL.as_ptr() as LPCSTR,
+            ) as *mut i32;
             if nvidia_gpu_select_variable.is_null() || amd_gpu_select_variable.is_null() {
-                println!("surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
+                println!(
+                    "surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
                        Your application may end up using the wrong GPU (discrete vs. \
                        integrated). To fix this issue, ensure that you are using the MSVC \
                        version of Rust and invoke the `declare_surfman!()` macro at the root of \
-                       your crate.");
-                warn!("surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
+                       your crate."
+                );
+                warn!(
+                    "surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
                        Your application may end up using the wrong GPU (discrete vs. \
                        integrated). To fix this issue, ensure that you are using the MSVC \
                        version of Rust and invoke the `declare_surfman!()` macro at the root of \
-                       your crate.");
+                       your crate."
+                );
                 return;
             }
             let value = match *self {
@@ -107,7 +113,10 @@ impl Adapter {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        let dx_interop_functions = WGL_EXTENSION_FUNCTIONS.dx_interop_functions.as_ref().unwrap();
+        let dx_interop_functions = WGL_EXTENSION_FUNCTIONS
+            .dx_interop_functions
+            .as_ref()
+            .unwrap();
         unsafe {
             (dx_interop_functions.DXCloseDeviceNV)(self.gl_dx_interop_device);
         }
@@ -127,16 +136,18 @@ impl Device {
             let mut d3d11_device = ptr::null_mut();
             let mut d3d11_feature_level = 0;
             let mut d3d11_device_context = ptr::null_mut();
-            let result = D3D11CreateDevice(ptr::null_mut(),
-                                           D3D_DRIVER_TYPE_HARDWARE,
-                                           ptr::null_mut(),
-                                           0,
-                                           ptr::null_mut(),
-                                           0,
-                                           D3D11_SDK_VERSION,
-                                           &mut d3d11_device,
-                                           &mut d3d11_feature_level,
-                                           &mut d3d11_device_context);
+            let result = D3D11CreateDevice(
+                ptr::null_mut(),
+                D3D_DRIVER_TYPE_HARDWARE,
+                ptr::null_mut(),
+                0,
+                ptr::null_mut(),
+                0,
+                D3D11_SDK_VERSION,
+                &mut d3d11_device,
+                &mut d3d11_feature_level,
+                &mut d3d11_device_context,
+            );
             if !winerror::SUCCEEDED(result) {
                 return Err(Error::DeviceOpenFailed);
             }
@@ -202,7 +213,10 @@ impl Device {
         unsafe {
             let d3d11_device = self.d3d11_device.as_raw();
             (*d3d11_device).AddRef();
-            NativeDevice { d3d11_device, gl_dx_interop_device: self.gl_dx_interop_device }
+            NativeDevice {
+                d3d11_device,
+                gl_dx_interop_device: self.gl_dx_interop_device,
+            }
         }
     }
 
@@ -279,14 +293,15 @@ impl HiddenWindow {
         let (sender, receiver) = mpsc::channel();
         let join_handle = thread::spawn(|| HiddenWindow::thread(sender));
         let window = receiver.recv().unwrap().0;
-        HiddenWindow { window, join_handle: Some(join_handle) }
+        HiddenWindow {
+            window,
+            join_handle: Some(join_handle),
+        }
     }
 
     #[inline]
     pub(crate) fn get_dc(&self) -> DCGuard {
-        unsafe {
-            DCGuard::new(winuser::GetDC(self.window), Some(self.window))
-        }
+        unsafe { DCGuard::new(winuser::GetDC(self.window), Some(self.window)) }
     }
 
     // The thread that creates the window for off-screen contexts.
@@ -312,21 +327,23 @@ impl HiddenWindow {
                 assert_ne!(window_class_atom, 0);
             }
 
-            let window = winuser::CreateWindowExA(0,
-                                                  window_class_name,
-                                                  window_class_name,
-                                                  WS_OVERLAPPEDWINDOW,
-                                                  0,
-                                                  0,
-                                                  HIDDEN_WINDOW_SIZE,
-                                                  HIDDEN_WINDOW_SIZE,
-                                                  ptr::null_mut(),
-                                                  ptr::null_mut(),
-                                                  instance,
-                                                  ptr::null_mut());
+            let window = winuser::CreateWindowExA(
+                0,
+                window_class_name,
+                window_class_name,
+                WS_OVERLAPPEDWINDOW,
+                0,
+                0,
+                HIDDEN_WINDOW_SIZE,
+                HIDDEN_WINDOW_SIZE,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                instance,
+                ptr::null_mut(),
+            );
 
             sender.send(SendableHWND(window)).unwrap();
-            
+
             let mut msg: MSG = mem::zeroed();
             while winuser::GetMessageA(&mut msg, window, 0, 0) != FALSE {
                 winuser::TranslateMessage(&msg);
@@ -341,6 +358,10 @@ impl HiddenWindow {
 
 impl<'a> DCGuard<'a> {
     pub(crate) fn new(dc: HDC, window: Option<HWND>) -> DCGuard<'a> {
-        DCGuard { dc, window, phantom: PhantomData }
+        DCGuard {
+            dc,
+            window,
+            phantom: PhantomData,
+        }
     }
 }

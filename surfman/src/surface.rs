@@ -25,7 +25,7 @@ pub struct SurfaceInfo {
     /// The ID of the context that this surface belongs to.
     pub context_id: ContextID,
     /// The OpenGL framebuffer object that can be used to render to this surface.
-    /// 
+    ///
     /// This is only valid when the surface is actually attached to a context.
     pub framebuffer_object: GLuint,
 }
@@ -42,7 +42,7 @@ pub(crate) enum Framebuffer<S, E> {
 }
 
 /// A unique ID per allocated surface.
-/// 
+///
 /// If you destroy a surface and then create a new one, the ID may be reused.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SurfaceID(pub usize);
@@ -54,21 +54,21 @@ impl Display for SurfaceID {
 }
 
 /// Specifies how and if the CPU has direct access to the surface data.
-/// 
+///
 /// No matter what value you choose here, the CPU can always indirectly upload data to the surface
 /// by, for example, drawing a full-screen quad. This enumeration simply describes whether the CPU
 /// has *direct* memory access to the surface, via a slice of pixel data.
-/// 
+///
 /// You can achieve better performance by limiting surfaces to `GPUOnly` unless you need to access
 /// the data on the CPU. For surfaces marked as GPU-only, the GPU can use texture swizzling to
 /// improve memory locality.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum SurfaceAccess {
     /// The surface data is accessible by the GPU only.
-    /// 
+    ///
     /// The `lock_surface_data()` method will return the `SurfaceDataInaccessible` error when
     /// called on this surface.
-    /// 
+    ///
     /// This is typically the flag you will want to use.
     GPUOnly,
 
@@ -77,17 +77,17 @@ pub enum SurfaceAccess {
 
     /// The surface data is accessible by the GPU and CPU, and the CPU will send surface data over
     /// the bus to the GPU using write-combining if available.
-    /// 
+    ///
     /// Specifically, what this means is that data transfer will be optimized for the following
     /// patterns:
-    /// 
+    ///
     /// 1. Writing, not reading.
-    /// 
+    ///
     /// 2. Writing sequentially, filling every byte in a range.
-    /// 
+    ///
     /// This flag has no effect on correctness (at least on x86), but not following the rules
     /// above may result in severe performance consequences.
-    /// 
+    ///
     /// The driver is free to treat this as identical to `GPUCPU`.
     GPUCPUWriteCombined,
 }
@@ -99,9 +99,9 @@ pub enum SurfaceType<NativeWidget> {
     /// contents on screen. Only generic surfaces can be bound to textures.
     Generic {
         /// The size of the surface.
-        /// 
+        ///
         /// For HiDPI screens, this is a physical size, not a logical size.
-        size: Size2D<i32>
+        size: Size2D<i32>,
     },
     /// A surface displayed inside a native widget (window or view). The size of a widget surface
     /// is automatically determined based on the size of the widget. (For example, if the widget is
@@ -109,7 +109,7 @@ pub enum SurfaceType<NativeWidget> {
     /// cannot be bound to textures.
     Widget {
         /// A native widget type specific to the backend.
-        /// 
+        ///
         /// For example, on Windows this wraps an `HWND`.
         native_widget: NativeWidget,
     },

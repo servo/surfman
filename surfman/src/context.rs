@@ -4,17 +4,17 @@
 
 #![allow(unused_imports)]
 
-use crate::Gl;
-use crate::gl::types::GLuint;
 use crate::gl;
+use crate::gl::types::GLuint;
 use crate::info::GLVersion;
+use crate::Gl;
 
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::sync::Mutex;
 
 /// A unique ID among all currently-allocated contexts.
-/// 
+///
 /// If you destroy a context, subsequently-allocated contexts might reuse the same ID.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ContextID(pub u64);
@@ -27,7 +27,7 @@ lazy_static! {
 bitflags! {
     /// Various flags that control attributes of the context and/or surfaces created from that
     /// context.
-    /// 
+    ///
     /// These roughly correspond to:
     /// https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
     ///
@@ -54,7 +54,7 @@ bitflags! {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct ContextAttributes {
     /// The OpenGL or OpenGL ES version that this context supports.
-    /// 
+    ///
     /// Keep in mind that OpenGL and OpenGL ES have different version numbering schemes. Before
     /// filling in this field, check the result of `Device::gl_api()`.
     pub version: GLVersion,
@@ -65,7 +65,10 @@ pub struct ContextAttributes {
 impl ContextAttributes {
     #[allow(dead_code)]
     pub(crate) fn zeroed() -> ContextAttributes {
-        ContextAttributes { version: GLVersion::new(0, 0), flags: ContextAttributeFlags::empty() }
+        ContextAttributes {
+            version: GLVersion::new(0, 0),
+            flags: ContextAttributeFlags::empty(),
+        }
     }
 }
 
@@ -81,8 +84,9 @@ pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
         // First, try `GL_CONTEXT_PROFILE_MASK`.
         let mut context_profile_mask = 0;
         gl.GetIntegerv(gl::CONTEXT_PROFILE_MASK, &mut context_profile_mask);
-        if gl.GetError() == gl::NO_ERROR &&
-                (context_profile_mask & gl::CONTEXT_COMPATIBILITY_PROFILE_BIT as i32) != 0 {
+        if gl.GetError() == gl::NO_ERROR
+            && (context_profile_mask & gl::CONTEXT_COMPATIBILITY_PROFILE_BIT as i32) != 0
+        {
             return true;
         }
 
@@ -102,4 +106,3 @@ pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
         false
     }
 }
-
