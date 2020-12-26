@@ -30,13 +30,13 @@ fn main() {
     }
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let target_family = env::var("CARGO_CFG_TARGET_FAMILY").unwrap();
+    let target_family = env::var("CARGO_CFG_TARGET_FAMILY").ok();
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());
 
     // Generate EGL bindings.
     if target_os == "android"
         || (target_os == "windows" && cfg!(feature = "sm-angle"))
-        || target_family == "unix"
+        || target_family.as_ref().map_or(false, |f| f == "unix")
     {
         let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, []);
