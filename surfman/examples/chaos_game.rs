@@ -2,8 +2,8 @@
 //
 //! Demonstrates how to use `surfman` to draw to a window surface via the CPU.
 
-use euclid::default::Point2D;
 use rand::{self, Rng};
+use surfman::geom::default::Point2D;
 use surfman::{SurfaceAccess, SurfaceType};
 use winit::dpi::PhysicalSize;
 use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};

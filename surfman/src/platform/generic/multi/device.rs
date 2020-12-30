@@ -8,9 +8,9 @@ use super::surface::{NativeWidget, Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
+use crate::geom::default::Size2D;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
-use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 

@@ -7,7 +7,7 @@ use crate::gl;
 use crate::gl::types::GLuint;
 use crate::Gl;
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 
 pub(crate) enum Renderbuffers {
     IndividualDepthStencil { depth: GLuint, stencil: GLuint },

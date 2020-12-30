@@ -12,7 +12,7 @@ use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_PLATFORM_X11_KHR;
 use crate::platform::unix::generic::device::Adapter;
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 
 use std::marker::PhantomData;
 use std::os::raw::c_void;

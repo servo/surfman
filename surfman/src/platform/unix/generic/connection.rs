@@ -11,7 +11,7 @@ use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_PLATFORM_SURFACELESS_MESA;
 use crate::Error;
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 
 use std::os::raw::c_void;
 use std::sync::Arc;

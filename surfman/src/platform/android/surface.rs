@@ -25,7 +25,7 @@ use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::os::raw::c_void;

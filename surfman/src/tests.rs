@@ -17,7 +17,7 @@ use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, Gl, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
 
-use euclid::default::Size2D;
+use crate::geom::Size2D;
 use std::os::raw::c_void;
 use std::sync::mpsc;
 use std::thread;

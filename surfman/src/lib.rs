@@ -51,6 +51,9 @@ pub use crate::info::{GLApi, GLVersion};
 mod surface;
 pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
 
+pub mod geom;
+pub use crate::geom::Size2D;
+
 pub mod macros;
 
 #[cfg(not(target_os = "android"))]

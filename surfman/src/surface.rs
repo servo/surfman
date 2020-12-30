@@ -4,8 +4,8 @@
 
 use crate::context::ContextID;
 
+use crate::geom::default::Size2D;
 use crate::gl::types::GLuint;
-use euclid::default::Size2D;
 use std::fmt::{self, Display, Formatter};
 
 /// Various data about the surface.

@@ -4,10 +4,10 @@
 
 use self::common::{ck, Buffer, Program, ResourceLoader, Shader, ShaderKind};
 
-use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
+use surfman::geom::default::{Point2D, Rect, Size2D, Vector2D};
 use surfman::{declare_surfman, SurfaceAccess, SurfaceTexture, SurfaceType};
 use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, GLApi, Surface};
 

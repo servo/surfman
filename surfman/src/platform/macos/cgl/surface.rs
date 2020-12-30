@@ -11,8 +11,8 @@ use crate::platform::macos::system::surface::Surface as SystemSurface;
 use crate::renderbuffers::Renderbuffers;
 use crate::{gl, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
 
+use crate::geom::default::Size2D;
 use core_foundation::base::TCFType;
-use euclid::default::Size2D;
 use io_surface::{self, IOSurface};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;

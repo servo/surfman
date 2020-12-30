@@ -3,9 +3,9 @@
 //! The abstract interface that all devices conform to.
 
 use super::connection::Connection as ConnectionInterface;
+use crate::geom::default::Size2D;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
-use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 

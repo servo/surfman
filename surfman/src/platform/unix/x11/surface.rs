@@ -12,7 +12,7 @@ use crate::platform::generic::egl::context;
 use crate::platform::generic::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use x11::xlib::{Window, XGetGeometry};

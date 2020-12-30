@@ -20,7 +20,7 @@ use crate::renderbuffers::Renderbuffers;
 use crate::Gl;
 use crate::{ContextAttributes, ContextID, Error, SurfaceID, SurfaceInfo};
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;

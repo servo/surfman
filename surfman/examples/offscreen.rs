@@ -6,7 +6,6 @@
 use crate::common::{ck, Buffer, FilesystemResourceLoader, Program, Shader, ShaderKind};
 
 use clap::{App, Arg};
-use euclid::default::Size2D;
 use gl;
 use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
 use png::{BitDepth, ColorType, Encoder};
@@ -14,6 +13,7 @@ use std::fs::File;
 use std::mem;
 use std::path::Path;
 use std::slice;
+use surfman::geom::Size2D;
 use surfman::{Connection, ContextAttributeFlags, ContextAttributes, GLApi, GLVersion};
 use surfman::{SurfaceAccess, SurfaceType};
 

@@ -10,7 +10,7 @@ use crate::connection::Connection as ConnectionInterface;
 use crate::info::GLApi;
 use crate::Error;
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 
 use std::os::raw::c_void;
 

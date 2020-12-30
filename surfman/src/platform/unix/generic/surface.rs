@@ -9,7 +9,7 @@ use crate::gl::types::{GLenum, GLuint};
 use crate::platform::generic::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 use std::marker::PhantomData;
 
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?

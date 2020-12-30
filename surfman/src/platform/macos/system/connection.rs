@@ -17,7 +17,7 @@ use core_foundation::bundle::CFBundleGetMainBundle;
 use core_foundation::dictionary::{CFMutableDictionary, CFMutableDictionaryRef};
 use core_foundation::string::CFString;
 
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 
 use std::os::raw::c_void;
 use std::str::FromStr;

@@ -11,7 +11,7 @@ use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType
 use crate::gl;
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
-use euclid::default::Size2D;
+use crate::geom::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;

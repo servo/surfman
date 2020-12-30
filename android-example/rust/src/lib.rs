@@ -7,7 +7,7 @@ use crate::threads::common::ResourceLoader;
 use crate::threads::App;
 
 use android_logger::Config;
-use euclid::default::Size2D;
+use surfman::geom::default::Size2D;
 use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue};
 use jni::{JNIEnv, JavaVM};
 use log::Level;

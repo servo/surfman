@@ -6,9 +6,9 @@ use super::context::Context;
 use super::device::Device;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
+use crate::geom::default::Size2D;
 use crate::gl::types::{GLenum, GLuint};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
-use euclid::default::Size2D;
 
 use std::fmt::{self, Debug, Formatter};
 
