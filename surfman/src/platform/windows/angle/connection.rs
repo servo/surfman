@@ -9,7 +9,7 @@
 
 use super::device::{Adapter, Device, NativeDevice, VendorPreference};
 use super::surface::NativeWidget;
-use crate::egl::types::EGLNativeWindowType;
+use crate::egl::types::{EGLDisplay, EGLNativeWindowType};
 use crate::Error;
 use crate::GLApi;
 
@@ -110,6 +110,15 @@ impl Connection {
         Device::new(adapter)
     }
 
+    /// Wraps a `NativeDevice` in a `Device` and returns it.
+    #[inline]
+    pub unsafe fn create_device_from_native_device(
+        &self,
+        native_device: NativeDevice,
+    ) -> Result<Device, Error> {
+        Device::from_native_device(native_device)
+    }
+
     /// Wraps an ANGLE `EGLDisplay`, along with the associated Direct3D device, in a `Device` and
     /// returns it.
     ///
@@ -117,11 +126,11 @@ impl Connection {
     /// Therefore, it is the caller's responsibility to keep it alive as long as this `Device`
     /// remains alive. This function does, however, call `AddRef` on the Direct3D device.
     #[inline]
-    pub unsafe fn create_device_from_native_device(
+    pub unsafe fn create_device_from_egl_display(
         &self,
-        native_device: NativeDevice,
+        egl_display: EGLDisplay,
     ) -> Result<Device, Error> {
-        Device::from_native_device(native_device)
+        Device::from_egl_display(egl_display)
     }
 
     /// Opens the display connection corresponding to the given `winit` window.

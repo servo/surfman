@@ -4,10 +4,11 @@
 
 use super::connection::Connection;
 use crate::egl;
-use crate::egl::types::{EGLAttrib, EGLDisplay, EGLint};
+use crate::egl::types::{EGLAttrib, EGLDisplay, EGLint, EGLDeviceEXT};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::{EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic::egl::ffi::{EGL_NO_DEVICE_EXT, EGL_PLATFORM_DEVICE_EXT};
+use crate::platform::generic::egl::ffi::{EGL_DEVICE_EXT};
 use crate::{Error, GLApi};
 
 use std::cell::{RefCell, RefMut};
@@ -186,8 +187,7 @@ impl Device {
             let d3d11_device = ComPtr::from_raw(d3d11_device);
 
             let eglCreateDeviceANGLE = EGL_EXTENSION_FUNCTIONS.CreateDeviceANGLE.expect(
-                "Where's the `EGL_ANGLE_device_creation` \
-                                                extension?",
+                "Where's the `EGL_ANGLE_device_creation` extension?",
             );
             let egl_device = eglCreateDeviceANGLE(
                 EGL_D3D11_DEVICE_ANGLE as EGLint,
@@ -227,6 +227,46 @@ impl Device {
                 egl_display: native_device.egl_display,
                 d3d11_device: ComPtr::from_raw(native_device.d3d11_device),
                 d3d_driver_type: native_device.d3d_driver_type,
+                display_is_owned: false,
+            })
+        }
+    }
+
+    #[allow(non_snake_case)]
+    pub(crate) fn from_egl_display(egl_display: EGLDisplay) -> Result<Device, Error> {
+
+        let eglQueryDisplayAttribEXT = EGL_EXTENSION_FUNCTIONS.QueryDisplayAttribEXT.expect(
+            "Where's the `EGL_EXT_device_query` extension?"
+        );
+        let eglQueryDeviceAttribEXT = EGL_EXTENSION_FUNCTIONS.QueryDeviceAttribEXT.expect(
+            "Where's the `EGL_EXT_device_query` extension?"
+        );
+        let mut angle_device : EGLAttrib = 0;
+        let result = eglQueryDisplayAttribEXT(
+            egl_display,
+            EGL_DEVICE_EXT as EGLint,
+            &mut angle_device as *mut EGLAttrib
+        );
+        if result == egl::FALSE {
+            return Err(Error::DeviceOpenFailed);
+        }
+        let mut device : EGLAttrib = 0;
+        let result = eglQueryDeviceAttribEXT(
+            angle_device as EGLDeviceEXT,
+            EGL_D3D11_DEVICE_ANGLE as EGLint,
+            &mut device as *mut EGLAttrib
+        );
+        if result == egl::FALSE {
+            return Err(Error::DeviceOpenFailed);
+        }
+        let d3d11_device = device as *mut ID3D11Device;
+
+        unsafe {
+            (*d3d11_device).AddRef();
+            Ok(Device {
+                egl_display: egl_display,
+                d3d11_device: ComPtr::from_raw(d3d11_device),
+                d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
                 display_is_owned: false,
             })
         }
