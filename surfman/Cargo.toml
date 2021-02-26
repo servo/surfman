@@ -2,7 +2,7 @@
 name = "surfman"
 license = "MIT / Apache-2.0"
 edition = "2018"
-version = "0.3.1"
+version = "0.3.2"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
@@ -36,7 +36,7 @@ log = "0.4"
 parking_lot = "0.10.2"
 
 [dependencies.euclid]
-version = "0.20"
+version = ">=0.20,<=0.22"
 features = []
 
 [dependencies.osmesa-sys]
