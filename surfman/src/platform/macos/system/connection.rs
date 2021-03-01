@@ -23,7 +23,7 @@ use std::os::raw::c_void;
 use std::str::FromStr;
 
 #[cfg(feature = "sm-winit")]
-use winit::os::macos::WindowExt;
+use winit::platform::macos::WindowExtMacOS;
 #[cfg(feature = "sm-winit")]
 use winit::window::Window;
 

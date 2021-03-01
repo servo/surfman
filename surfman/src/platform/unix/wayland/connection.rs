@@ -18,7 +18,7 @@ use std::sync::Arc;
 use wayland_sys::client::{wl_display, wl_proxy, WAYLAND_CLIENT_HANDLE};
 
 #[cfg(feature = "sm-winit")]
-use winit::os::unix::WindowExt;
+use winit::platform::unix::WindowExtUnix;
 #[cfg(feature = "sm-winit")]
 use winit::window::Window;
 
