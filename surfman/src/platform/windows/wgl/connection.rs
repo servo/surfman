@@ -18,7 +18,7 @@ use winapi::shared::windef::HWND;
 #[cfg(feature = "sm-winit")]
 use winit::os::windows::WindowExt;
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 /// Represents a connection to the display server.
 ///

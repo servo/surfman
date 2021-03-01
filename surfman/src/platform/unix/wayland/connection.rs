@@ -20,7 +20,7 @@ use wayland_sys::client::{wl_display, wl_proxy, WAYLAND_CLIENT_HANDLE};
 #[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 /// A connection to the Wayland server.
 #[derive(Clone)]

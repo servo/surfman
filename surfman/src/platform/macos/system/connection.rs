@@ -25,7 +25,7 @@ use std::str::FromStr;
 #[cfg(feature = "sm-winit")]
 use winit::os::macos::WindowExt;
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 /// A no-op connection.
 ///

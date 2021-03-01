@@ -22,7 +22,7 @@ use crate::platform::macos::system::surface::NSView;
 use cocoa::base::id;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 pub use crate::platform::macos::system::connection::NativeConnection;
 

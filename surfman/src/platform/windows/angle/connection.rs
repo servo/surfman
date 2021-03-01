@@ -23,7 +23,7 @@ use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 #[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
 use winit::os::windows::WindowExt;
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 const INTEL_PCI_ID: UINT = 0x8086;
 

@@ -23,7 +23,7 @@ use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay
 #[cfg(feature = "sm-winit")]
 use winit::os::unix::WindowExt;
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 lazy_static! {
     static ref X_THREADS_INIT: () = {

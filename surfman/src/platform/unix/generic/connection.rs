@@ -17,7 +17,7 @@ use std::os::raw::c_void;
 use std::sync::Arc;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 /// A no-op connection.
 #[derive(Clone)]

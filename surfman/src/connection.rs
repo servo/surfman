@@ -10,7 +10,7 @@ use euclid::default::Size2D;
 use std::os::raw::c_void;
 
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 /// Methods relating to display server connections.
 pub trait Connection: Sized {
