@@ -39,7 +39,7 @@ fn main() {
     let mut device = connection.create_device(&adapter).unwrap();
 
     let mut event_loop = EventsLoop::new();
-    let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
+    let dpi = event_loop.get_primary_monitor().get_scale_factor();
     let logical_size = PhysicalSize::new(WINDOW_WIDTH as f64, WINDOW_HEIGHT as f64).to_logical(dpi);
     let window = WindowBuilder::new()
         .with_title("Chaos game example")

@@ -87,7 +87,7 @@ static BACKGROUND_COLOR: [f32; 4] = [
 #[cfg(not(target_os = "android"))]
 fn main() {
     let mut event_loop = EventsLoop::new();
-    let dpi = event_loop.get_primary_monitor().get_hidpi_factor();
+    let dpi = event_loop.get_primary_monitor().get_scale_factor();
     let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let logical_size =
         PhysicalSize::new(window_size.width as f64, window_size.height as f64).to_logical(dpi);
