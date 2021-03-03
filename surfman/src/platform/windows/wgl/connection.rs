@@ -119,7 +119,7 @@ impl Connection {
         &self,
         window: &Window,
     ) -> Result<NativeWidget, Error> {
-        let hwnd = window.get_hwnd() as HWND;
+        let hwnd = window.hwnd() as HWND;
         if hwnd.is_null() {
             Err(Error::IncompatibleNativeWidget)
         } else {
