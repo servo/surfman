@@ -137,7 +137,7 @@ impl Connection {
         &self,
         window: &Window,
     ) -> Result<NativeWidget, Error> {
-        let ns_view = window.get_nsview() as id;
+        let ns_view = window.ns_view() as id;
         if ns_view.is_null() {
             return Err(Error::IncompatibleNativeWidget);
         }
