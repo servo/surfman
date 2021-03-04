@@ -23,9 +23,9 @@ use std::os::raw::c_void;
 use std::str::FromStr;
 
 #[cfg(feature = "sm-winit")]
-use winit::os::macos::WindowExt;
+use winit::platform::macos::WindowExtMacOS;
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 /// A no-op connection.
 ///
@@ -137,7 +137,7 @@ impl Connection {
         &self,
         window: &Window,
     ) -> Result<NativeWidget, Error> {
-        let ns_view = window.get_nsview() as id;
+        let ns_view = window.ns_view() as id;
         if ns_view.is_null() {
             return Err(Error::IncompatibleNativeWidget);
         }

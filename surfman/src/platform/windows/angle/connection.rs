@@ -21,9 +21,9 @@ use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
 #[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
-use winit::os::windows::WindowExt;
+use winit::platform::windows::WindowExtWindows;
 #[cfg(feature = "sm-winit")]
-use winit::Window;
+use winit::window::Window;
 
 const INTEL_PCI_ID: UINT = 0x8086;
 
@@ -148,7 +148,7 @@ impl Connection {
         &self,
         window: &Window,
     ) -> Result<NativeWidget, Error> {
-        let hwnd = window.get_hwnd() as EGLNativeWindowType;
+        let hwnd = window.hwnd() as EGLNativeWindowType;
         if hwnd.is_null() {
             Err(Error::IncompatibleNativeWidget)
         } else {

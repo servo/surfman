@@ -155,7 +155,7 @@ thread_local! {
 
 lazy_static! {
     pub(crate) static ref WGL_EXTENSION_FUNCTIONS: WGLExtensionFunctions =
-        { thread::spawn(extension_loader_thread).join().unwrap() };
+        thread::spawn(extension_loader_thread).join().unwrap();
 }
 
 impl Device {
