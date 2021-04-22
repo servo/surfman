@@ -104,7 +104,7 @@ impl Connection {
     #[cfg(feature = "sm-winit")]
     #[inline]
     pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
-        Err(Error::UnsupportedOnThisPlatform)
+        Ok(Connection)
     }
 
     /// Creates a native widget type from the given `winit` window.
@@ -114,9 +114,16 @@ impl Connection {
     #[inline]
     pub fn create_native_widget_from_winit_window(
         &self,
-        _: &Window,
+        window: &Window,
     ) -> Result<NativeWidget, Error> {
-        Err(Error::UnsupportedOnThisPlatform)
+        use raw_window_handle::HasRawWindowHandle;
+        use raw_window_handle::RawWindowHandle::Android;
+        match window.raw_window_handle() {
+            Android(handle) => Ok(NativeWidget {
+                native_window: handle.a_native_window as *mut _,
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
     }
 
     /// Create a native widget from a raw pointer
