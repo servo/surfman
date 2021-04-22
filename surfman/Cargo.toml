@@ -2,7 +2,7 @@
 name = "surfman"
 license = "MIT / Apache-2.0"
 edition = "2018"
-version = "0.4.0"
+version = "0.4.1"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
@@ -57,7 +57,7 @@ gl = "0.14"
 png = "0.15"
 rand = "0.7"
 
-[target.x86_64-apple-darwin.dependencies]
+[target.'cfg(target_os = "macos")'.dependencies]
 cgl = "0.3.2"
 cocoa = "0.19"
 core-foundation = "0.6"
