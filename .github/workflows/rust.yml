@@ -1,0 +1,105 @@
+name: Rust
+
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  Build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-16.04, windows-latest]
+        rust: [nightly-2020-09-30, stable]
+        features: ["", "--features sm-winit"]
+        target: ["default"]
+        include:
+          # rust nightly
+          - os: ubuntu-16.04
+            features: "--features sm-wayland-default"
+            rust: nightly-2020-09-30
+            target: "default"
+          - os: ubuntu-16.04
+            target: "arm-linux-androideabi"
+            rust: nightly-2020-09-30
+          - os: windows-latest
+            features: "--features sm-angle-builtin"
+            rust: nightly-2020-09-30
+            target: "default"
+          - os: windows-latest
+            features: "--features 'sm-no-wgl sm-angle-builtin'"
+            rust: nightly-2020-09-30
+            target: "default"
+          - os: windows-latest
+            target: "aarch64-pc-windows-msvc"
+            rust: nightly-2020-09-30
+          # rust stable
+          - os: ubuntu-16.04
+            features: "--features sm-wayland-default"
+            rust: stable
+            target: "default"
+          - os: ubuntu-16.04
+            target: "arm-linux-androideabi"
+            rust: stable
+          - os: windows-latest
+            features: "--features sm-angle-builtin"
+            rust: stable
+            target: "default"
+          - os: windows-latest
+            features: "--features 'sm-no-wgl sm-angle-builtin'"
+            rust: stable
+            target: "default"
+          - os: windows-latest
+            target: "aarch64-pc-windows-msvc"
+            rust: stable
+          # nightly only
+          - os: windows-latest
+            target: "aarch64-uwp-windows-msvc"
+            rust: nightly-2020-09-30
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install deps on linux
+      if: startsWith(matrix.os, 'ubuntu')
+      run: |
+        sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+        sudo apt update
+        sudo apt install gcc-4.8 g++-4.8 libxxf86vm-dev libosmesa6-dev gcc-arm-linux-androideabi libgles2-mesa-dev -y
+        export CXX=g++-4.8
+    - name: Install rust
+      uses: actions-rs/toolchain@v1
+      with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          default: true
+    - name: Build target
+      if: matrix.target != 'default' && startsWith(matrix.target, 'aarch64-uwp-windows-msvc') != true
+      run: |
+        cd surfman
+        rustup target add ${{ matrix.target }}
+        cargo build --verbose ${{ matrix.features }} --target=${{ matrix.target }}
+    - name: Build
+      if: matrix.target == 'default'
+      run: |
+        cd surfman
+        cargo build --verbose ${{ matrix.features }}
+    - name: Build Windows
+      if: startsWith(matrix.target, 'aarch64-uwp-windows-msvc')
+      shell: cmd
+      run: |
+        cd surfman
+        rustup component add rust-src --target=aarch64-uwp-windows-msvc
+        cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
+  build_result:
+    name: homu build finished
+    runs-on: ubuntu-latest
+    needs: ["Build"]
+    steps:
+      - name: Mark the job as successful
+        run: exit 0
+        if: success()
+      - name: Mark the job as unsuccessful
+        run: exit 1
+        if: "!success()"
