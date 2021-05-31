@@ -79,8 +79,8 @@ optional = true
 
 # Ensure that we have a static libEGL.lib present for linking with EGL bindings.
 [target.'cfg(target_os = "windows")'.dependencies.mozangle]
-version = "0.2"
-features = ["egl"]
+version = "0.3"
+features = ["egl", "build_dlls"]
 optional = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
