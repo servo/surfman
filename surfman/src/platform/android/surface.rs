@@ -212,13 +212,10 @@ impl Device {
         let width = ANativeWindow_getWidth(native_window);
         let height = ANativeWindow_getHeight(native_window);
 
-        let context_descriptor = self.context_descriptor(context);
-        let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
-
         EGL_FUNCTIONS.with(|egl| {
             let egl_surface = egl.CreateWindowSurface(
                 self.egl_display,
-                egl_config,
+                self.context_to_egl_config(context),
                 native_window as *const c_void,
                 ptr::null(),
             );

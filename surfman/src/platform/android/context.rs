@@ -316,11 +316,11 @@ impl Device {
         context::get_proc_address(symbol_name)
     }
 
-    pub(crate) fn context_descriptor_to_egl_config(
+    pub(crate) fn context_to_egl_config(
         &self,
-        context_descriptor: &ContextDescriptor,
+        context: &Context,
     ) -> EGLConfig {
-        unsafe { context::egl_config_from_id(self.egl_display, context_descriptor.egl_config_id) }
+        unsafe { context::egl_config_from_id(self.egl_display, context::get_context_attr(self.egl_display, context.egl_context, egl::CONFIG_ID as EGLint)) }
     }
 
     pub(crate) fn temporarily_make_context_current(
