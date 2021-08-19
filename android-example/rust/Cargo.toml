@@ -20,7 +20,7 @@ jni = "0.13"
 log = "0.4"
 
 [dependencies.euclid]
-version = "0.20"
+version = "0.22"
 features = []
 
 [dependencies.surfman]
