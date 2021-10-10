@@ -63,10 +63,8 @@ jobs:
     - name: Install deps on linux
       if: startsWith(matrix.os, 'ubuntu')
       run: |
-        sudo add-apt-repository ppa:ubuntu-toolchain-r/test
         sudo apt update
-        sudo apt install gcc-4.8 g++-4.8 libxxf86vm-dev libosmesa6-dev gcc-arm-linux-androideabi libgles2-mesa-dev -y
-        export CXX=g++-4.8
+        sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev -y
     - name: Install rust
       uses: actions-rs/toolchain@v1
       with:
