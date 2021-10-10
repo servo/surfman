@@ -11,17 +11,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-16.04, windows-latest]
+        os: [macos-latest, ubuntu-20.04, windows-latest]
         rust: [nightly-2020-09-30, stable]
         features: ["", "--features sm-winit"]
         target: ["default"]
         include:
           # rust nightly
-          - os: ubuntu-16.04
+          - os: ubuntu-20.04
             features: "--features sm-wayland-default"
             rust: nightly-2020-09-30
             target: "default"
-          - os: ubuntu-16.04
+          - os: ubuntu-20.04
             target: "arm-linux-androideabi"
             rust: nightly-2020-09-30
           - os: windows-latest
@@ -36,11 +36,11 @@ jobs:
             target: "aarch64-pc-windows-msvc"
             rust: nightly-2020-09-30
           # rust stable
-          - os: ubuntu-16.04
+          - os: ubuntu-20.04
             features: "--features sm-wayland-default"
             rust: stable
             target: "default"
-          - os: ubuntu-16.04
+          - os: ubuntu-20.04
             target: "arm-linux-androideabi"
             rust: stable
           - os: windows-latest
