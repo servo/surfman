@@ -55,7 +55,7 @@ optional = true
 clap = "2"
 gl = "0.14"
 png = "0.15"
-rand = "0.7"
+rand = "0.8.5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cgl = "0.3.2"
