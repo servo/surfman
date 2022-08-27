@@ -12,29 +12,29 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-20.04, windows-latest]
-        rust: [nightly-2020-09-30, stable]
+        rust: [nightly-2022-08-27, stable]
         features: ["", "--features sm-winit"]
         target: ["default"]
         include:
           # rust nightly
           - os: ubuntu-20.04
             features: "--features sm-wayland-default"
-            rust: nightly-2020-09-30
+            rust: nightly-2022-08-27
             target: "default"
           - os: ubuntu-20.04
             target: "arm-linux-androideabi"
-            rust: nightly-2020-09-30
+            rust: nightly-2022-08-27
           - os: windows-latest
             features: "--features sm-angle-builtin"
-            rust: nightly-2020-09-30
+            rust: nightly-2022-08-27
             target: "default"
           - os: windows-latest
             features: "--features 'sm-no-wgl sm-angle-builtin'"
-            rust: nightly-2020-09-30
+            rust: nightly-2022-08-27
             target: "default"
           - os: windows-latest
             target: "aarch64-pc-windows-msvc"
-            rust: nightly-2020-09-30
+            rust: nightly-2022-08-27
           # rust stable
           - os: ubuntu-20.04
             features: "--features sm-wayland-default"
@@ -57,7 +57,7 @@ jobs:
           # nightly only
           - os: windows-latest
             target: "aarch64-uwp-windows-msvc"
-            rust: nightly-2020-09-30
+            rust: nightly-2022-08-27
     steps:
     - uses: actions/checkout@v2
     - name: Install deps on linux
