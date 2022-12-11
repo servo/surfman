@@ -17,7 +17,7 @@ use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use core_graphics::geometry::{CGRect, CGSize, CG_ZERO_POINT};
-use display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
+use servo_display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use euclid::default::Size2D;
 use io_surface::{self, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow, IOSurface, IOSurfaceRef};
 use io_surface::{kIOSurfaceCacheMode, kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
