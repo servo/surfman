@@ -62,7 +62,7 @@ cgl = "0.3.2"
 cocoa = "0.19"
 core-foundation = "0.6"
 core-graphics = "0.17"
-display-link = { git = "https://github.com/servo/display-link", branch = "no-transmute" }
+servo-display-link = "0.2"
 io-surface = "0.12"
 mach = "0.3"
 metal = "0.18"
