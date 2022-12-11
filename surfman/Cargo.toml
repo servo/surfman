@@ -2,7 +2,7 @@
 name = "surfman"
 license = "MIT / Apache-2.0"
 edition = "2018"
-version = "0.4.3"
+version = "0.4.4"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
@@ -62,7 +62,7 @@ cgl = "0.3.2"
 cocoa = "0.19"
 core-foundation = "0.6"
 core-graphics = "0.17"
-display-link = "0.2"
+display-link = { git = "https://github.com/servo/display-link", branch = "no-transmute" }
 io-surface = "0.12"
 mach = "0.3"
 metal = "0.18"
