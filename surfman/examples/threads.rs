@@ -17,11 +17,11 @@ use self::common::FilesystemResourceLoader;
 #[cfg(not(target_os = "android"))]
 use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
 #[cfg(not(target_os = "android"))]
-use winit::dpi::PhysicalSize;
-#[cfg(not(target_os = "android"))]
-use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
-#[cfg(not(target_os = "android"))]
-use winit::{WindowBuilder, WindowEvent};
+use winit::{
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder,
+};
 
 pub mod common;
 
@@ -86,17 +86,16 @@ static BACKGROUND_COLOR: [f32; 4] = [
 
 #[cfg(not(target_os = "android"))]
 fn main() {
-    let mut event_loop = EventsLoop::new();
-    let dpi = event_loop.get_primary_monitor().get_scale_factor();
+    let event_loop = EventLoop::new();
     let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
-    let logical_size =
-        PhysicalSize::new(window_size.width as f64, window_size.height as f64).to_logical(dpi);
     let window = WindowBuilder::new()
         .with_title("Multithreaded example")
-        .with_dimensions(logical_size)
+        .with_inner_size(winit::dpi::LogicalSize::new(
+            window_size.width,
+            window_size.height,
+        ))
         .build(&event_loop)
         .unwrap();
-    window.show();
 
     let connection = Connection::from_winit_window(&window).unwrap();
     let native_widget = connection
@@ -106,7 +105,7 @@ fn main() {
     let mut device = connection.create_device(&adapter).unwrap();
 
     let context_attributes = ContextAttributes {
-        version: GLVersion::new(3, 0),
+        version: GLVersion::new(3, 3),
         flags: ContextAttributeFlags::ALPHA,
     };
     let context_descriptor = device
@@ -131,27 +130,21 @@ fn main() {
         Box::new(FilesystemResourceLoader),
         window_size,
     );
-    let mut exit = false;
 
-    while !exit {
-        app.tick(true);
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
 
-        event_loop.poll_events(|event| match event {
+        match event {
             Event::WindowEvent {
-                event: WindowEvent::Destroyed,
-                ..
+                event: WindowEvent::CloseRequested,
+                window_id,
+            } if window_id == window.id() => *control_flow = ControlFlow::Exit,
+            Event::RedrawRequested(_) => {
+                app.tick(true);
             }
-            | Event::DeviceEvent {
-                event:
-                    DeviceEvent::Key(KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                        ..
-                    }),
-                ..
-            } => exit = true,
-            _ => {}
-        });
-    }
+            _ => (),
+        }
+    });
 }
 
 pub struct App {

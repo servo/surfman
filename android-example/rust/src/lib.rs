@@ -12,8 +12,8 @@ use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue};
 use jni::{JNIEnv, JavaVM};
 use log::Level;
 use std::cell::{Cell, RefCell};
-use std::mem;
 use std::thread::{self, JoinHandle};
+use std::{mem, slice};
 use surfman::platform::android::tests;
 use surfman::{Connection, NativeContext, NativeDevice};
 
@@ -25,7 +25,8 @@ thread_local! {
     static ATTACHED_TO_JNI: Cell<bool> = Cell::new(false);
 }
 
-#[no_mangle]
+// Im confused NativeDevice::current() does not exist
+/** #[no_mangle]
 pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_init(
     env: JNIEnv,
     _class: JClass,
@@ -59,8 +60,7 @@ pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThre
             window_size,
         ))
     });
-}
-
+} **/
 #[no_mangle]
 pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThreadsExampleRenderer_tick(
     _env: JNIEnv,
@@ -178,7 +178,10 @@ impl ResourceLoader for JavaResourceLoader {
         {
             JValue::Object(object) => {
                 let byte_buffer = JByteBuffer::from(object);
-                dest.extend_from_slice(env.get_direct_buffer_address(byte_buffer).unwrap());
+                let slice = unsafe {
+                    slice::from_raw_parts(env.get_direct_buffer_address(byte_buffer).unwrap(), 1)
+                };
+                dest.extend_from_slice(slice);
             }
             _ => panic!("Unexpected return value!"),
         }

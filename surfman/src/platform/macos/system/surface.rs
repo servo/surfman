@@ -17,11 +17,11 @@ use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use core_graphics::geometry::{CGRect, CGSize, CG_ZERO_POINT};
-use servo_display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use euclid::default::Size2D;
 use io_surface::{self, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow, IOSurface, IOSurfaceRef};
 use io_surface::{kIOSurfaceCacheMode, kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
 use mach::kern_return::KERN_SUCCESS;
+use servo_display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use std::fmt::{self, Debug, Formatter};
 use std::mem;
 use std::os::raw::c_void;
@@ -244,7 +244,11 @@ impl Device {
     }
 
     /// Resizes a widget surface
-    pub fn resize_surface(&self, surface: &mut Surface, mut size: Size2D<i32>) -> Result<(), Error> {
+    pub fn resize_surface(
+        &self,
+        surface: &mut Surface,
+        mut size: Size2D<i32>,
+    ) -> Result<(), Error> {
         // The surface will not appear if its width is not a multiple of 4 (i.e. stride is a
         // multiple of 16 bytes). Enforce this.
         let width = size.width as i32;
