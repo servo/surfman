@@ -1,6 +1,6 @@
 name: Rust
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 env:
   CARGO_TERM_COLOR: always
@@ -77,19 +77,19 @@ jobs:
       run: |
         cd surfman
         rustup target add ${{ matrix.target }}
-        cargo build --verbose ${{ matrix.features }} --target=${{ matrix.target }}
+        cargo test --verbose ${{ matrix.features }} --target=${{ matrix.target }}
     - name: Build
       if: matrix.target == 'default'
       run: |
         cd surfman
-        cargo build --verbose ${{ matrix.features }}
+        cargo test --verbose ${{ matrix.features }}
     - name: Build Windows
       if: startsWith(matrix.target, 'aarch64-uwp-windows-msvc')
       shell: cmd
       run: |
         cd surfman
         rustup component add rust-src --target=aarch64-uwp-windows-msvc
-        cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
+        cargo test -Z build-std --verbose --target=aarch64-uwp-windows-msvc
   build_result:
     name: homu build finished
     runs-on: ubuntu-latest
