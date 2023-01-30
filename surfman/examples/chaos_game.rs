@@ -6,8 +6,8 @@ use euclid::default::Point2D;
 use rand::{self, Rng};
 use surfman::{SurfaceAccess, SurfaceType};
 use winit::dpi::PhysicalSize;
-use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
-use winit::{WindowBuilder, WindowEvent};
+use winit::event::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
+use winit::window::{WindowBuilder, WindowEvent};
 
 #[cfg(target_os = "macos")]
 use surfman::SystemConnection;

@@ -17,12 +17,6 @@ use self::common::FilesystemResourceLoader;
 #[cfg(not(target_os = "android"))]
 use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
 #[cfg(not(target_os = "android"))]
-use winit::dpi::PhysicalSize;
-#[cfg(not(target_os = "android"))]
-use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
-#[cfg(not(target_os = "android"))]
-use winit::{WindowBuilder, WindowEvent};
-
 pub mod common;
 
 declare_surfman!();
@@ -86,7 +80,14 @@ static BACKGROUND_COLOR: [f32; 4] = [
 
 #[cfg(not(target_os = "android"))]
 fn main() {
-    let mut event_loop = EventsLoop::new();
+    use winit::{
+        dpi::PhysicalSize,
+        event::{DeviceEvent, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+        window::WindowBuilder,
+        event_loop::EventLoop
+    };
+
+    let mut event_loop = EventLoop::new();
     let dpi = event_loop.get_primary_monitor().get_scale_factor();
     let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let logical_size =
