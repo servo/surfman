@@ -44,7 +44,7 @@ version = "0.1"
 optional = true
 
 [dependencies.winit]
-version = "0.27.2"
+version = "0.27"
 optional = true
 
 [dependencies.raw-window-handle]
@@ -55,7 +55,7 @@ optional = true
 clap = "2"
 gl = "0.14"
 png = "0.15"
-rand = "0.8.5"
+rand = "0.8"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cgl = "0.3.2"
