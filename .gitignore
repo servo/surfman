@@ -13,3 +13,4 @@ gc.properties
 /android-example/**/.settings
 SDL2
 *.code-workspace
+.idea/
