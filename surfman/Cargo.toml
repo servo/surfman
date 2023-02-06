@@ -44,12 +44,12 @@ version = "0.1"
 optional = true
 
 [dependencies.winit]
-version = "0.26.1"
+version = "0.28.1"
 optional = true
 
-# winit v0.26.1 -> raw-window-handle v0.4.2
+# winit v0.28.1 -> raw-window-handle v0.5.0
 [dependencies.raw-window-handle]
-version = "0.4.2"
+version = "0.5.0"
 optional = true
 
 [dev-dependencies]
@@ -89,4 +89,4 @@ wio = "0.2"
 winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "libloaderapi"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-"raw-window-handle" = "0.4.2"
+"raw-window-handle" = "0.5.0"
