@@ -2,7 +2,7 @@
 name = "surfman_android_threads"
 version = "0.1.0"
 authors = ["Patrick Walton <pcwalton@mimiga.net>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 crate_type = ["cdylib"]
@@ -14,9 +14,9 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
-android_logger = "0.8"
+android_logger = "0.11.2"
 gl = "0.14"
-jni = "0.13"
+jni = "0.20.0"
 log = "0.4"
 
 [dependencies.euclid]
