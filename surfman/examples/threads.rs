@@ -17,11 +17,12 @@ use self::common::FilesystemResourceLoader;
 #[cfg(not(target_os = "android"))]
 use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
 #[cfg(not(target_os = "android"))]
-use winit::dpi::PhysicalSize;
-#[cfg(not(target_os = "android"))]
-use winit::{DeviceEvent, Event, EventsLoop, KeyboardInput, VirtualKeyCode};
-#[cfg(not(target_os = "android"))]
-use winit::{WindowBuilder, WindowEvent};
+use winit::{
+    dpi::{LogicalSize, PhysicalSize},
+    event::{DeviceEvent, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::WindowBuilder
+};
 
 pub mod common;
 
@@ -86,17 +87,20 @@ static BACKGROUND_COLOR: [f32; 4] = [
 
 #[cfg(not(target_os = "android"))]
 fn main() {
-    let mut event_loop = EventsLoop::new();
-    let dpi = event_loop.get_primary_monitor().get_scale_factor();
+    let event_loop = EventLoop::new();
+    let dpi = event_loop.primary_monitor().unwrap().scale_factor();
     let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let logical_size =
-        PhysicalSize::new(window_size.width as f64, window_size.height as f64).to_logical(dpi);
+        PhysicalSize::new(window_size.width, window_size.height)
+        .to_logical::<f64>(dpi);
+
     let window = WindowBuilder::new()
         .with_title("Multithreaded example")
-        .with_dimensions(logical_size)
+        .with_inner_size(logical_size)
         .build(&event_loop)
         .unwrap();
-    window.show();
+
+    window.set_visible(true);
 
     let connection = Connection::from_winit_window(&window).unwrap();
     let native_widget = connection
@@ -131,29 +135,24 @@ fn main() {
         Box::new(FilesystemResourceLoader),
         window_size,
     );
-    let mut exit = false;
 
-    while !exit {
-        app.tick(true);
+    event_loop.run(move |event, _, control_flow| match event {
+        Event::WindowEvent {
+            event: WindowEvent::CloseRequested,
+            ..
+        }
+        | Event::DeviceEvent {
+            event:
+                DeviceEvent::Key(KeyboardInput {
+                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                    ..
+                }),
+            ..
+        } => *control_flow = ControlFlow::Exit,
+        _ => { app.tick(true); *control_flow = ControlFlow::Poll; }
+    });
 
-        event_loop.poll_events(|event| match event {
-            Event::WindowEvent {
-                event: WindowEvent::Destroyed,
-                ..
-            }
-            | Event::DeviceEvent {
-                event:
-                    DeviceEvent::Key(KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                        ..
-                    }),
-                ..
-            } => exit = true,
-            _ => {}
-        });
-    }
 }
-
 pub struct App {
     main_from_worker_receiver: Receiver<Frame>,
     main_to_worker_sender: Sender<Surface>,
@@ -166,7 +165,14 @@ pub struct App {
     window_size: Size2D<i32>,
 }
 
+impl Drop for App {
+    fn drop(&mut self) {
+        self.device.destroy_context(&mut self.context).unwrap();
+    }
+}
+
 impl App {
+
     pub fn new(
         connection: Connection,
         adapter: Adapter,
@@ -533,7 +539,11 @@ fn worker_thread(
         }
 
         let old_surface = device.unbind_surface_from_context(&mut context).unwrap();
-        let new_surface = worker_from_main_receiver.recv().unwrap();
+        let new_surface = match worker_from_main_receiver.recv() {
+            Ok(surface) => surface,
+            Err(_) => break,
+        };
+
         device
             .bind_surface_to_context(&mut context, new_surface)
             .unwrap();
@@ -568,6 +578,8 @@ fn worker_thread(
         theta_y += ROTATION_SPEED_Y;
         theta_z += ROTATION_SPEED_Z;
     }
+
+    device.destroy_context(&mut context).unwrap();
 }
 
 struct Frame {
