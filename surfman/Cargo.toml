@@ -44,11 +44,11 @@ version = "0.1"
 optional = true
 
 [dependencies.winit]
-version = "0.24.0"
+version = "0.28.1"
 optional = true
 
 [dependencies.raw-window-handle]
-version = "0.3.3"
+version = "0.5"
 optional = true
 
 [dev-dependencies]
@@ -88,4 +88,5 @@ wio = "0.2"
 winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "libloaderapi"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
-"raw-window-handle" = "0.3.3"
+raw-window-handle = "0.5"
+winit = { version = "0.28.1", features = [ "android-native-activity" ] }

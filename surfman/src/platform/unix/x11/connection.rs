@@ -21,7 +21,7 @@ use std::sync::Arc;
 use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
 
 #[cfg(feature = "sm-winit")]
-use winit::platform::unix::WindowExtUnix;
+use winit::platform::x11::WindowExtX11;
 #[cfg(feature = "sm-winit")]
 use winit::window::Window;
 
