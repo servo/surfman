@@ -18,7 +18,7 @@ use self::common::FilesystemResourceLoader;
 use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
 #[cfg(not(target_os = "android"))]
 use winit::{
-    dpi::{LogicalSize, PhysicalSize},
+    dpi::PhysicalSize,
     event::{DeviceEvent, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder
@@ -88,15 +88,12 @@ static BACKGROUND_COLOR: [f32; 4] = [
 #[cfg(not(target_os = "android"))]
 fn main() {
     let event_loop = EventLoop::new();
-    let dpi = event_loop.primary_monitor().unwrap().scale_factor();
     let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
-    let logical_size =
-        PhysicalSize::new(window_size.width, window_size.height)
-        .to_logical::<f64>(dpi);
+    let physical_size = PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     let window = WindowBuilder::new()
         .with_title("Multithreaded example")
-        .with_inner_size(logical_size)
+        .with_inner_size(physical_size)
         .build(&event_loop)
         .unwrap();
 
