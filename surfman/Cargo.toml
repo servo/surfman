@@ -33,7 +33,6 @@ bitflags = "1.1"
 lazy_static = "1"
 libc = "0.2"
 log = "0.4"
-parking_lot = "0.10.2"
 
 [dependencies.euclid]
 version = "0.22"
@@ -54,8 +53,8 @@ optional = true
 [dev-dependencies]
 clap = "2"
 gl = "0.14"
-png = "0.15"
-rand = "0.7"
+png = "0.17"
+rand = "0.8"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cgl = "0.3.2"
@@ -69,7 +68,7 @@ metal = "0.18"
 objc = "0.2"
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.wayland-sys]
-version = "0.24"
+version = "0.30"
 features = ["client", "dlopen", "egl"]
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
@@ -85,7 +84,7 @@ optional = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 wio = "0.2"
-winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "libloaderapi"] }
+winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "winerror", "libloaderapi"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 raw-window-handle = "0.5"

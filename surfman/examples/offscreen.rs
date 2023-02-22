@@ -164,7 +164,7 @@ fn main() {
         FRAMEBUFFER_WIDTH as u32,
         FRAMEBUFFER_HEIGHT as u32,
     );
-    encoder.set_color(ColorType::RGBA);
+    encoder.set_color(ColorType::Rgba);
     encoder.set_depth(BitDepth::Eight);
     let mut image_writer = encoder.write_header().unwrap();
     image_writer.write_image_data(&pixels).unwrap();

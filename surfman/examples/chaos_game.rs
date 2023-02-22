@@ -78,7 +78,7 @@ fn main() {
             } => *control_flow = ControlFlow::Exit,
             _ => {
                 for _ in 0..ITERATIONS_PER_FRAME {
-                    let (dest_x, dest_y) = TRIANGLE_POINTS[rng.gen_range(0, 3)];
+                    let (dest_x, dest_y) = TRIANGLE_POINTS[rng.gen_range(0..3)];
                     point = point.lerp(Point2D::new(dest_x, dest_y), 0.5);
                     put_pixel(&mut data, &point, FOREGROUND_COLOR);
                 }
