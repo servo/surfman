@@ -2,7 +2,7 @@
 name = "surfman"
 license = "MIT OR Apache-2.0"
 edition = "2018"
-version = "0.5.0"
+version = "0.6.0"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
@@ -33,7 +33,6 @@ bitflags = "1.1"
 lazy_static = "1"
 libc = "0.2"
 log = "0.4"
-parking_lot = "0.10.2"
 
 [dependencies.euclid]
 version = "0.22"
@@ -54,22 +53,22 @@ optional = true
 [dev-dependencies]
 clap = "2"
 gl = "0.14"
-png = "0.15"
-rand = "0.7"
+png = "0.17"
+rand = "0.8"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cgl = "0.3.2"
-cocoa = "0.19"
-core-foundation = "0.6"
-core-graphics = "0.17"
+cocoa = "0.24"
+core-foundation = "0.9"
+core-graphics = "0.22"
 servo-display-link = "0.2"
-io-surface = "0.12"
+io-surface = "0.15"
 mach = "0.3"
-metal = "0.18"
+metal = "0.24"
 objc = "0.2"
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.wayland-sys]
-version = "0.24"
+version = "0.30"
 features = ["client", "dlopen", "egl"]
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
@@ -85,7 +84,7 @@ optional = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 wio = "0.2"
-winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "libloaderapi"] }
+winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "winerror", "libloaderapi"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 raw-window-handle = "0.5"

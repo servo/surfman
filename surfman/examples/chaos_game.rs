@@ -5,7 +5,7 @@
 use euclid::default::Point2D;
 use rand::{self, Rng};
 use surfman::{SurfaceAccess, SurfaceType};
-use winit::dpi::{LogicalSize, PhysicalSize};
+use winit::dpi::PhysicalSize;
 use winit::event::{DeviceEvent, Event, WindowEvent, KeyboardInput, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
@@ -40,13 +40,10 @@ fn main() {
     let mut device = connection.create_device(&adapter).unwrap();
 
     let event_loop = EventLoop::new();
-    let dpi = event_loop.primary_monitor().unwrap().scale_factor();
-    let logical_size =
-        PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT)
-        .to_logical::<f64>(dpi);
+    let physical_size = PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let window = WindowBuilder::new()
         .with_title("Chaos game example")
-        .with_inner_size(logical_size)
+        .with_inner_size(physical_size)
         .build(&event_loop)
         .unwrap();
 
@@ -81,7 +78,7 @@ fn main() {
             } => *control_flow = ControlFlow::Exit,
             _ => {
                 for _ in 0..ITERATIONS_PER_FRAME {
-                    let (dest_x, dest_y) = TRIANGLE_POINTS[rng.gen_range(0, 3)];
+                    let (dest_x, dest_y) = TRIANGLE_POINTS[rng.gen_range(0..3)];
                     point = point.lerp(Point2D::new(dest_x, dest_y), 0.5);
                     put_pixel(&mut data, &point, FOREGROUND_COLOR);
                 }
