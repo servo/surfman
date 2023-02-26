@@ -108,6 +108,14 @@ impl Connection {
         SystemConnection::from_winit_window(window).map(Connection)
     }
 
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle")]
+    pub fn from_raw_display_handle(
+        raw_handle: raw_window_handle::RawDisplayHandle,
+    ) -> Result<Connection, Error> {
+        SystemConnection::from_raw_display_handle(raw_handle).map(Connection)
+    }
+
     /// Creates a native widget type from the given `winit` window.
     ///
     /// This type can be later used to create surfaces that render to the window.
@@ -136,10 +144,10 @@ impl Connection {
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::MacOS;
+        use raw_window_handle::RawWindowHandle::AppKit;
 
         match raw_handle {
-            MacOS(handle) => Ok(NativeWidget {
+            AppKit(handle) => Ok(NativeWidget {
                 view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
             }),
             _ => Err(Error::IncompatibleNativeWidget),

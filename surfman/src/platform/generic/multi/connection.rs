@@ -191,6 +191,19 @@ where
         }
     }
 
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle")]
+    pub fn from_raw_display_handle(
+        raw_handle: raw_window_handle::RawDisplayHandle,
+    ) -> Result<Connection<Def, Alt>, Error> {
+        match <Def::Connection>::from_raw_display_handle(raw_handle) {
+            Ok(connection) => Ok(Connection::Default(connection)),
+            Err(_) => {
+                <Alt::Connection>::from_raw_display_handle(raw_handle).map(Connection::Alternate)
+            }
+        }
+    }
+
     /// Creates a native widget type from the given `winit` window.
     ///
     /// This type can be later used to create surfaces that render to the window.
@@ -307,6 +320,13 @@ where
     #[cfg(feature = "sm-winit")]
     fn from_winit_window(window: &Window) -> Result<Connection<Def, Alt>, Error> {
         Connection::from_winit_window(window)
+    }
+
+    #[cfg(feature = "sm-raw-window-handle")]
+    fn from_raw_display_handle(
+        raw_handle: raw_window_handle::RawDisplayHandle,
+    ) -> Result<Connection<Def, Alt>, Error> {
+        Connection::from_raw_display_handle(raw_handle)
     }
 
     #[cfg(feature = "sm-winit")]
