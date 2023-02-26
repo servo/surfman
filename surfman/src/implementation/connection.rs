@@ -80,6 +80,14 @@ impl ConnectionInterface for Connection {
     }
 
     #[inline]
+    #[cfg(feature = "sm-raw-window-handle")]
+    fn from_raw_display_handle(
+        raw_handle: raw_window_handle::RawDisplayHandle,
+    ) -> Result<Connection, Error> {
+        Connection::from_raw_display_handle(raw_handle)
+    }
+
+    #[inline]
     #[cfg(feature = "sm-winit")]
     fn create_native_widget_from_winit_window(
         &self,

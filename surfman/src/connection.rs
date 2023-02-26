@@ -61,6 +61,12 @@ pub trait Connection: Sized {
     #[cfg(feature = "sm-winit")]
     fn from_winit_window(window: &Window) -> Result<Self, Error>;
 
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle")]
+    fn from_raw_display_handle(
+        raw_handle: raw_window_handle::RawDisplayHandle,
+    ) -> Result<Self, Error>;
+
     /// Creates a native widget type from the given `winit` window.
     ///
     /// This type can be later used to create surfaces that render to the window.

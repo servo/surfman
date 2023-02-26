@@ -173,6 +173,23 @@ impl Connection {
         }
     }
 
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle")]
+    pub fn from_raw_display_handle(
+        raw_handle: raw_window_handle::RawDisplayHandle,
+    ) -> Result<Connection, Error> {
+        use raw_window_handle::RawDisplayHandle::Wayland;
+        use raw_window_handle::WaylandDisplayHandle;
+        unsafe {
+            let wayland_display = match raw_handle {
+                Wayland(WaylandDisplayHandle { display, .. }) => display as *mut wl_display,
+                _ => return Err(Error::IncompatibleRawDisplayHandle),
+            };
+
+            Connection::from_wayland_display(wayland_display, false)
+        }
+    }
+
     /// Creates a native widget type from the given `winit` window.
     ///
     /// This type can be later used to create surfaces that render to the window.

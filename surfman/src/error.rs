@@ -90,6 +90,8 @@ pub enum Error {
     IncompatibleNativeWidget,
     /// The `winit` window is incompatible with this backend.
     IncompatibleWinitWindow,
+    /// The `raw display handle` is incompatible with this backend.
+    IncompatibleRawDisplayHandle,
     /// The native context does not match the supplied device.
     IncompatibleNativeContext,
     /// The native device does not match the supplied connection.

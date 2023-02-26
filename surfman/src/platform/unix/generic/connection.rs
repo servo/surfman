@@ -144,6 +144,14 @@ impl Connection {
         Err(Error::IncompatibleNativeWidget)
     }
 
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle")]
+    pub fn from_raw_display_handle(
+        _: raw_window_handle::RawDisplayHandle,
+    ) -> Result<Connection, Error> {
+        Err(Error::IncompatibleNativeWidget)
+    }
+
     /// Creates a native widget type from the given `winit` window.
     ///
     /// This type can be later used to create surfaces that render to the window.
