@@ -17,7 +17,7 @@ gl_generator = "0.14"
 cfg_aliases = "0.1.0"
 
 [features]
-default = ["sm-winit"]
+default = ["sm-winit", "sm-raw-window-handle"]
 sm-angle = []
 sm-angle-builtin = ["mozangle"]
 sm-angle-default = ["sm-angle"]

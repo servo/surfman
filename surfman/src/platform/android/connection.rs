@@ -152,10 +152,10 @@ impl Connection {
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Android;
+        use raw_window_handle::RawWindowHandle::AndroidNdk;
 
         match raw_handle {
-            Android(handle) => Ok(NativeWidget {
+            AndroidNdk(handle) => Ok(NativeWidget {
                 native_window: handle.a_native_window as *mut _,
             }),
             _ => Err(Error::IncompatibleNativeWidget),
