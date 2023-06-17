@@ -13,7 +13,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
         rust: [nightly-2022-08-27, stable]
-        features: ["", "--features sm-winit"]
+        features: ["", "--features 'sm-winit sm-raw-window-handle'"]
         target: ["default"]
         include:
           # rust nightly
