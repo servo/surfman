@@ -154,10 +154,10 @@ impl Connection {
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Windows;
+        use raw_window_handle::RawWindowHandle::Win32;
 
         match raw_handle {
-            Windows(handle) => Ok(NativeWidget {
+            Win32(handle) => Ok(NativeWidget {
                 window_handle: handle.hwnd as HWND,
             }),
             _ => Err(Error::IncompatibleNativeWidget),
