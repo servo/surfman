@@ -193,10 +193,15 @@ impl Connection {
     #[inline]
     pub fn create_native_widget_from_rwh(
         &self,
-        _: raw_window_handle::RawWindowHandle,
+        handle: raw_window_handle::RawWindowHandle,
     ) -> Result<NativeWidget, Error> {
-        // TODO: support raw window handle on windows angle
-        Err(Error::UnsupportedOnThisPlatform)
+        if let raw_window_handle::RawWindowHandle::Win32(handle) = handle {
+            Ok(NativeWidget {
+                egl_native_window: handle.hwnd as EGLNativeWindowType,
+            })
+        } else {
+            Err(Error::IncompatibleNativeWidget)
+        }
     }
 }
 
