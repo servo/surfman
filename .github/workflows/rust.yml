@@ -1,6 +1,12 @@
 name: Rust
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ['master']
+  pull_request:
+    branches: ["**"]
+  merge_group:
+    types: [checks_requested]
 
 env:
   CARGO_TERM_COLOR: always
@@ -91,7 +97,7 @@ jobs:
         rustup component add rust-src --target=aarch64-uwp-windows-msvc
         cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
   build_result:
-    name: homu build finished
+    name: Result
     runs-on: ubuntu-latest
     needs: ["Build"]
     steps:
