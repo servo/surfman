@@ -72,12 +72,9 @@ jobs:
         sudo apt update
         sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev -y
     - name: Install rust
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@master
       with:
-          profile: minimal
           toolchain: ${{ matrix.rust }}
-          override: true
-          default: true
     - name: Build target
       if: matrix.target != 'default' && startsWith(matrix.target, 'aarch64-uwp-windows-msvc') != true
       run: |
