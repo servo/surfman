@@ -36,6 +36,8 @@ pub use platform::system::device::{Adapter as SystemAdapter, Device as SystemDev
 #[cfg(target_os = "macos")]
 pub use platform::system::surface::Surface as SystemSurface;
 
+#[cfg(feature = "chains")]
+pub mod chains;
 pub mod connection;
 pub mod device;
 

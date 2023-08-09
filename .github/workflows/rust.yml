@@ -19,12 +19,12 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
         rust: [nightly-2022-08-27, stable]
-        features: ["", "--features 'sm-winit sm-raw-window-handle'"]
+        features: ["", "--features 'chains sm-winit sm-raw-window-handle'"]
         target: ["default"]
         include:
           # rust nightly
           - os: ubuntu-22.04
-            features: "--features sm-wayland-default"
+            features: "--features 'chains sm-wayland-default'"
             rust: nightly-2022-08-27
             target: "default"
           - os: ubuntu-22.04
@@ -35,7 +35,7 @@ jobs:
             rust: nightly-2022-08-27
             target: "default"
           - os: windows-latest
-            features: "--features 'sm-no-wgl sm-angle-builtin'"
+            features: "--features 'chains sm-no-wgl sm-angle-builtin'"
             rust: nightly-2022-08-27
             target: "default"
           - os: windows-latest
@@ -50,11 +50,11 @@ jobs:
             target: "arm-linux-androideabi"
             rust: stable
           - os: windows-latest
-            features: "--features sm-angle-builtin"
+            features: "--features 'chains sm-angle-builtin'"
             rust: stable
             target: "default"
           - os: windows-latest
-            features: "--features 'sm-no-wgl sm-angle-builtin'"
+            features: "--features 'chains sm-no-wgl sm-angle-builtin'"
             rust: stable
             target: "default"
           - os: windows-latest
