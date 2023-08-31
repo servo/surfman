@@ -44,7 +44,7 @@ fn main() {
     }
 
     // Generate GL bindings.
-    if target_os == "android" {
+    if target_os == "android" || target_os == "linux" {
         let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Gles2, (3, 0), Profile::Core, Fallbacks::All, []);
         registry.write_bindings(StructGenerator, &mut file).unwrap();
