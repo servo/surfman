@@ -208,8 +208,6 @@ impl Device {
         let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
         layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
         layer.set_contents(front_surface.obj as id);
-        layer.set_opaque(true);
-        layer.set_contents_opaque(true);
         superlayer.add_sublayer(&layer);
 
         let view = native_widget.view.clone();
@@ -284,8 +282,6 @@ impl Device {
             view_info
                 .layer
                 .set_contents(view_info.front_surface.obj as id);
-            view_info.layer.set_opaque(true);
-            view_info.layer.set_contents_opaque(true);
             surface.io_surface = self.create_io_surface(&size, surface.access);
             surface.size = size;
         }
