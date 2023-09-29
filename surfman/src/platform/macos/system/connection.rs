@@ -146,12 +146,14 @@ impl Connection {
         window: &Window,
     ) -> Result<NativeWidget, Error> {
         let ns_view = window.ns_view() as id;
+        let ns_window = window.ns_window() as id;
         if ns_view.is_null() {
             return Err(Error::IncompatibleNativeWidget);
         }
         unsafe {
             Ok(NativeWidget {
                 view: NSView(msg_send![ns_view, retain]),
+                opaque: msg_send![ns_window as id, isOpaque],
             })
         }
     }
@@ -164,6 +166,7 @@ impl Connection {
     ) -> NativeWidget {
         NativeWidget {
             view: NSView(raw as id),
+            opaque: true,
         }
     }
 
@@ -179,6 +182,7 @@ impl Connection {
         match raw_handle {
             AppKit(handle) => Ok(NativeWidget {
                 view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
+                opaque: unsafe { msg_send![handle.ns_window as id, isOpaque] },
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }

@@ -78,6 +78,7 @@ pub(crate) struct ViewInfo {
     logical_size: NSSize,
     display_link: DisplayLink,
     next_vblank: Arc<VblankCond>,
+    opaque: bool,
 }
 
 struct VblankCond {
@@ -94,6 +95,8 @@ pub struct NSView(pub(crate) id);
 pub struct NativeWidget {
     /// The `NSView` object.
     pub view: NSView,
+    /// A bool value that indicates whether widget's NSWindow is opaque.
+    pub opaque: bool,
 }
 
 /// Represents the CPU view of the pixel data of this surface.
@@ -204,12 +207,13 @@ impl Device {
         }];
         let logical_size = logical_rect.size;
 
+        let opaque = native_widget.opaque;
         let layer = CALayer::new();
         let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
         layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
         layer.set_contents(front_surface.obj as id);
-        layer.set_opaque(true);
-        layer.set_contents_opaque(true);
+        layer.set_opaque(opaque);
+        layer.set_contents_opaque(opaque);
         superlayer.add_sublayer(&layer);
 
         let view = native_widget.view.clone();
@@ -223,6 +227,7 @@ impl Device {
             logical_size,
             display_link,
             next_vblank,
+            opaque,
         }
     }
 
@@ -284,8 +289,8 @@ impl Device {
             view_info
                 .layer
                 .set_contents(view_info.front_surface.obj as id);
-            view_info.layer.set_opaque(true);
-            view_info.layer.set_contents_opaque(true);
+            view_info.layer.set_opaque(view_info.opaque);
+            view_info.layer.set_contents_opaque(view_info.opaque);
             surface.io_surface = self.create_io_surface(&size, surface.access);
             surface.size = size;
         }
