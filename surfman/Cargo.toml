@@ -2,7 +2,7 @@
 name = "surfman"
 license = "MIT OR Apache-2.0 OR MPL-2.0"
 edition = "2018"
-version = "0.8.0"
+version = "0.8.1"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
@@ -75,7 +75,7 @@ optional = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 wio = "0.2"
-winapi = { version = "0.3", features = ["d3d11", "wingdi", "winuser", "winerror", "libloaderapi"] }
+winapi = { version = "0.3", features = ["d3d11", "libloaderapi", "winbase", "winerror", "wingdi", "winuser" ] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 raw-window-handle = "0.5"
