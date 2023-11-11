@@ -23,9 +23,9 @@ use std::os::raw::c_void;
 use std::str::FromStr;
 
 #[cfg(feature = "sm-winit")]
-use winit::platform::macos::WindowExtMacOS;
-#[cfg(feature = "sm-winit")]
 use winit::window::Window;
+#[cfg(feature = "sm-winit")]
+use raw_window_handle::HasWindowHandle;
 
 /// A no-op connection.
 ///
@@ -145,16 +145,25 @@ impl Connection {
         &self,
         window: &Window,
     ) -> Result<NativeWidget, Error> {
-        let ns_view = window.ns_view() as id;
-        let ns_window = window.ns_window() as id;
-        if ns_view.is_null() {
-            return Err(Error::IncompatibleNativeWidget);
-        }
-        unsafe {
-            Ok(NativeWidget {
-                view: NSView(msg_send![ns_view, retain]),
-                opaque: msg_send![ns_window as id, isOpaque],
-            })
+        use raw_window_handle::RawWindowHandle::AppKit;
+
+        let handle = window.window_handle().map_err(|_| Error::IncompatibleNativeWidget)?;
+        let raw_handle = handle.as_raw();
+        match raw_handle {
+            AppKit(handle) => {
+                let ns_view = handle.ns_view.as_ptr() as id;
+                if ns_view.is_null() {
+                    return Err(Error::IncompatibleNativeWidget);
+                }
+                let ns_window: id = unsafe { msg_send![ns_view, window] };
+                unsafe {
+                    Ok(NativeWidget {
+                        view: NSView(msg_send![ns_view, retain]),
+                        opaque: msg_send![ns_window, isOpaque],
+                    })
+                }
+            }
+            _ => Err(Error::IncompatibleNativeWidget),
         }
     }
 
@@ -180,10 +189,14 @@ impl Connection {
         use raw_window_handle::RawWindowHandle::AppKit;
 
         match raw_handle {
-            AppKit(handle) => Ok(NativeWidget {
-                view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
-                opaque: unsafe { msg_send![handle.ns_window as id, isOpaque] },
-            }),
+            AppKit(handle) => {
+                let view = NSView(unsafe { msg_send![handle.ns_view.as_ptr() as id, retain] }); 
+                let window: id = unsafe { msg_send![view.0, window] };
+                Ok(NativeWidget {
+                    view: view,
+                    opaque: unsafe { msg_send![window, isOpaque] },
+                })
+            }
             _ => Err(Error::IncompatibleNativeWidget),
         }
     }

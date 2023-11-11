@@ -147,10 +147,14 @@ impl Connection {
         use raw_window_handle::RawWindowHandle::AppKit;
 
         match raw_handle {
-            AppKit(handle) => Ok(NativeWidget {
-                view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
-                opaque: unsafe { msg_send![handle.ns_window as id, isOpaque] },
-            }),
+            AppKit(handle) => {
+                let view = NSView(unsafe { msg_send![handle.ns_view.as_ptr() as id, retain] });
+                let window: id = unsafe { msg_send![view.0, window] };
+                Ok(NativeWidget {
+                    view: view,
+                    opaque: unsafe { msg_send![window, isOpaque] },
+                })
+            }
             _ => Err(Error::IncompatibleNativeWidget),
         }
     }
