@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: ['master']
+    branches: [main]
   pull_request:
     branches: ["**"]
   merge_group:
@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
-        rust: [nightly-2023-02-01, stable]
+        rust: [nightly, stable]
         features: ["", "--features 'chains sm-winit sm-raw-window-handle'"]
         target: ["default"]
         include:
