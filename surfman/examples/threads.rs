@@ -21,7 +21,7 @@ use winit::{
     dpi::PhysicalSize,
     event::{DeviceEvent, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder
+    window::WindowBuilder,
 };
 
 pub mod common;
@@ -146,9 +146,11 @@ fn main() {
                 }),
             ..
         } => *control_flow = ControlFlow::Exit,
-        _ => { app.tick(true); *control_flow = ControlFlow::Poll; }
+        _ => {
+            app.tick(true);
+            *control_flow = ControlFlow::Poll;
+        }
     });
-
 }
 pub struct App {
     main_from_worker_receiver: Receiver<Frame>,
@@ -169,7 +171,6 @@ impl Drop for App {
 }
 
 impl App {
-
     pub fn new(
         connection: Connection,
         adapter: Adapter,
