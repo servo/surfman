@@ -93,6 +93,7 @@ pub enum SurfaceAccess {
 }
 
 /// Information specific to the type of surface: generic or widget.
+#[derive(Clone)]
 pub enum SurfaceType<NativeWidget> {
     /// An off-screen surface that has a pixel size. Generic surfaces can sometimes be shown on
     /// screen using platform-specific APIs, but `surfman` itself provides no way to draw their
