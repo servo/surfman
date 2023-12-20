@@ -18,7 +18,7 @@
 //!
 //! Each producer context has one *attached* swap chain, whose back buffer is the current surface of the context.
 //! The producer may change the attached swap chain, attaching a currently unattached swap chain,
-//! and detatching the currently attached one.
+//! and detaching the currently attached one.
 
 #![allow(missing_docs)]
 
@@ -165,7 +165,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
             .iter()
             .position(|surface| device.surface_info(surface).size == self.size)
             .map(|index| {
-                debug!("Recyling surface for context {:?}", self.context_id);
+                debug!("Recycling surface for context {:?}", self.context_id);
                 Ok(self.recycled_surfaces.swap_remove(index))
             })
             .unwrap_or_else(|| {
