@@ -65,7 +65,7 @@ jobs:
             target: "aarch64-uwp-windows-msvc"
             rust: nightly-2023-02-01
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install deps on linux
       if: startsWith(matrix.os, 'ubuntu')
       run: |
