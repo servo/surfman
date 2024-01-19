@@ -25,7 +25,7 @@ sm-angle-default = ["sm-angle"]
 sm-no-wgl = ["sm-angle-default"]
 sm-test = []
 sm-wayland-default = []
-sm-winit = ["winit"]
+sm-winit = ["winit", "sm-raw-window-handle"]
 sm-x11 = ["x11"]
 sm-raw-window-handle = ["raw-window-handle"]
 

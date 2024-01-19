@@ -18,8 +18,6 @@ use std::sync::Arc;
 use wayland_sys::client::{wl_display, wl_proxy, WAYLAND_CLIENT_HANDLE};
 
 #[cfg(feature = "sm-winit")]
-use winit::platform::wayland::WindowExtWayland;
-#[cfg(feature = "sm-winit")]
 use winit::window::Window;
 
 /// A connection to the Wayland server.
@@ -164,13 +162,12 @@ impl Connection {
     /// Opens the display connection corresponding to the given `winit` window.
     #[cfg(feature = "sm-winit")]
     pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        unsafe {
-            let wayland_display = match window.wayland_display() {
-                Some(wayland_display) => wayland_display as *mut wl_display,
-                None => return Err(Error::IncompatibleWinitWindow),
-            };
-            Connection::from_wayland_display(wayland_display, false)
-        }
+        use raw_window_handle::HasRawDisplayHandle;
+        let raw_display_handle = match window.raw_display_handle() {
+            Ok(raw_display_handle) => raw_display_handle,
+            _ => return Err(Error::ConnectionFailed),
+        };
+        Connection::from_raw_display_handle(raw_display_handle)
     }
 
     /// Opens the display connection corresponding to the given raw display handle.
@@ -182,7 +179,7 @@ impl Connection {
         use raw_window_handle::WaylandDisplayHandle;
         unsafe {
             let wayland_display = match raw_handle {
-                Wayland(WaylandDisplayHandle { display, .. }) => display as *mut wl_display,
+                Wayland(WaylandDisplayHandle { display, .. }) => display.as_ptr() as *mut wl_display,
                 _ => return Err(Error::IncompatibleRawDisplayHandle),
             };
 
@@ -198,10 +195,13 @@ impl Connection {
         &self,
         window: &Window,
     ) -> Result<NativeWidget, Error> {
-        let wayland_surface = match window.wayland_surface() {
-            Some(wayland_surface) => wayland_surface as *mut wl_proxy,
-            None => return Err(Error::IncompatibleNativeWidget),
+        use raw_window_handle::RawWindowHandle;
+        use raw_window_handle::HasRawWindowHandle;
+        let wayland_surface = match window.raw_window_handle() {
+            Ok(RawWindowHandle::Wayland(handle)) => handle.surface.as_ptr() as *mut wl_proxy,
+            _ => return Err(Error::IncompatibleNativeWidget),
         };
+
 
         // The window's DPI factor is 1.0 when nothing has been rendered to it yet. So use the DPI
         // factor of the primary monitor instead, since that's where the window will presumably go
@@ -239,7 +239,7 @@ impl Connection {
         use raw_window_handle::RawWindowHandle::Wayland;
 
         let wayland_surface = match raw_handle {
-            Wayland(handle) => handle.surface as *mut wl_proxy,
+            Wayland(handle) => handle.surface.as_ptr() as *mut wl_proxy,
             _ => return Err(Error::IncompatibleNativeWidget),
         };
 
