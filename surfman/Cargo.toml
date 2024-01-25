@@ -18,14 +18,13 @@ cfg_aliases = "0.1.0"
 
 [features]
 chains = ["fnv", "sparkle"]
-default = ["sm-winit", "sm-raw-window-handle"]
+default = ["sm-raw-window-handle"]
 sm-angle = []
 sm-angle-builtin = ["mozangle"]
 sm-angle-default = ["sm-angle"]
 sm-no-wgl = ["sm-angle-default"]
 sm-test = []
 sm-wayland-default = []
-sm-winit = ["winit"]
 sm-x11 = ["x11"]
 sm-raw-window-handle = ["raw-window-handle"]
 
@@ -38,7 +37,6 @@ libc = "0.2"
 log = "0.4"
 sparkle = { version = "0.1", optional = true }
 osmesa-sys = { version = "0.1", optional = true }
-winit = { version = "0.28.1", optional = true }
 raw-window-handle = { version = "0.5", optional = true }
 
 [dev-dependencies]
@@ -79,4 +77,3 @@ winapi = { version = "0.3", features = ["d3d11", "libloaderapi", "winbase", "win
 
 [target.'cfg(target_os = "android")'.dependencies]
 raw-window-handle = "0.5"
-winit = { version = "0.28.1", features = [ "android-native-activity" ] }

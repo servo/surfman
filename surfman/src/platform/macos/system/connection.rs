@@ -22,11 +22,6 @@ use euclid::default::Size2D;
 use std::os::raw::c_void;
 use std::str::FromStr;
 
-#[cfg(feature = "sm-winit")]
-use winit::platform::macos::WindowExtMacOS;
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 /// A no-op connection.
 ///
 /// Connections to the CGS window server are implicit on macOS, so this is a zero-sized type.
@@ -123,39 +118,12 @@ impl Connection {
         self.create_device(&self.create_adapter()?)
     }
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
-        Connection::new()
-    }
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_raw_display_handle(
         _: raw_window_handle::RawDisplayHandle,
     ) -> Result<Connection, Error> {
         Connection::new()
-    }
-
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[cfg(feature = "sm-winit")]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<NativeWidget, Error> {
-        let ns_view = window.ns_view() as id;
-        let ns_window = window.ns_window() as id;
-        if ns_view.is_null() {
-            return Err(Error::IncompatibleNativeWidget);
-        }
-        unsafe {
-            Ok(NativeWidget {
-                view: NSView(msg_send![ns_view, retain]),
-                opaque: msg_send![ns_window as id, isOpaque],
-            })
-        }
     }
 
     /// Create a native widget from a raw pointer
@@ -173,9 +141,10 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(
+    pub fn create_native_widget_from_raw_window_handle(
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
+        _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         use raw_window_handle::RawWindowHandle::AppKit;
 

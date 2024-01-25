@@ -9,9 +9,6 @@ use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 /// Methods relating to display server connections.
 pub trait Connection: Sized {
     /// The adapter type associated with this connection.
@@ -57,24 +54,11 @@ pub trait Connection: Sized {
         native_device: Self::NativeDevice,
     ) -> Result<Self::Device, Error>;
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    fn from_winit_window(window: &Window) -> Result<Self, Error>;
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     fn from_raw_display_handle(
         raw_handle: raw_window_handle::RawDisplayHandle,
     ) -> Result<Self, Error>;
-
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[cfg(feature = "sm-winit")]
-    fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<Self::NativeWidget, Error>;
 
     /// Creates a native widget from a raw pointer
     unsafe fn create_native_widget_from_ptr(
@@ -85,8 +69,9 @@ pub trait Connection: Sized {
 
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
-    fn create_native_widget_from_rwh(
+    fn create_native_widget_from_raw_window_handle(
         &self,
         window: raw_window_handle::RawWindowHandle,
+        size: Size2D<i32>,
     ) -> Result<Self::NativeWidget, Error>;
 }

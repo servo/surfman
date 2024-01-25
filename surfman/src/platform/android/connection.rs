@@ -14,9 +14,6 @@ use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 /// A connection to the display server.
 #[derive(Clone)]
 pub struct Connection;
@@ -100,38 +97,12 @@ impl Connection {
         })
     }
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
-        Ok(Connection)
-    }
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_raw_display_handle(
         _: raw_window_handle::RawDisplayHandle,
     ) -> Result<Connection, Error> {
         Ok(Connection)
-    }
-
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::HasRawWindowHandle;
-        use raw_window_handle::RawWindowHandle::AndroidNdk;
-        match window.raw_window_handle() {
-            AndroidNdk(handle) => Ok(NativeWidget {
-                native_window: handle.a_native_window as *mut _,
-            }),
-            _ => Err(Error::IncompatibleNativeWidget),
-        }
     }
 
     /// Create a native widget from a raw pointer
@@ -148,9 +119,10 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(
+    pub fn create_native_widget_from_raw_window_handle(
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
+        _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         use raw_window_handle::RawWindowHandle::AndroidNdk;
 

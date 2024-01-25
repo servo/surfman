@@ -23,6 +23,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder
 };
+use winit::raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 
 pub mod common;
 
@@ -99,9 +100,14 @@ fn main() {
 
     window.set_visible(true);
 
-    let connection = Connection::from_winit_window(&window).unwrap();
+    let raw_display_handle = window.raw_display_handle();
+    let connection = Connection::from_raw_display_handle(raw_display_handle).unwrap();
+
+    let window_size = window.inner_size();
+    let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
+    let raw_window_handle = window.raw_window_handle();
     let native_widget = connection
-        .create_native_widget_from_winit_window(&window)
+        .create_native_widget_from_raw_window_handle(raw_window_handle, window_size)
         .unwrap();
     let adapter = connection.create_low_power_adapter().unwrap();
     let mut device = connection.create_device(&adapter).unwrap();

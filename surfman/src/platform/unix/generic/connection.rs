@@ -16,9 +16,6 @@ use euclid::default::Size2D;
 use std::os::raw::c_void;
 use std::sync::Arc;
 
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 /// A no-op connection.
 #[derive(Clone)]
 pub struct Connection {
@@ -137,30 +134,11 @@ impl Connection {
         Device::new(self, &self.create_adapter()?)
     }
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[inline]
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
-        Err(Error::IncompatibleNativeWidget)
-    }
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_raw_display_handle(
         _: raw_window_handle::RawDisplayHandle,
     ) -> Result<Connection, Error> {
-        Err(Error::IncompatibleNativeWidget)
-    }
-
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[inline]
-    #[cfg(feature = "sm-winit")]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        _: &Window,
-    ) -> Result<NativeWidget, Error> {
         Err(Error::IncompatibleNativeWidget)
     }
 
@@ -176,9 +154,10 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(
+    pub fn create_native_widget_from_raw_window_handle(
         &self,
         _: raw_window_handle::RawWindowHandle,
+        _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         Err(Error::IncompatibleNativeWidget)
     }

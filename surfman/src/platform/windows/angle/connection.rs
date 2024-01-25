@@ -20,11 +20,6 @@ use std::os::raw::c_void;
 use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
-#[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
-use winit::platform::windows::WindowExtWindows;
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 const INTEL_PCI_ID: UINT = 0x8086;
 
 /// A no-op connection.
@@ -133,48 +128,12 @@ impl Connection {
         Device::from_egl_display(egl_display)
     }
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(_: &Window) -> Result<Connection, Error> {
-        Connection::new()
-    }
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_raw_display_handle(
         _: raw_window_handle::RawDisplayHandle,
     ) -> Result<Connection, Error> {
         Connection::new()
-    }
-
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[cfg(all(feature = "sm-winit", not(target_vendor = "uwp")))]
-    #[inline]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<NativeWidget, Error> {
-        let hwnd = window.hwnd() as EGLNativeWindowType;
-        if hwnd.is_null() {
-            Err(Error::IncompatibleNativeWidget)
-        } else {
-            Ok(NativeWidget {
-                egl_native_window: hwnd,
-            })
-        }
-    }
-
-    /// Creates a native widget type from the given `winit` window.
-    /// This is unsupported on UWP.
-    #[cfg(all(feature = "sm-winit", target_vendor = "uwp"))]
-    #[inline]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        _window: &Window,
-    ) -> Result<NativeWidget, Error> {
-        Err(Error::IncompatibleNativeWidget)
     }
 
     /// Create a native widget from a raw pointer
@@ -191,9 +150,10 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(
+    pub fn create_native_widget_from_raw_window_handle(
         &self,
         handle: raw_window_handle::RawWindowHandle,
+        _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         if let raw_window_handle::RawWindowHandle::Win32(handle) = handle {
             Ok(NativeWidget {

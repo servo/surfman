@@ -8,7 +8,7 @@ use crate::threads::App;
 
 use android_logger::Config;
 use euclid::default::Size2D;
-use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue};
+use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue, JValueGen};
 use jni::{JNIEnv, JavaVM};
 use log::Level;
 use std::cell::{Cell, RefCell};
@@ -35,7 +35,7 @@ pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThre
 ) {
     ATTACHED_TO_JNI.with(|attached_to_jni| attached_to_jni.set(true));
 
-    android_logger::init_once(Config::default().with_min_level(Level::Trace));
+    android_logger::init_once(Config::default());
 
     let window_size = Size2D::new(width, height);
 
@@ -166,20 +166,25 @@ impl ResourceLoader for JavaResourceLoader {
         });
 
         let loader = self.loader.as_obj();
-        let env = self.vm.get_env().unwrap();
+        let mut env = self.vm.get_env().unwrap();
         match env
             .call_method(
                 loader,
                 "slurp",
                 "(Ljava/lang/String;)Ljava/nio/ByteBuffer;",
-                &[JValue::Object(*env.new_string(filename).unwrap())],
+                &[JValue::Object(&env.new_string(filename).unwrap())],
             )
-            .unwrap()
         {
-            JValue::Object(object) => {
+            Ok(JValueGen::Object(object)) => {
                 let byte_buffer = JByteBuffer::from(object);
-                dest.extend_from_slice(env.get_direct_buffer_address(byte_buffer).unwrap());
-            }
+                unsafe {
+                    let slice = std::slice::from_raw_parts(
+                        env.get_direct_buffer_address(&byte_buffer).unwrap(),
+                        env.get_direct_buffer_capacity(&byte_buffer).unwrap(),
+                    );
+                    dest.extend_from_slice(slice);
+                }
+            },
             _ => panic!("Unexpected return value!"),
         }
     }

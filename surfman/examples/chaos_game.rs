@@ -49,8 +49,11 @@ fn main() {
 
     window.set_visible(true);
 
+    let window_size = window.inner_size();
+    let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
+    let handle = window.window_handle().unwrap();
     let native_widget = connection
-        .create_native_widget_from_winit_window(&window)
+        .create_native_widget_from_raw_window_handle(handle.as_raw(), window_size);
         .unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
