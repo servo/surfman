@@ -13,9 +13,6 @@ use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 /// A connection to the display server.
 pub enum Connection<Def, Alt>
 where
@@ -182,15 +179,6 @@ where
         }
     }
 
-    /// Opens the connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(window: &Window) -> Result<Connection<Def, Alt>, Error> {
-        match <Def::Connection>::from_winit_window(window) {
-            Ok(connection) => Ok(Connection::Default(connection)),
-            Err(_) => <Alt::Connection>::from_winit_window(window).map(Connection::Alternate),
-        }
-    }
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_raw_display_handle(
@@ -201,24 +189,6 @@ where
             Err(_) => {
                 <Alt::Connection>::from_raw_display_handle(raw_handle).map(Connection::Alternate)
             }
-        }
-    }
-
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[cfg(feature = "sm-winit")]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<NativeWidget<Def, Alt>, Error> {
-        match *self {
-            Connection::Default(ref connection) => connection
-                .create_native_widget_from_winit_window(window)
-                .map(NativeWidget::Default),
-            Connection::Alternate(ref connection) => connection
-                .create_native_widget_from_winit_window(window)
-                .map(NativeWidget::Alternate),
         }
     }
 
@@ -240,16 +210,17 @@ where
 
     /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
-    pub fn create_native_widget_from_rwh(
+    pub fn create_native_widget_from_raw_window_handle(
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
+        size: Size2D<i32>,
     ) -> Result<NativeWidget<Def, Alt>, Error> {
         match *self {
             Connection::Default(ref connection) => connection
-                .create_native_widget_from_rwh(raw_handle)
+                .create_native_widget_from_raw_window_handle(raw_handle, size)
                 .map(NativeWidget::Default),
             Connection::Alternate(ref connection) => connection
-                .create_native_widget_from_rwh(raw_handle)
+                .create_native_widget_from_raw_window_handle(raw_handle, size)
                 .map(NativeWidget::Alternate),
         }
     }
@@ -316,25 +287,11 @@ where
         Connection::create_device_from_native_device(self, native_device)
     }
 
-    #[inline]
-    #[cfg(feature = "sm-winit")]
-    fn from_winit_window(window: &Window) -> Result<Connection<Def, Alt>, Error> {
-        Connection::from_winit_window(window)
-    }
-
     #[cfg(feature = "sm-raw-window-handle")]
     fn from_raw_display_handle(
         raw_handle: raw_window_handle::RawDisplayHandle,
     ) -> Result<Connection<Def, Alt>, Error> {
         Connection::from_raw_display_handle(raw_handle)
-    }
-
-    #[cfg(feature = "sm-winit")]
-    fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<Self::NativeWidget, Error> {
-        Connection::create_native_widget_from_winit_window(self, window)
     }
 
     #[inline]
@@ -347,10 +304,11 @@ where
     }
 
     #[cfg(feature = "sm-raw-window-handle")]
-    fn create_native_widget_from_rwh(
+    fn create_native_widget_from_raw_window_handle(
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
+        size: Size2D<i32>,
     ) -> Result<Self::NativeWidget, Error> {
-        Connection::create_native_widget_from_rwh(self, raw_handle)
+        Connection::create_native_widget_from_raw_window_handle(self, raw_handle, size)
     }
 }

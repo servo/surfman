@@ -88,8 +88,6 @@ pub enum Error {
     IncompatibleAdapter,
     /// The native widget type does not match the supplied device.
     IncompatibleNativeWidget,
-    /// The `winit` window is incompatible with this backend.
-    IncompatibleWinitWindow,
     /// The `raw display handle` is incompatible with this backend.
     IncompatibleRawDisplayHandle,
     /// The native context does not match the supplied device.

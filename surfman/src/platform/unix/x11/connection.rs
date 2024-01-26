@@ -20,11 +20,6 @@ use std::ptr;
 use std::sync::Arc;
 use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
 
-#[cfg(feature = "sm-winit")]
-use winit::platform::x11::WindowExtX11;
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 lazy_static! {
     static ref X_THREADS_INIT: () = {
         unsafe {
@@ -192,16 +187,6 @@ impl Connection {
         Device::new(self, &native_device.adapter)
     }
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        if let Some(display) = window.xlib_display() {
-            Connection::from_x11_display(display as *mut Display, false)
-        } else {
-            Err(Error::IncompatibleWinitWindow)
-        }
-    }
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_raw_display_handle(
@@ -219,20 +204,6 @@ impl Connection {
         Connection::from_x11_display(display, false)
     }
 
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[cfg(feature = "sm-winit")]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<NativeWidget, Error> {
-        match window.xlib_window() {
-            Some(window) => Ok(NativeWidget { window }),
-            None => Err(Error::IncompatibleNativeWidget),
-        }
-    }
-
     /// Create a native widget from a raw pointer
     pub unsafe fn create_native_widget_from_ptr(
         &self,
@@ -246,9 +217,10 @@ impl Connection {
 
     /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
-    pub fn create_native_widget_from_rwh(
+    pub fn create_native_widget_from_raw_window_handle(
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
+        _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         use raw_window_handle::RawWindowHandle::Xlib;
 

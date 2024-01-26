@@ -17,11 +17,6 @@ use std::ptr;
 use std::sync::Arc;
 use wayland_sys::client::{wl_display, wl_proxy, WAYLAND_CLIENT_HANDLE};
 
-#[cfg(feature = "sm-winit")]
-use winit::platform::wayland::WindowExtWayland;
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 /// A connection to the Wayland server.
 #[derive(Clone)]
 pub struct Connection {
@@ -161,18 +156,6 @@ impl Connection {
         })
     }
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        unsafe {
-            let wayland_display = match window.wayland_display() {
-                Some(wayland_display) => wayland_display as *mut wl_display,
-                None => return Err(Error::IncompatibleWinitWindow),
-            };
-            Connection::from_wayland_display(wayland_display, false)
-        }
-    }
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_raw_display_handle(
@@ -190,34 +173,6 @@ impl Connection {
         }
     }
 
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[cfg(feature = "sm-winit")]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<NativeWidget, Error> {
-        let wayland_surface = match window.wayland_surface() {
-            Some(wayland_surface) => wayland_surface as *mut wl_proxy,
-            None => return Err(Error::IncompatibleNativeWidget),
-        };
-
-        // The window's DPI factor is 1.0 when nothing has been rendered to it yet. So use the DPI
-        // factor of the primary monitor instead, since that's where the window will presumably go
-        // when actually displayed. (The user might move it somewhere else later, of course.)
-        //
-        // FIXME(pcwalton): Is it true that the window will go the primary monitor first?
-        // let hidpi_factor = window.primary_monitor().scale_factor();
-        let window_size = window.inner_size();
-        let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-
-        Ok(NativeWidget {
-            wayland_surface,
-            size: window_size,
-        })
-    }
-
     /// Create a native widget from a raw pointer
     pub unsafe fn create_native_widget_from_ptr(
         &self,
@@ -232,9 +187,10 @@ impl Connection {
 
     /// Creates a native widget type from the given `raw_window_handle::HasRawWindowHandle`
     #[cfg(feature = "sm-raw-window-handle")]
-    pub fn create_native_widget_from_rwh(
+    pub fn create_native_widget_from_raw_window_handle(
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
+        window_size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         use raw_window_handle::RawWindowHandle::Wayland;
 
@@ -242,9 +198,6 @@ impl Connection {
             Wayland(handle) => handle.surface as *mut wl_proxy,
             _ => return Err(Error::IncompatibleNativeWidget),
         };
-
-        // TODO: Find out how to get actual size from the raw window handle
-        let window_size = Size2D::new(400, 500);
 
         Ok(NativeWidget {
             wayland_surface,

@@ -21,9 +21,6 @@ use crate::platform::macos::system::surface::NSView;
 #[cfg(feature = "sm-raw-window-handle")]
 use cocoa::base::id;
 
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 pub use crate::platform::macos::system::connection::NativeConnection;
 
 /// A connection to the display server.
@@ -102,30 +99,12 @@ impl Connection {
             .map(Device)
     }
 
-    /// Opens the display connection corresponding to the given `winit` window.
-    #[cfg(feature = "sm-winit")]
-    pub fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        SystemConnection::from_winit_window(window).map(Connection)
-    }
-
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_raw_display_handle(
         raw_handle: raw_window_handle::RawDisplayHandle,
     ) -> Result<Connection, Error> {
         SystemConnection::from_raw_display_handle(raw_handle).map(Connection)
-    }
-
-    /// Creates a native widget type from the given `winit` window.
-    ///
-    /// This type can be later used to create surfaces that render to the window.
-    #[cfg(feature = "sm-winit")]
-    #[inline]
-    pub fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<NativeWidget, Error> {
-        self.0.create_native_widget_from_winit_window(window)
     }
 
     /// Creates a native widget from a raw pointer
@@ -140,9 +119,10 @@ impl Connection {
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
-    pub fn create_native_widget_from_rwh(
+    pub fn create_native_widget_from_raw_window_handle(
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
+        _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         use raw_window_handle::RawWindowHandle::AppKit;
 

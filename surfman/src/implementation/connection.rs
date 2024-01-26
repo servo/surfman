@@ -14,9 +14,6 @@ use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 
-#[cfg(feature = "sm-winit")]
-use winit::window::Window;
-
 #[deny(unconditional_recursion)]
 impl ConnectionInterface for Connection {
     type Adapter = Adapter;
@@ -74,26 +71,11 @@ impl ConnectionInterface for Connection {
     }
 
     #[inline]
-    #[cfg(feature = "sm-winit")]
-    fn from_winit_window(window: &Window) -> Result<Connection, Error> {
-        Connection::from_winit_window(window)
-    }
-
-    #[inline]
     #[cfg(feature = "sm-raw-window-handle")]
     fn from_raw_display_handle(
         raw_handle: raw_window_handle::RawDisplayHandle,
     ) -> Result<Connection, Error> {
         Connection::from_raw_display_handle(raw_handle)
-    }
-
-    #[inline]
-    #[cfg(feature = "sm-winit")]
-    fn create_native_widget_from_winit_window(
-        &self,
-        window: &Window,
-    ) -> Result<NativeWidget, Error> {
-        Connection::create_native_widget_from_winit_window(self, window)
     }
 
     #[inline]
@@ -107,10 +89,11 @@ impl ConnectionInterface for Connection {
 
     #[inline]
     #[cfg(feature = "sm-raw-window-handle")]
-    fn create_native_widget_from_rwh(
+    fn create_native_widget_from_raw_window_handle(
         &self,
         window: raw_window_handle::RawWindowHandle,
+        size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        Connection::create_native_widget_from_rwh(self, window)
+        Connection::create_native_widget_from_raw_window_handle(self, window, size)
     }
 }
