@@ -11,17 +11,19 @@ use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, SystemSurfaceInfo};
 use cocoa::appkit::{NSScreen, NSView as NSViewMethods, NSWindow};
 use cocoa::base::{id, YES};
 use cocoa::foundation::{NSPoint, NSRect, NSSize};
-use cocoa::quartzcore::{transaction, CALayer, CATransform3D};
+use cocoa::quartzcore::{transaction, CATransform3D};
+use core_foundation::array::{CFArray, CFArrayRef};
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 use core_graphics::geometry::{CGRect, CGSize, CG_ZERO_POINT};
-use servo_display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use euclid::default::Size2D;
 use io_surface::{self, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow, IOSurface, IOSurfaceRef};
 use io_surface::{kIOSurfaceCacheMode, kIOSurfaceHeight, kIOSurfacePixelFormat, kIOSurfaceWidth};
 use mach::kern_return::KERN_SUCCESS;
+use objc::runtime::BOOL;
+use servo_display_link::macos::cvdisplaylink::{CVDisplayLink, CVTimeStamp, DisplayLink};
 use std::fmt::{self, Debug, Formatter};
 use std::mem;
 use std::os::raw::c_void;
@@ -174,9 +176,10 @@ impl Device {
         surface_access: SurfaceAccess,
         native_widget: &NativeWidget,
     ) -> ViewInfo {
+        let view = native_widget.view.0;
         let front_surface = self.create_io_surface(&size, surface_access);
 
-        let window: id = msg_send![native_widget.view.0, window];
+        let window: id = msg_send![view, window];
         let device_description: CFDictionary<CFString, CFNumber> =
             CFDictionary::wrap_under_get_rule(window.screen().deviceDescription() as *const _);
         let description_key: CFString = CFString::from("NSScreenNumber");
@@ -195,20 +198,31 @@ impl Device {
         transaction::begin();
         transaction::set_disable_actions(true);
 
-        let superlayer = CALayer::new();
-        native_widget.view.0.setLayer(superlayer.id());
-        native_widget.view.0.setWantsLayer(YES);
+        let layer: id = msg_send![view, layer];
+        let superlayer = if layer.is_null() {
+            let layer = CALayer::new();
+            view.setLayer(layer.id());
+            view.setWantsLayer(YES);
+            layer
+        } else {
+            CALayer(layer)
+        };
+
+        let layer = if let Some(sublayers) = superlayer.sublayers() {
+            let layer = sublayers.get_all_values()[0] as id;
+            CALayer(layer)
+        } else {
+            CALayer::new()
+        };
 
         // Compute logical size.
-        let window: id = msg_send![native_widget.view.0, window];
+        let window: id = msg_send![view, window];
         let logical_rect: NSRect = msg_send![window, convertRectFromBacking:NSRect {
             origin: NSPoint { x: 0.0, y: 0.0 },
             size: NSSize { width: size.width as f64, height: size.height as f64 },
         }];
         let logical_size = logical_rect.size;
-
         let opaque = native_widget.opaque;
-        let layer = CALayer::new();
         let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
         layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
         layer.set_contents(front_surface.obj as id);
@@ -249,7 +263,11 @@ impl Device {
     }
 
     /// Resizes a widget surface
-    pub fn resize_surface(&self, surface: &mut Surface, mut size: Size2D<i32>) -> Result<(), Error> {
+    pub fn resize_surface(
+        &self,
+        surface: &mut Surface,
+        mut size: Size2D<i32>,
+    ) -> Result<(), Error> {
         // The surface will not appear if its width is not a multiple of 4 (i.e. stride is a
         // multiple of 16 bytes). Enforce this.
         let width = size.width as i32;
@@ -494,4 +512,77 @@ unsafe extern "C" fn display_link_output_callback(
 
     mem::forget(next_vblank);
     kCVReturnSuccess
+}
+
+pub struct CALayer(id);
+
+unsafe impl Send for CALayer {}
+unsafe impl Sync for CALayer {}
+
+impl Clone for CALayer {
+    #[inline]
+    fn clone(&self) -> CALayer {
+        unsafe { CALayer(msg_send![self.id(), retain]) }
+    }
+}
+
+impl Drop for CALayer {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe { msg_send![self.id(), release] }
+    }
+}
+
+impl CALayer {
+    #[inline]
+    pub fn id(&self) -> id {
+        self.0
+    }
+
+    #[inline]
+    pub fn new() -> CALayer {
+        unsafe { CALayer(msg_send![class!(CALayer), layer]) }
+    }
+
+    #[inline]
+    pub fn set_sublayer_transform(&self, sublayer_transform: CATransform3D) {
+        unsafe { msg_send![self.id(), setSublayerTransform: sublayer_transform] }
+    }
+
+    #[inline]
+    pub fn set_frame(&self, frame: &CGRect) {
+        unsafe { msg_send![self.id(), setFrame:*frame] }
+    }
+
+    #[inline]
+    pub unsafe fn set_contents(&self, contents: id) {
+        msg_send![self.id(), setContents: contents]
+    }
+
+    #[inline]
+    pub fn set_contents_opaque(&self, opaque: bool) {
+        unsafe { msg_send![self.id(), setContentsOpaque: opaque as BOOL] }
+    }
+
+    #[inline]
+    pub fn add_sublayer(&self, sublayer: &CALayer) {
+        unsafe { msg_send![self.id(), addSublayer:sublayer.id()] }
+    }
+
+    #[inline]
+    pub fn set_opaque(&self, opaque: bool) {
+        unsafe { msg_send![self.id(), setOpaque: opaque as BOOL] }
+    }
+
+    #[inline]
+    pub fn sublayers(&self) -> Option<CFArray<CALayer>> {
+        unsafe {
+            let sublayers: CFArrayRef = msg_send![self.id(), sublayers];
+            if sublayers.is_null() {
+                None
+            } else {
+                Some(TCFType::wrap_under_create_rule(sublayers))
+            }
+        }
+    }
 }
