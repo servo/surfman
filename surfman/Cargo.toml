@@ -52,7 +52,7 @@ core-foundation = "0.9"
 core-graphics = "0.22"
 servo-display-link = "0.2"
 io-surface = "0.15"
-mach = "0.3"
+mach2 = "0.4"
 metal = "0.24"
 objc = "0.2"
 
@@ -73,7 +73,14 @@ optional = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 wio = "0.2"
-winapi = { version = "0.3", features = ["d3d11", "libloaderapi", "winbase", "winerror", "wingdi", "winuser" ] }
+winapi = { version = "0.3", features = [
+    "d3d11",
+    "libloaderapi",
+    "winbase",
+    "winerror",
+    "wingdi",
+    "winuser",
+] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 raw-window-handle = "0.5"

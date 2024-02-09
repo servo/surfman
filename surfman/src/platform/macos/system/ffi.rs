@@ -5,7 +5,7 @@
 #![allow(non_upper_case_globals)]
 
 use io_surface::IOSurfaceRef;
-use mach::kern_return::kern_return_t;
+use mach2::kern_return::kern_return_t;
 use std::os::raw::c_void;
 
 pub(crate) const kCVPixelFormatType_32BGRA: i32 = 0x42475241; // 'BGRA'
