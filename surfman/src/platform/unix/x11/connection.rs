@@ -196,7 +196,10 @@ impl Connection {
         use raw_window_handle::RawDisplayHandle::Xlib;
         use raw_window_handle::XlibDisplayHandle;
         let display = match raw_handle {
-            Xlib(XlibDisplayHandle { display, .. }) => display as *mut Display,
+            Xlib(XlibDisplayHandle { display, .. }) => match display {
+                Some(display) => display.as_ptr() as *mut Display,
+                None => return Err(Error::ConnectionRequired),
+            },
             Xcb(_) => return Err(Error::Unimplemented),
             _ => return Err(Error::IncompatibleRawDisplayHandle),
         };

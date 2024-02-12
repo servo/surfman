@@ -165,7 +165,9 @@ impl Connection {
         use raw_window_handle::WaylandDisplayHandle;
         unsafe {
             let wayland_display = match raw_handle {
-                Wayland(WaylandDisplayHandle { display, .. }) => display as *mut wl_display,
+                Wayland(WaylandDisplayHandle { display, .. }) => {
+                    display.as_ptr() as *mut wl_display
+                }
                 _ => return Err(Error::IncompatibleRawDisplayHandle),
             };
 
@@ -195,7 +197,7 @@ impl Connection {
         use raw_window_handle::RawWindowHandle::Wayland;
 
         let wayland_surface = match raw_handle {
-            Wayland(handle) => handle.surface as *mut wl_proxy,
+            Wayland(handle) => handle.surface.as_ptr() as *mut wl_proxy,
             _ => return Err(Error::IncompatibleNativeWidget),
         };
 

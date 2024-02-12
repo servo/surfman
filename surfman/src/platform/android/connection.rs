@@ -128,7 +128,7 @@ impl Connection {
 
         match raw_handle {
             AndroidNdk(handle) => Ok(NativeWidget {
-                native_window: handle.a_native_window as *mut _,
+                native_window: handle.a_native_window.as_ptr() as *mut _,
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }
