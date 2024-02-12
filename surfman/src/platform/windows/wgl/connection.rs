@@ -129,7 +129,7 @@ impl Connection {
 
         match raw_handle {
             Win32(handle) => Ok(NativeWidget {
-                window_handle: handle.hwnd as HWND,
+                window_handle: handle.hwnd.get() as HWND,
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }

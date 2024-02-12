@@ -157,7 +157,7 @@ impl Connection {
     ) -> Result<NativeWidget, Error> {
         if let raw_window_handle::RawWindowHandle::Win32(handle) = handle {
             Ok(NativeWidget {
-                egl_native_window: handle.hwnd as EGLNativeWindowType,
+                egl_native_window: handle.hwnd.get() as EGLNativeWindowType,
             })
         } else {
             Err(Error::IncompatibleNativeWidget)
