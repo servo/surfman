@@ -36,7 +36,7 @@ lazy_static! {
     static ref EGL_LIBRARY: EGLLibraryWrapper = {
         unsafe {
             EGLLibraryWrapper(dlopen(
-                &b"libEGL.so\0"[0] as *const u8 as *const _,
+                &b"libEGL.so.1\0"[0] as *const u8 as *const _,
                 RTLD_LAZY,
             ))
         }
