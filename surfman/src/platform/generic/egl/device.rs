@@ -34,12 +34,15 @@ lazy_static! {
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 lazy_static! {
     static ref EGL_LIBRARY: EGLLibraryWrapper = {
-        unsafe {
-            EGLLibraryWrapper(dlopen(
-                &b"libEGL.so\0"[0] as *const u8 as *const _,
-                RTLD_LAZY,
-            ))
+        for soname in [b"libEGL.so.1\0".as_ptr(), b"libEGL.so\0".as_ptr()] {
+            unsafe {
+                let handle = dlopen(soname as *const _, RTLD_LAZY);
+                if !handle.is_null() {
+                    return EGLLibraryWrapper(handle);
+                }
+            }
         }
+        panic!("Unable to load the libEGL shared object");
     };
 }
 
