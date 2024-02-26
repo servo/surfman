@@ -180,14 +180,27 @@ where
     }
 
     /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
-        raw_handle: raw_window_handle::RawDisplayHandle,
+        raw_handle: rwh_05::RawDisplayHandle,
     ) -> Result<Connection<Def, Alt>, Error> {
         match <Def::Connection>::from_raw_display_handle(raw_handle) {
             Ok(connection) => Ok(Connection::Default(connection)),
             Err(_) => {
                 <Alt::Connection>::from_raw_display_handle(raw_handle).map(Connection::Alternate)
+            }
+        }
+    }
+
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn from_display_handle(
+        handle: rwh_06::DisplayHandle,
+    ) -> Result<Connection<Def, Alt>, Error> {
+        match <Def::Connection>::from_display_handle(handle) {
+            Ok(connection) => Ok(Connection::Default(connection)),
+            Err(_) => {
+                <Alt::Connection>::from_display_handle(handle).map(Connection::Alternate)
             }
         }
     }
@@ -209,10 +222,10 @@ where
     }
 
     /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
-        raw_handle: raw_window_handle::RawWindowHandle,
+        raw_handle: rwh_05::RawWindowHandle,
         size: Size2D<i32>,
     ) -> Result<NativeWidget<Def, Alt>, Error> {
         match *self {
@@ -221,6 +234,23 @@ where
                 .map(NativeWidget::Default),
             Connection::Alternate(ref connection) => connection
                 .create_native_widget_from_raw_window_handle(raw_handle, size)
+                .map(NativeWidget::Alternate),
+        }
+    }
+
+    /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn create_native_widget_from_window_handle(
+        &self,
+        handle: rwh_06::WindowHandle,
+        size: Size2D<i32>,
+    ) -> Result<NativeWidget<Def, Alt>, Error> {
+        match *self {
+            Connection::Default(ref connection) => connection
+                .create_native_widget_from_window_handle(handle, size)
+                .map(NativeWidget::Default),
+            Connection::Alternate(ref connection) => connection
+                .create_native_widget_from_window_handle(handle, size)
                 .map(NativeWidget::Alternate),
         }
     }
@@ -287,11 +317,18 @@ where
         Connection::create_device_from_native_device(self, native_device)
     }
 
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     fn from_raw_display_handle(
-        raw_handle: raw_window_handle::RawDisplayHandle,
+        raw_handle: rwh_05::RawDisplayHandle,
     ) -> Result<Connection<Def, Alt>, Error> {
         Connection::from_raw_display_handle(raw_handle)
+    }
+
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    fn from_display_handle(
+        handle: rwh_06::DisplayHandle,
+    ) -> Result<Connection<Def, Alt>, Error> {
+        Connection::from_display_handle(handle)
     }
 
     #[inline]
@@ -303,12 +340,21 @@ where
         Connection::create_native_widget_from_ptr(self, raw, size)
     }
 
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     fn create_native_widget_from_raw_window_handle(
         &self,
-        raw_handle: raw_window_handle::RawWindowHandle,
+        raw_handle: rwh_05::RawWindowHandle,
         size: Size2D<i32>,
     ) -> Result<Self::NativeWidget, Error> {
         Connection::create_native_widget_from_raw_window_handle(self, raw_handle, size)
+    }
+
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    fn create_native_widget_from_window_handle(
+        &self,
+        handle: rwh_06::WindowHandle,
+        size: Size2D<i32>,
+    ) -> Result<Self::NativeWidget, Error> {
+        Connection::create_native_widget_from_window_handle(self, handle, size)
     }
 }

@@ -157,14 +157,31 @@ impl Connection {
     }
 
     /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
         raw_handle: raw_window_handle::RawDisplayHandle,
     ) -> Result<Connection, Error> {
-        use raw_window_handle::RawDisplayHandle::Wayland;
-        use raw_window_handle::WaylandDisplayHandle;
+        use rwh_05::RawDisplayHandle::Wayland;
+        use rwh_05::WaylandDisplayHandle;
         unsafe {
             let wayland_display = match raw_handle {
+                Wayland(WaylandDisplayHandle { display, .. }) => display as *mut wl_display,
+                _ => return Err(Error::IncompatibleRawDisplayHandle),
+            };
+
+            Connection::from_wayland_display(wayland_display, false)
+        }
+    }
+
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn from_display_handle(
+        handle: raw_window_handle::DisplayHandle,
+    ) -> Result<Connection, Error> {
+        use rwh_06::RawDisplayHandle::Wayland;
+        use rwh_06::WaylandDisplayHandle;
+        unsafe {
+            let wayland_display = match handle.as_raw() {
                 Wayland(WaylandDisplayHandle { display, .. }) => display as *mut wl_display,
                 _ => return Err(Error::IncompatibleRawDisplayHandle),
             };
@@ -186,15 +203,35 @@ impl Connection {
     }
 
     /// Creates a native widget type from the given `raw_window_handle::HasRawWindowHandle`
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
-        raw_handle: raw_window_handle::RawWindowHandle,
+        raw_handle: rwh_05::RawWindowHandle,
         window_size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Wayland;
+        use rwh_05::RawWindowHandle::Wayland;
 
         let wayland_surface = match raw_handle {
+            Wayland(handle) => handle.surface as *mut wl_proxy,
+            _ => return Err(Error::IncompatibleNativeWidget),
+        };
+
+        Ok(NativeWidget {
+            wayland_surface,
+            size: window_size,
+        })
+    }
+
+    /// Creates a native widget type from the given `raw_window_handle::HasRawWindowHandle`
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn create_native_widget_from_window_handle(
+        &self,
+        handle: rwh_06::WindowHandle,
+        window_size: Size2D<i32>,
+    ) -> Result<NativeWidget, Error> {
+        use rwh_06::RawWindowHandle::Wayland;
+
+        let wayland_surface = match handle.as_raw() {
             Wayland(handle) => handle.surface as *mut wl_proxy,
             _ => return Err(Error::IncompatibleNativeWidget),
         };

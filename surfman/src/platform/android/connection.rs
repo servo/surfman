@@ -98,9 +98,17 @@ impl Connection {
     }
 
     /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
-        _: raw_window_handle::RawDisplayHandle,
+        _: rwh_05::RawDisplayHandle,
+    ) -> Result<Connection, Error> {
+        Ok(Connection)
+    }
+
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn from_display_handle(
+        _: rwh_06::DisplayHandle,
     ) -> Result<Connection, Error> {
         Ok(Connection)
     }
@@ -117,16 +125,34 @@ impl Connection {
     }
 
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     #[inline]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
-        raw_handle: raw_window_handle::RawWindowHandle,
+        raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::AndroidNdk;
+        use rwh_05::RawWindowHandle::AndroidNdk;
 
         match raw_handle {
+            AndroidNdk(handle) => Ok(NativeWidget {
+                native_window: handle.a_native_window as *mut _,
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
+    }
+
+    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    #[inline]
+    pub fn create_native_widget_from_window_handle(
+        &self,
+        handle: rwh_06::WindowHandle,
+        _size: Size2D<i32>,
+    ) -> Result<NativeWidget, Error> {
+        use rwh_06::RawWindowHandle::AndroidNdk;
+
+        match handle.as_raw() {
             AndroidNdk(handle) => Ok(NativeWidget {
                 native_window: handle.a_native_window as *mut _,
             }),

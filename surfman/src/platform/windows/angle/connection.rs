@@ -129,9 +129,17 @@ impl Connection {
     }
 
     /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
-        _: raw_window_handle::RawDisplayHandle,
+        _: rwh_05::RawDisplayHandle,
+    ) -> Result<Connection, Error> {
+        Connection::new()
+    }
+
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn from_display_handle(
+        _: rwh_06::DisplayHandle,
     ) -> Result<Connection, Error> {
         Connection::new()
     }
@@ -148,14 +156,31 @@ impl Connection {
     }
 
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     #[inline]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
-        handle: raw_window_handle::RawWindowHandle,
+        handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        if let raw_window_handle::RawWindowHandle::Win32(handle) = handle {
+        if let rwh_05::RawWindowHandle::Win32(handle) = handle {
+            Ok(NativeWidget {
+                egl_native_window: handle.hwnd as EGLNativeWindowType,
+            })
+        } else {
+            Err(Error::IncompatibleNativeWidget)
+        }
+    }
+
+    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    #[inline]
+    pub fn create_native_widget_from_window_handle(
+        &self,
+        handle: rwh_06::WindowHandle,
+        _size: Size2D<i32>,
+    ) -> Result<NativeWidget, Error> {
+        if let rwh_06::RawWindowHandle::Win32(handle) = handle.as_raw() {
             Ok(NativeWidget {
                 egl_native_window: handle.hwnd.get() as EGLNativeWindowType,
             })

@@ -16,11 +16,6 @@ use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 
-#[cfg(feature = "sm-raw-window-handle")]
-use crate::platform::macos::system::surface::NSView;
-#[cfg(feature = "sm-raw-window-handle")]
-use cocoa::base::id;
-
 pub use crate::platform::macos::system::connection::NativeConnection;
 
 /// A connection to the display server.
@@ -100,11 +95,19 @@ impl Connection {
     }
 
     /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
-        raw_handle: raw_window_handle::RawDisplayHandle,
+        raw_handle: rwh_05::RawDisplayHandle,
     ) -> Result<Connection, Error> {
         SystemConnection::from_raw_display_handle(raw_handle).map(Connection)
+    }
+
+    /// Opens the display connection corresponding to the given raw display handle.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn from_display_handle(
+        handle: rwh_06::DisplayHandle,
+    ) -> Result<Connection, Error> {
+        SystemConnection::from_display_handle(handle).map(Connection)
     }
 
     /// Creates a native widget from a raw pointer
@@ -117,16 +120,39 @@ impl Connection {
     }
 
     /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     #[inline]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
-        raw_handle: raw_window_handle::RawWindowHandle,
+        raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::AppKit;
+        use crate::platform::macos::system::surface::NSView;
+        use cocoa::base::id;
+        use rwh_05::RawWindowHandle::AppKit;
 
         match raw_handle {
+            AppKit(handle) => Ok(NativeWidget {
+                view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
+                opaque: unsafe { msg_send![handle.ns_window as id, isOpaque] },
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
+    }
+
+    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    #[inline]
+    pub fn create_native_widget_from_window_handle(
+        &self,
+        handle: rwh_06::WindowHandle,
+        _size: Size2D<i32>,
+    ) -> Result<NativeWidget, Error> {
+        use crate::platform::macos::system::surface::NSView;
+        use cocoa::base::id;
+        use rwh_06::RawWindowHandle::AppKit;
+
+        match handle.as_raw() {
             AppKit(handle) => Ok(NativeWidget {
                 view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
                 opaque: unsafe { msg_send![handle.ns_window as id, isOpaque] },
