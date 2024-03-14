@@ -19,10 +19,11 @@ use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
 #[cfg(not(target_os = "android"))]
 use winit::{
     dpi::PhysicalSize,
-    event::{DeviceEvent, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{DeviceEvent, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder
 };
+
 use rwh_05::{HasRawDisplayHandle, HasRawWindowHandle};
 
 pub mod common;
@@ -88,7 +89,9 @@ static BACKGROUND_COLOR: [f32; 4] = [
 
 #[cfg(not(target_os = "android"))]
 fn main() {
-    let event_loop = EventLoop::new();
+    use winit::{event::RawKeyEvent, keyboard::{KeyCode, PhysicalKey}};
+
+    let event_loop = EventLoop::new().expect("couldn't create eventloop");
     let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let physical_size = PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT);
 
@@ -139,21 +142,21 @@ fn main() {
         window_size,
     );
 
-    event_loop.run(move |event, _, control_flow| match event {
+    event_loop.run(move |event, target| match event {
         Event::WindowEvent {
             event: WindowEvent::CloseRequested,
             ..
         }
         | Event::DeviceEvent {
             event:
-                DeviceEvent::Key(KeyboardInput {
-                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                DeviceEvent::Key(RawKeyEvent {
+                    physical_key: PhysicalKey::Code(KeyCode::Escape),
                     ..
                 }),
             ..
-        } => *control_flow = ControlFlow::Exit,
-        _ => { app.tick(true); *control_flow = ControlFlow::Poll; }
-    });
+        } => target.exit(),
+        _ => { app.tick(true); target.set_control_flow(ControlFlow::Poll) }
+    }).expect("failed to run event loop");
 
 }
 pub struct App {
