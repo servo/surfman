@@ -98,7 +98,6 @@ fn make_connection(window: &winit::window::Window) -> surfman::Connection
     connection
 }
 
-// rwh 0.6
 #[cfg(not(feature = "sm-raw-window-handle-05"))]
 fn make_connection(window: &winit::window::Window) -> surfman::Connection
 {
@@ -117,7 +116,6 @@ fn make_native_widget(window: &winit::window::Window, connection: &surfman::Conn
     native_widget
 }
 
-// rwh 0.6
 #[cfg(not(feature = "sm-raw-window-handle-05"))]
 fn make_native_widget(window: &winit::window::Window, connection: &surfman::Connection, window_size: Size2D<i32>) -> surfman::NativeWidget
 {

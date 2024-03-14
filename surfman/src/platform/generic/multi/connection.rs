@@ -179,7 +179,7 @@ where
         }
     }
 
-    /// Opens the display connection corresponding to the given raw display handle.
+    /// Opens the display connection corresponding to the given `RawDisplayHandle.
     #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
         raw_handle: rwh_05::RawDisplayHandle,
@@ -192,7 +192,7 @@ where
         }
     }
 
-    /// Opens the display connection corresponding to the given raw display handle.
+    /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
     pub fn from_display_handle(
         handle: rwh_06::DisplayHandle,
@@ -221,7 +221,7 @@ where
         }
     }
 
-    /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
+    /// Create a native widget type from the given `RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
@@ -238,7 +238,7 @@ where
         }
     }
 
-    /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
+    /// Create a native widget type from the given `WindowHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
     pub fn create_native_widget_from_window_handle(
         &self,

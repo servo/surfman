@@ -54,13 +54,13 @@ pub trait Connection: Sized {
         native_device: Self::NativeDevice,
     ) -> Result<Self::Device, Error>;
 
-    /// Opens the display connection corresponding to the given raw display handle.
+    /// Opens the display connection corresponding to the given `RawDisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-05")]
     fn from_raw_display_handle(
         raw_handle: rwh_05::RawDisplayHandle,
     ) -> Result<Self, Error>;
 
-    /// Opens the display connection corresponding to the given raw display handle.
+    /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
     fn from_display_handle(
         handle: rwh_06::DisplayHandle,
@@ -73,7 +73,7 @@ pub trait Connection: Sized {
         size: Size2D<i32>,
     ) -> Self::NativeWidget;
 
-    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
+    /// Create a native widget type from the given `RawWindowHandle`.
     #[cfg(feature = "sm-raw-window-handle-05")]
     fn create_native_widget_from_raw_window_handle(
         &self,
@@ -81,7 +81,7 @@ pub trait Connection: Sized {
         size: Size2D<i32>,
     ) -> Result<Self::NativeWidget, Error>;
 
-    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
+    /// Create a native widget type from the given `WindowHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
     fn create_native_widget_from_window_handle(
         &self,
