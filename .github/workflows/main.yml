@@ -19,7 +19,7 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-22.04, windows-latest]
         rust: [stable]
-        features: ["", "--features 'chains sm-raw-window-handle'"]
+        features: ["", "--features 'chains sm-raw-window-handle-06'",  "--features 'chains sm-raw-window-handle-05'"]
         target: ["default"]
         include:
           # rust stable
