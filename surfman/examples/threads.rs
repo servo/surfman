@@ -23,7 +23,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder
 };
-use winit::raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use rwh_05::{HasRawDisplayHandle, HasRawWindowHandle};
 
 pub mod common;
 
