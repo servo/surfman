@@ -1,0 +1,4 @@
+[toolchain]
+channel = "1.76"
+components = [ "rustfmt" ]
+profile = "minimal"
