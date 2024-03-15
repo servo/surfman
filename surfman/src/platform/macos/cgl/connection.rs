@@ -104,9 +104,7 @@ impl Connection {
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
-    pub fn from_display_handle(
-        handle: rwh_06::DisplayHandle,
-    ) -> Result<Connection, Error> {
+    pub fn from_display_handle(handle: rwh_06::DisplayHandle) -> Result<Connection, Error> {
         SystemConnection::from_display_handle(handle).map(Connection)
     }
 
@@ -153,10 +151,18 @@ impl Connection {
         use rwh_06::RawWindowHandle::AppKit;
 
         match handle.as_raw() {
-            AppKit(handle) => Ok(NativeWidget {
-                view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
-                opaque: unsafe { msg_send![handle.ns_window as id, isOpaque] },
-            }),
+            AppKit(handle) => {
+                let ns_view = handle.ns_view.as_ptr() as id;
+                // https://developer.apple.com/documentation/appkit/nsview/1483301-window
+                let ns_window: id = unsafe{ msg_send![ns_view, window] };
+                Ok(NativeWidget {
+                    // increment the nsview's reference count with retain
+                    // https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571946-retain
+                    view: NSView(unsafe { msg_send![ns_view, retain] }),
+                    // https://developer.apple.com/documentation/appkit/nswindow/1419086-isopaque
+                    opaque: unsafe { msg_send![ns_window, isOpaque] },
+                })
+            }
             _ => Err(Error::IncompatibleNativeWidget),
         }
     }
