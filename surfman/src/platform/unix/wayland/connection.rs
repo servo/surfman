@@ -159,7 +159,7 @@ impl Connection {
     /// Opens the display connection corresponding to the given `RawDisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
-        raw_handle: raw_window_handle::RawDisplayHandle,
+        raw_handle: rwh_05::RawDisplayHandle,
     ) -> Result<Connection, Error> {
         use rwh_05::RawDisplayHandle::Wayland;
         use rwh_05::WaylandDisplayHandle;
@@ -176,13 +176,13 @@ impl Connection {
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
     pub fn from_display_handle(
-        handle: raw_window_handle::DisplayHandle,
+        handle: rwh_06::DisplayHandle,
     ) -> Result<Connection, Error> {
         use rwh_06::RawDisplayHandle::Wayland;
         use rwh_06::WaylandDisplayHandle;
         unsafe {
             let wayland_display = match handle.as_raw() {
-                Wayland(WaylandDisplayHandle { display, .. }) => display as *mut wl_display,
+                Wayland(WaylandDisplayHandle { display, .. }) => display.as_ptr() as *mut wl_display,
                 _ => return Err(Error::IncompatibleRawDisplayHandle),
             };
 
@@ -232,7 +232,7 @@ impl Connection {
         use rwh_06::RawWindowHandle::Wayland;
 
         let wayland_surface = match handle.as_raw() {
-            Wayland(handle) => handle.surface as *mut wl_proxy,
+            Wayland(handle) => handle.surface.as_ptr() as *mut wl_proxy,
             _ => return Err(Error::IncompatibleNativeWidget),
         };
 
