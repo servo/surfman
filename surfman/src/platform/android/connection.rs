@@ -99,17 +99,13 @@ impl Connection {
 
     /// Opens the display connection corresponding to the given raw display handle.
     #[cfg(feature = "sm-raw-window-handle-05")]
-    pub fn from_raw_display_handle(
-        _: rwh_05::RawDisplayHandle,
-    ) -> Result<Connection, Error> {
+    pub fn from_raw_display_handle(_: rwh_05::RawDisplayHandle) -> Result<Connection, Error> {
         Ok(Connection)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
-    pub fn from_display_handle(
-        _: rwh_06::DisplayHandle,
-    ) -> Result<Connection, Error> {
+    pub fn from_display_handle(_: rwh_06::DisplayHandle) -> Result<Connection, Error> {
         Ok(Connection)
     }
 

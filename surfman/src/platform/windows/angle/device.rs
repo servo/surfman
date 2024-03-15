@@ -4,11 +4,11 @@
 
 use super::connection::Connection;
 use crate::egl;
-use crate::egl::types::{EGLAttrib, EGLDisplay, EGLint, EGLDeviceEXT};
+use crate::egl::types::{EGLAttrib, EGLDeviceEXT, EGLDisplay, EGLint};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_DEVICE_EXT;
 use crate::platform::generic::egl::ffi::{EGL_D3D11_DEVICE_ANGLE, EGL_EXTENSION_FUNCTIONS};
 use crate::platform::generic::egl::ffi::{EGL_NO_DEVICE_EXT, EGL_PLATFORM_DEVICE_EXT};
-use crate::platform::generic::egl::ffi::{EGL_DEVICE_EXT};
 use crate::{Error, GLApi};
 
 use std::cell::{RefCell, RefMut};
@@ -186,9 +186,9 @@ impl Device {
             debug_assert!(d3d11_feature_level >= D3D_FEATURE_LEVEL_9_3);
             let d3d11_device = ComPtr::from_raw(d3d11_device);
 
-            let eglCreateDeviceANGLE = EGL_EXTENSION_FUNCTIONS.CreateDeviceANGLE.expect(
-                "Where's the `EGL_ANGLE_device_creation` extension?",
-            );
+            let eglCreateDeviceANGLE = EGL_EXTENSION_FUNCTIONS
+                .CreateDeviceANGLE
+                .expect("Where's the `EGL_ANGLE_device_creation` extension?");
             let egl_device = eglCreateDeviceANGLE(
                 EGL_D3D11_DEVICE_ANGLE as EGLint,
                 d3d11_device.as_raw() as *mut c_void,
@@ -234,27 +234,26 @@ impl Device {
 
     #[allow(non_snake_case)]
     pub(crate) fn from_egl_display(egl_display: EGLDisplay) -> Result<Device, Error> {
-
-        let eglQueryDisplayAttribEXT = EGL_EXTENSION_FUNCTIONS.QueryDisplayAttribEXT.expect(
-            "Where's the `EGL_EXT_device_query` extension?"
-        );
-        let eglQueryDeviceAttribEXT = EGL_EXTENSION_FUNCTIONS.QueryDeviceAttribEXT.expect(
-            "Where's the `EGL_EXT_device_query` extension?"
-        );
-        let mut angle_device : EGLAttrib = 0;
+        let eglQueryDisplayAttribEXT = EGL_EXTENSION_FUNCTIONS
+            .QueryDisplayAttribEXT
+            .expect("Where's the `EGL_EXT_device_query` extension?");
+        let eglQueryDeviceAttribEXT = EGL_EXTENSION_FUNCTIONS
+            .QueryDeviceAttribEXT
+            .expect("Where's the `EGL_EXT_device_query` extension?");
+        let mut angle_device: EGLAttrib = 0;
         let result = eglQueryDisplayAttribEXT(
             egl_display,
             EGL_DEVICE_EXT as EGLint,
-            &mut angle_device as *mut EGLAttrib
+            &mut angle_device as *mut EGLAttrib,
         );
         if result == egl::FALSE {
             return Err(Error::DeviceOpenFailed);
         }
-        let mut device : EGLAttrib = 0;
+        let mut device: EGLAttrib = 0;
         let result = eglQueryDeviceAttribEXT(
             angle_device as EGLDeviceEXT,
             EGL_D3D11_DEVICE_ANGLE as EGLint,
-            &mut device as *mut EGLAttrib
+            &mut device as *mut EGLAttrib,
         );
         if result == egl::FALSE {
             return Err(Error::DeviceOpenFailed);

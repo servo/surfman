@@ -175,14 +175,14 @@ impl Connection {
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
-    pub fn from_display_handle(
-        handle: rwh_06::DisplayHandle,
-    ) -> Result<Connection, Error> {
+    pub fn from_display_handle(handle: rwh_06::DisplayHandle) -> Result<Connection, Error> {
         use rwh_06::RawDisplayHandle::Wayland;
         use rwh_06::WaylandDisplayHandle;
         unsafe {
             let wayland_display = match handle.as_raw() {
-                Wayland(WaylandDisplayHandle { display, .. }) => display.as_ptr() as *mut wl_display,
+                Wayland(WaylandDisplayHandle { display, .. }) => {
+                    display.as_ptr() as *mut wl_display
+                }
                 _ => return Err(Error::IncompatibleRawDisplayHandle),
             };
 

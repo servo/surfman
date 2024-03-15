@@ -22,8 +22,8 @@
 
 #![allow(missing_docs)]
 
-use crate::{ContextID, Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use crate::device::Device as DeviceAPI;
+use crate::{ContextID, Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
 use fnv::{FnvHashMap, FnvHashSet};
 use log::debug;
