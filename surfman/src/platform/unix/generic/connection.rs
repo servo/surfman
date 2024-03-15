@@ -134,10 +134,18 @@ impl Connection {
         Device::new(self, &self.create_adapter()?)
     }
 
-    /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle")]
+    /// Opens the display connection corresponding to the given `RawDisplayHandle`.
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
-        _: raw_window_handle::RawDisplayHandle,
+        _: rwh_05::RawDisplayHandle,
+    ) -> Result<Connection, Error> {
+        Err(Error::IncompatibleNativeWidget)
+    }
+
+    /// Opens the display connection corresponding to the given `DisplayHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn from_display_handle(
+        _: rwh_06::DisplayHandle,
     ) -> Result<Connection, Error> {
         Err(Error::IncompatibleNativeWidget)
     }
@@ -151,12 +159,23 @@ impl Connection {
         NativeWidget
     }
 
-    /// Create a native widget type from the given `raw_window_handle::RawWindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
+    /// Create a native widget type from the given `RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-05")]
     #[inline]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
-        _: raw_window_handle::RawWindowHandle,
+        _: rwh_05::RawWindowHandle,
+        _size: Size2D<i32>,
+    ) -> Result<NativeWidget, Error> {
+        Err(Error::IncompatibleNativeWidget)
+    }
+
+    /// Create a native widget type from the given `WindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    #[inline]
+    pub fn create_native_widget_from_window_handle(
+        &self,
+        _: rwh_06::WindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         Err(Error::IncompatibleNativeWidget)

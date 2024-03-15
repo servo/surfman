@@ -71,11 +71,19 @@ impl ConnectionInterface for Connection {
     }
 
     #[inline]
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     fn from_raw_display_handle(
-        raw_handle: raw_window_handle::RawDisplayHandle,
+        raw_handle: rwh_05::RawDisplayHandle,
     ) -> Result<Connection, Error> {
         Connection::from_raw_display_handle(raw_handle)
+    }
+
+    #[inline]
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    fn from_display_handle(
+        handle: rwh_06::DisplayHandle,
+    ) -> Result<Connection, Error> {
+        Connection::from_display_handle(handle)
     }
 
     #[inline]
@@ -88,12 +96,22 @@ impl ConnectionInterface for Connection {
     }
 
     #[inline]
-    #[cfg(feature = "sm-raw-window-handle")]
+    #[cfg(feature = "sm-raw-window-handle-05")]
     fn create_native_widget_from_raw_window_handle(
         &self,
-        window: raw_window_handle::RawWindowHandle,
+        window: rwh_05::RawWindowHandle,
         size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
         Connection::create_native_widget_from_raw_window_handle(self, window, size)
+    }
+
+    #[inline]
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    fn create_native_widget_from_window_handle(
+        &self,
+        window: rwh_06::WindowHandle,
+        size: Size2D<i32>,
+    ) -> Result<NativeWidget, Error> {
+        Connection::create_native_widget_from_window_handle(self, window, size)
     }
 }

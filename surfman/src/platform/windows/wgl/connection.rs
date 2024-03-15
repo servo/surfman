@@ -99,10 +99,18 @@ impl Connection {
         Device::from_native_device(native_device)
     }
 
-    /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle")]
+    /// Opens the display connection corresponding to the given `RawDisplayHandle`.
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
-        _: raw_window_handle::RawDisplayHandle,
+        _: rwh_05::RawDisplayHandle,
+    ) -> Result<Connection, Error> {
+        Connection::new()
+    }
+
+    /// Opens the display connection corresponding to the given `DisplayHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn from_display_handle(
+        _: rwh_06::DisplayHandle,
     ) -> Result<Connection, Error> {
         Connection::new()
     }
@@ -118,18 +126,35 @@ impl Connection {
         }
     }
 
-    /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
+    /// Create a native widget type from the given `RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
-        raw_handle: raw_window_handle::RawWindowHandle,
+        raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Win32;
+        use rwh_05::RawWindowHandle::Win32;
 
         match raw_handle {
             Win32(handle) => Ok(NativeWidget {
                 window_handle: handle.hwnd as HWND,
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
+    }
+
+    /// Create a native widget type from the given `WindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn create_native_widget_from_window_handle(
+        &self,
+        handle: rwh_06::WindowHandle,
+        _size: Size2D<i32>,
+    ) -> Result<NativeWidget, Error> {
+        use rwh_06::RawWindowHandle::Win32;
+
+        match handle.as_raw() {
+            Win32(handle) => Ok(NativeWidget {
+                window_handle: handle.hwnd.get() as HWND,
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }

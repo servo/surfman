@@ -187,15 +187,32 @@ impl Connection {
         Device::new(self, &native_device.adapter)
     }
 
-    /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle")]
+    /// Opens the display connection corresponding to the given `RawDisplayHandle`.
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn from_raw_display_handle(
-        raw_handle: raw_window_handle::RawDisplayHandle,
+        raw_handle: rwh_05::RawDisplayHandle,
     ) -> Result<Connection, Error> {
-        use raw_window_handle::RawDisplayHandle::Xcb;
-        use raw_window_handle::RawDisplayHandle::Xlib;
-        use raw_window_handle::XlibDisplayHandle;
+        use rwh_05::RawDisplayHandle::Xcb;
+        use rwh_05::RawDisplayHandle::Xlib;
+        use rwh_05::XlibDisplayHandle;
         let display = match raw_handle {
+            Xlib(XlibDisplayHandle { display, .. }) => display as *mut Display,
+            Xcb(_) => return Err(Error::Unimplemented),
+            _ => return Err(Error::IncompatibleRawDisplayHandle),
+        };
+
+        Connection::from_x11_display(display, false)
+    }
+
+    /// Opens the display connection corresponding to the given `DisplayHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn from_display_handle(
+        handle: rwh_06::DisplayHandle,
+    ) -> Result<Connection, Error> {
+        use rwh_06::RawDisplayHandle::Xcb;
+        use rwh_06::RawDisplayHandle::Xlib;
+        use rwh_06::XlibDisplayHandle;
+        let display = match handle.as_raw() {
             Xlib(XlibDisplayHandle { display, .. }) => display as *mut Display,
             Xcb(_) => return Err(Error::Unimplemented),
             _ => return Err(Error::IncompatibleRawDisplayHandle),
@@ -215,16 +232,33 @@ impl Connection {
         }
     }
 
-    /// Create a native widget type from the given `raw_window_handle::HasRawWindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
+    /// Create a native widget type from the given `RawWindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-05")]
     pub fn create_native_widget_from_raw_window_handle(
         &self,
-        raw_handle: raw_window_handle::RawWindowHandle,
+        raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Xlib;
+        use rwh_05::RawWindowHandle::Xlib;
 
         match raw_handle {
+            Xlib(handle) => Ok(NativeWidget {
+                window: handle.window,
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
+    }
+
+    /// Create a native widget type from the given `WindowHandle`.
+    #[cfg(feature = "sm-raw-window-handle-06")]
+    pub fn create_native_widget_from_window_handle(
+        &self,
+        handle: rwh_06::WindowHandle,
+        _size: Size2D<i32>,
+    ) -> Result<NativeWidget, Error> {
+        use rwh_06::RawWindowHandle::Xlib;
+
+        match handle.as_raw() {
             Xlib(handle) => Ok(NativeWidget {
                 window: handle.window,
             }),

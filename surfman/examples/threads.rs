@@ -19,11 +19,15 @@ use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
 #[cfg(not(target_os = "android"))]
 use winit::{
     dpi::PhysicalSize,
-    event::{DeviceEvent, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event::{DeviceEvent, Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder
 };
-use winit::raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+
+#[cfg(feature = "sm-raw-window-handle-05")]
+use rwh_05::{HasRawDisplayHandle, HasRawWindowHandle};
+#[cfg(not(feature = "sm-raw-window-handle-05"))]
+use rwh_06::{HasDisplayHandle, HasWindowHandle};
 
 pub mod common;
 
@@ -86,9 +90,47 @@ static BACKGROUND_COLOR: [f32; 4] = [
     1.0,
 ];
 
+#[cfg(feature = "sm-raw-window-handle-05")]
+fn make_connection(window: &winit::window::Window) -> surfman::Connection
+{
+    let raw_display_handle = window.raw_display_handle();
+    let connection = Connection::from_raw_display_handle(raw_display_handle).unwrap();
+    connection
+}
+
+#[cfg(not(feature = "sm-raw-window-handle-05"))]
+fn make_connection(window: &winit::window::Window) -> surfman::Connection
+{
+    let display_handle = window.display_handle().expect("failed to get display handle from window");
+    let connection = Connection::from_display_handle(display_handle).unwrap();
+    connection
+}
+
+#[cfg(feature = "sm-raw-window-handle-05")]
+fn make_native_widget(window: &winit::window::Window, connection: &surfman::Connection, window_size: Size2D<i32>) -> surfman::NativeWidget
+{
+    let raw_window_handle = window.raw_window_handle();
+    let native_widget = connection
+        .create_native_widget_from_raw_window_handle(raw_window_handle, window_size)
+        .unwrap();
+    native_widget
+}
+
+#[cfg(not(feature = "sm-raw-window-handle-05"))]
+fn make_native_widget(window: &winit::window::Window, connection: &surfman::Connection, window_size: Size2D<i32>) -> surfman::NativeWidget
+{
+    let raw_window_handle = window.window_handle().expect("couldn't get window handle from window");
+    let native_widget = connection
+        .create_native_widget_from_window_handle(raw_window_handle, window_size)
+        .unwrap();
+    native_widget
+}
+
 #[cfg(not(target_os = "android"))]
 fn main() {
-    let event_loop = EventLoop::new();
+    use winit::{event::RawKeyEvent, keyboard::{KeyCode, PhysicalKey}};
+
+    let event_loop = EventLoop::new().expect("couldn't create eventloop");
     let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let physical_size = PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT);
 
@@ -100,15 +142,11 @@ fn main() {
 
     window.set_visible(true);
 
-    let raw_display_handle = window.raw_display_handle();
-    let connection = Connection::from_raw_display_handle(raw_display_handle).unwrap();
+    let connection = make_connection(&window);
 
     let window_size = window.inner_size();
     let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-    let raw_window_handle = window.raw_window_handle();
-    let native_widget = connection
-        .create_native_widget_from_raw_window_handle(raw_window_handle, window_size)
-        .unwrap();
+    let native_widget = make_native_widget(&window, &connection, window_size);
     let adapter = connection.create_low_power_adapter().unwrap();
     let mut device = connection.create_device(&adapter).unwrap();
 
@@ -139,21 +177,21 @@ fn main() {
         window_size,
     );
 
-    event_loop.run(move |event, _, control_flow| match event {
+    event_loop.run(move |event, target| match event {
         Event::WindowEvent {
             event: WindowEvent::CloseRequested,
             ..
         }
         | Event::DeviceEvent {
             event:
-                DeviceEvent::Key(KeyboardInput {
-                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                DeviceEvent::Key(RawKeyEvent {
+                    physical_key: PhysicalKey::Code(KeyCode::Escape),
                     ..
                 }),
             ..
-        } => *control_flow = ControlFlow::Exit,
-        _ => { app.tick(true); *control_flow = ControlFlow::Poll; }
-    });
+        } => target.exit(),
+        _ => { app.tick(true); target.set_control_flow(ControlFlow::Poll) }
+    }).expect("failed to run event loop");
 
 }
 pub struct App {

@@ -50,7 +50,7 @@ bitflags! {
 
 /// Attributes that control aspects of a context and/or surfaces created from that context.
 ///
-/// Similar to: https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
+/// Similar to: <https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES>
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct ContextAttributes {
     /// The OpenGL or OpenGL ES version that this context supports.
