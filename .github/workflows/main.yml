@@ -70,10 +70,17 @@ jobs:
         cd surfman
         rustup component add rust-src --target=aarch64-uwp-windows-msvc
         cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
+  Format:
+    name: Run `rustfmt`
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mkroening/rust-toolchain-toml@main
+      - run: cargo fmt --check
   build_result:
     name: Result
     runs-on: ubuntu-latest
-    needs: ["Build"]
+    needs: ["Build", "Format"]
     if: always()
     steps:
       - name: Mark the job as successful
