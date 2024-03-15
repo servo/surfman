@@ -156,7 +156,7 @@ impl Connection {
                 // https://developer.apple.com/documentation/appkit/nsview/1483301-window
                 let ns_window: id = unsafe{ msg_send![ns_view, window] };
                 Ok(NativeWidget {
-                    // increment the nsview's reference count with retain
+                    // Increment the nsview's reference count with retain. See:
                     // https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571946-retain
                     view: NSView(unsafe { msg_send![ns_view, retain] }),
                     // https://developer.apple.com/documentation/appkit/nswindow/1419086-isopaque
