@@ -72,17 +72,13 @@ impl ConnectionInterface for Connection {
 
     #[inline]
     #[cfg(feature = "sm-raw-window-handle-05")]
-    fn from_raw_display_handle(
-        raw_handle: rwh_05::RawDisplayHandle,
-    ) -> Result<Connection, Error> {
+    fn from_raw_display_handle(raw_handle: rwh_05::RawDisplayHandle) -> Result<Connection, Error> {
         Connection::from_raw_display_handle(raw_handle)
     }
 
     #[inline]
     #[cfg(feature = "sm-raw-window-handle-06")]
-    fn from_display_handle(
-        handle: rwh_06::DisplayHandle,
-    ) -> Result<Connection, Error> {
+    fn from_display_handle(handle: rwh_06::DisplayHandle) -> Result<Connection, Error> {
         Connection::from_display_handle(handle)
     }
 

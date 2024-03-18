@@ -167,14 +167,12 @@ impl ResourceLoader for JavaResourceLoader {
 
         let loader = self.loader.as_obj();
         let mut env = self.vm.get_env().unwrap();
-        match env
-            .call_method(
-                loader,
-                "slurp",
-                "(Ljava/lang/String;)Ljava/nio/ByteBuffer;",
-                &[JValue::Object(&env.new_string(filename).unwrap())],
-            )
-        {
+        match env.call_method(
+            loader,
+            "slurp",
+            "(Ljava/lang/String;)Ljava/nio/ByteBuffer;",
+            &[JValue::Object(&env.new_string(filename).unwrap())],
+        ) {
             Ok(JValueGen::Object(object)) => {
                 let byte_buffer = JByteBuffer::from(object);
                 unsafe {
@@ -184,7 +182,7 @@ impl ResourceLoader for JavaResourceLoader {
                     );
                     dest.extend_from_slice(slice);
                 }
-            },
+            }
             _ => panic!("Unexpected return value!"),
         }
     }

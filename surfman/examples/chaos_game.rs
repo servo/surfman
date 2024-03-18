@@ -6,7 +6,7 @@ use euclid::default::Point2D;
 use rand::{self, Rng};
 use surfman::{SurfaceAccess, SurfaceType};
 use winit::dpi::PhysicalSize;
-use winit::event::{DeviceEvent, Event, WindowEvent, KeyboardInput, VirtualKeyCode};
+use winit::event::{DeviceEvent, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 
@@ -53,7 +53,7 @@ fn main() {
     let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
     let handle = window.window_handle().unwrap();
     let native_widget = connection
-        .create_native_widget_from_raw_window_handle(handle.as_raw(), window_size);
+        .create_native_widget_from_raw_window_handle(handle.as_raw(), window_size)
         .unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };

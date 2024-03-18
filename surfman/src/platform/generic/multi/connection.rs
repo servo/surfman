@@ -199,9 +199,7 @@ where
     ) -> Result<Connection<Def, Alt>, Error> {
         match <Def::Connection>::from_display_handle(handle) {
             Ok(connection) => Ok(Connection::Default(connection)),
-            Err(_) => {
-                <Alt::Connection>::from_display_handle(handle).map(Connection::Alternate)
-            }
+            Err(_) => <Alt::Connection>::from_display_handle(handle).map(Connection::Alternate),
         }
     }
 
@@ -325,9 +323,7 @@ where
     }
 
     #[cfg(feature = "sm-raw-window-handle-06")]
-    fn from_display_handle(
-        handle: rwh_06::DisplayHandle,
-    ) -> Result<Connection<Def, Alt>, Error> {
+    fn from_display_handle(handle: rwh_06::DisplayHandle) -> Result<Connection<Def, Alt>, Error> {
         Connection::from_display_handle(handle)
     }
 

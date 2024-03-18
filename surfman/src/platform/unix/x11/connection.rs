@@ -206,9 +206,7 @@ impl Connection {
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
-    pub fn from_display_handle(
-        handle: rwh_06::DisplayHandle,
-    ) -> Result<Connection, Error> {
+    pub fn from_display_handle(handle: rwh_06::DisplayHandle) -> Result<Connection, Error> {
         use rwh_06::RawDisplayHandle::Xcb;
         use rwh_06::RawDisplayHandle::Xlib;
         use rwh_06::XlibDisplayHandle;

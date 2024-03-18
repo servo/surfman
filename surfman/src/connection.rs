@@ -56,15 +56,11 @@ pub trait Connection: Sized {
 
     /// Opens the display connection corresponding to the given `RawDisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-05")]
-    fn from_raw_display_handle(
-        raw_handle: rwh_05::RawDisplayHandle,
-    ) -> Result<Self, Error>;
+    fn from_raw_display_handle(raw_handle: rwh_05::RawDisplayHandle) -> Result<Self, Error>;
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
-    fn from_display_handle(
-        handle: rwh_06::DisplayHandle,
-    ) -> Result<Self, Error>;
+    fn from_display_handle(handle: rwh_06::DisplayHandle) -> Result<Self, Error>;
 
     /// Creates a native widget from a raw pointer
     unsafe fn create_native_widget_from_ptr(

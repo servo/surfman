@@ -120,17 +120,13 @@ impl Connection {
 
     /// Opens the display connection corresponding to the given `RawDisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-05")]
-    pub fn from_raw_display_handle(
-        _: rwh_05::RawDisplayHandle,
-    ) -> Result<Connection, Error> {
+    pub fn from_raw_display_handle(_: rwh_05::RawDisplayHandle) -> Result<Connection, Error> {
         Connection::new()
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-06")]
-    pub fn from_display_handle(
-        _: rwh_06::DisplayHandle,
-    ) -> Result<Connection, Error> {
+    pub fn from_display_handle(_: rwh_06::DisplayHandle) -> Result<Connection, Error> {
         Connection::new()
     }
 
@@ -179,7 +175,7 @@ impl Connection {
             AppKit(handle) => {
                 let ns_view = handle.ns_view.as_ptr() as id;
                 // https://developer.apple.com/documentation/appkit/nsview/1483301-window
-                let ns_window: id = unsafe{ msg_send![ns_view, window] };
+                let ns_window: id = unsafe { msg_send![ns_view, window] };
                 Ok(NativeWidget {
                     // Increment the nsview's reference count with retain. See:
                     // https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571946-retain
