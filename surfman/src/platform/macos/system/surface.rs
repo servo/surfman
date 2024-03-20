@@ -477,7 +477,7 @@ impl Drop for ViewInfo {
             self.display_link.stop();
 
             // Drop the reference that the callback was holding onto.
-            mem::transmute_copy::<Arc<VblankCond>, Arc<VblankCond>>(&self.next_vblank);
+            let _ = mem::transmute_copy::<Arc<VblankCond>, Arc<VblankCond>>(&self.next_vblank);
         }
     }
 }
