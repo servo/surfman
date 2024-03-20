@@ -1,14 +1,14 @@
-// surfman/surfman/src/platform/android/surface.rs
+// surfman/surfman/src/platform/egl/android_surface.rs
 //
 //! Surface management for Android using the `GraphicBuffer` class and EGL.
 
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
-use super::ffi::{AHardwareBuffer, AHardwareBuffer_Desc, AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE};
-use super::ffi::{AHardwareBuffer_allocate, AHardwareBuffer_release, ANativeWindow};
-use super::ffi::{ANativeWindow_getHeight, ANativeWindow_getWidth};
-use super::ffi::{AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM, AHARDWAREBUFFER_USAGE_CPU_READ_NEVER};
-use super::ffi::{AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER, AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER};
+use super::android_ffi::{AHardwareBuffer, AHardwareBuffer_Desc, AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE};
+use super::android_ffi::{AHardwareBuffer_allocate, AHardwareBuffer_release, ANativeWindow};
+use super::android_ffi::{ANativeWindow_getHeight, ANativeWindow_getWidth};
+use super::android_ffi::{AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM, AHARDWAREBUFFER_USAGE_CPU_READ_NEVER};
+use super::android_ffi::{AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER, AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER};
 use crate::context::ContextID;
 use crate::egl;
 use crate::egl::types::{EGLSurface, EGLint};

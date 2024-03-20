@@ -1,13 +1,13 @@
-// surfman/surfman/src/platform/android/mod.rs
+// surfman/surfman/src/platform/egl/mod.rs
 //
 //! Bindings to EGL on Android.
 
 pub mod connection;
 pub mod context;
 pub mod device;
-pub mod surface;
+pub mod android_surface;
 
-mod ffi;
+mod android_ffi;
 
 #[path = "../../implementation/mod.rs"]
 mod implementation;

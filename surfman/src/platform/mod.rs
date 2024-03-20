@@ -5,9 +5,9 @@
 pub mod generic;
 
 #[cfg(android_platform)]
-pub mod android;
+pub mod egl;
 #[cfg(android_platform)]
-pub use android as default;
+pub use egl as default;
 
 #[cfg(macos_platform)]
 pub mod macos;

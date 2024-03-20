@@ -1,12 +1,12 @@
-// surfman/surfman/src/platform/android/connection.rs
+// surfman/surfman/src/platform/egl/connection.rs
 //
 //! A no-op connection for Android.
 //!
 //! FIXME(pcwalton): Should this instead wrap `EGLDisplay`? Is that thread-safe on Android?
 
 use super::device::{Adapter, Device, NativeDevice};
-use super::ffi::ANativeWindow;
-use super::surface::NativeWidget;
+use super::android_ffi::ANativeWindow;
+use super::android_surface::NativeWidget;
 use crate::Error;
 use crate::GLApi;
 

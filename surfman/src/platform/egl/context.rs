@@ -1,9 +1,9 @@
-// surfman/surfman/src/platform/android/context.rs
+// surfman/surfman/src/platform/egl/context.rs
 //
 //! OpenGL rendering contexts.
 
 use super::device::Device;
-use super::surface::{Surface, SurfaceObjects};
+use super::android_surface::{Surface, SurfaceObjects};
 use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::egl;
 use crate::egl::types::{EGLConfig, EGLContext, EGLSurface, EGLint};

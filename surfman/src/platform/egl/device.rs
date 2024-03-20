@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/android/device.rs
+// surfman/surfman/src/platform/egl/device.rs
 //
 //! A thread-local handle to the device.
 
