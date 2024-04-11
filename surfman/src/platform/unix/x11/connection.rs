@@ -211,7 +211,10 @@ impl Connection {
         use rwh_06::RawDisplayHandle::Xlib;
         use rwh_06::XlibDisplayHandle;
         let display = match handle.as_raw() {
-            Xlib(XlibDisplayHandle { display, .. }) => display as *mut Display,
+            Xlib(XlibDisplayHandle {
+                display: Some(display),
+                ..
+            }) => display.as_ptr() as *mut Display,
             Xcb(_) => return Err(Error::Unimplemented),
             _ => return Err(Error::IncompatibleRawDisplayHandle),
         };
