@@ -24,7 +24,7 @@ jobs:
         include:
           # rust stable
           - os: ubuntu-22.04
-            features: "--features sm-wayland-default"
+            features: "--features 'sm-x11 sm-wayland-default'"
             rust: stable
             target: "default"
           - os: ubuntu-22.04
