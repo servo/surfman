@@ -56,7 +56,6 @@ pub fn test_device_creation() {
         Ok(_) => {}
         Err(Error::RequiredExtensionUnavailable) => {
             // Can't run these tests on this hardware.
-            return;
         }
         Err(err) => panic!("Failed to create device: {:?}", err),
     }
