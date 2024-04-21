@@ -174,7 +174,7 @@ impl Device {
         surface_access: SurfaceAccess,
         native_widget: &NativeWidget,
     ) -> ViewInfo {
-        let front_surface = self.create_io_surface(&size, surface_access);
+        let front_surface = self.create_io_surface(size, surface_access);
 
         let window: id = msg_send![native_widget.view.0, window];
         let device_description: CFDictionary<CFString, CFNumber> =
