@@ -42,9 +42,7 @@ impl Device {
     pub fn native_device(&self) -> NativeDevice {
         NativeDevice(
             MetalDevice::all()
-                .into_iter()
-                .filter(|device| device.is_low_power() == self.adapter.is_low_power)
-                .next()
+                .into_iter().find(|device| device.is_low_power() == self.adapter.is_low_power)
                 .expect("No Metal device found!"),
         )
     }
