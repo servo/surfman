@@ -107,10 +107,7 @@ where
                     .create_context(descriptor, shared)
                     .map(Context::Default)
             }
-            (
-                &mut Device::Alternate(ref mut device),
-                ContextDescriptor::Alternate(descriptor),
-            ) => {
+            (&mut Device::Alternate(ref mut device), ContextDescriptor::Alternate(descriptor)) => {
                 let shared = match share_with {
                     Some(Context::Alternate(other)) => Some(other),
                     Some(_) => {
@@ -230,8 +227,7 @@ where
         surface: Surface<Def, Alt>,
     ) -> Result<(), (Error, Surface<Def, Alt>)> {
         match (self, &mut *context) {
-            (Device::Default(device), &mut Context::Default(ref mut context)) => match surface
-            {
+            (Device::Default(device), &mut Context::Default(ref mut context)) => match surface {
                 Surface::Default(surface) => device
                     .bind_surface_to_context(context, surface)
                     .map_err(|(err, surface)| (err, Surface::Default(surface))),
@@ -277,10 +273,9 @@ where
             (Device::Default(device), ContextDescriptor::Default(context_descriptor)) => {
                 device.context_descriptor_attributes(context_descriptor)
             }
-            (
-                Device::Alternate(device),
-                ContextDescriptor::Alternate(context_descriptor),
-            ) => device.context_descriptor_attributes(context_descriptor),
+            (Device::Alternate(device), ContextDescriptor::Alternate(context_descriptor)) => {
+                device.context_descriptor_attributes(context_descriptor)
+            }
             _ => panic!("Incompatible context!"),
         }
     }
@@ -314,12 +309,8 @@ where
     /// a new one, the new context might have the same ID as the destroyed one.
     pub fn context_id(&self, context: &Context<Def, Alt>) -> ContextID {
         match (self, context) {
-            (Device::Default(device), Context::Default(context)) => {
-                device.context_id(context)
-            }
-            (Device::Alternate(device), Context::Alternate(context)) => {
-                device.context_id(context)
-            }
+            (Device::Default(device), Context::Default(context)) => device.context_id(context),
+            (Device::Alternate(device), Context::Alternate(context)) => device.context_id(context),
             _ => panic!("Incompatible context!"),
         }
     }
