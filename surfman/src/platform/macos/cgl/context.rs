@@ -43,7 +43,7 @@ const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 #[allow(non_upper_case_globals)]
 const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
 
-static OPENGL_FRAMEWORK_IDENTIFIER: &'static str = "com.apple.opengl";
+static OPENGL_FRAMEWORK_IDENTIFIER: &str = "com.apple.opengl";
 
 thread_local! {
     #[doc(hidden)]
