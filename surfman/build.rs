@@ -38,18 +38,18 @@ fn main() {
         || (target_os == "windows" && cfg!(feature = "sm-angle"))
         || target_family.as_ref().map_or(false, |f| f == "unix")
     {
-        let mut file = File::create(&dest.join("egl_bindings.rs")).unwrap();
+        let mut file = File::create(dest.join("egl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, []);
         registry.write_bindings(StructGenerator, &mut file).unwrap();
     }
 
     // Generate GL bindings.
     if target_os == "android" {
-        let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
+        let mut file = File::create(dest.join("gl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Gles2, (3, 0), Profile::Core, Fallbacks::All, []);
         registry.write_bindings(StructGenerator, &mut file).unwrap();
     } else {
-        let mut file = File::create(&dest.join("gl_bindings.rs")).unwrap();
+        let mut file = File::create(dest.join("gl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Gl, (3, 3), Profile::Core, Fallbacks::All, []);
         registry.write_bindings(StructGenerator, &mut file).unwrap();
     }
