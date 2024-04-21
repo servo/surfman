@@ -56,7 +56,6 @@ pub fn test_device_creation() {
         Ok(_) => {}
         Err(Error::RequiredExtensionUnavailable) => {
             // Can't run these tests on this hardware.
-            return;
         }
         Err(err) => panic!("Failed to create device: {:?}", err),
     }
@@ -76,7 +75,6 @@ pub fn test_device_accessors() {
     };
     drop(device.connection());
     drop(device.adapter());
-    drop(device.gl_api());
 }
 
 // Tests that all combinations of flags result in the creation of valid context descriptors and
@@ -868,7 +866,7 @@ pub fn test_get_native_context() {
 fn bind_context_fbo(gl: &Gl, device: &Device, context: &Context) {
     unsafe {
         gl.BindFramebuffer(gl::FRAMEBUFFER, context_fbo(device, context));
-        check_gl(&gl);
+        check_gl(gl);
     }
 }
 
@@ -883,7 +881,7 @@ fn context_fbo(device: &Device, context: &Context) -> GLuint {
 fn make_surface(device: &mut Device, context: &Context) -> Surface {
     device
         .create_surface(
-            &context,
+            context,
             SurfaceAccess::GPUOnly,
             SurfaceType::Generic {
                 size: Size2D::new(640, 480),
@@ -918,9 +916,9 @@ fn make_fbo(gl: &Gl, texture_target: GLenum, texture: GLuint) -> GLuint {
     unsafe {
         let mut framebuffer_object = 0;
         gl.GenFramebuffers(1, &mut framebuffer_object);
-        check_gl(&gl);
+        check_gl(gl);
         gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        check_gl(&gl);
+        check_gl(gl);
         gl.FramebufferTexture2D(
             gl::FRAMEBUFFER,
             gl::COLOR_ATTACHMENT0,
@@ -928,7 +926,7 @@ fn make_fbo(gl: &Gl, texture_target: GLenum, texture: GLuint) -> GLuint {
             texture,
             0,
         );
-        check_gl(&gl);
+        check_gl(gl);
         assert_eq!(
             gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
             gl::FRAMEBUFFER_COMPLETE

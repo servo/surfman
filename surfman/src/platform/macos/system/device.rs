@@ -43,8 +43,7 @@ impl Device {
         NativeDevice(
             MetalDevice::all()
                 .into_iter()
-                .filter(|device| device.is_low_power() == self.adapter.is_low_power)
-                .next()
+                .find(|device| device.is_low_power() == self.adapter.is_low_power)
                 .expect("No Metal device found!"),
         )
     }

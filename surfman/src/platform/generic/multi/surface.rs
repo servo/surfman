@@ -107,7 +107,7 @@ where
         surface_type: SurfaceType<NativeWidget<Def, Alt>>,
     ) -> Result<Surface<Def, Alt>, Error> {
         match (&mut *self, context) {
-            (&mut Device::Default(ref mut device), &Context::Default(ref context)) => {
+            (&mut Device::Default(ref mut device), Context::Default(context)) => {
                 let surface_type = match surface_type {
                     SurfaceType::Generic { size } => SurfaceType::Generic { size },
                     SurfaceType::Widget {
@@ -121,7 +121,7 @@ where
                     .create_surface(context, surface_access, surface_type)
                     .map(Surface::Default)
             }
-            (&mut Device::Alternate(ref mut device), &Context::Alternate(ref context)) => {
+            (&mut Device::Alternate(ref mut device), Context::Alternate(context)) => {
                 let surface_type = match surface_type {
                     SurfaceType::Generic { size } => SurfaceType::Generic { size },
                     SurfaceType::Widget {
@@ -155,8 +155,7 @@ where
         surface: Surface<Def, Alt>,
     ) -> Result<SurfaceTexture<Def, Alt>, (Error, Surface<Def, Alt>)> {
         match (self, &mut *context) {
-            (&Device::Default(ref device), &mut Context::Default(ref mut context)) => match surface
-            {
+            (Device::Default(device), &mut Context::Default(ref mut context)) => match surface {
                 Surface::Default(surface) => {
                     match device.create_surface_texture(context, surface) {
                         Ok(surface_texture) => Ok(SurfaceTexture::Default(surface_texture)),
@@ -165,7 +164,7 @@ where
                 }
                 _ => Err((Error::IncompatibleSurface, surface)),
             },
-            (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
+            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => {
                 match surface {
                     Surface::Alternate(surface) => {
                         match device.create_surface_texture(context, surface) {
@@ -193,18 +192,15 @@ where
         surface: &mut Surface<Def, Alt>,
     ) -> Result<(), Error> {
         match (self, &mut *context) {
-            (&Device::Default(ref device), &mut Context::Default(ref mut context)) => {
-                match *surface {
-                    Surface::Default(ref mut surface) => device.destroy_surface(context, surface),
-                    _ => Err(Error::IncompatibleSurface),
-                }
-            }
-            (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
-                match *surface {
-                    Surface::Alternate(ref mut surface) => device.destroy_surface(context, surface),
-                    _ => Err(Error::IncompatibleSurface),
-                }
-            }
+            (Device::Default(device), &mut Context::Default(ref mut context)) => match *surface {
+                Surface::Default(ref mut surface) => device.destroy_surface(context, surface),
+                _ => Err(Error::IncompatibleSurface),
+            },
+            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => match *surface
+            {
+                Surface::Alternate(ref mut surface) => device.destroy_surface(context, surface),
+                _ => Err(Error::IncompatibleSurface),
+            },
             _ => Err(Error::IncompatibleContext),
         }
     }
@@ -222,7 +218,7 @@ where
         surface_texture: SurfaceTexture<Def, Alt>,
     ) -> Result<Surface<Def, Alt>, (Error, SurfaceTexture<Def, Alt>)> {
         match (self, &mut *context) {
-            (&Device::Default(ref device), &mut Context::Default(ref mut context)) => {
+            (Device::Default(device), &mut Context::Default(ref mut context)) => {
                 match surface_texture {
                     SurfaceTexture::Default(surface_texture) => {
                         match device.destroy_surface_texture(context, surface_texture) {
@@ -235,7 +231,7 @@ where
                     _ => Err((Error::IncompatibleSurfaceTexture, surface_texture)),
                 }
             }
-            (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
+            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => {
                 match surface_texture {
                     SurfaceTexture::Alternate(surface_texture) => {
                         match device.destroy_surface_texture(context, surface_texture) {
@@ -265,11 +261,11 @@ where
         surface: &mut Surface<Def, Alt>,
     ) -> Result<(), Error> {
         match (self, context) {
-            (&Device::Default(ref device), &Context::Default(ref context)) => match *surface {
+            (Device::Default(device), Context::Default(context)) => match *surface {
                 Surface::Default(ref mut surface) => device.present_surface(context, surface),
                 _ => Err(Error::IncompatibleSurface),
             },
-            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => match *surface {
+            (Device::Alternate(device), Context::Alternate(context)) => match *surface {
                 Surface::Alternate(ref mut surface) => device.present_surface(context, surface),
                 _ => Err(Error::IncompatibleSurface),
             },
@@ -285,11 +281,11 @@ where
         size: Size2D<i32>,
     ) -> Result<(), Error> {
         match (self, context) {
-            (&Device::Default(ref device), &Context::Default(ref context)) => match *surface {
+            (Device::Default(device), Context::Default(context)) => match *surface {
                 Surface::Default(ref mut surface) => device.resize_surface(context, surface, size),
                 _ => Err(Error::IncompatibleSurface),
             },
-            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => match *surface {
+            (Device::Alternate(device), Context::Alternate(context)) => match *surface {
                 Surface::Alternate(ref mut surface) => {
                     device.resize_surface(context, surface, size)
                 }
@@ -318,10 +314,10 @@ where
     /// 0, the default framebuffer, depending on platform.
     pub fn surface_info(&self, surface: &Surface<Def, Alt>) -> SurfaceInfo {
         match (self, surface) {
-            (&Device::Default(ref device), Surface::Default(ref surface)) => {
+            (Device::Default(device), Surface::Default(ref surface)) => {
                 device.surface_info(surface)
             }
-            (&Device::Alternate(ref device), Surface::Alternate(ref surface)) => {
+            (Device::Alternate(device), Surface::Alternate(ref surface)) => {
                 device.surface_info(surface)
             }
             _ => panic!("Incompatible context!"),
@@ -333,10 +329,10 @@ where
     /// It is only legal to read from, not write to, this texture object.
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture<Def, Alt>) -> GLuint {
         match (self, surface_texture) {
-            (&Device::Default(ref device), SurfaceTexture::Default(ref surface_texture)) => {
+            (Device::Default(device), SurfaceTexture::Default(ref surface_texture)) => {
                 device.surface_texture_object(surface_texture)
             }
-            (&Device::Alternate(ref device), SurfaceTexture::Alternate(ref surface_texture)) => {
+            (Device::Alternate(device), SurfaceTexture::Alternate(ref surface_texture)) => {
                 device.surface_texture_object(surface_texture)
             }
             _ => panic!("Incompatible context!"),

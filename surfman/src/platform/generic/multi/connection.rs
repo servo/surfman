@@ -147,10 +147,10 @@ where
     /// Device handles are local to a single thread.
     pub fn create_device(&self, adapter: &Adapter<Def, Alt>) -> Result<Device<Def, Alt>, Error> {
         match (self, adapter) {
-            (&Connection::Default(ref connection), &Adapter::Default(ref adapter)) => {
+            (Connection::Default(connection), Adapter::Default(adapter)) => {
                 connection.create_device(adapter).map(Device::Default)
             }
-            (&Connection::Alternate(ref connection), &Adapter::Alternate(ref adapter)) => {
+            (Connection::Alternate(connection), Adapter::Alternate(adapter)) => {
                 connection.create_device(adapter).map(Device::Alternate)
             }
             _ => Err(Error::IncompatibleAdapter),
@@ -164,13 +164,13 @@ where
         native_device: NativeDevice<Def, Alt>,
     ) -> Result<Device<Def, Alt>, Error> {
         match self {
-            &Connection::Default(ref connection) => match native_device {
+            Connection::Default(connection) => match native_device {
                 NativeDevice::Default(native_device) => connection
                     .create_device_from_native_device(native_device)
                     .map(Device::Default),
                 _ => Err(Error::IncompatibleNativeDevice),
             },
-            &Connection::Alternate(ref connection) => match native_device {
+            Connection::Alternate(connection) => match native_device {
                 NativeDevice::Alternate(native_device) => connection
                     .create_device_from_native_device(native_device)
                     .map(Device::Alternate),

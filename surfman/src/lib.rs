@@ -63,6 +63,7 @@ pub(crate) use crate::gl::Gles2 as Gl;
 mod gl_utils;
 mod renderbuffers;
 
+#[allow(clippy::all)]
 mod gl {
     include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
 }
@@ -73,6 +74,7 @@ mod gl {
     unix
 ))]
 #[allow(non_camel_case_types)]
+#[allow(clippy::all)]
 mod egl {
     use std::os::raw::{c_long, c_void};
     pub type khronos_utime_nanoseconds_t = khronos_uint64_t;
