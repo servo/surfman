@@ -95,9 +95,9 @@ where
         share_with: Option<&Context<Def, Alt>>,
     ) -> Result<Context<Def, Alt>, Error> {
         match (&mut *self, descriptor) {
-            (&mut Device::Default(ref mut device), &ContextDescriptor::Default(ref descriptor)) => {
+            (&mut Device::Default(ref mut device), ContextDescriptor::Default(descriptor)) => {
                 let shared = match share_with {
-                    Some(&Context::Default(ref other)) => Some(other),
+                    Some(Context::Default(other)) => Some(other),
                     Some(_) => {
                         return Err(Error::IncompatibleSharedContext);
                     }
@@ -109,10 +109,10 @@ where
             }
             (
                 &mut Device::Alternate(ref mut device),
-                &ContextDescriptor::Alternate(ref descriptor),
+                ContextDescriptor::Alternate(descriptor),
             ) => {
                 let shared = match share_with {
-                    Some(&Context::Alternate(ref other)) => Some(other),
+                    Some(Context::Alternate(other)) => Some(other),
                     Some(_) => {
                         return Err(Error::IncompatibleSharedContext);
                     }
@@ -132,13 +132,13 @@ where
         native_context: NativeContext<Def, Alt>,
     ) -> Result<Context<Def, Alt>, Error> {
         match self {
-            &Device::Default(ref device) => match native_context {
+            Device::Default(device) => match native_context {
                 NativeContext::Default(native_context) => device
                     .create_context_from_native_context(native_context)
                     .map(Context::Default),
                 _ => Err(Error::IncompatibleNativeContext),
             },
-            &Device::Alternate(ref device) => match native_context {
+            Device::Alternate(device) => match native_context {
                 NativeContext::Alternate(native_context) => device
                     .create_context_from_native_context(native_context)
                     .map(Context::Alternate),
@@ -152,10 +152,10 @@ where
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context<Def, Alt>) -> Result<(), Error> {
         match (self, &mut *context) {
-            (&Device::Default(ref device), &mut Context::Default(ref mut context)) => {
+            (Device::Default(device), &mut Context::Default(ref mut context)) => {
                 device.destroy_context(context)
             }
-            (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
+            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => {
                 device.destroy_context(context)
             }
             _ => Err(Error::IncompatibleContext),
@@ -165,10 +165,10 @@ where
     /// Returns the native context underlying this context.
     pub fn native_context(&self, context: &Context<Def, Alt>) -> NativeContext<Def, Alt> {
         match (self, context) {
-            (&Device::Default(ref device), &Context::Default(ref context)) => {
+            (Device::Default(device), Context::Default(context)) => {
                 NativeContext::Default(device.native_context(context))
             }
-            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+            (Device::Alternate(device), Context::Alternate(context)) => {
                 NativeContext::Alternate(device.native_context(context))
             }
             _ => panic!("Incompatible context!"),
@@ -178,10 +178,10 @@ where
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context<Def, Alt>) -> ContextDescriptor<Def, Alt> {
         match (self, context) {
-            (&Device::Default(ref device), &Context::Default(ref context)) => {
+            (Device::Default(device), Context::Default(context)) => {
                 ContextDescriptor::Default(device.context_descriptor(context))
             }
-            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+            (Device::Alternate(device), Context::Alternate(context)) => {
                 ContextDescriptor::Alternate(device.context_descriptor(context))
             }
             _ => panic!("Incompatible context!"),
@@ -193,10 +193,10 @@ where
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context<Def, Alt>) -> Result<(), Error> {
         match (self, context) {
-            (&Device::Default(ref device), &Context::Default(ref context)) => {
+            (Device::Default(device), Context::Default(context)) => {
                 device.make_context_current(context)
             }
-            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+            (Device::Alternate(device), Context::Alternate(context)) => {
                 device.make_context_current(context)
             }
             _ => Err(Error::IncompatibleContext),
@@ -209,8 +209,8 @@ where
     /// made current.
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         match self {
-            &Device::Default(ref device) => device.make_no_context_current(),
-            &Device::Alternate(ref device) => device.make_no_context_current(),
+            Device::Default(device) => device.make_no_context_current(),
+            Device::Alternate(device) => device.make_no_context_current(),
         }
     }
 
@@ -230,14 +230,14 @@ where
         surface: Surface<Def, Alt>,
     ) -> Result<(), (Error, Surface<Def, Alt>)> {
         match (self, &mut *context) {
-            (&Device::Default(ref device), &mut Context::Default(ref mut context)) => match surface
+            (Device::Default(device), &mut Context::Default(ref mut context)) => match surface
             {
                 Surface::Default(surface) => device
                     .bind_surface_to_context(context, surface)
                     .map_err(|(err, surface)| (err, Surface::Default(surface))),
                 _ => Err((Error::IncompatibleSurface, surface)),
             },
-            (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => {
+            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => {
                 match surface {
                     Surface::Alternate(surface) => device
                         .bind_surface_to_context(context, surface)
@@ -258,10 +258,10 @@ where
         context: &mut Context<Def, Alt>,
     ) -> Result<Option<Surface<Def, Alt>>, Error> {
         match (self, &mut *context) {
-            (&Device::Default(ref device), &mut Context::Default(ref mut context)) => device
+            (Device::Default(device), &mut Context::Default(ref mut context)) => device
                 .unbind_surface_from_context(context)
                 .map(|surface| surface.map(Surface::Default)),
-            (&Device::Alternate(ref device), &mut Context::Alternate(ref mut context)) => device
+            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => device
                 .unbind_surface_from_context(context)
                 .map(|surface| surface.map(Surface::Alternate)),
             _ => Err(Error::IncompatibleContext),
@@ -274,12 +274,12 @@ where
         context_descriptor: &ContextDescriptor<Def, Alt>,
     ) -> ContextAttributes {
         match (self, context_descriptor) {
-            (&Device::Default(ref device), &ContextDescriptor::Default(ref context_descriptor)) => {
+            (Device::Default(device), ContextDescriptor::Default(context_descriptor)) => {
                 device.context_descriptor_attributes(context_descriptor)
             }
             (
-                &Device::Alternate(ref device),
-                &ContextDescriptor::Alternate(ref context_descriptor),
+                Device::Alternate(device),
+                ContextDescriptor::Alternate(context_descriptor),
             ) => device.context_descriptor_attributes(context_descriptor),
             _ => panic!("Incompatible context!"),
         }
@@ -298,10 +298,10 @@ where
         symbol_name: &str,
     ) -> *const c_void {
         match (self, context) {
-            (&Device::Default(ref device), &Context::Default(ref context)) => {
+            (Device::Default(device), Context::Default(context)) => {
                 device.get_proc_address(context, symbol_name)
             }
-            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+            (Device::Alternate(device), Context::Alternate(context)) => {
                 device.get_proc_address(context, symbol_name)
             }
             _ => panic!("Incompatible context!"),
@@ -314,10 +314,10 @@ where
     /// a new one, the new context might have the same ID as the destroyed one.
     pub fn context_id(&self, context: &Context<Def, Alt>) -> ContextID {
         match (self, context) {
-            (&Device::Default(ref device), &Context::Default(ref context)) => {
+            (Device::Default(device), Context::Default(context)) => {
                 device.context_id(context)
             }
-            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+            (Device::Alternate(device), Context::Alternate(context)) => {
                 device.context_id(context)
             }
             _ => panic!("Incompatible context!"),
@@ -332,10 +332,10 @@ where
         context: &Context<Def, Alt>,
     ) -> Result<Option<SurfaceInfo>, Error> {
         match (self, context) {
-            (&Device::Default(ref device), &Context::Default(ref context)) => {
+            (Device::Default(device), Context::Default(context)) => {
                 device.context_surface_info(context)
             }
-            (&Device::Alternate(ref device), &Context::Alternate(ref context)) => {
+            (Device::Alternate(device), Context::Alternate(context)) => {
                 device.context_surface_info(context)
             }
             _ => Err(Error::IncompatibleContext),
