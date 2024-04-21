@@ -76,7 +76,6 @@ pub fn test_device_accessors() {
     };
     drop(device.connection());
     drop(device.adapter());
-    drop(device.gl_api());
 }
 
 // Tests that all combinations of flags result in the creation of valid context descriptors and
