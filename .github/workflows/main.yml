@@ -52,6 +52,7 @@ jobs:
         sudo apt update
         sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev -y
     - name: Install rust
+      id: toolchain
       uses: dtolnay/rust-toolchain@master
       with:
           toolchain: ${{ matrix.rust }}
@@ -59,20 +60,20 @@ jobs:
       if: matrix.target != 'default' && startsWith(matrix.target, 'aarch64-uwp-windows-msvc') != true
       run: |
         cd surfman
-        rustup target add ${{ matrix.target }}
-        cargo build --verbose ${{ matrix.features }} --target=${{ matrix.target }}
+        rustup +${{steps.toolchain.outputs.name}} target add ${{ matrix.target }}
+        cargo +${{steps.toolchain.outputs.name}} build --verbose ${{ matrix.features }} --target=${{ matrix.target }}
     - name: Build
       if: matrix.target == 'default'
       run: |
         cd surfman
-        cargo build --verbose ${{ matrix.features }}
+        cargo +${{steps.toolchain.outputs.name}} build --verbose ${{ matrix.features }}
     - name: Build Windows
       if: startsWith(matrix.target, 'aarch64-uwp-windows-msvc')
       shell: cmd
       run: |
         cd surfman
-        rustup component add rust-src --target=aarch64-uwp-windows-msvc
-        cargo build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
+        rustup +${{steps.toolchain.outputs.name}} component add rust-src --target=aarch64-uwp-windows-msvc
+        cargo +${{steps.toolchain.outputs.name}} build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
   Format:
     name: Run `rustfmt`
     runs-on: ubuntu-latest
