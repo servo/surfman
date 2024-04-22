@@ -41,6 +41,9 @@ jobs:
           - os: windows-latest
             target: "aarch64-pc-windows-msvc"
             rust: stable
+          - os: ubuntu-22.04
+            target: "aarch64-unknown-linux-ohos"
+            rust: beta  # Rust 1.78 is the first version where `-ohos` is tier2
     steps:
     - uses: actions/checkout@v4
     - name: Install deps on linux
