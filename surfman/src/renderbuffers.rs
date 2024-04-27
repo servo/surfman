@@ -6,6 +6,7 @@ use crate::context::{ContextAttributeFlags, ContextAttributes};
 use crate::gl;
 use crate::gl::types::GLuint;
 use crate::Gl;
+use std::thread;
 
 use euclid::default::Size2D;
 
@@ -22,7 +23,11 @@ impl Drop for Renderbuffers {
                 stencil: 0,
             }
             | Renderbuffers::CombinedDepthStencil(0) => {}
-            _ => panic!("Should have destroyed the FBO renderbuffers with `destroy()`!"),
+            _ => {
+                if !thread::panicking() {
+                    panic!("Should have destroyed the FBO renderbuffers with `destroy()`!")
+                }
+            }
         }
     }
 }
