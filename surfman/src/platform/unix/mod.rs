@@ -2,18 +2,17 @@
 //
 //! Backends specific to Unix-like systems, particularly Linux.
 
-// The default when x11 is enabled
-#[cfg(x11)]
+// The default when x11 is enabled, and wayland default is not explicitly selected.
+#[cfg(all(x11_platform, not(wayland_default)))]
 pub mod default;
 
-// The default when x11 is not enabled
-#[cfg(not(x11))]
+#[cfg(wayland_default)]
 pub use wayland as default;
 
-#[cfg(linux)]
+#[cfg(free_unix)]
 pub mod generic;
 
-#[cfg(linux)]
+#[cfg(wayland_platform)]
 pub mod wayland;
-#[cfg(x11)]
+#[cfg(x11_platform)]
 pub mod x11;
