@@ -12,21 +12,26 @@ fn main() {
     // Setup aliases for #[cfg] checks
     cfg_aliases! {
         // Platforms
-        windows: { target_os = "windows" },
-        macos: { target_os = "macos" },
-        android: { target_os = "android" },
-        // TODO: is `target_os = "linux"` the same as the following check?
-        linux: { all(unix, not(any(macos, android))) },
+        android_platform: { target_os = "android" },
+        web_platform: { all(target_family = "wasm", target_os = "unknown") },
+        macos_platform: { target_os = "macos" },
+        ios_platform: { target_os = "ios" },
+        windows_platform: { target_os = "windows" },
+        apple: { any(target_os = "ios", target_os = "macos") },
+        free_unix: { all(unix, not(apple), not(android_platform), not(target_os = "emscripten")) },
+
+        // Native displays.
+        x11_platform: { all(free_unix, feature = "sm-x11") },
+        wayland_platform: { all(free_unix) },
 
         // Features:
         // Here we collect the features that are only valid on certain platforms and
         // we add aliases that include checks for the correct platform.
         angle: { all(windows, feature = "sm-angle") },
-        angle_builtin: { all(windows, feature = "sm-angle-builtin") },
-        angle_default: { all(windows, feature = "sm-angle-default") },
-        no_wgl: { all(windows, feature = "sm-no-wgl") },
-        wayland_default: { all(linux, feature = "sm-wayland-default") },
-        x11: { all(linux, feature = "sm-x11") },
+        angle_builtin: { all(windows_platform, feature = "sm-angle-builtin") },
+        angle_default: { all(windows_platform, feature = "sm-angle-default") },
+        no_wgl: { all(windows_platform, feature = "sm-no-wgl") },
+        wayland_default: { all(wayland_platform, any(not(x11_platform), feature = "sm-wayland-default")) },
     }
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
