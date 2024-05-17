@@ -5,10 +5,14 @@
 //! FIXME(pcwalton): Should this instead wrap `EGLDisplay`? Is that thread-safe on Android?
 
 use super::device::{Adapter, Device, NativeDevice};
-use super::android_ffi::ANativeWindow;
-use super::android_surface::NativeWidget;
+use super::surface::NativeWidget;
 use crate::Error;
 use crate::GLApi;
+
+#[cfg(android_platform)]
+use super::android_ffi::ANativeWindow;
+#[cfg(ohos_platform)]
+use super::ohos_ffi::OHNativeWindow;
 
 use euclid::default::Size2D;
 
@@ -109,15 +113,51 @@ impl Connection {
         Ok(Connection)
     }
 
+    #[cfg(android_platform)]
+    fn create_native_widget_from_ptr_impl(raw: *mut c_void) -> NativeWidget {
+        NativeWidget {
+            native_window: raw as *mut ANativeWindow,
+        }
+    }
+
+    #[cfg(ohos_platform)]
+    fn create_native_widget_from_ptr_impl(raw: *mut c_void) -> NativeWidget {
+        NativeWidget {
+            native_window: raw as *mut OHNativeWindow,
+        }
+    }
+
     /// Create a native widget from a raw pointer
     pub unsafe fn create_native_widget_from_ptr(
         &self,
         raw: *mut c_void,
         _size: Size2D<i32>,
     ) -> NativeWidget {
-        NativeWidget {
-            native_window: raw as *mut ANativeWindow,
+        debug_assert!(!raw.is_null());
+        Self::create_native_widget_from_ptr_impl(raw)
+    }
+
+    #[cfg(all(feature = "sm-raw-window-handle-05", android_platform))]
+    #[inline]
+    fn create_native_widget_from_rwh_05_handle(
+        raw_handle: rwh_05::RawWindowHandle,
+    ) -> Result<NativeWidget, Error> {
+        use rwh_05::RawWindowHandle::AndroidNdk;
+
+        match raw_handle {
+            AndroidNdk(handle) => Ok(NativeWidget {
+                native_window: handle.a_native_window as *mut _,
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
         }
+    }
+
+    #[cfg(all(feature = "sm-raw-window-handle-05", ohos_platform))]
+    #[inline]
+    fn create_native_widget_from_rwh_05_handle(
+        _raw_handle: rwh_05::RawWindowHandle,
+    ) -> Result<NativeWidget, Error> {
+        Err(Error::IncompatibleNativeWidget)
     }
 
     /// Create a native widget type from the given `RawWindowHandle`.
@@ -128,11 +168,34 @@ impl Connection {
         raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use rwh_05::RawWindowHandle::AndroidNdk;
+        create_native_widget_from_rwh_05_handle(raw_handle)
+    }
 
-        match raw_handle {
+    #[cfg(all(feature = "sm-raw-window-handle-06", android_platform))]
+    #[inline]
+    fn create_native_widget_from_rwh_06_handle(
+        handle: rwh_06::WindowHandle,
+    ) -> Result<NativeWidget, Error> {
+        use rwh_06::RawWindowHandle::AndroidNdk;
+
+        match handle.as_raw() {
             AndroidNdk(handle) => Ok(NativeWidget {
-                native_window: handle.a_native_window as *mut _,
+                native_window: handle.a_native_window.as_ptr() as *mut _,
+            }),
+            _ => Err(Error::IncompatibleNativeWidget),
+        }
+    }
+
+    #[cfg(all(feature = "sm-raw-window-handle-06", ohos_platform))]
+    #[inline]
+    fn create_native_widget_from_rwh_06_handle(
+        handle: rwh_06::WindowHandle,
+    ) -> Result<NativeWidget, Error> {
+        use rwh_06::RawWindowHandle::OhosNdk;
+
+        match handle.as_raw() {
+            OhosNdk(handle) => Ok(NativeWidget {
+                native_window: handle.native_window.as_ptr().cast(),
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }
@@ -146,14 +209,7 @@ impl Connection {
         handle: rwh_06::WindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use rwh_06::RawWindowHandle::AndroidNdk;
-
-        match handle.as_raw() {
-            AndroidNdk(handle) => Ok(NativeWidget {
-                native_window: handle.a_native_window.as_ptr() as *mut _,
-            }),
-            _ => Err(Error::IncompatibleNativeWidget),
-        }
+        Self::create_native_widget_from_rwh_06_handle(handle)
     }
 }
 

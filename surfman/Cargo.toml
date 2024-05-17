@@ -40,7 +40,7 @@ log = "0.4"
 sparkle = { version = "0.1", optional = true }
 osmesa-sys = { version = "0.1", optional = true }
 rwh_05 = { package = "raw-window-handle", version = "0.5.2", features = ["std"], optional = true }
-rwh_06 = { package = "raw-window-handle", version = "0.6", features = ["std"], optional = true }
+rwh_06 = { package = "raw-window-handle", version = "0.6.2", features = ["std"], optional = true }
 
 [dev-dependencies]
 clap = "2"
@@ -61,11 +61,11 @@ mach2 = "0.4"
 metal = "0.24"
 objc = "0.2"
 
-[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.wayland-sys]
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.wayland-sys]
 version = "0.30"
 features = ["client", "dlopen", "egl"]
 
-[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android"))))'.dependencies.x11]
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.x11]
 version = "2.3.0"
 features = ["xlib"]
 optional = true

@@ -3,7 +3,7 @@
 //! OpenGL rendering contexts.
 
 use super::device::Device;
-use super::android_surface::{Surface, SurfaceObjects};
+use super::surface::{Surface, SurfaceObjects};
 use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::egl;
 use crate::egl::types::{EGLConfig, EGLContext, EGLSurface, EGLint};
@@ -212,11 +212,12 @@ impl Device {
                     ..
                 }) => (egl_surface, egl_surface),
                 Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
+                #[cfg(android_platform)]
                 Framebuffer::Surface(Surface {
                     objects: SurfaceObjects::HardwareBuffer { .. },
                     ..
-                })
-                | Framebuffer::None => (context.pbuffer, context.pbuffer),
+                }) => (context.pbuffer, context.pbuffer),
+                Framebuffer::None => (context.pbuffer, context.pbuffer),
             };
 
             EGL_FUNCTIONS.with(|egl| {
@@ -366,11 +367,12 @@ impl Device {
                 ..
             }) => (egl_surface, egl_surface),
             Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
+            #[cfg(android_platform)]
             Framebuffer::Surface(Surface {
                 objects: SurfaceObjects::HardwareBuffer { .. },
                 ..
-            })
-            | Framebuffer::None => (context.pbuffer, context.pbuffer),
+            }) => (context.pbuffer, context.pbuffer),
+            Framebuffer::None => (context.pbuffer, context.pbuffer),
         };
 
         NativeContext {

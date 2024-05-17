@@ -732,7 +732,7 @@ pub fn test_surface_texture_right_side_up() {
     }
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
 #[cfg_attr(not(feature = "sm-test"), test)]
 #[serial]
 pub fn test_depth_and_stencil() {

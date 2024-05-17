@@ -72,12 +72,12 @@ impl ContextAttributes {
     }
 }
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_env = "ohos"))]
 pub(crate) fn current_context_uses_compatibility_profile(_gl: &Gl) -> bool {
     false
 }
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_env = "ohos")))]
 #[allow(dead_code)]
 pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
     unsafe {
