@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/egl/android_surface.rs
+// surfman/surfman/src/platform/egl/surface/mod.rs
 //
 //! Surface management for Android and OpenHarmony using the `GraphicBuffer` class and EGL.
 
