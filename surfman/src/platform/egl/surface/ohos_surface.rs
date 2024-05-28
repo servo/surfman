@@ -72,9 +72,7 @@ impl Device {
         let mut height: i32 = 0;
         let mut width: i32 = 0;
         // Safety: `OH_NativeWindow_NativeWindowHandleOpt` takes two output i32 pointers as
-        // variable arguments when called with `GET_BUFFER_GEOMETRY`. See the OHNativeWindow
-        // documentation for details:
-        // https://gitee.com/openharmony/docs/blob/master/en/application-dev/reference/apis-arkgraphics2d/_native_window.md
+        // variable arguments when called with `GET_BUFFER_GEOMETRY`.
         let result = unsafe {
             OH_NativeWindow_NativeWindowHandleOpt(
                 native_widget.native_window,

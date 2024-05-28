@@ -28,6 +28,15 @@ extern "C" {
     /// Can be used to query information like height and width.
     /// See the official [Documentation] for detailed usage information.
     ///
+    /// # Safety
+    ///
+    /// The `window` handle must be valid.
+    /// The variable arguments which must be passed to this function vary depending on the
+    /// value of `code`.
+    /// For `NativeWindowOperation::GET_BUFFER_GEOMETRY` the function two output i32 pointers
+    /// `height: *mut i32` and `width: *mut i32` must be passed as variadic arguments.
+    ///
+    ///
     /// [Documentation]: <https://gitee.com/openharmony/docs/blob/master/en/application-dev/reference/apis-arkgraphics2d/_native_window.md>
     pub(crate) fn OH_NativeWindow_NativeWindowHandleOpt(
         window: *mut OHNativeWindow,
