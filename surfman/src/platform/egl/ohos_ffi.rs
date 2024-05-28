@@ -30,11 +30,12 @@ extern "C" {
     ///
     /// # Safety
     ///
-    /// The `window` handle must be valid.
-    /// The variable arguments which must be passed to this function vary depending on the
-    /// value of `code`.
-    /// For `NativeWindowOperation::GET_BUFFER_GEOMETRY` the function two output i32 pointers
-    /// `height: *mut i32` and `width: *mut i32` must be passed as variadic arguments.
+    ///  - The `window` handle must be valid.
+    ///  - The variable arguments which must be passed to this function vary depending on the
+    ///    value of `code`.
+    ///  - For `NativeWindowOperation::GET_BUFFER_GEOMETRY` the function takes two output
+    ///    i32 pointers, `height: *mut i32` and `width: *mut i32` which are passed as variadic
+    ///    arguments.
     ///
     ///
     /// [Documentation]: <https://gitee.com/openharmony/docs/blob/master/en/application-dev/reference/apis-arkgraphics2d/_native_window.md>
