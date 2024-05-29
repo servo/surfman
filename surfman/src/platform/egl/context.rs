@@ -1,4 +1,4 @@
-// surfman/surfman/src/platform/android/context.rs
+// surfman/surfman/src/platform/egl/context.rs
 //
 //! OpenGL rendering contexts.
 
@@ -212,11 +212,12 @@ impl Device {
                     ..
                 }) => (egl_surface, egl_surface),
                 Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
+                #[cfg(android_platform)]
                 Framebuffer::Surface(Surface {
                     objects: SurfaceObjects::HardwareBuffer { .. },
                     ..
-                })
-                | Framebuffer::None => (context.pbuffer, context.pbuffer),
+                }) => (context.pbuffer, context.pbuffer),
+                Framebuffer::None => (context.pbuffer, context.pbuffer),
             };
 
             EGL_FUNCTIONS.with(|egl| {
@@ -366,11 +367,12 @@ impl Device {
                 ..
             }) => (egl_surface, egl_surface),
             Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
+            #[cfg(android_platform)]
             Framebuffer::Surface(Surface {
                 objects: SurfaceObjects::HardwareBuffer { .. },
                 ..
-            })
-            | Framebuffer::None => (context.pbuffer, context.pbuffer),
+            }) => (context.pbuffer, context.pbuffer),
+            Framebuffer::None => (context.pbuffer, context.pbuffer),
         };
 
         NativeContext {

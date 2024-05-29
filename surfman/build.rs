@@ -13,12 +13,13 @@ fn main() {
     cfg_aliases! {
         // Platforms
         android_platform: { target_os = "android" },
+        ohos_platform: { target_env = "ohos" },
         web_platform: { all(target_family = "wasm", target_os = "unknown") },
         macos_platform: { target_os = "macos" },
         ios_platform: { target_os = "ios" },
         windows_platform: { target_os = "windows" },
         apple: { any(target_os = "ios", target_os = "macos") },
-        free_unix: { all(unix, not(apple), not(android_platform), not(target_os = "emscripten")) },
+        free_unix: { all(unix, not(apple), not(android_platform), not(target_os = "emscripten"), not(ohos_platform)) },
 
         // Native displays.
         x11_platform: { all(free_unix, feature = "sm-x11") },
@@ -36,11 +37,13 @@ fn main() {
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_family = env::var("CARGO_CFG_TARGET_FAMILY").ok();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
     let dest = PathBuf::from(&env::var("OUT_DIR").unwrap());
 
     // Generate EGL bindings.
     if target_os == "android"
         || (target_os == "windows" && cfg!(feature = "sm-angle"))
+        || target_env == "ohos"
         || target_family.as_ref().map_or(false, |f| f == "unix")
     {
         let mut file = File::create(dest.join("egl_bindings.rs")).unwrap();
@@ -49,7 +52,7 @@ fn main() {
     }
 
     // Generate GL bindings.
-    if target_os == "android" {
+    if target_os == "android" || target_env == "ohos" {
         let mut file = File::create(dest.join("gl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Gles2, (3, 0), Profile::Core, Fallbacks::All, []);
         registry.write_bindings(StructGenerator, &mut file).unwrap();
