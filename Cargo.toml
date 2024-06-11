@@ -1,6 +1,92 @@
-[workspace]
-
-members = [
-    "android-example/rust",
-    "surfman",
+[package]
+name = "surfman"
+license = "MIT OR Apache-2.0 OR MPL-2.0"
+edition = "2018"
+version = "0.9.4"
+authors = [
+    "Patrick Walton <pcwalton@mimiga.net>",
+    "Emilio Cobos Álvarez <emilio@crisal.io>",
+    "The Servo Project Developers",
 ]
+description = "A cross-platform, low-level toolkit for GPU surface management"
+repository = "https://github.com/servo/surfman"
+build = "build.rs"
+readme = "README.md"
+
+[build-dependencies]
+gl_generator = "0.14"
+cfg_aliases = "0.1.0"
+
+[features]
+chains = ["fnv", "sparkle"]
+default = ["sm-raw-window-handle-06"]
+sm-angle = []
+sm-angle-builtin = ["mozangle"]
+sm-angle-default = ["sm-angle"]
+sm-no-wgl = ["sm-angle-default"]
+sm-test = []
+sm-wayland-default = []
+sm-x11 = ["x11"]
+sm-raw-window-handle-generic = []
+sm-raw-window-handle-05 = ["dep:rwh_05"]
+sm-raw-window-handle-06 = ["dep:rwh_06"]
+
+[dependencies]
+bitflags = "1.1"
+euclid = "0.22"
+fnv = { version = "1.0", optional = true }
+lazy_static = "1"
+libc = "0.2"
+log = "0.4"
+sparkle = { version = "0.1", optional = true }
+osmesa-sys = { version = "0.1", optional = true }
+rwh_05 = { package = "raw-window-handle", version = "0.5.2", features = ["std"], optional = true }
+rwh_06 = { package = "raw-window-handle", version = "0.6.2", features = ["std"], optional = true }
+
+[dev-dependencies]
+clap = "2"
+gl = "0.14"
+png = "0.17"
+rand = "0.8"
+winit = "0.29"
+serial_test = "3.1.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cgl = "0.3.2"
+cocoa = "0.25"
+core-foundation = "0.9"
+core-graphics = "0.23"
+servo-display-link = "0.2"
+io-surface = "0.15"
+mach2 = "0.4"
+metal = "0.24"
+objc = "0.2"
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.wayland-sys]
+version = "0.30"
+features = ["client", "dlopen", "egl"]
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.x11]
+version = "2.3.0"
+features = ["xlib"]
+optional = true
+
+# Ensure that we have a static libEGL.lib present for linking with EGL bindings.
+[target.'cfg(target_os = "windows")'.dependencies.mozangle]
+version = "0.4"
+features = ["egl", "build_dlls"]
+optional = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+wio = "0.2"
+winapi = { version = "0.3", features = [
+    "d3d11",
+    "libloaderapi",
+    "winbase",
+    "winerror",
+    "wingdi",
+    "winuser",
+] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+rwh_06 = { package = "raw-window-handle", version = "0.6" }
