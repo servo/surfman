@@ -20,5 +20,8 @@ euclid = { version = "0.22" }
 gl = "0.14"
 jni = "0.21"
 log = "0.4"
-surfman = { path = "../../surfman", features = [ "sm-test" ] }
+surfman = { version = "0.9.4", features = [ "sm-test" ] }
 winit = { version = "0.29.10", features = [ "android-native-activity", "rwh_05" ] }
+
+[patch.crates-io]
+surfman = { path = "../../" }

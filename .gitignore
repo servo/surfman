@@ -3,6 +3,7 @@ target
 *~
 *.iml
 /android-example/local.properties
+/android-example/target
 gc.properties
 *.bin
 /android-example/app/.classpath

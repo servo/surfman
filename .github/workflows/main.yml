@@ -64,19 +64,16 @@ jobs:
     - name: Build target
       if: matrix.target != 'default' && startsWith(matrix.target, 'aarch64-uwp-windows-msvc') != true
       run: |
-        cd surfman
         rustup +${{steps.toolchain.outputs.name}} target add ${{ matrix.target }}
         cargo +${{steps.toolchain.outputs.name}} build --verbose ${{ matrix.features }} --target=${{ matrix.target }}
     - name: Build
       if: matrix.target == 'default'
       run: |
-        cd surfman
         cargo +${{steps.toolchain.outputs.name}} build --verbose ${{ matrix.features }}
     - name: Build Windows
       if: startsWith(matrix.target, 'aarch64-uwp-windows-msvc')
       shell: cmd
       run: |
-        cd surfman
         rustup +${{steps.toolchain.outputs.name}} component add rust-src --target=aarch64-uwp-windows-msvc
         cargo +${{steps.toolchain.outputs.name}} build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
   Format:
