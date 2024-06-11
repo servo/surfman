@@ -46,11 +46,16 @@ jobs:
             rust: stable
     steps:
     - uses: actions/checkout@v4
-    - name: Install deps on linux
+    - name: Install dependencies (Linux)
       if: startsWith(matrix.os, 'ubuntu')
       run: |
         sudo apt update
         sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev -y
+    - name: Upgrade LLVM (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco upgrade llvm --version=17.0.6 -y
+        echo "LLVM_PATH=C:\Program Files\LLVM\bin" >> $GITHUB_ENV
     - name: Install rust
       id: toolchain
       uses: dtolnay/rust-toolchain@master
