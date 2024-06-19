@@ -87,6 +87,16 @@ winapi = { version = "0.3", features = [
     "wingdi",
     "winuser",
 ] }
+windows = { version = "0.57", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_OpenGL",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Direct3D11",
+    "Win32_System_SystemServices",
+] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 rwh_06 = { package = "raw-window-handle", version = "0.6" }

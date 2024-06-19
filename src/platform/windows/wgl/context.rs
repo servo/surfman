@@ -24,11 +24,15 @@ use winapi::shared::ntdef::{HANDLE, LPCSTR};
 use winapi::shared::windef::{HBRUSH, HDC, HGLRC, HWND};
 use winapi::um::libloaderapi;
 use winapi::um::wingdi::{self, PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_MAIN_PLANE};
-use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetCurrentContext};
-use winapi::um::wingdi::{wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
-use winapi::um::wingdi::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
+// use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetCurrentContext};
+use windows::Win32::Graphics::OpenGL::{wglCreateContext, wglDeleteContext, wglGetCurrentContext};
+// use winapi::um::wingdi::{wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
+use windows::Win32::Graphics::OpenGL::{wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
+// use winapi::um::wingdi::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
+use windows::Win32::Graphics::OpenGL::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
 use winapi::um::winuser::{self, COLOR_BACKGROUND, CREATESTRUCTA, CS_OWNDC, WM_CREATE, WNDCLASSA};
 use winapi::um::winuser::{WS_OVERLAPPEDWINDOW, WS_VISIBLE};
+
 
 const WGL_DRAW_TO_WINDOW_ARB: GLenum = 0x2001;
 const WGL_ACCELERATION_ARB: GLenum = 0x2003;
