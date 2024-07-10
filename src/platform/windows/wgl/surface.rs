@@ -12,37 +12,26 @@ use crate::gl;
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
 use euclid::default::Size2D;
+use windows::Win32::Graphics::Gdi::{GetDC, ReleaseDC};
+use windows::Win32::Graphics::OpenGL::{GetPixelFormat, SwapBuffers};
+use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
-// use winapi::shared::dxgi::IDXGIResource;
 use windows::Win32::Graphics::Dxgi::IDXGIResource;
-// use winapi::shared::dxgiformat::DXGI_FORMAT_R8G8B8A8_UNORM;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM;
-// use winapi::shared::dxgitype::DXGI_SAMPLE_DESC;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC;
-// use winapi::shared::minwindef::{FALSE, UINT};
-use windows::Win32::Foundation::{FALSE, UINT};
-// use winapi::shared::ntdef::HANDLE;
 use windows::Win32::Foundation::HANDLE;
-// use winapi::shared::windef::HWND;
 use windows::Win32::Foundation::HWND;
-use winapi::shared::winerror;
-// use winapi::um::d3d11::{ID3D11Texture2D, D3D11_USAGE_DEFAULT};
 use windows::Win32::Graphics::Direct3D11::{ID3D11Texture2D, D3D11_USAGE_DEFAULT};
-// use winapi::um::d3d11::{D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE};
 use windows::Win32::Graphics::Direct3D11::{D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE};
-// use winapi::um::d3d11::{D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX, D3D11_TEXTURE2D_DESC};
-use windows::Win32::Graphics::Direct3D11::{D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX, D3D11_TEXTURE2D_DESC};
-// use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+use windows::Win32::Graphics::Direct3D11::{
+    D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX, D3D11_TEXTURE2D_DESC,
+};
 use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
-use winapi::um::wingdi;
-use winapi::um::winuser;
-use winapi::Interface;
-use wio::com::ComPtr;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
@@ -74,7 +63,7 @@ pub struct Surface {
 
 pub(crate) enum Win32Objects {
     Texture {
-        d3d11_texture: ComPtr<ID3D11Texture2D>,
+        d3d11_texture: ID3D11Texture2D,
         dxgi_share_handle: HANDLE,
         gl_dx_interop_object: HANDLE,
         gl_texture: GLuint,
@@ -98,7 +87,7 @@ pub(crate) enum Win32Objects {
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     #[allow(dead_code)]
-    pub(crate) local_d3d11_texture: ComPtr<ID3D11Texture2D>,
+    pub(crate) local_d3d11_texture: ID3D11Texture2D,
     local_gl_dx_interop_object: HANDLE,
     pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
@@ -168,8 +157,8 @@ impl Device {
 
             // Create the Direct3D 11 texture.
             let d3d11_texture2d_desc = D3D11_TEXTURE2D_DESC {
-                Width: size.width as UINT,
-                Height: size.height as UINT,
+                Width: size.width as u32,
+                Height: size.height as u32,
                 MipLevels: 1,
                 ArraySize: 1,
                 Format: DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -178,45 +167,39 @@ impl Device {
                     Quality: 0,
                 },
                 Usage: D3D11_USAGE_DEFAULT,
-                BindFlags: D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
+                BindFlags: (D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET).0 as u32,
                 CPUAccessFlags: 0,
-                MiscFlags: D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX,
+                MiscFlags: D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX.0 as u32,
             };
-            let mut d3d11_texture = ptr::null_mut();
-            let mut result = self.d3d11_device.CreateTexture2D(
-                &d3d11_texture2d_desc,
-                ptr::null(),
-                &mut d3d11_texture,
-            );
-            if !winerror::SUCCEEDED(result) {
+            let mut d3d11_texture;
+            let mut result =
+                self.d3d11_device
+                    .CreateTexture2D(&d3d11_texture2d_desc, None, d3d11_texture);
+            if !result.is_ok() {
                 return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
             }
-            assert!(!d3d11_texture.is_null());
-            let d3d11_texture = ComPtr::from_raw(d3d11_texture);
-
+            assert!(d3d11_texture.is_some());
             // Upcast it to a DXGI resource.
-            let mut dxgi_resource: *mut IDXGIResource = ptr::null_mut();
-            result = d3d11_texture.QueryInterface(
-                &IDXGIResource::uuidof(),
-                &mut dxgi_resource as *mut *mut IDXGIResource as *mut *mut c_void,
-            );
-            assert!(winerror::SUCCEEDED(result));
+            let d3d11_texture = d3d11_texture.unwrap();
+            let dxgi_resource = d3d11_texture.cast::<IDXGIResource>();
+            // assert!(result.is_ok());
             assert!(!dxgi_resource.is_null());
-            let dxgi_resource = ComPtr::from_raw(dxgi_resource);
+            // let dxgi_resource = ComPtr::from_raw(dxgi_resource);
 
             // Get the share handle. We'll need it both to bind to GL and to share the texture
             // across contexts.
-            let mut dxgi_share_handle = INVALID_HANDLE_VALUE;
-            result = dxgi_resource.GetSharedHandle(&mut dxgi_share_handle);
-            assert!(winerror::SUCCEEDED(result));
+            let result = dxgi_resource.as_ref().unwrap().GetSharedHandle();
+            assert!(result.is_ok());
+            let mut dxgi_share_handle = result.unwrap();
             assert_ne!(dxgi_share_handle, INVALID_HANDLE_VALUE);
-
+            
             // Tell GL about the share handle.
+            let d3d11_texture = d3d11_texture;
             let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
-                d3d11_texture.as_raw() as *mut c_void,
+                d3d11_texture as *mut c_void,
                 dxgi_share_handle,
             );
-            assert_ne!(ok, FALSE);
+            assert_ne!(ok, false);
 
             // Make our texture object on the GL side.
             let mut gl_texture = 0;
@@ -225,13 +208,13 @@ impl Device {
             // Bind the GL texture to the D3D11 texture.
             let gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
                 self.gl_dx_interop_device,
-                d3d11_texture.as_raw() as *mut c_void,
+                d3d11_texture as *mut c_void,
                 gl_texture,
                 gl::TEXTURE_2D,
                 WGL_ACCESS_READ_WRITE_NV,
             );
             // Per the spec, and unlike other HANDLEs, null indicates an error.
-            if gl_dx_interop_object.is_null() {
+            if gl_dx_interop_object.is_invalid() {
                 let msg = std::io::Error::last_os_error(); // Equivalent to GetLastError().
                 error!(
                     "Unable to share surface between OpenGL and DirectX. OS error '{}'.",
@@ -262,6 +245,8 @@ impl Device {
 
             // FIXME(pcwalton): Do we need to acquire the keyed mutex, or does the GL driver do
             // that?
+            
+            let d3d11_texture = d3d11_texture.as_ref().unwrap().unwrap();
 
             Ok(Surface {
                 size: *size,
@@ -287,16 +272,16 @@ impl Device {
         unsafe {
             // Get the bounds of the native HWND.
             let mut widget_rect = mem::zeroed();
-            let ok = winuser::GetWindowRect(native_widget.window_handle, &mut widget_rect);
-            if ok == FALSE {
+            let ok = GetWindowRect(native_widget.window_handle, &mut widget_rect);
+            if ok.is_err() {
                 return Err(Error::InvalidNativeWidget);
             }
 
             // Set its pixel format.
             {
                 let context_dc_guard = self.get_context_dc(context);
-                let pixel_format = wingdi::GetPixelFormat(context_dc_guard.dc);
-                let window_dc = winuser::GetDC(native_widget.window_handle);
+                let pixel_format = GetPixelFormat(context_dc_guard.dc);
+                let window_dc = GetDC(native_widget.window_handle);
                 context::set_dc_pixel_format(window_dc, pixel_format);
             }
 
@@ -359,7 +344,7 @@ impl Device {
                         self.gl_dx_interop_device,
                         *gl_dx_interop_object,
                     );
-                    assert_ne!(ok, FALSE);
+                    assert_ne!(ok, false);
                     *gl_dx_interop_object = INVALID_HANDLE_VALUE;
                 }
                 Win32Objects::Widget { window_handle: _ } => {}
@@ -405,26 +390,24 @@ impl Device {
 
         unsafe {
             // Create a new texture wrapping the shared handle.
-            let mut local_d3d11_texture = ptr::null_mut();
+            let mut local_d3d11_texture ;
             let result = self.d3d11_device.OpenSharedResource(
                 dxgi_share_handle,
-                &ID3D11Texture2D::uuidof(),
                 &mut local_d3d11_texture,
             );
-            if !winerror::SUCCEEDED(result) || local_d3d11_texture.is_null() {
+            if result.is_err() || local_d3d11_texture.is_none() {
                 return Err((
                     Error::SurfaceImportFailed(WindowingApiError::Failed),
                     surface,
                 ));
             }
-            let local_d3d11_texture = ComPtr::from_raw(local_d3d11_texture as *mut ID3D11Texture2D);
 
             // Make GL aware of the connection between the share handle and the texture.
             let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
-                local_d3d11_texture.as_raw() as *mut c_void,
+                local_d3d11_texture as *mut c_void,
                 dxgi_share_handle,
             );
-            assert_ne!(ok, FALSE);
+            assert_ne!(ok, false);
 
             // Create a GL texture.
             let mut gl_texture = 0;
@@ -433,7 +416,7 @@ impl Device {
             // Register that texture with GL/DX interop.
             let mut local_gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
                 self.gl_dx_interop_device,
-                local_d3d11_texture.as_raw() as *mut c_void,
+                local_d3d11_texture as *mut c_void,
                 gl_texture,
                 gl::TEXTURE_2D,
                 WGL_ACCESS_READ_ONLY_NV,
@@ -445,7 +428,7 @@ impl Device {
                 1,
                 &mut local_gl_dx_interop_object,
             );
-            assert_ne!(ok, FALSE);
+            assert_ne!(ok, false);
 
             // Initialize the texture, for convenience.
             // FIXME(pcwalton): We should probably reset the bound texture after this.
@@ -466,7 +449,7 @@ impl Device {
                 gl::TEXTURE_WRAP_T,
                 gl::CLAMP_TO_EDGE as GLint,
             );
-
+            let local_d3d11_texture = local_d3d11_texture.unwrap();
             // Finish up.
             Ok(SurfaceTexture {
                 surface,
@@ -507,14 +490,14 @@ impl Device {
                 1,
                 &mut surface_texture.local_gl_dx_interop_object,
             );
-            assert_ne!(ok, FALSE);
+            assert_ne!(ok, false);
 
             // Unregister the texture from GL/DX interop.
             let ok = (dx_interop_functions.DXUnregisterObjectNV)(
                 self.gl_dx_interop_device,
                 surface_texture.local_gl_dx_interop_object,
             );
-            assert_ne!(ok, FALSE);
+            assert_ne!(ok, false);
             surface_texture.local_gl_dx_interop_object = INVALID_HANDLE_VALUE;
 
             // Destroy the GL texture.
@@ -545,7 +528,7 @@ impl Device {
                 1,
                 &mut gl_dx_interop_object,
             );
-            assert_ne!(ok, FALSE);
+            assert_ne!(ok, false);
         }
     }
 
@@ -569,7 +552,7 @@ impl Device {
                 1,
                 &mut gl_dx_interop_object,
             );
-            assert_ne!(ok, FALSE);
+            assert_ne!(ok, false);
         }
     }
 
@@ -604,10 +587,10 @@ impl Device {
         };
 
         unsafe {
-            let dc = winuser::GetDC(window_handle);
-            let ok = wingdi::SwapBuffers(dc);
-            assert_ne!(ok, FALSE);
-            winuser::ReleaseDC(window_handle, dc);
+            let dc = GetDC(window_handle);
+            let ok = SwapBuffers(dc);
+            assert!(ok.is_ok());
+            ReleaseDC(window_handle, dc);
             Ok(())
         }
     }
@@ -656,8 +639,8 @@ impl Surface {
         match self.win32_objects {
             Win32Objects::Texture {
                 ref d3d11_texture, ..
-            } => SurfaceID((*d3d11_texture).as_raw() as usize),
-            Win32Objects::Widget { window_handle } => SurfaceID(window_handle as usize),
+            } => SurfaceID((*d3d11_texture.).as_raw() as usize),
+            Win32Objects::Widget { window_handle } => SurfaceID(window_handle.0 as usize),
         }
     }
 }
