@@ -18,21 +18,28 @@ use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::thread;
-use winapi::shared::minwindef::{BOOL, FALSE, FLOAT, HMODULE, LPARAM, LPVOID, LRESULT, UINT};
-use winapi::shared::minwindef::{WORD, WPARAM};
-use winapi::shared::ntdef::{HANDLE, LPCSTR};
-use winapi::shared::windef::{HBRUSH, HDC, HGLRC, HWND};
-use winapi::um::libloaderapi;
-use winapi::um::wingdi::{self, PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_MAIN_PLANE};
-// use winapi::um::wingdi::{wglCreateContext, wglDeleteContext, wglGetCurrentContext};
+use windows::core::{s, w, PCSTR, PSTR};
+use windows::Win32::Foundation::HANDLE;
+use windows::Win32::Foundation::HINSTANCE;
+use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::WPARAM;
+use windows::Win32::Foundation::{BOOL, FALSE, HMODULE, LPARAM, LRESULT};
+use windows::Win32::Graphics::Gdi::GetDC;
+use windows::Win32::Graphics::Gdi::COLOR_BACKGROUND;
+use windows::Win32::Graphics::Gdi::{HBRUSH, HDC};
 use windows::Win32::Graphics::OpenGL::{wglCreateContext, wglDeleteContext, wglGetCurrentContext};
-// use winapi::um::wingdi::{wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
 use windows::Win32::Graphics::OpenGL::{wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent};
-// use winapi::um::wingdi::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
+use windows::Win32::Graphics::OpenGL::{ChoosePixelFormat, GetPixelFormat, SetPixelFormat};
+use windows::Win32::Graphics::OpenGL::{DescribePixelFormat, HGLRC};
+use windows::Win32::Graphics::OpenGL::{PFD_DOUBLEBUFFER, PFD_DRAW_TO_WINDOW, PFD_MAIN_PLANE};
 use windows::Win32::Graphics::OpenGL::{PFD_SUPPORT_OPENGL, PFD_TYPE_RGBA, PIXELFORMATDESCRIPTOR};
-use winapi::um::winuser::{self, COLOR_BACKGROUND, CREATESTRUCTA, CS_OWNDC, WM_CREATE, WNDCLASSA};
-use winapi::um::winuser::{WS_OVERLAPPEDWINDOW, WS_VISIBLE};
-
+use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress, LoadLibraryA};
+use windows::Win32::UI::WindowsAndMessaging::{
+    CreateWindowExA, DestroyWindow, RegisterClassA, HCURSOR, HICON,
+};
+use windows::Win32::UI::WindowsAndMessaging::{DefWindowProcA, WINDOW_EX_STYLE};
+use windows::Win32::UI::WindowsAndMessaging::{CREATESTRUCTA, CS_OWNDC, WM_CREATE, WNDCLASSA};
+use windows::Win32::UI::WindowsAndMessaging::{WS_OVERLAPPEDWINDOW, WS_VISIBLE};
 
 const WGL_DRAW_TO_WINDOW_ARB: GLenum = 0x2001;
 const WGL_ACCELERATION_ARB: GLenum = 0x2003;
@@ -68,16 +75,16 @@ pub(crate) struct WGLPixelFormatExtensionFunctions {
     ChoosePixelFormatARB: unsafe extern "C" fn(
         hdc: HDC,
         piAttribIList: *const c_int,
-        pfAttribFList: *const FLOAT,
-        nMaxFormats: UINT,
+        pfAttribFList: *const f32,
+        nMaxFormats: u32,
         piFormats: *mut c_int,
-        nNumFormats: *mut UINT,
+        nNumFormats: *mut u32,
     ) -> BOOL,
     GetPixelFormatAttribivARB: unsafe extern "C" fn(
         hdc: HDC,
         iPixelFormat: c_int,
         iLayerPlane: c_int,
-        nAttributes: UINT,
+        nAttributes: u32,
         piAttributes: *const c_int,
         piValues: *mut c_int,
     ) -> BOOL,
@@ -152,7 +159,7 @@ pub struct NativeContext(pub HGLRC);
 thread_local! {
     static OPENGL_LIBRARY: HMODULE = {
         unsafe {
-            libloaderapi::LoadLibraryA(&b"opengl32.dll\0"[0] as *const u8 as LPCSTR)
+            LoadLibraryA(PCSTR(&b"opengl32.dll\0"[0] as *const u8)).unwrap()
         }
     };
 }
@@ -287,17 +294,17 @@ impl Device {
                 ];
                 glrc = wglCreateContextAttribsARB(
                     dc,
-                    share_with.map_or(ptr::null_mut(), |ctx| ctx.glrc),
+                    share_with.map_or(HGLRC::default(), |ctx| ctx.glrc),
                     wgl_attributes.as_ptr(),
                 );
-                if glrc.is_null() {
+                if glrc.is_invalid() {
                     return Err(Error::ContextCreationFailed(WindowingApiError::Failed));
                 }
 
                 // Temporarily make the context current.
                 let _guard = CurrentContextGuard::new();
                 let ok = wglMakeCurrent(dc, glrc);
-                assert_ne!(ok, FALSE);
+                assert!(ok.is_ok());
 
                 // Load the GL functions.
                 gl = Gl::load_with(get_proc_address);
@@ -335,7 +342,7 @@ impl Device {
             let dc = hidden_window_dc.dc;
             let _guard = CurrentContextGuard::new();
             let ok = wglMakeCurrent(dc, native_context.0);
-            assert_ne!(ok, FALSE);
+            assert!(ok.is_ok());
             Gl::load_with(get_proc_address)
         };
 
@@ -365,7 +372,7 @@ impl Device {
 
         unsafe {
             if wglGetCurrentContext() == context.glrc {
-                wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
+                wglMakeCurrent(None, None);
             }
 
             if context.status == ContextStatus::Owned {
@@ -373,7 +380,7 @@ impl Device {
             }
         }
 
-        context.glrc = ptr::null_mut();
+        context.glrc = HGLRC::default();
         context.status = ContextStatus::Destroyed;
         Ok(())
     }
@@ -382,7 +389,7 @@ impl Device {
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
             let dc_guard = self.get_context_dc(context);
-            let pixel_format = wingdi::GetPixelFormat(dc_guard.dc);
+            let pixel_format = GetPixelFormat(dc_guard.dc);
 
             let _guard = self.temporarily_make_context_current(context);
 
@@ -426,7 +433,7 @@ impl Device {
                 dc_guard.dc,
                 context_descriptor.pixel_format,
                 0,
-                attrib_name_i_list.len() as UINT,
+                attrib_name_i_list.len() as u32,
                 attrib_name_i_list.as_ptr(),
                 attrib_value_i_list.as_mut_ptr(),
             );
@@ -483,7 +490,7 @@ impl Device {
         unsafe {
             let dc_guard = self.get_context_dc(context);
             let ok = wglMakeCurrent(dc_guard.dc, context.glrc);
-            if ok != FALSE {
+            if ok.is_ok() {
                 Ok(())
             } else {
                 Err(Error::MakeCurrentFailed(WindowingApiError::Failed))
@@ -498,8 +505,8 @@ impl Device {
     #[inline]
     pub fn make_no_context_current(&self) -> Result<(), Error> {
         unsafe {
-            let ok = wglMakeCurrent(ptr::null_mut(), ptr::null_mut());
-            if ok != FALSE {
+            let ok = wglMakeCurrent(None, None);
+            if ok.is_ok() {
                 Ok(())
             } else {
                 Err(Error::MakeCurrentFailed(WindowingApiError::Failed))
@@ -586,7 +593,7 @@ impl Device {
                 Framebuffer::Surface(Surface {
                     win32_objects: Win32Objects::Widget { window_handle },
                     ..
-                }) => DCGuard::new(winuser::GetDC(window_handle), Some(window_handle)),
+                }) => DCGuard::new(GetDC(window_handle), Some(window_handle)),
                 Framebuffer::Surface(Surface {
                     win32_objects: Win32Objects::Texture { .. },
                     ..
@@ -632,7 +639,7 @@ impl NativeContext {
     pub fn current() -> Result<NativeContext, Error> {
         unsafe {
             let glrc = wglGetCurrentContext();
-            if glrc != ptr::null_mut() {
+            if !glrc.is_invalid() {
                 Ok(NativeContext(glrc))
             } else {
                 Err(Error::NoCurrentContext)
@@ -643,40 +650,40 @@ impl NativeContext {
 
 fn extension_loader_thread() -> WGLExtensionFunctions {
     unsafe {
-        let instance = libloaderapi::GetModuleHandleA(ptr::null_mut());
-        let window_class_name = &b"SurfmanFalseWindow\0"[0] as *const u8 as LPCSTR;
+        let instance = GetModuleHandleA(None).unwrap();
+        let window_class_name = PCSTR(&b"SurfmanFalseWindow\0"[0] as *const u8);
         let window_class = WNDCLASSA {
             style: CS_OWNDC,
             lpfnWndProc: Some(extension_loader_window_proc),
             cbClsExtra: 0,
             cbWndExtra: 0,
-            hInstance: instance,
-            hIcon: ptr::null_mut(),
-            hCursor: ptr::null_mut(),
-            hbrBackground: COLOR_BACKGROUND as HBRUSH,
-            lpszMenuName: ptr::null_mut(),
+            hInstance: HINSTANCE::from(instance),
+            hIcon: HICON::default(),
+            hCursor: HCURSOR::default(),
+            hbrBackground: HBRUSH(COLOR_BACKGROUND.0 as isize),
+            lpszMenuName: PCSTR::null(),
             lpszClassName: window_class_name,
         };
-        let window_class_atom = winuser::RegisterClassA(&window_class);
+        let window_class_atom = RegisterClassA(&window_class);
         assert_ne!(window_class_atom, 0);
 
         let mut extension_functions = WGLExtensionFunctions::default();
-        let window = winuser::CreateWindowExA(
-            0,
-            window_class_atom as LPCSTR,
+        let window = CreateWindowExA(
+            WINDOW_EX_STYLE(0),
+            PCSTR(window_class_atom as *const u8),
             window_class_name,
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             0,
             0,
             640,
             480,
-            ptr::null_mut(),
-            ptr::null_mut(),
+            None,
+            None,
             instance,
-            &mut extension_functions as *mut WGLExtensionFunctions as LPVOID,
+            Some(&mut extension_functions as *mut WGLExtensionFunctions as *mut c_void),
         );
 
-        winuser::DestroyWindow(window);
+        DestroyWindow(window);
 
         extension_functions
     }
@@ -685,7 +692,7 @@ fn extension_loader_thread() -> WGLExtensionFunctions {
 #[allow(non_snake_case)]
 extern "system" fn extension_loader_window_proc(
     hwnd: HWND,
-    uMsg: UINT,
+    uMsg: u32,
     wParam: WPARAM,
     lParam: LPARAM,
 ) -> LRESULT {
@@ -693,7 +700,7 @@ extern "system" fn extension_loader_window_proc(
         match uMsg {
             WM_CREATE => {
                 let pixel_format_descriptor = PIXELFORMATDESCRIPTOR {
-                    nSize: mem::size_of::<PIXELFORMATDESCRIPTOR>() as WORD,
+                    nSize: mem::size_of::<PIXELFORMATDESCRIPTOR>() as u16,
                     nVersion: 1,
                     dwFlags: PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
                     iPixelType: PFD_TYPE_RGBA,
@@ -714,7 +721,7 @@ extern "system" fn extension_loader_window_proc(
                     cDepthBits: 24,
                     cStencilBits: 8,
                     cAuxBuffers: 0,
-                    iLayerType: PFD_MAIN_PLANE,
+                    iLayerType: PFD_MAIN_PLANE.0 as u8,
                     bReserved: 0,
                     dwLayerMask: 0,
                     dwVisibleMask: 0,
@@ -722,22 +729,22 @@ extern "system" fn extension_loader_window_proc(
                 };
 
                 // Create a false GL context.
-                let dc = winuser::GetDC(hwnd);
-                let pixel_format = wingdi::ChoosePixelFormat(dc, &pixel_format_descriptor);
+                let dc = GetDC(hwnd);
+                let pixel_format = ChoosePixelFormat(dc, &pixel_format_descriptor);
                 assert_ne!(pixel_format, 0);
-                let mut ok = wingdi::SetPixelFormat(dc, pixel_format, &pixel_format_descriptor);
-                assert_ne!(ok, FALSE);
+                let mut ok = SetPixelFormat(dc, pixel_format, &pixel_format_descriptor);
+                assert!(ok.is_ok());
                 let gl_context = wglCreateContext(dc);
-                assert!(!gl_context.is_null());
-                ok = wglMakeCurrent(dc, gl_context);
-                assert_ne!(ok, FALSE);
+                assert!(gl_context.is_ok());
+                ok = wglMakeCurrent(dc, gl_context.unwrap());
+                assert!(ok.is_ok());
 
                 // Detect extensions.
-                let create_struct = lParam as *mut CREATESTRUCTA;
+                let create_struct = lParam.0 as *mut CREATESTRUCTA;
                 let wgl_extension_functions =
                     (*create_struct).lpCreateParams as *mut WGLExtensionFunctions;
                 (*wgl_extension_functions).GetExtensionsStringARB = mem::transmute(
-                    wglGetProcAddress(&b"wglGetExtensionsStringARB\0"[0] as *const u8 as LPCSTR),
+                    wglGetProcAddress(PCSTR(&b"wglGetExtensionsStringARB\0"[0] as *const u8)),
                 );
                 let extensions = match (*wgl_extension_functions).GetExtensionsStringARB {
                     Some(wglGetExtensionsStringARB) => {
@@ -751,55 +758,55 @@ extern "system" fn extension_loader_window_proc(
                     if extension == "WGL_ARB_pixel_format" {
                         (*wgl_extension_functions).pixel_format_functions =
                             Some(WGLPixelFormatExtensionFunctions {
-                                ChoosePixelFormatARB: mem::transmute(wglGetProcAddress(
-                                    &b"wglChoosePixelFormatARB\0"[0] as *const u8 as LPCSTR,
-                                )),
+                                ChoosePixelFormatARB: mem::transmute(wglGetProcAddress(PCSTR(
+                                    &b"wglChoosePixelFormatARB\0"[0] as *const u8,
+                                ))),
                                 GetPixelFormatAttribivARB: mem::transmute(wglGetProcAddress(
-                                    &b"wglGetPixelFormatAttribivARB\0"[0] as *const u8 as LPCSTR,
+                                    PCSTR(&b"wglGetPixelFormatAttribivARB\0"[0] as *const u8),
                                 )),
                             });
                         continue;
                     }
                     if extension == "WGL_ARB_create_context" {
                         (*wgl_extension_functions).CreateContextAttribsARB =
-                            mem::transmute(wglGetProcAddress(
-                                &b"wglCreateContextAttribsARB\0"[0] as *const u8 as LPCSTR,
-                            ));
+                            mem::transmute(wglGetProcAddress(PCSTR(
+                                &b"wglCreateContextAttribsARB\0"[0] as *const u8,
+                            )));
                         continue;
                     }
                     if extension == "WGL_NV_DX_interop" {
                         (*wgl_extension_functions).dx_interop_functions =
                             Some(WGLDXInteropExtensionFunctions {
-                                DXCloseDeviceNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXCloseDeviceNV\0"[0] as *const u8 as LPCSTR,
-                                )),
-                                DXLockObjectsNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXLockObjectsNV\0"[0] as *const u8 as LPCSTR,
-                                )),
-                                DXOpenDeviceNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXOpenDeviceNV\0"[0] as *const u8 as LPCSTR,
-                                )),
-                                DXRegisterObjectNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXRegisterObjectNV\0"[0] as *const u8 as LPCSTR,
-                                )),
+                                DXCloseDeviceNV: mem::transmute(wglGetProcAddress(PCSTR(
+                                    &b"wglDXCloseDeviceNV\0"[0] as *const u8,
+                                ))),
+                                DXLockObjectsNV: mem::transmute(wglGetProcAddress(PCSTR(
+                                    &b"wglDXLockObjectsNV\0"[0] as *const u8,
+                                ))),
+                                DXOpenDeviceNV: mem::transmute(wglGetProcAddress(PCSTR(
+                                    &b"wglDXOpenDeviceNV\0"[0] as *const u8,
+                                ))),
+                                DXRegisterObjectNV: mem::transmute(wglGetProcAddress(PCSTR(
+                                    &b"wglDXRegisterObjectNV\0"[0] as *const u8,
+                                ))),
                                 DXSetResourceShareHandleNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXSetResourceShareHandleNV\0"[0] as *const u8 as LPCSTR,
+                                    PCSTR(&b"wglDXSetResourceShareHandleNV\0"[0] as *const u8),
                                 )),
-                                DXUnlockObjectsNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXUnlockObjectsNV\0"[0] as *const u8 as LPCSTR,
-                                )),
-                                DXUnregisterObjectNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXUnregisterObjectNV\0"[0] as *const u8 as LPCSTR,
-                                )),
+                                DXUnlockObjectsNV: mem::transmute(wglGetProcAddress(PCSTR(
+                                    &b"wglDXUnlockObjectsNV\0"[0] as *const u8,
+                                ))),
+                                DXUnregisterObjectNV: mem::transmute(wglGetProcAddress(PCSTR(
+                                    &b"wglDXUnregisterObjectNV\0"[0] as *const u8,
+                                ))),
                             });
                         continue;
                     }
                 }
 
-                wglDeleteContext(gl_context);
-                0
+                wglDeleteContext(gl_context.unwrap());
+                LRESULT(0)
             }
-            _ => winuser::DefWindowProcA(hwnd, uMsg, wParam, lParam),
+            _ => DefWindowProcA(hwnd, uMsg, wParam, lParam),
         }
     }
 }
@@ -876,13 +883,13 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         // https://www.khronos.org/opengl/wiki/Load_OpenGL_Functions#Windows
         let symbol_name: CString = CString::new(symbol_name).unwrap();
-        let symbol_ptr = symbol_name.as_ptr() as *const u8 as LPCSTR;
-        let addr = wglGetProcAddress(symbol_ptr) as *const c_void;
-        if !addr.is_null() {
-            return addr;
+        let symbol_ptr = PCSTR(symbol_name.as_ptr() as *const u8);
+        let addr = wglGetProcAddress(symbol_ptr);
+        if addr.is_some() {
+            return addr.unwrap() as *const c_void;
         }
         OPENGL_LIBRARY.with(|opengl_library| {
-            libloaderapi::GetProcAddress(*opengl_library, symbol_ptr) as *const c_void
+            GetProcAddress(*opengl_library, symbol_ptr).unwrap() as *const c_void
         })
     }
 }
@@ -890,14 +897,14 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
 pub(crate) fn set_dc_pixel_format(dc: HDC, pixel_format: c_int) {
     unsafe {
         let mut pixel_format_descriptor = mem::zeroed();
-        let pixel_format_count = wingdi::DescribePixelFormat(
+        let pixel_format_count = DescribePixelFormat(
             dc,
             pixel_format,
-            mem::size_of::<PIXELFORMATDESCRIPTOR>() as UINT,
-            &mut pixel_format_descriptor,
+            mem::size_of::<PIXELFORMATDESCRIPTOR>() as u32,
+            Some(&mut pixel_format_descriptor),
         );
         assert_ne!(pixel_format_count, 0);
-        let ok = wingdi::SetPixelFormat(dc, pixel_format, &mut pixel_format_descriptor);
-        assert_ne!(ok, FALSE);
+        let ok = SetPixelFormat(dc, pixel_format, &mut pixel_format_descriptor);
+        assert!(ok.is_ok());
     }
 }
