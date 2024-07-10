@@ -12,11 +12,11 @@ use std::os::raw::{c_int, c_void};
 use std::ptr;
 use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
-use windows::core::PCSTR;
+use windows::core::{Interface, PCSTR};
 // use winapi::shared::dxgi::{IDXGIAdapter, IDXGIDevice};
 // use winapi::shared::minwindef::{self, FALSE, UINT};
 // use winapi::shared::ntdef::{HANDLE, LPCSTR};
-use windows::Win32::Foundation::{HANDLE, HINSTANCE, HMODULE, LPARAM, WPARAM};
+use windows::Win32::Foundation::{HANDLE, HINSTANCE, HMODULE, LPARAM, LRESULT, WPARAM};
 // use winapi::shared::windef::{HBRUSH, HDC, HWND};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Graphics::Gdi::{GetDC, HBRUSH, HDC};
@@ -36,8 +36,9 @@ use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
 use windows::Win32::Graphics::Gdi::ReleaseDC;
 use windows::Win32::Graphics::Gdi::COLOR_BACKGROUND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    self as winuser, CreateWindowExA, DefWindowProcA, GetClassInfoA, HCURSOR, HICON, HMENU,
-    WINDOW_EX_STYLE,
+    self as winuser, CreateWindowExA, DefWindowProcA, GetClassInfoA, GetWindowLongPtrA,
+    SetWindowLongPtrA, CREATESTRUCTA, GWLP_USERDATA, HCURSOR, HICON, HMENU, WINDOW_EX_STYLE,
+    WM_NCCREATE,
 };
 use windows::Win32::UI::WindowsAndMessaging::{CS_OWNDC, MSG, WM_CLOSE};
 // use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW};
@@ -96,12 +97,13 @@ impl Adapter {
         unsafe {
             let current_module = GetModuleHandleA(PCSTR::null());
             assert!(current_module.is_ok());
+            let current_module = current_module.unwrap();
             let nvidia_gpu_select_variable = GetProcAddress(
-                current_module.unwrap(),
+                current_module,
                 PCSTR(NVIDIA_GPU_SELECT_SYMBOL.as_ptr()),
             );
             let amd_gpu_select_variable = GetProcAddress(
-                current_module.unwrap(),
+                current_module,
                 PCSTR(AMD_GPU_SELECT_SYMBOL.as_ptr()),
             );
             if nvidia_gpu_select_variable.is_none() || amd_gpu_select_variable.is_none() {
@@ -159,9 +161,9 @@ impl Device {
         };
 
         unsafe {
-            let mut d3d11_device;
+            let mut d3d11_device = Default::default();
             let mut d3d11_feature_level = ptr::null_mut();
-            let mut d3d11_device_context;
+            let mut d3d11_device_context = Default::default();
             let result = D3D11CreateDevice(
                 None,
                 D3D_DRIVER_TYPE_HARDWARE,
@@ -198,10 +200,12 @@ impl Device {
     pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
         unsafe {
             let d3d11_device = native_device.d3d11_device;
-            let dxgi_device: IDXGIDevice = d3d11_device.cast();
+            let dxgi_device = d3d11_device.cast::<IDXGIDevice>();
+
+            assert!(dxgi_device.is_ok());
 
             // Fetch the DXGI adapter.
-            let result = dxgi_device.GetAdapter();
+            let result = dxgi_device.unwrap().GetAdapter();
             assert!(result.is_ok());
             let dxgi_adapter = result.unwrap();
 
@@ -232,7 +236,7 @@ impl Device {
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
         unsafe {
-            let d3d11_device = self.d3d11_device;
+            let d3d11_device = self.d3d11_device.clone();
             NativeDevice {
                 d3d11_device,
                 gl_dx_interop_device: self.gl_dx_interop_device,
@@ -319,11 +323,19 @@ impl HiddenWindow {
         }
     }
 
+    // From https://github.com/microsoft/windows-rs/blob/02c4f29d19fbe6d59b2ae0b42262e68d00438f0f/crates/samples/windows/direct2d/src/main.rs#L439
     #[inline]
     pub(crate) fn get_dc(&self) -> DCGuard {
         unsafe { DCGuard::new(GetDC(self.window), Some(self.window)) }
     }
-
+    extern "system" fn wndproc(
+        window: HWND,
+        message: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        unsafe { DefWindowProcA(window, message, wparam, lparam) }
+    }
     // The thread that creates the window for off-screen contexts.
     fn thread(sender: Sender<SendableHWND>) {
         unsafe {
@@ -333,7 +345,7 @@ impl HiddenWindow {
             if GetClassInfoA(instance, window_class_name, &mut window_class).is_err() {
                 window_class = WNDCLASSA {
                     style: CS_OWNDC,
-                    lpfnWndProc: Some(DefWindowProcA),
+                    lpfnWndProc: Some(Self::wndproc),
                     cbClsExtra: 0,
                     cbWndExtra: 0,
                     hInstance: instance,

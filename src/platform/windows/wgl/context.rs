@@ -736,7 +736,8 @@ extern "system" fn extension_loader_window_proc(
                 assert!(ok.is_ok());
                 let gl_context = wglCreateContext(dc);
                 assert!(gl_context.is_ok());
-                ok = wglMakeCurrent(dc, gl_context.unwrap());
+                let gl_context = gl_context.unwrap();
+                ok = wglMakeCurrent(dc, gl_context);
                 assert!(ok.is_ok());
 
                 // Detect extensions.
@@ -803,7 +804,7 @@ extern "system" fn extension_loader_window_proc(
                     }
                 }
 
-                wglDeleteContext(gl_context.unwrap());
+                wglDeleteContext(gl_context);
                 LRESULT(0)
             }
             _ => DefWindowProcA(hwnd, uMsg, wParam, lParam),

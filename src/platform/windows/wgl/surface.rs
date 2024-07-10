@@ -12,6 +12,7 @@ use crate::gl;
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
 use euclid::default::Size2D;
+use windows::core::Interface;
 use windows::Win32::Graphics::Gdi::{GetDC, ReleaseDC};
 use windows::Win32::Graphics::OpenGL::{GetPixelFormat, SwapBuffers};
 use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
@@ -171,7 +172,7 @@ impl Device {
                 CPUAccessFlags: 0,
                 MiscFlags: D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX.0 as u32,
             };
-            let mut d3d11_texture;
+            let mut d3d11_texture= Default::default();
             let mut result =
                 self.d3d11_device
                     .CreateTexture2D(&d3d11_texture2d_desc, None, d3d11_texture);
@@ -246,7 +247,7 @@ impl Device {
             // FIXME(pcwalton): Do we need to acquire the keyed mutex, or does the GL driver do
             // that?
             
-            let d3d11_texture = d3d11_texture.as_ref().unwrap().unwrap();
+            let d3d11_texture = (*d3d11_texture).to_owned().unwrap();
 
             Ok(Surface {
                 size: *size,
@@ -390,7 +391,7 @@ impl Device {
 
         unsafe {
             // Create a new texture wrapping the shared handle.
-            let mut local_d3d11_texture ;
+            let mut local_d3d11_texture = Default::default();
             let result = self.d3d11_device.OpenSharedResource(
                 dxgi_share_handle,
                 &mut local_d3d11_texture,
@@ -401,10 +402,10 @@ impl Device {
                     surface,
                 ));
             }
-
+            let local_d3d11_texture : ID3D11Texture2D = local_d3d11_texture.unwrap();
             // Make GL aware of the connection between the share handle and the texture.
             let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
-                local_d3d11_texture as *mut c_void,
+                local_d3d11_texture.as_raw() as *mut c_void,
                 dxgi_share_handle,
             );
             assert_ne!(ok, false);
@@ -416,7 +417,7 @@ impl Device {
             // Register that texture with GL/DX interop.
             let mut local_gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
                 self.gl_dx_interop_device,
-                local_d3d11_texture as *mut c_void,
+                local_d3d11_texture.as_raw() as *mut c_void,
                 gl_texture,
                 gl::TEXTURE_2D,
                 WGL_ACCESS_READ_ONLY_NV,
@@ -449,7 +450,6 @@ impl Device {
                 gl::TEXTURE_WRAP_T,
                 gl::CLAMP_TO_EDGE as GLint,
             );
-            let local_d3d11_texture = local_d3d11_texture.unwrap();
             // Finish up.
             Ok(SurfaceTexture {
                 surface,
@@ -639,7 +639,7 @@ impl Surface {
         match self.win32_objects {
             Win32Objects::Texture {
                 ref d3d11_texture, ..
-            } => SurfaceID((*d3d11_texture.).as_raw() as usize),
+            } => SurfaceID((*d3d11_texture).as_raw() as usize),
             Win32Objects::Widget { window_handle } => SurfaceID(window_handle.0 as usize),
         }
     }
