@@ -16,7 +16,6 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
-use std::ptr;
 use std::thread;
 use windows::core::Interface;
 use windows::Win32::Foundation::HANDLE;

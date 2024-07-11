@@ -18,7 +18,7 @@ use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::thread;
-use windows::core::{s, w, PCSTR, PSTR};
+use windows::core::PCSTR;
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Foundation::HINSTANCE;
 use windows::Win32::Foundation::HWND;
