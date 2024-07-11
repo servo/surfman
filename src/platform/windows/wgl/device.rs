@@ -13,37 +13,24 @@ use std::ptr;
 use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
 use windows::core::{Interface, PCSTR};
-// use winapi::shared::dxgi::{IDXGIAdapter, IDXGIDevice};
-// use winapi::shared::minwindef::{self, FALSE, UINT};
-// use winapi::shared::ntdef::{HANDLE, LPCSTR};
-use windows::Win32::Foundation::{HANDLE, HINSTANCE, HMODULE, LPARAM, LRESULT, WPARAM};
-// use winapi::shared::windef::{HBRUSH, HDC, HWND};
 use windows::Win32::Foundation::HWND;
-use windows::Win32::Graphics::Gdi::{GetDC, HBRUSH, HDC};
-// use winapi::shared::winerror::{self, S_OK};
-use windows::Win32::Graphics::Dxgi::{IDXGIAdapter, IDXGIDevice};
-// use winapi::um::d3d11::{D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_SDK_VERSION};
+use windows::Win32::Foundation::{HANDLE, HINSTANCE, HMODULE, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
 use windows::Win32::Graphics::Direct3D11::{
     D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_CREATE_DEVICE_FLAG,
     D3D11_SDK_VERSION,
 };
-// use winapi::um::d3dcommon::D3D_DRIVER_TYPE_HARDWARE;
-use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
-// use winapi::um::libloaderapi;
-use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
-// use windows::Win32::System::LibraryLoader::GetProcAddress;
-// use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CLOSE};
+use windows::Win32::Graphics::Dxgi::{IDXGIAdapter, IDXGIDevice};
 use windows::Win32::Graphics::Gdi::ReleaseDC;
 use windows::Win32::Graphics::Gdi::COLOR_BACKGROUND;
+use windows::Win32::Graphics::Gdi::{GetDC, HBRUSH, HDC};
+use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
 use windows::Win32::UI::WindowsAndMessaging::{
-    self as winuser, CreateWindowExA, DefWindowProcA, GetClassInfoA, GetWindowLongPtrA,
-    SetWindowLongPtrA, CREATESTRUCTA, GWLP_USERDATA, HCURSOR, HICON, HMENU, WINDOW_EX_STYLE,
-    WM_NCCREATE,
+    CreateWindowExA, DefWindowProcA, DispatchMessageA, GetClassInfoA, GetMessageA, PostMessageA,
+    RegisterClassA, TranslateMessage, HCURSOR, HICON, HMENU, WINDOW_EX_STYLE,
 };
 use windows::Win32::UI::WindowsAndMessaging::{CS_OWNDC, MSG, WM_CLOSE};
-// use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW};
 use windows::Win32::UI::WindowsAndMessaging::{WNDCLASSA, WS_OVERLAPPEDWINDOW};
-// use wio::com::ComPtr;
 
 pub(crate) const HIDDEN_WINDOW_SIZE: c_int = 16;
 
@@ -289,7 +276,7 @@ pub(crate) struct DCGuard<'a> {
 impl Drop for HiddenWindow {
     fn drop(&mut self) {
         unsafe {
-            winuser::PostMessageA(self.window, WM_CLOSE, WPARAM(0), LPARAM(0));
+            PostMessageA(self.window, WM_CLOSE, WPARAM(0), LPARAM(0));
             if let Some(join_handle) = self.join_handle.take() {
                 drop(join_handle.join());
             }
@@ -351,7 +338,7 @@ impl HiddenWindow {
                     lpszMenuName: PCSTR::null(),
                     lpszClassName: window_class_name,
                 };
-                let window_class_atom = winuser::RegisterClassA(&window_class);
+                let window_class_atom = RegisterClassA(&window_class);
                 assert_ne!(window_class_atom, 0);
             }
 
@@ -373,9 +360,9 @@ impl HiddenWindow {
             sender.send(SendableHWND(window)).unwrap();
 
             let mut msg: MSG = mem::zeroed();
-            while winuser::GetMessageA(&mut msg, window, 0, 0) != false {
-                winuser::TranslateMessage(&msg);
-                winuser::DispatchMessageA(&msg);
+            while GetMessageA(&mut msg, window, 0, 0) != false {
+                TranslateMessage(&msg);
+                DispatchMessageA(&msg);
                 if msg.message == WM_CLOSE {
                     break;
                 }

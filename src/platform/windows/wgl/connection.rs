@@ -13,7 +13,6 @@ use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 
-// use winapi::shared::windef::HWND;
 use windows::Win32::Foundation::HWND;
 
 /// Represents a connection to the display server.
