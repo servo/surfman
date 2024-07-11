@@ -12,27 +12,27 @@ use crate::gl;
 use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
 use euclid::default::Size2D;
-use windows::core::Interface;
-use windows::Win32::Graphics::Gdi::{GetDC, ReleaseDC};
-use windows::Win32::Graphics::OpenGL::{GetPixelFormat, SwapBuffers};
-use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
-use windows::Win32::Graphics::Dxgi::IDXGIResource;
-use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM;
-use windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC;
+use windows::core::Interface;
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
 use windows::Win32::Graphics::Direct3D11::{ID3D11Texture2D, D3D11_USAGE_DEFAULT};
 use windows::Win32::Graphics::Direct3D11::{D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE};
 use windows::Win32::Graphics::Direct3D11::{
     D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX, D3D11_TEXTURE2D_DESC,
 };
-use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
+use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM;
+use windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC;
+use windows::Win32::Graphics::Dxgi::IDXGIResource;
+use windows::Win32::Graphics::Gdi::{GetDC, ReleaseDC};
+use windows::Win32::Graphics::OpenGL::{GetPixelFormat, SwapBuffers};
+use windows::Win32::UI::WindowsAndMessaging::GetWindowRect;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
@@ -172,7 +172,7 @@ impl Device {
                 CPUAccessFlags: 0,
                 MiscFlags: D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX.0 as u32,
             };
-            let mut d3d11_texture= Default::default();
+            let mut d3d11_texture = Default::default();
             let mut result =
                 self.d3d11_device
                     .CreateTexture2D(&d3d11_texture2d_desc, None, d3d11_texture);
@@ -193,7 +193,7 @@ impl Device {
             assert!(result.is_ok());
             let mut dxgi_share_handle = result.unwrap();
             assert_ne!(dxgi_share_handle, INVALID_HANDLE_VALUE);
-            
+
             // Tell GL about the share handle.
             let d3d11_texture = d3d11_texture;
             let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
@@ -246,7 +246,7 @@ impl Device {
 
             // FIXME(pcwalton): Do we need to acquire the keyed mutex, or does the GL driver do
             // that?
-            
+
             let d3d11_texture = (*d3d11_texture).to_owned().unwrap();
 
             Ok(Surface {
@@ -392,17 +392,16 @@ impl Device {
         unsafe {
             // Create a new texture wrapping the shared handle.
             let mut local_d3d11_texture = Default::default();
-            let result = self.d3d11_device.OpenSharedResource(
-                dxgi_share_handle,
-                &mut local_d3d11_texture,
-            );
+            let result = self
+                .d3d11_device
+                .OpenSharedResource(dxgi_share_handle, &mut local_d3d11_texture);
             if result.is_err() || local_d3d11_texture.is_none() {
                 return Err((
                     Error::SurfaceImportFailed(WindowingApiError::Failed),
                     surface,
                 ));
             }
-            let local_d3d11_texture : ID3D11Texture2D = local_d3d11_texture.unwrap();
+            let local_d3d11_texture: ID3D11Texture2D = local_d3d11_texture.unwrap();
             // Make GL aware of the connection between the share handle and the texture.
             let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
                 local_d3d11_texture.as_raw() as *mut c_void,

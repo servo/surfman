@@ -98,14 +98,10 @@ impl Adapter {
             let current_module = GetModuleHandleA(PCSTR::null());
             assert!(current_module.is_ok());
             let current_module = current_module.unwrap();
-            let nvidia_gpu_select_variable = GetProcAddress(
-                current_module,
-                PCSTR(NVIDIA_GPU_SELECT_SYMBOL.as_ptr()),
-            );
-            let amd_gpu_select_variable = GetProcAddress(
-                current_module,
-                PCSTR(AMD_GPU_SELECT_SYMBOL.as_ptr()),
-            );
+            let nvidia_gpu_select_variable =
+                GetProcAddress(current_module, PCSTR(NVIDIA_GPU_SELECT_SYMBOL.as_ptr()));
+            let amd_gpu_select_variable =
+                GetProcAddress(current_module, PCSTR(AMD_GPU_SELECT_SYMBOL.as_ptr()));
             if nvidia_gpu_select_variable.is_none() || amd_gpu_select_variable.is_none() {
                 println!(
                     "surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
