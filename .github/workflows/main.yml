@@ -51,10 +51,9 @@ jobs:
       run: |
         sudo apt update
         sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev -y
-    - name: Upgrade LLVM (Windows)
+    - name: Setup LLVM (Windows)
       if: runner.os == 'Windows'
       run: |
-        choco upgrade llvm --version=17.0.6 -y
         echo "LLVM_PATH=C:\Program Files\LLVM\bin" >> $GITHUB_ENV
     - name: Install rust
       id: toolchain
