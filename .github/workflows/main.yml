@@ -66,11 +66,11 @@ jobs:
       if: matrix.target != 'default' && startsWith(matrix.target, 'aarch64-uwp-windows-msvc') != true
       run: |
         rustup +${{steps.toolchain.outputs.name}} target add ${{ matrix.target }}
-        cargo +${{steps.toolchain.outputs.name}} build --verbose ${{ matrix.features }} --target=${{ matrix.target }}
+        cargo +${{steps.toolchain.outputs.name}} build -vv ${{ matrix.features }} --target=${{ matrix.target }}
     - name: Build
       if: matrix.target == 'default'
       run: |
-        cargo +${{steps.toolchain.outputs.name}} build --verbose ${{ matrix.features }}
+        cargo +${{steps.toolchain.outputs.name}} build -vv ${{ matrix.features }}
     - name: Build Windows
       if: startsWith(matrix.target, 'aarch64-uwp-windows-msvc')
       shell: cmd
