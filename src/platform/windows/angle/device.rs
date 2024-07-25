@@ -19,7 +19,7 @@ use winapi::shared::dxgi::{self, IDXGIAdapter, IDXGIDevice, IDXGIFactory1};
 use winapi::shared::minwindef::UINT;
 use winapi::shared::winerror::{self, S_OK};
 use winapi::um::d3d11::{D3D11CreateDevice, ID3D11Device, D3D11_SDK_VERSION};
-use winapi::um::d3dcommon::{D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_9_3};
+use winapi::um::d3dcommon::{D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP, D3D_FEATURE_LEVEL_9_3};
 use winapi::Interface;
 use wio::com::ComPtr;
 
@@ -167,8 +167,13 @@ impl Device {
         unsafe {
             let mut d3d11_device = ptr::null_mut();
             let mut d3d11_feature_level = 0;
+            let d3d11_adapter = if d3d_driver_type == D3D_DRIVER_TYPE_WARP {
+                ptr::null_mut()
+            } else {
+                adapter.dxgi_adapter.as_raw()
+            };
             let result = D3D11CreateDevice(
-                adapter.dxgi_adapter.as_raw(),
+                d3d11_adapter,
                 d3d_driver_type,
                 ptr::null_mut(),
                 0,
