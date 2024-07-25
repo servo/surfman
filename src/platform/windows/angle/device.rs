@@ -167,7 +167,6 @@ impl Device {
         unsafe {
             let mut d3d11_device = ptr::null_mut();
             let mut d3d11_feature_level = 0;
-            let mut d3d11_device_context = ptr::null_mut();
             let result = D3D11CreateDevice(
                 adapter.dxgi_adapter.as_raw(),
                 d3d_driver_type,
@@ -178,7 +177,7 @@ impl Device {
                 D3D11_SDK_VERSION,
                 &mut d3d11_device,
                 &mut d3d11_feature_level,
-                &mut d3d11_device_context,
+                ptr::null_mut(),
             );
             if !winerror::SUCCEEDED(result) {
                 return Err(Error::DeviceOpenFailed);
