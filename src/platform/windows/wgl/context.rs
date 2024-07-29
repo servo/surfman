@@ -660,7 +660,7 @@ fn extension_loader_thread() -> WGLExtensionFunctions {
             hInstance: HINSTANCE::from(instance),
             hIcon: HICON::default(),
             hCursor: HCURSOR::default(),
-            hbrBackground: HBRUSH(COLOR_BACKGROUND.0 as isize),
+            hbrBackground: HBRUSH(COLOR_BACKGROUND.0 as *mut c_void),
             lpszMenuName: PCSTR::null(),
             lpszClassName: window_class_name,
         };
@@ -683,7 +683,9 @@ fn extension_loader_thread() -> WGLExtensionFunctions {
             Some(&mut extension_functions as *mut WGLExtensionFunctions as *mut c_void),
         );
 
-        DestroyWindow(window);
+        assert!(window.is_ok());
+
+        DestroyWindow(window.unwrap());
 
         extension_functions
     }

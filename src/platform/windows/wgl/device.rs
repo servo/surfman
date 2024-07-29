@@ -249,11 +249,10 @@ impl Device {
 impl Adapter {
     fn from_dxgi_adapter(dxgi_adapter: &IDXGIAdapter) -> Adapter {
         unsafe {
-            let mut adapter_desc = mem::zeroed();
-            let result = dxgi_adapter.GetDesc(&mut adapter_desc);
+            let result = dxgi_adapter.GetDesc();
             assert!(result.is_ok());
 
-            if adapter_desc.VendorId == INTEL_PCI_ID {
+            if result.unwrap().VendorId == INTEL_PCI_ID {
                 Adapter::LowPower
             } else {
                 Adapter::HighPerformance
@@ -334,7 +333,7 @@ impl HiddenWindow {
                     hInstance: instance,
                     hIcon: HICON::default(),
                     hCursor: HCURSOR::default(),
-                    hbrBackground: HBRUSH(COLOR_BACKGROUND.0 as isize),
+                    hbrBackground: HBRUSH(COLOR_BACKGROUND.0 as *mut c_void),
                     lpszMenuName: PCSTR::null(),
                     lpszClassName: window_class_name,
                 };
@@ -356,6 +355,10 @@ impl HiddenWindow {
                 instance,
                 None,
             );
+
+            assert!(window.is_ok());
+
+            let window = window.unwrap();
 
             sender.send(SendableHWND(window)).unwrap();
 

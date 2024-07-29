@@ -118,7 +118,7 @@ impl Connection {
         _size: Size2D<i32>,
     ) -> NativeWidget {
         NativeWidget {
-            window_handle: HWND(raw as isize),
+            window_handle: HWND(raw),
         }
     }
 
@@ -150,7 +150,7 @@ impl Connection {
 
         match handle.as_raw() {
             Win32(handle) => Ok(NativeWidget {
-                window_handle: HWND(handle.hwnd.get()),
+                window_handle: HWND(handle.hwnd.get() as *mut c_void),
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }
