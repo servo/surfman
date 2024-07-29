@@ -54,6 +54,7 @@ jobs:
     - name: Upgrade LLVM (Windows)
       if: runner.os == 'Windows'
       run: |
+        choco uninstall llvm
         choco upgrade llvm --version=17.0.6 -y
         echo "LLVM_PATH=C:\Program Files\LLVM\bin" >> $GITHUB_ENV
     - name: Install rust
