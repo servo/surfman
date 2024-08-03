@@ -1,1 +1,1 @@
-../../../../../surfman/resources/examples/grid.fs.glsl
+../../../../../resources/examples/grid.fs.glsl

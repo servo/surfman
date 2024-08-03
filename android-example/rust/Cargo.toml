@@ -21,7 +21,8 @@ gl = "0.14"
 jni = "0.21"
 log = "0.4"
 surfman = { version = "0.9.4", features = [ "sm-test" ] }
-winit = { version = "0.29.10", features = [ "android-native-activity", "rwh_05" ] }
+winit = { version = "0.29.10", features = [ "android-native-activity", "rwh_06" ] }
+rwh_06 = { package = "raw-window-handle", version = "0.6" }
 
 [patch.crates-io]
 surfman = { path = "../../" }
