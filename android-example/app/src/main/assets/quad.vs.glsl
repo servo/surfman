@@ -1,1 +1,1 @@
-../../../../../surfman/resources/examples/quad.vs.glsl
+../../../../../resources/examples/quad.vs.glsl
