@@ -196,6 +196,7 @@ impl Device {
         transaction::set_disable_actions(true);
 
         let superlayer = CALayer::new();
+        let _: () = msg_send![superlayer.id(), retain];
         native_widget.view.0.setLayer(superlayer.id());
         native_widget.view.0.setWantsLayer(YES);
 
@@ -209,6 +210,7 @@ impl Device {
 
         let opaque = native_widget.opaque;
         let layer = CALayer::new();
+        let _: () = msg_send![layer.id(), retain];
         let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
         layer.set_frame(&CGRect::new(&CG_ZERO_POINT, &layer_size));
         layer.set_contents(front_surface.obj as id);
