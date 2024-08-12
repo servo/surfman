@@ -24,6 +24,7 @@ use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
+use windows::core::Interface;
 use windows::Win32::Foundation::{HANDLE, INVALID_HANDLE_VALUE};
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::Dxgi::IDXGIKeyedMutex;
@@ -169,7 +170,7 @@ impl Device {
                     let surface = egl.CreatePbufferFromClientBuffer(
                         self.egl_display,
                         EGL_D3D_TEXTURE_ANGLE,
-                        texture as *const _ as *const c_void,
+                        texture.as_raw() as *const _,
                         egl_config,
                         attributes.as_ptr(),
                     );
