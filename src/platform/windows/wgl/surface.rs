@@ -171,8 +171,8 @@ impl Device {
                 CPUAccessFlags: 0,
                 MiscFlags: D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX.0 as u32,
             };
-            let mut d3d11_texture = Default::default();
-            let mut result =
+            let d3d11_texture = Default::default();
+            let result =
                 self.d3d11_device
                     .CreateTexture2D(&d3d11_texture2d_desc, None, d3d11_texture);
             if !result.is_ok() {
@@ -190,7 +190,7 @@ impl Device {
             // across contexts.
             let result = dxgi_resource.as_ref().unwrap().GetSharedHandle();
             assert!(result.is_ok());
-            let mut dxgi_share_handle = result.unwrap();
+            let dxgi_share_handle = result.unwrap();
             assert_ne!(dxgi_share_handle, INVALID_HANDLE_VALUE);
 
             // Tell GL about the share handle.

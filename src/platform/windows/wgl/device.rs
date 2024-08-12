@@ -145,7 +145,7 @@ impl Device {
 
         unsafe {
             let mut d3d11_device = Default::default();
-            let mut d3d11_feature_level = ptr::null_mut();
+            let d3d11_feature_level = ptr::null_mut();
             let mut d3d11_device_context = Default::default();
             let result = D3D11CreateDevice(
                 None,
@@ -218,12 +218,10 @@ impl Device {
     /// The reference count on the D3D 11 device is increased before returning.
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
-        unsafe {
-            let d3d11_device = self.d3d11_device.clone();
-            NativeDevice {
-                d3d11_device,
-                gl_dx_interop_device: self.gl_dx_interop_device,
-            }
+        let d3d11_device = self.d3d11_device.clone();
+        NativeDevice {
+            d3d11_device,
+            gl_dx_interop_device: self.gl_dx_interop_device,
         }
     }
 
