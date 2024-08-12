@@ -133,7 +133,7 @@ impl Connection {
 
         match raw_handle {
             Win32(handle) => Ok(NativeWidget {
-                window_handle: HWND(handle.hwnd.get() as *mut c_void),
+                window_handle: HWND(handle.hwnd),
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }

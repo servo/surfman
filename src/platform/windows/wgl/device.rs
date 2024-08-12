@@ -196,7 +196,7 @@ impl Device {
             let adapter = Adapter::from_dxgi_adapter(&dxgi_adapter);
 
             // Fetch the device context.
-            let mut d3d11_device_context = d3d11_device.GetImmediateContext();
+            let d3d11_device_context = d3d11_device.GetImmediateContext();
             assert!(d3d11_device_context.is_ok());
             let d3d11_device_context = d3d11_device_context.unwrap();
 
