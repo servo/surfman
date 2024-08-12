@@ -11,12 +11,11 @@ use std::os::raw::{c_char, c_void};
 #[cfg(not(target_os = "windows"))]
 use libc::{dlopen, dlsym, RTLD_LAZY};
 #[cfg(target_os = "windows")]
+use windows::core::PCSTR;
+#[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HMODULE;
 #[cfg(target_os = "windows")]
-use windows::Win32::System::LibraryLoader::{GetProcAddress,LoadLibraryA};
-#[cfg(target_os = "windows")]
-use windows::core::PCSTR;
-
+use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryA};
 
 thread_local! {
     pub static EGL_FUNCTIONS: Egl = Egl::load_with(get_proc_address);
@@ -57,8 +56,6 @@ unsafe impl Sync for EGLLibraryWrapper {}
 
 #[cfg(target_os = "windows")]
 fn get_proc_address(symbol_name: &str) -> *const c_void {
-    
-
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
         let symbol_ptr = PCSTR(symbol_name.as_ptr() as *const u8);

@@ -18,7 +18,6 @@ use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYP
 
 use std::os::raw::c_void;
 
-
 const INTEL_PCI_ID: u32 = 0x8086;
 
 /// A no-op connection.
