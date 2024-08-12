@@ -235,12 +235,11 @@ impl Device {
         if result == egl::FALSE {
             return Err(Error::DeviceOpenFailed);
         }
-        let d3d11_device = device as *mut ID3D11Device;
-
         unsafe {
+            let d3d11_device = ID3D11Device::from_raw(device as *mut c_void);
             Ok(Device {
                 egl_display: egl_display,
-                d3d11_device: (*d3d11_device).to_owned(),
+                d3d11_device: d3d11_device,
                 d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
                 display_is_owned: false,
             })
