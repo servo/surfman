@@ -11,11 +11,12 @@ use std::os::raw::{c_char, c_void};
 #[cfg(not(target_os = "windows"))]
 use libc::{dlopen, dlsym, RTLD_LAZY};
 #[cfg(target_os = "windows")]
-use winapi::shared::minwindef::HMODULE;
+use windows::Win32::Foundation::HMODULE;
 #[cfg(target_os = "windows")]
-use winapi::shared::ntdef::LPCSTR;
+use windows::Win32::System::LibraryLoader::{GetProcAddress,LoadLibraryA};
 #[cfg(target_os = "windows")]
-use winapi::um::libloaderapi;
+use windows::core::PCSTR;
+
 
 thread_local! {
     pub static EGL_FUNCTIONS: Egl = Egl::load_with(get_proc_address);
@@ -25,7 +26,7 @@ thread_local! {
 lazy_static! {
     static ref EGL_LIBRARY: EGLLibraryWrapper = {
         unsafe {
-            let module = libloaderapi::LoadLibraryA(&b"libEGL.dll\0"[0] as *const u8 as LPCSTR);
+            let module = LoadLibraryA(PCSTR(&b"libEGL.dll\0"[0] as *const u8)).unwrap();
             EGLLibraryWrapper(module)
         }
     };
@@ -56,10 +57,12 @@ unsafe impl Sync for EGLLibraryWrapper {}
 
 #[cfg(target_os = "windows")]
 fn get_proc_address(symbol_name: &str) -> *const c_void {
+    
+
     unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
-        let symbol_ptr = symbol_name.as_ptr() as *const u8 as LPCSTR;
-        libloaderapi::GetProcAddress(EGL_LIBRARY.0, symbol_ptr) as *const c_void
+        let symbol_ptr = PCSTR(symbol_name.as_ptr() as *const u8);
+        GetProcAddress(EGL_LIBRARY.0, symbol_ptr).unwrap() as *const c_void
     }
 }
 

@@ -17,10 +17,10 @@ use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
 use std::mem;
 use std::os::raw::c_void;
 use std::thread;
-use winapi::shared::winerror::S_OK;
-use winapi::um::winbase::INFINITE;
 
 pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
+
+const INFINITE: u32 = 0xFFFFFFFF;
 
 thread_local! {
     #[doc(hidden)]
@@ -300,7 +300,7 @@ impl Device {
                 ..
             } => unsafe {
                 let result = keyed_mutex.AcquireSync(0, INFINITE);
-                assert_eq!(result, S_OK);
+                assert!(result.is_ok());
             },
             _ => {}
         }
@@ -340,7 +340,7 @@ impl Device {
                 ..
             } => unsafe {
                 let result = keyed_mutex.ReleaseSync(0);
-                assert_eq!(result, S_OK);
+                assert!(result.is_ok());
             },
             _ => {}
         }

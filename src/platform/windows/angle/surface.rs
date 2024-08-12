@@ -24,15 +24,12 @@ use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
-use winapi::shared::dxgi::IDXGIKeyedMutex;
-use winapi::shared::winerror::S_OK;
-use winapi::um::d3d11;
-use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-use winapi::um::winbase::INFINITE;
-use winapi::um::winnt::HANDLE;
-use wio::com::ComPtr;
+use windows::Win32::Foundation::{HANDLE, INVALID_HANDLE_VALUE};
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
+use windows::Win32::Graphics::Dxgi::IDXGIKeyedMutex;
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+const INFINITE: u32 = 0xFFFFFFFF;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
@@ -70,7 +67,7 @@ pub struct Surface {
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_surface: EGLSurface,
-    pub(crate) local_keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
+    pub(crate) local_keyed_mutex: Option<IDXGIKeyedMutex>,
     pub(crate) gl_texture: GLuint,
     pub(crate) phantom: PhantomData<*const ()>,
 }
@@ -103,12 +100,12 @@ pub(crate) enum Win32Objects {
         share_handle: HANDLE,
         synchronization: Synchronization,
         // We keep a reference to the ComPtr in order to keep its refcount from becoming zero
-        texture: Option<ComPtr<d3d11::ID3D11Texture2D>>,
+        texture: Option<ID3D11Texture2D>,
     },
 }
 
 pub(crate) enum Synchronization {
-    KeyedMutex(ComPtr<IDXGIKeyedMutex>),
+    KeyedMutex(IDXGIKeyedMutex),
     GLFinish,
     None,
 }
@@ -146,7 +143,7 @@ impl Device {
         &mut self,
         context: &Context,
         size: &Size2D<i32>,
-        texture: Option<ComPtr<d3d11::ID3D11Texture2D>>,
+        texture: Option<ID3D11Texture2D>,
     ) -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -172,7 +169,7 @@ impl Device {
                     let surface = egl.CreatePbufferFromClientBuffer(
                         self.egl_display,
                         EGL_D3D_TEXTURE_ANGLE,
-                        texture.as_raw() as *const _,
+                        texture as *const _ as *const c_void,
                         egl_config,
                         attributes.as_ptr(),
                     );
@@ -196,7 +193,7 @@ impl Device {
                     self.egl_display,
                     egl_surface,
                     EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE as EGLint,
-                    &mut share_handle,
+                    &mut share_handle as *mut HANDLE as *mut *mut c_void,
                 );
                 assert_ne!(result, egl::FALSE);
                 assert_ne!(share_handle, INVALID_HANDLE_VALUE);
@@ -211,9 +208,7 @@ impl Device {
                     &mut keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void,
                 );
                 let synchronization = if result != egl::FALSE && !keyed_mutex.is_null() {
-                    let keyed_mutex = ComPtr::from_raw(keyed_mutex);
-                    keyed_mutex.AddRef();
-                    Synchronization::KeyedMutex(keyed_mutex)
+                    Synchronization::KeyedMutex((*keyed_mutex).clone())
                 } else if texture.is_none() {
                     Synchronization::GLFinish
                 } else {
@@ -241,7 +236,7 @@ impl Device {
         &mut self,
         context: &Context,
         size: &Size2D<i32>,
-        texture: ComPtr<d3d11::ID3D11Texture2D>,
+        texture: ID3D11Texture2D,
     ) -> Result<Surface, Error> {
         self.create_pbuffer_surface(context, size, Some(texture))
     }
@@ -336,7 +331,7 @@ impl Device {
                 let local_egl_surface = egl.CreatePbufferFromClientBuffer(
                     self.egl_display,
                     EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-                    share_handle,
+                    share_handle.0 as *const _,
                     local_egl_config,
                     pbuffer_attributes.as_ptr(),
                 );
@@ -355,13 +350,10 @@ impl Device {
                     &mut local_keyed_mutex as *mut *mut IDXGIKeyedMutex as *mut *mut c_void,
                 );
                 let local_keyed_mutex = if result != egl::FALSE && !local_keyed_mutex.is_null() {
-                    let local_keyed_mutex = ComPtr::from_raw(local_keyed_mutex);
-                    local_keyed_mutex.AddRef();
+                    let result = (*local_keyed_mutex).AcquireSync(0, INFINITE);
+                    assert!(result.is_ok());
 
-                    let result = local_keyed_mutex.AcquireSync(0, INFINITE);
-                    assert_eq!(result, S_OK);
-
-                    Some(local_keyed_mutex)
+                    Some((*local_keyed_mutex).clone())
                 } else {
                     None
                 };
@@ -380,7 +372,7 @@ impl Device {
         context: &Context,
         surface: Surface,
         local_egl_surface: EGLSurface,
-        local_keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
+        local_keyed_mutex: Option<IDXGIKeyedMutex>,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
@@ -442,7 +434,7 @@ impl Device {
         &mut self,
         context: &mut Context,
         size: &Size2D<i32>,
-        texture: ComPtr<d3d11::ID3D11Texture2D>,
+        texture: ID3D11Texture2D,
     ) -> Result<SurfaceTexture, Error> {
         let surface = self.create_pbuffer_surface(context, size, Some(texture))?;
         let local_egl_surface = surface.egl_surface;
@@ -509,7 +501,7 @@ impl Device {
 
             if let Some(ref local_keyed_mutex) = surface_texture.local_keyed_mutex {
                 let result = local_keyed_mutex.ReleaseSync(0);
-                assert_eq!(result, S_OK);
+                assert!(result.is_ok());
             }
 
             EGL_FUNCTIONS.with(|egl| {
