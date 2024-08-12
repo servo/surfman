@@ -10,7 +10,9 @@ use windows::Win32::Graphics::Direct3D::{
 use windows::Win32::Graphics::Direct3D11::{
     D3D11CreateDevice, ID3D11Device, D3D11_CREATE_DEVICE_FLAG, D3D11_SDK_VERSION,
 };
-use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter, IDXGIDevice, IDXGIFactory1};
+use windows::Win32::Graphics::Dxgi::{
+    CreateDXGIFactory1, IDXGIAdapter, IDXGIDevice, IDXGIFactory1,
+};
 
 use super::connection::Connection;
 use crate::egl;
@@ -25,8 +27,6 @@ use std::cell::{RefCell, RefMut};
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
-
-const INFINITE: u32 = 0xFFFFFFFF;
 
 thread_local! {
     static DXGI_FACTORY: RefCell<Option<IDXGIFactory1>> = RefCell::new(None);
@@ -140,7 +140,7 @@ impl Device {
         let d3d_driver_type = adapter.d3d_driver_type;
         unsafe {
             let mut d3d11_device = Default::default();
-            let mut d3d11_feature_level = ptr::null_mut();
+            let d3d11_feature_level = ptr::null_mut();
             let mut d3d11_device_context = Default::default();
             let d3d11_adapter: IDXGIAdapter = if d3d_driver_type == D3D_DRIVER_TYPE_WARP {
                 IDXGIAdapter::from_raw(ptr::null_mut())
@@ -201,14 +201,12 @@ impl Device {
     }
 
     pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
-        unsafe {
-            Ok(Device {
-                egl_display: native_device.egl_display,
-                d3d11_device: native_device.d3d11_device,
-                d3d_driver_type: native_device.d3d_driver_type,
-                display_is_owned: false,
-            })
-        }
+        Ok(Device {
+            egl_display: native_device.egl_display,
+            d3d11_device: native_device.d3d11_device,
+            d3d_driver_type: native_device.d3d_driver_type,
+            display_is_owned: false,
+        })
     }
 
     #[allow(non_snake_case)]
