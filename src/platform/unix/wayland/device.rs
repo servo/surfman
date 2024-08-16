@@ -63,6 +63,10 @@ impl Device {
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     #[inline]
     pub fn gl_api(&self) -> GLApi {
-        GLApi::GL
+        if std::env::var("SURFMAN_FORCE_GLES").is_ok() {
+            GLApi::GLES
+        } else {
+            GLApi::GL
+        }
     }
 }
