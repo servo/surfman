@@ -324,7 +324,10 @@ impl Device {
         };
 
         unsafe {
-            let bytes_per_row = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, (size.width * BYTES_PER_PIXEL) as usize) as i32;
+            let bytes_per_row = IOSurfaceAlignProperty(
+                kIOSurfaceBytesPerRow,
+                (size.width * BYTES_PER_PIXEL) as usize,
+            ) as i32;
             let properties = CFDictionary::from_CFType_pairs(&[
                 (
                     CFString::wrap_under_get_rule(kIOSurfaceWidth),
