@@ -15,7 +15,7 @@ use cocoa::quartzcore::{transaction, CALayer, CATransform3D};
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
-use core_foundation::string::CFString;
+use core_foundation::string::{CFString, CFStringRef};
 use core_graphics::geometry::{CGRect, CGSize, CG_ZERO_POINT};
 use euclid::default::Size2D;
 use io_surface::{self, kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow, IOSurface, IOSurfaceRef};
@@ -28,6 +28,11 @@ use std::os::raw::c_void;
 use std::slice;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+
+#[link(name = "IOSurface", kind = "framework")]
+extern "C" {
+    fn IOSurfaceAlignProperty(property: CFStringRef, value: usize) -> usize;
+}
 
 const BYTES_PER_PIXEL: i32 = 4;
 
@@ -319,6 +324,7 @@ impl Device {
         };
 
         unsafe {
+            let bytes_per_row = IOSurfaceAlignProperty(kIOSurfaceBytesPerRow, (size.width * BYTES_PER_PIXEL) as usize) as i32;
             let properties = CFDictionary::from_CFType_pairs(&[
                 (
                     CFString::wrap_under_get_rule(kIOSurfaceWidth),
@@ -334,7 +340,7 @@ impl Device {
                 ),
                 (
                     CFString::wrap_under_get_rule(kIOSurfaceBytesPerRow),
-                    CFNumber::from(size.width * BYTES_PER_PIXEL).as_CFType(),
+                    CFNumber::from(bytes_per_row).as_CFType(),
                 ),
                 (
                     CFString::wrap_under_get_rule(kIOSurfacePixelFormat),
