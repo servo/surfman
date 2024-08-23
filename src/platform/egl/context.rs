@@ -212,7 +212,6 @@ impl Device {
                     ..
                 }) => (egl_surface, egl_surface),
                 Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
-                #[cfg(android_platform)]
                 Framebuffer::Surface(Surface {
                     objects: SurfaceObjects::HardwareBuffer { .. },
                     ..
@@ -367,7 +366,6 @@ impl Device {
                 ..
             }) => (egl_surface, egl_surface),
             Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
-            #[cfg(android_platform)]
             Framebuffer::Surface(Surface {
                 objects: SurfaceObjects::HardwareBuffer { .. },
                 ..
