@@ -2,7 +2,7 @@
 name = "surfman"
 license = "MIT OR Apache-2.0 OR MPL-2.0"
 edition = "2018"
-version = "0.9.7"
+version = "0.9.8"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
@@ -15,7 +15,7 @@ readme = "README.md"
 
 [build-dependencies]
 gl_generator = "0.14"
-cfg_aliases = "0.1.0"
+cfg_aliases = "0.2.1"
 
 [features]
 chains = ["fnv", "sparkle"]
