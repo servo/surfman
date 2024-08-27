@@ -32,7 +32,7 @@ sm-raw-window-handle-05 = ["dep:rwh_05"]
 sm-raw-window-handle-06 = ["dep:rwh_06"]
 
 [dependencies]
-bitflags = "1.1"
+bitflags = "2.6"
 euclid = "0.22"
 fnv = { version = "1.0", optional = true }
 lazy_static = "1"
