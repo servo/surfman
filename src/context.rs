@@ -32,6 +32,7 @@ bitflags! {
     /// https://www.khronos.org/registry/webgl/specs/latest/1.0/#WEBGLCONTEXTATTRIBUTES
     ///
     /// There are some extra `surfman`-specific flags as well.
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub struct ContextAttributeFlags: u8 {
         /// Surfaces created for this context will have an alpha channel (RGBA or BGRA; i.e. 4
         /// channels, 32 bits per pixel, 8 bits per channel). If this is not present, surfaces will
