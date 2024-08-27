@@ -78,14 +78,18 @@ features = ["egl", "build_dlls"]
 optional = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
-wio = "0.2"
-winapi = { version = "0.3", features = [
-    "d3d11",
-    "libloaderapi",
-    "winbase",
-    "winerror",
-    "wingdi",
-    "winuser",
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_OpenGL",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemServices",
 ] }
 
 [target.'cfg(target_os = "android")'.dependencies]

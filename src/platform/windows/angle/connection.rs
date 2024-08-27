@@ -14,13 +14,11 @@ use crate::Error;
 use crate::GLApi;
 
 use euclid::default::Size2D;
+use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
 use std::os::raw::c_void;
 
-use winapi::shared::minwindef::UINT;
-use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
-
-const INTEL_PCI_ID: UINT = 0x8086;
+const INTEL_PCI_ID: u32 = 0x8086;
 
 /// A no-op connection.
 ///

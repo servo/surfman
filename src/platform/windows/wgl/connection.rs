@@ -13,7 +13,7 @@ use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 
-use winapi::shared::windef::HWND;
+use windows::Win32::Foundation::HWND;
 
 /// Represents a connection to the display server.
 ///
@@ -118,7 +118,7 @@ impl Connection {
         _size: Size2D<i32>,
     ) -> NativeWidget {
         NativeWidget {
-            window_handle: raw as HWND,
+            window_handle: HWND(raw),
         }
     }
 
@@ -133,7 +133,7 @@ impl Connection {
 
         match raw_handle {
             Win32(handle) => Ok(NativeWidget {
-                window_handle: handle.hwnd as HWND,
+                window_handle: HWND(handle.hwnd),
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }
@@ -150,7 +150,7 @@ impl Connection {
 
         match handle.as_raw() {
             Win32(handle) => Ok(NativeWidget {
-                window_handle: handle.hwnd.get() as HWND,
+                window_handle: HWND(handle.hwnd.get() as *mut c_void),
             }),
             _ => Err(Error::IncompatibleNativeWidget),
         }

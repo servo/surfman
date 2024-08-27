@@ -2,6 +2,18 @@
 //
 //! A thread-local handle to the device.
 
+use windows::core::Interface;
+use windows::Win32::Foundation::HMODULE;
+use windows::Win32::Graphics::Direct3D::{
+    D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP, D3D_FEATURE_LEVEL_9_3,
+};
+use windows::Win32::Graphics::Direct3D11::{
+    D3D11CreateDevice, ID3D11Device, D3D11_CREATE_DEVICE_FLAG, D3D11_SDK_VERSION,
+};
+use windows::Win32::Graphics::Dxgi::{
+    CreateDXGIFactory1, IDXGIAdapter, IDXGIDevice, IDXGIFactory1,
+};
+
 use super::connection::Connection;
 use crate::egl;
 use crate::egl::types::{EGLAttrib, EGLDeviceEXT, EGLDisplay, EGLint};
@@ -15,18 +27,9 @@ use std::cell::{RefCell, RefMut};
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
-use winapi::shared::dxgi::{self, IDXGIAdapter, IDXGIDevice, IDXGIFactory1};
-use winapi::shared::minwindef::UINT;
-use winapi::shared::winerror::{self, S_OK};
-use winapi::um::d3d11::{D3D11CreateDevice, ID3D11Device, D3D11_SDK_VERSION};
-use winapi::um::d3dcommon::{
-    D3D_DRIVER_TYPE, D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP, D3D_FEATURE_LEVEL_9_3,
-};
-use winapi::Interface;
-use wio::com::ComPtr;
 
 thread_local! {
-    static DXGI_FACTORY: RefCell<Option<ComPtr<IDXGIFactory1>>> = RefCell::new(None);
+    static DXGI_FACTORY: RefCell<Option<IDXGIFactory1>> = RefCell::new(None);
 }
 
 /// Represents a hardware display adapter that can be used for rendering (including the CPU).
@@ -34,7 +37,7 @@ thread_local! {
 /// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
 #[derive(Clone)]
 pub struct Adapter {
-    pub(crate) dxgi_adapter: ComPtr<IDXGIAdapter>,
+    pub(crate) dxgi_adapter: IDXGIAdapter,
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
 }
 
@@ -45,15 +48,15 @@ unsafe impl Send for Adapter {}
 /// Devices contain most of the relevant surface management methods.
 pub struct Device {
     pub(crate) egl_display: EGLDisplay,
-    pub(crate) d3d11_device: ComPtr<ID3D11Device>,
+    pub(crate) d3d11_device: ID3D11Device,
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
     pub(crate) display_is_owned: bool,
 }
 
 pub(crate) enum VendorPreference {
     None,
-    Prefer(UINT),
-    Avoid(UINT),
+    Prefer(u32),
+    Avoid(u32),
 }
 
 /// Wraps a Direct3D 11 device and its associated EGL display.
@@ -62,7 +65,7 @@ pub struct NativeDevice {
     /// The ANGLE EGL display.
     pub egl_display: EGLDisplay,
     /// The Direct3D 11 device that the ANGLE EGL display was created with.
-    pub d3d11_device: *mut ID3D11Device,
+    pub d3d11_device: ID3D11Device,
     /// The Direct3D driver type that the device was created with.
     pub d3d_driver_type: D3D_DRIVER_TYPE,
 }
@@ -74,54 +77,33 @@ impl Adapter {
     ) -> Result<Adapter, Error> {
         unsafe {
             let dxgi_factory = DXGI_FACTORY.with(|dxgi_factory_slot| {
-                let mut dxgi_factory_slot: RefMut<Option<ComPtr<IDXGIFactory1>>> =
-                    dxgi_factory_slot.borrow_mut();
-                if dxgi_factory_slot.is_none() {
-                    let mut dxgi_factory: *mut IDXGIFactory1 = ptr::null_mut();
-                    let result = dxgi::CreateDXGIFactory1(
-                        &IDXGIFactory1::uuidof(),
-                        &mut dxgi_factory as *mut *mut IDXGIFactory1 as *mut *mut c_void,
-                    );
-                    if !winerror::SUCCEEDED(result) {
-                        return Err(Error::Failed);
-                    }
-                    assert!(!dxgi_factory.is_null());
-                    *dxgi_factory_slot = Some(ComPtr::from_raw(dxgi_factory));
+                let result = CreateDXGIFactory1::<IDXGIFactory1>();
+                if result.is_err() {
+                    return Err(Error::Failed);
                 }
-                Ok((*dxgi_factory_slot).clone().unwrap())
+                Ok(result.unwrap())
             })?;
 
             // Find the first adapter that matches the vendor preference.
             let mut adapter_index = 0;
             loop {
-                let mut dxgi_adapter_1 = ptr::null_mut();
-                let result = (*dxgi_factory).EnumAdapters1(adapter_index, &mut dxgi_adapter_1);
-                if !winerror::SUCCEEDED(result) {
+                let result = (*dxgi_factory).EnumAdapters(adapter_index);
+                if result.is_err() {
                     break;
                 }
-                assert!(!dxgi_adapter_1.is_null());
-                let dxgi_adapter_1 = ComPtr::from_raw(dxgi_adapter_1);
+                let dxgi_adapter_1 = result.unwrap();
 
-                let mut adapter_desc = mem::zeroed();
-                let result = (*dxgi_adapter_1).GetDesc1(&mut adapter_desc);
-                assert_eq!(result, S_OK);
-
+                let result = dxgi_adapter_1.GetDesc();
+                assert!(result.is_ok());
+                let adapter_desc = result.unwrap();
                 let choose_this = match vendor_preference {
                     VendorPreference::Prefer(vendor_id) => vendor_id == adapter_desc.VendorId,
                     VendorPreference::Avoid(vendor_id) => vendor_id != adapter_desc.VendorId,
                     VendorPreference::None => true,
                 };
                 if choose_this {
-                    let mut dxgi_adapter: *mut IDXGIAdapter = ptr::null_mut();
-                    let result = (*dxgi_adapter_1).QueryInterface(
-                        &IDXGIAdapter::uuidof(),
-                        &mut dxgi_adapter as *mut *mut IDXGIAdapter as *mut *mut c_void,
-                    );
-                    assert_eq!(result, S_OK);
-                    let dxgi_adapter = ComPtr::from_raw(dxgi_adapter);
-
                     return Ok(Adapter {
-                        dxgi_adapter,
+                        dxgi_adapter: dxgi_adapter_1,
                         d3d_driver_type,
                     });
                 }
@@ -130,31 +112,21 @@ impl Adapter {
             }
 
             // Fallback: Go with the first adapter.
-            let mut dxgi_adapter_1 = ptr::null_mut();
-            let result = (*dxgi_factory).EnumAdapters1(0, &mut dxgi_adapter_1);
-            if !winerror::SUCCEEDED(result) {
+            let result = (*dxgi_factory).EnumAdapters(0);
+            if result.is_err() {
                 return Err(Error::NoAdapterFound);
             }
-            assert!(!dxgi_adapter_1.is_null());
-            let dxgi_adapter_1 = ComPtr::from_raw(dxgi_adapter_1);
-
-            let mut dxgi_adapter: *mut IDXGIAdapter = ptr::null_mut();
-            let result = (*dxgi_adapter_1).QueryInterface(
-                &IDXGIAdapter::uuidof(),
-                &mut dxgi_adapter as *mut *mut IDXGIAdapter as *mut *mut c_void,
-            );
-            assert!(winerror::SUCCEEDED(result));
-            let dxgi_adapter = ComPtr::from_raw(dxgi_adapter);
+            let dxgi_adapter_1 = result.unwrap();
 
             Ok(Adapter {
-                dxgi_adapter,
+                dxgi_adapter: dxgi_adapter_1,
                 d3d_driver_type,
             })
         }
     }
 
     /// Create an Adapter instance wrapping an existing DXGI adapter.
-    pub fn from_dxgi_adapter(adapter: ComPtr<IDXGIAdapter>) -> Adapter {
+    pub fn from_dxgi_adapter(adapter: IDXGIAdapter) -> Adapter {
         Adapter {
             dxgi_adapter: adapter,
             d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
@@ -167,34 +139,36 @@ impl Device {
     pub(crate) fn new(adapter: &Adapter) -> Result<Device, Error> {
         let d3d_driver_type = adapter.d3d_driver_type;
         unsafe {
-            let mut d3d11_device = ptr::null_mut();
-            let mut d3d11_feature_level = 0;
-            let d3d11_adapter = if d3d_driver_type == D3D_DRIVER_TYPE_WARP {
-                ptr::null_mut()
+            let mut d3d11_device = Default::default();
+            let d3d11_feature_level = ptr::null_mut();
+            let mut d3d11_device_context = Default::default();
+            let d3d11_adapter: IDXGIAdapter = if d3d_driver_type == D3D_DRIVER_TYPE_WARP {
+                IDXGIAdapter::from_raw(ptr::null_mut())
             } else {
-                adapter.dxgi_adapter.as_raw()
+                adapter.dxgi_adapter.clone()
             };
             let result = D3D11CreateDevice(
-                d3d11_adapter,
+                &d3d11_adapter,
                 d3d_driver_type,
-                ptr::null_mut(),
-                0,
-                ptr::null_mut(),
-                0,
+                HMODULE::default(),
+                D3D11_CREATE_DEVICE_FLAG(0),
+                None,
                 D3D11_SDK_VERSION,
-                &mut d3d11_device,
-                &mut d3d11_feature_level,
-                ptr::null_mut(),
+                Some(&mut d3d11_device),
+                Some(d3d11_feature_level),
+                Some(&mut d3d11_device_context),
             );
-            if !winerror::SUCCEEDED(result) {
+
+            if result.is_err() {
                 return Err(Error::DeviceOpenFailed);
             }
-            debug_assert!(d3d11_feature_level >= D3D_FEATURE_LEVEL_9_3);
-            let d3d11_device = ComPtr::from_raw(d3d11_device);
+            debug_assert!((*d3d11_feature_level).0 >= D3D_FEATURE_LEVEL_9_3.0);
 
             let eglCreateDeviceANGLE = EGL_EXTENSION_FUNCTIONS
                 .CreateDeviceANGLE
                 .expect("Where's the `EGL_ANGLE_device_creation` extension?");
+            assert!(d3d11_device.is_some());
+            let d3d11_device = d3d11_device.unwrap();
             let egl_device = eglCreateDeviceANGLE(
                 EGL_D3D11_DEVICE_ANGLE as EGLint,
                 d3d11_device.as_raw() as *mut c_void,
@@ -227,15 +201,12 @@ impl Device {
     }
 
     pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
-        unsafe {
-            (*native_device.d3d11_device).AddRef();
-            Ok(Device {
-                egl_display: native_device.egl_display,
-                d3d11_device: ComPtr::from_raw(native_device.d3d11_device),
-                d3d_driver_type: native_device.d3d_driver_type,
-                display_is_owned: false,
-            })
-        }
+        Ok(Device {
+            egl_display: native_device.egl_display,
+            d3d11_device: native_device.d3d11_device,
+            d3d_driver_type: native_device.d3d_driver_type,
+            display_is_owned: false,
+        })
     }
 
     #[allow(non_snake_case)]
@@ -264,13 +235,11 @@ impl Device {
         if result == egl::FALSE {
             return Err(Error::DeviceOpenFailed);
         }
-        let d3d11_device = device as *mut ID3D11Device;
-
         unsafe {
-            (*d3d11_device).AddRef();
+            let d3d11_device = ID3D11Device::from_raw(device as *mut c_void);
             Ok(Device {
                 egl_display: egl_display,
-                d3d11_device: ComPtr::from_raw(d3d11_device),
+                d3d11_device: d3d11_device,
                 d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
                 display_is_owned: false,
             })
@@ -286,18 +255,13 @@ impl Device {
     /// Returns the adapter that this device was created with.
     pub fn adapter(&self) -> Adapter {
         unsafe {
-            let mut dxgi_device: *mut IDXGIDevice = ptr::null_mut();
-            let result = (*self.d3d11_device).QueryInterface(
-                &IDXGIDevice::uuidof(),
-                &mut dxgi_device as *mut *mut IDXGIDevice as *mut *mut c_void,
-            );
-            assert!(winerror::SUCCEEDED(result));
-            let dxgi_device = ComPtr::from_raw(dxgi_device);
+            let result = (*self.d3d11_device).cast::<IDXGIDevice>();
+            assert!(result.is_ok());
+            let dxgi_device = result.unwrap();
 
-            let mut dxgi_adapter = ptr::null_mut();
-            let result = (*dxgi_device).GetAdapter(&mut dxgi_adapter);
-            assert!(winerror::SUCCEEDED(result));
-            let dxgi_adapter = ComPtr::from_raw(dxgi_adapter);
+            let result = dxgi_device.GetAdapter();
+            assert!(result.is_ok());
+            let dxgi_adapter = result.unwrap();
 
             Adapter {
                 dxgi_adapter,
@@ -313,7 +277,7 @@ impl Device {
     pub fn native_device(&self) -> NativeDevice {
         NativeDevice {
             egl_display: self.egl_display,
-            d3d11_device: self.d3d11_device.clone().into_raw(),
+            d3d11_device: self.d3d11_device.clone(),
             d3d_driver_type: self.d3d_driver_type,
         }
     }
