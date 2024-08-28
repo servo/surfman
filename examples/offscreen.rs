@@ -251,10 +251,10 @@ impl TriProgram {
         let program = Program::new(vertex_shader, fragment_shader);
         unsafe {
             let position_attribute =
-                gl::GetAttribLocation(program.object, b"aPosition\0".as_ptr() as *const GLchar);
+                gl::GetAttribLocation(program.object, c"aPosition".as_ptr() as *const GLchar);
             ck();
             let color_attribute =
-                gl::GetAttribLocation(program.object, "aColor\0".as_ptr() as *const GLchar);
+                gl::GetAttribLocation(program.object, c"aColor".as_ptr() as *const GLchar);
             ck();
             TriProgram {
                 program,

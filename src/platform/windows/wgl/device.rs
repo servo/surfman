@@ -6,6 +6,7 @@ use super::connection::Connection;
 use super::context::WGL_EXTENSION_FUNCTIONS;
 use crate::{Error, GLApi};
 
+use std::ffi::CStr;
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_int, c_void};
@@ -14,7 +15,7 @@ use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
 use winapi::shared::dxgi::{IDXGIAdapter, IDXGIDevice};
 use winapi::shared::minwindef::{self, FALSE, UINT};
-use winapi::shared::ntdef::{HANDLE, LPCSTR};
+use winapi::shared::ntdef::HANDLE;
 use winapi::shared::windef::{HBRUSH, HDC, HWND};
 use winapi::shared::winerror::{self, S_OK};
 use winapi::um::d3d11::{D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, D3D11_SDK_VERSION};
@@ -28,8 +29,8 @@ pub(crate) const HIDDEN_WINDOW_SIZE: c_int = 16;
 
 const INTEL_PCI_ID: UINT = 0x8086;
 
-static NVIDIA_GPU_SELECT_SYMBOL: &[u8] = b"NvOptimusEnablement\0";
-static AMD_GPU_SELECT_SYMBOL: &[u8] = b"AmdPowerXpressRequestHighPerformance\0";
+static NVIDIA_GPU_SELECT_SYMBOL: &CStr = c"NvOptimusEnablement";
+static AMD_GPU_SELECT_SYMBOL: &CStr = c"AmdPowerXpressRequestHighPerformance";
 
 /// Represents a hardware display adapter that can be used for rendering (including the CPU).
 ///
@@ -76,14 +77,12 @@ impl Adapter {
         unsafe {
             let current_module = libloaderapi::GetModuleHandleA(ptr::null());
             assert!(!current_module.is_null());
-            let nvidia_gpu_select_variable: *mut i32 = libloaderapi::GetProcAddress(
-                current_module,
-                NVIDIA_GPU_SELECT_SYMBOL.as_ptr() as LPCSTR,
-            ) as *mut i32;
-            let amd_gpu_select_variable: *mut i32 = libloaderapi::GetProcAddress(
-                current_module,
-                AMD_GPU_SELECT_SYMBOL.as_ptr() as LPCSTR,
-            ) as *mut i32;
+            let nvidia_gpu_select_variable: *mut i32 =
+                libloaderapi::GetProcAddress(current_module, NVIDIA_GPU_SELECT_SYMBOL.as_ptr())
+                    as *mut i32;
+            let amd_gpu_select_variable: *mut i32 =
+                libloaderapi::GetProcAddress(current_module, AMD_GPU_SELECT_SYMBOL.as_ptr())
+                    as *mut i32;
             if nvidia_gpu_select_variable.is_null() || amd_gpu_select_variable.is_null() {
                 println!(
                     "surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
@@ -308,7 +307,7 @@ impl HiddenWindow {
     fn thread(sender: Sender<SendableHWND>) {
         unsafe {
             let instance = libloaderapi::GetModuleHandleA(ptr::null_mut());
-            let window_class_name = &b"SurfmanHiddenWindow\0"[0] as *const u8 as LPCSTR;
+            let window_class_name = c"SurfmanHiddenWindow".as_ptr();
             let mut window_class = mem::zeroed();
             if winuser::GetClassInfoA(instance, window_class_name, &mut window_class) == FALSE {
                 window_class = WNDCLASSA {

@@ -1,7 +1,7 @@
 [package]
 name = "surfman"
 license = "MIT OR Apache-2.0 OR MPL-2.0"
-edition = "2018"
+edition = "2021"
 version = "0.9.8"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
