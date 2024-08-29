@@ -14,12 +14,12 @@ use crate::egl::types::{EGLSurface, EGLint};
 use crate::gl;
 use crate::gl::types::{GLenum, GLuint};
 use crate::gl_utils;
+use crate::platform::egl::ohos_ffi::{eglGetNativeClientBufferANDROID, EGL_NATIVE_BUFFER_OHOS};
 use crate::platform::generic;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGLImageKHR;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 use crate::platform::generic::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
-use crate::platform::generic::egl::ffi::EGL_NATIVE_BUFFER_ANDROID;
 use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
 use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
@@ -252,14 +252,6 @@ impl Device {
         _: &Context,
         hardware_buffer: *mut OH_NativeBuffer,
     ) -> EGLImageKHR {
-        // Get the native client buffer.
-        // Note: `eglGetNativeClientBufferANDROID` is available starting with OpenHarmony 5.0.
-        // Its availability is documented here: https://docs.openharmony.cn/pages/v5.0/en/application-dev/reference/native-lib/egl-symbol.md
-        let eglGetNativeClientBufferANDROID =
-            EGL_EXTENSION_FUNCTIONS.GetNativeClientBufferANDROID.expect(
-                "Where's the `EGL_ANDROID_get_native_client_buffer` \
-                                            extension?",
-            );
         let client_buffer = eglGetNativeClientBufferANDROID(hardware_buffer as *const _);
         assert!(!client_buffer.is_null());
 
@@ -273,8 +265,8 @@ impl Device {
         let egl_image = (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(
             self.egl_display,
             egl::NO_CONTEXT,
-            EGL_NATIVE_BUFFER_ANDROID,
-            client_buffer,
+            EGL_NATIVE_BUFFER_OHOS,
+            client_buffer.cast_mut().cast(),
             egl_image_attributes.as_ptr(),
         );
         assert_ne!(egl_image, EGL_NO_IMAGE_KHR);

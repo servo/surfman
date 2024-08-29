@@ -3,6 +3,13 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 
+use std::ffi::c_void;
+
+/// From `eglext.h` on OpenHarmony.
+pub(crate) const EGL_NATIVE_BUFFER_OHOS: u32 = 0x34E1;
+
+use crate::egl::types::EGLClientBuffer;
+
 #[repr(C)]
 pub struct NativeWindow {
     _unused: [u8; 0],
@@ -44,6 +51,17 @@ extern "C" {
         code: NativeWindowOperation,
         ...
     ) -> i32;
+}
+
+#[link(name = "EGL")]
+extern "C" {
+    /// Get the native Client buffer
+    ///
+    /// The extension function `eglGetNativeClientBufferANDROID` is available starting with OpenHarmony 5.0.
+    /// Its availability is documented here: https://docs.openharmony.cn/pages/v5.0/en/application-dev/reference/native-lib/egl-symbol.md
+    /// However it is not available in `EGL_EXTENSION_FUNCTIONS`, since `eglGetProcAddress()` does not find
+    /// the function and returns NULL.
+    pub(crate) fn eglGetNativeClientBufferANDROID(buffer: *const c_void) -> EGLClientBuffer;
 }
 
 // Bindings to `native_buffer` components we use. Official Documentation:
