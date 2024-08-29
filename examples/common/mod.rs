@@ -68,7 +68,7 @@ impl Shader {
             gl::ShaderSource(
                 shader,
                 1,
-                &(source.as_ptr() as *const GLchar),
+                &(source.as_ptr().cast()),
                 &(source.len() as GLint),
             );
             ck();
@@ -116,7 +116,7 @@ impl Buffer {
             gl::BufferData(
                 gl::ARRAY_BUFFER,
                 data.len() as isize,
-                data.as_ptr() as *const c_void,
+                data.as_ptr().cast(),
                 gl::STATIC_DRAW,
             );
             ck();
