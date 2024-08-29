@@ -657,9 +657,14 @@ fn extension_loader_thread() -> WGLExtensionFunctions {
         assert_ne!(window_class_atom, 0);
 
         let mut extension_functions = WGLExtensionFunctions::default();
+        // The `lpClassName` parameter of `CreateWindowExA()` takes either
+        // a pointer to a null-terminated c string, or an `ATOM` / `u16` encoded
+        // in the lower bytes of the pointer type. We do the latter by forcing an
+        // `as` cast of the ATOM to the pointer type `LPCSTR`.
+        let lpClassName = window_class_atom as LPCSTR;
         let window = winuser::CreateWindowExA(
             0,
-            window_class_atom as LPCSTR,
+            lpClassName,
             window_class_name,
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             0,
