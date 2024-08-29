@@ -811,26 +811,21 @@ impl BlitProgram {
         let program = Program::new(vertex_shader, fragment_shader);
         unsafe {
             let position_attribute =
-                gl::GetAttribLocation(program.object, b"aPosition\0".as_ptr() as *const GLchar);
+                gl::GetAttribLocation(program.object, c"aPosition".as_ptr().cast());
             ck();
             let transform_uniform =
-                gl::GetUniformLocation(program.object, b"uTransform\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uTransform".as_ptr().cast());
             ck();
             let translation_uniform =
-                gl::GetUniformLocation(program.object, b"uTranslation\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uTranslation".as_ptr().cast());
             ck();
-            let tex_transform_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uTexTransform\0".as_ptr() as *const GLchar,
-            );
+            let tex_transform_uniform =
+                gl::GetUniformLocation(program.object, c"uTexTransform".as_ptr().cast());
             ck();
-            let tex_translation_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uTexTranslation\0".as_ptr() as *const GLchar,
-            );
+            let tex_translation_uniform =
+                gl::GetUniformLocation(program.object, c"uTexTranslation".as_ptr().cast());
             ck();
-            let source_uniform =
-                gl::GetUniformLocation(program.object, b"uSource\0".as_ptr() as *const GLchar);
+            let source_uniform = gl::GetUniformLocation(program.object, c"uSource".as_ptr().cast());
             ck();
             BlitProgram {
                 program,
@@ -883,49 +878,36 @@ impl GridProgram {
         let program = Program::new(vertex_shader, fragment_shader);
         unsafe {
             let position_attribute =
-                gl::GetAttribLocation(program.object, b"aPosition\0".as_ptr() as *const GLchar);
+                gl::GetAttribLocation(program.object, c"aPosition".as_ptr().cast());
             ck();
             let transform_uniform =
-                gl::GetUniformLocation(program.object, b"uTransform\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uTransform".as_ptr().cast());
             ck();
             let translation_uniform =
-                gl::GetUniformLocation(program.object, b"uTranslation\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uTranslation".as_ptr().cast());
             ck();
-            let tex_transform_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uTexTransform\0".as_ptr() as *const GLchar,
-            );
+            let tex_transform_uniform =
+                gl::GetUniformLocation(program.object, c"uTexTransform".as_ptr().cast());
             ck();
-            let tex_translation_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uTexTranslation\0".as_ptr() as *const GLchar,
-            );
+            let tex_translation_uniform =
+                gl::GetUniformLocation(program.object, c"uTexTranslation".as_ptr().cast());
             ck();
-            let gridline_color_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uGridlineColor\0".as_ptr() as *const GLchar,
-            );
+            let gridline_color_uniform =
+                gl::GetUniformLocation(program.object, c"uGridlineColor".as_ptr().cast());
             ck();
             let bg_color_uniform =
-                gl::GetUniformLocation(program.object, b"uBGColor\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uBGColor".as_ptr().cast());
             ck();
-            let radius_uniform =
-                gl::GetUniformLocation(program.object, b"uRadius\0".as_ptr() as *const GLchar);
+            let radius_uniform = gl::GetUniformLocation(program.object, c"uRadius".as_ptr().cast());
             ck();
-            let camera_position_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uCameraPosition\0".as_ptr() as *const GLchar,
-            );
+            let camera_position_uniform =
+                gl::GetUniformLocation(program.object, c"uCameraPosition".as_ptr().cast());
             ck();
-            let light_position_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uLightPosition\0".as_ptr() as *const GLchar,
-            );
+            let light_position_uniform =
+                gl::GetUniformLocation(program.object, c"uLightPosition".as_ptr().cast());
             ck();
-            let sphere_position_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uSpherePosition\0".as_ptr() as *const GLchar,
-            );
+            let sphere_position_uniform =
+                gl::GetUniformLocation(program.object, c"uSpherePosition".as_ptr().cast());
             ck();
             GridProgram {
                 program,
@@ -985,55 +967,42 @@ impl CheckProgram {
         let program = Program::new(vertex_shader, fragment_shader);
         unsafe {
             let position_attribute =
-                gl::GetAttribLocation(program.object, b"aPosition\0".as_ptr() as *const GLchar);
+                gl::GetAttribLocation(program.object, c"aPosition".as_ptr().cast());
             ck();
             let transform_uniform =
-                gl::GetUniformLocation(program.object, b"uTransform\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uTransform".as_ptr().cast());
             ck();
             let translation_uniform =
-                gl::GetUniformLocation(program.object, b"uTranslation\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uTranslation".as_ptr().cast());
             ck();
-            let tex_transform_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uTexTransform\0".as_ptr() as *const GLchar,
-            );
+            let tex_transform_uniform =
+                gl::GetUniformLocation(program.object, c"uTexTransform".as_ptr().cast());
             ck();
-            let tex_translation_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uTexTranslation\0".as_ptr() as *const GLchar,
-            );
+            let tex_translation_uniform =
+                gl::GetUniformLocation(program.object, c"uTexTranslation".as_ptr().cast());
             ck();
             let rotation_uniform =
-                gl::GetUniformLocation(program.object, b"uRotation\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uRotation".as_ptr().cast());
             ck();
             let color_a_uniform =
-                gl::GetUniformLocation(program.object, b"uColorA\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uColorA".as_ptr().cast());
             ck();
             let color_b_uniform =
-                gl::GetUniformLocation(program.object, b"uColorB\0".as_ptr() as *const GLchar);
+                gl::GetUniformLocation(program.object, c"uColorB".as_ptr().cast());
             ck();
-            let viewport_origin_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uViewportOrigin\0".as_ptr() as *const GLchar,
-            );
+            let viewport_origin_uniform =
+                gl::GetUniformLocation(program.object, c"uViewportOrigin".as_ptr().cast());
             ck();
-            let radius_uniform =
-                gl::GetUniformLocation(program.object, b"uRadius\0".as_ptr() as *const GLchar);
+            let radius_uniform = gl::GetUniformLocation(program.object, c"uRadius".as_ptr().cast());
             ck();
-            let camera_position_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uCameraPosition\0".as_ptr() as *const GLchar,
-            );
+            let camera_position_uniform =
+                gl::GetUniformLocation(program.object, c"uCameraPosition".as_ptr().cast());
             ck();
-            let light_position_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uLightPosition\0".as_ptr() as *const GLchar,
-            );
+            let light_position_uniform =
+                gl::GetUniformLocation(program.object, c"uLightPosition".as_ptr().cast());
             ck();
-            let sphere_position_uniform = gl::GetUniformLocation(
-                program.object,
-                b"uSpherePosition\0".as_ptr() as *const GLchar,
-            );
+            let sphere_position_uniform =
+                gl::GetUniformLocation(program.object, c"uSpherePosition".as_ptr().cast());
             ck();
             CheckProgram {
                 program,

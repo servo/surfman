@@ -82,15 +82,15 @@ lazy_static! {
         use std::mem::transmute as cast;
         unsafe {
             EGLExtensionFunctions {
-                CreateImageKHR: cast(get(b"eglCreateImageKHR\0")),
-                DestroyImageKHR: cast(get(b"eglDestroyImageKHR\0")),
-                ImageTargetTexture2DOES: cast(get(b"glEGLImageTargetTexture2DOES\0")),
+                CreateImageKHR: cast(get(c"eglCreateImageKHR")),
+                DestroyImageKHR: cast(get(c"eglDestroyImageKHR")),
+                ImageTargetTexture2DOES: cast(get(c"glEGLImageTargetTexture2DOES")),
 
-                CreateDeviceANGLE: cast(get(b"eglCreateDeviceANGLE\0")),
-                GetNativeClientBufferANDROID: cast(get(b"eglGetNativeClientBufferANDROID\0")),
-                QueryDeviceAttribEXT: cast(get(b"eglQueryDeviceAttribEXT\0")),
-                QueryDisplayAttribEXT: cast(get(b"eglQueryDisplayAttribEXT\0")),
-                QuerySurfacePointerANGLE: cast(get(b"eglQuerySurfacePointerANGLE\0")),
+                CreateDeviceANGLE: cast(get(c"eglCreateDeviceANGLE")),
+                GetNativeClientBufferANDROID: cast(get(c"eglGetNativeClientBufferANDROID")),
+                QueryDeviceAttribEXT: cast(get(c"eglQueryDeviceAttribEXT")),
+                QueryDisplayAttribEXT: cast(get(c"eglQueryDisplayAttribEXT")),
+                QuerySurfacePointerANGLE: cast(get(c"eglQuerySurfacePointerANGLE")),
             }
         }
     };

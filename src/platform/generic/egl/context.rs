@@ -16,7 +16,7 @@ use crate::{Gl, SurfaceInfo};
 
 use std::ffi::CString;
 use std::mem;
-use std::os::raw::{c_char, c_void};
+use std::os::raw::c_void;
 use std::ptr;
 use std::thread;
 
@@ -593,7 +593,7 @@ pub(crate) unsafe fn egl_config_from_id(
 pub(crate) fn get_proc_address(symbol_name: &str) -> *const c_void {
     EGL_FUNCTIONS.with(|egl| unsafe {
         let symbol_name: CString = CString::new(symbol_name).unwrap();
-        egl.GetProcAddress(symbol_name.as_ptr() as *const u8 as *const c_char) as *const c_void
+        egl.GetProcAddress(symbol_name.as_ptr()).cast()
     })
 }
 

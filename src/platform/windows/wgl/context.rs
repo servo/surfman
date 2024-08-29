@@ -148,7 +148,7 @@ pub struct NativeContext(pub HGLRC);
 thread_local! {
     static OPENGL_LIBRARY: HMODULE = {
         unsafe {
-            libloaderapi::LoadLibraryA(&b"opengl32.dll\0"[0] as *const u8 as LPCSTR)
+            libloaderapi::LoadLibraryA(c"opengl32.dll".as_ptr())
         }
     };
 }
@@ -640,7 +640,7 @@ impl NativeContext {
 fn extension_loader_thread() -> WGLExtensionFunctions {
     unsafe {
         let instance = libloaderapi::GetModuleHandleA(ptr::null_mut());
-        let window_class_name = &b"SurfmanFalseWindow\0"[0] as *const u8 as LPCSTR;
+        let window_class_name = c"SurfmanFalseWindow".as_ptr();
         let window_class = WNDCLASSA {
             style: CS_OWNDC,
             lpfnWndProc: Some(extension_loader_window_proc),
@@ -657,9 +657,14 @@ fn extension_loader_thread() -> WGLExtensionFunctions {
         assert_ne!(window_class_atom, 0);
 
         let mut extension_functions = WGLExtensionFunctions::default();
+        // The `lpClassName` parameter of `CreateWindowExA()` takes either
+        // a pointer to a null-terminated c string, or an `ATOM` / `u16` encoded
+        // in the lower bytes of the pointer type. We do the latter by forcing an
+        // `as` cast of the ATOM to the pointer type `LPCSTR`.
+        let lpClassName = window_class_atom as LPCSTR;
         let window = winuser::CreateWindowExA(
             0,
-            window_class_atom as LPCSTR,
+            lpClassName,
             window_class_name,
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             0,
@@ -732,9 +737,8 @@ extern "system" fn extension_loader_window_proc(
                 let create_struct = lParam as *mut CREATESTRUCTA;
                 let wgl_extension_functions =
                     (*create_struct).lpCreateParams as *mut WGLExtensionFunctions;
-                (*wgl_extension_functions).GetExtensionsStringARB = mem::transmute(
-                    wglGetProcAddress(&b"wglGetExtensionsStringARB\0"[0] as *const u8 as LPCSTR),
-                );
+                (*wgl_extension_functions).GetExtensionsStringARB =
+                    mem::transmute(wglGetProcAddress(c"wglGetExtensionsStringARB".as_ptr()));
                 let extensions = match (*wgl_extension_functions).GetExtensionsStringARB {
                     Some(wglGetExtensionsStringARB) => {
                         CStr::from_ptr(wglGetExtensionsStringARB(dc)).to_string_lossy()
@@ -748,44 +752,43 @@ extern "system" fn extension_loader_window_proc(
                         (*wgl_extension_functions).pixel_format_functions =
                             Some(WGLPixelFormatExtensionFunctions {
                                 ChoosePixelFormatARB: mem::transmute(wglGetProcAddress(
-                                    &b"wglChoosePixelFormatARB\0"[0] as *const u8 as LPCSTR,
+                                    c"wglChoosePixelFormatARB".as_ptr(),
                                 )),
                                 GetPixelFormatAttribivARB: mem::transmute(wglGetProcAddress(
-                                    &b"wglGetPixelFormatAttribivARB\0"[0] as *const u8 as LPCSTR,
+                                    c"wglGetPixelFormatAttribivARB".as_ptr(),
                                 )),
                             });
                         continue;
                     }
                     if extension == "WGL_ARB_create_context" {
-                        (*wgl_extension_functions).CreateContextAttribsARB =
-                            mem::transmute(wglGetProcAddress(
-                                &b"wglCreateContextAttribsARB\0"[0] as *const u8 as LPCSTR,
-                            ));
+                        (*wgl_extension_functions).CreateContextAttribsARB = mem::transmute(
+                            wglGetProcAddress(c"wglCreateContextAttribsARB".as_ptr()),
+                        );
                         continue;
                     }
                     if extension == "WGL_NV_DX_interop" {
                         (*wgl_extension_functions).dx_interop_functions =
                             Some(WGLDXInteropExtensionFunctions {
                                 DXCloseDeviceNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXCloseDeviceNV\0"[0] as *const u8 as LPCSTR,
+                                    c"wglDXCloseDeviceNV".as_ptr(),
                                 )),
                                 DXLockObjectsNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXLockObjectsNV\0"[0] as *const u8 as LPCSTR,
+                                    c"wglDXLockObjectsNV".as_ptr(),
                                 )),
                                 DXOpenDeviceNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXOpenDeviceNV\0"[0] as *const u8 as LPCSTR,
+                                    c"wglDXOpenDeviceNV".as_ptr(),
                                 )),
                                 DXRegisterObjectNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXRegisterObjectNV\0"[0] as *const u8 as LPCSTR,
+                                    c"wglDXRegisterObjectNV".as_ptr(),
                                 )),
                                 DXSetResourceShareHandleNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXSetResourceShareHandleNV\0"[0] as *const u8 as LPCSTR,
+                                    c"wglDXSetResourceShareHandleNV".as_ptr(),
                                 )),
                                 DXUnlockObjectsNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXUnlockObjectsNV\0"[0] as *const u8 as LPCSTR,
+                                    c"wglDXUnlockObjectsNV".as_ptr(),
                                 )),
                                 DXUnregisterObjectNV: mem::transmute(wglGetProcAddress(
-                                    &b"wglDXUnregisterObjectNV\0"[0] as *const u8 as LPCSTR,
+                                    c"wglDXUnregisterObjectNV".as_ptr(),
                                 )),
                             });
                         continue;
@@ -872,7 +875,7 @@ fn get_proc_address(symbol_name: &str) -> *const c_void {
     unsafe {
         // https://www.khronos.org/opengl/wiki/Load_OpenGL_Functions#Windows
         let symbol_name: CString = CString::new(symbol_name).unwrap();
-        let symbol_ptr = symbol_name.as_ptr() as *const u8 as LPCSTR;
+        let symbol_ptr = symbol_name.as_ptr();
         let addr = wglGetProcAddress(symbol_ptr) as *const c_void;
         if !addr.is_null() {
             return addr;

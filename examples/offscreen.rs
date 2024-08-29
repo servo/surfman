@@ -188,7 +188,7 @@ impl TriVertexArray {
             ck();
 
             let vertex_buffer = Buffer::from_data(slice::from_raw_parts(
-                TRI_VERTICES.as_ptr() as *const u8,
+                TRI_VERTICES.as_ptr().cast(),
                 mem::size_of::<Vertex>() * 3,
             ));
 
@@ -251,10 +251,9 @@ impl TriProgram {
         let program = Program::new(vertex_shader, fragment_shader);
         unsafe {
             let position_attribute =
-                gl::GetAttribLocation(program.object, b"aPosition\0".as_ptr() as *const GLchar);
+                gl::GetAttribLocation(program.object, c"aPosition".as_ptr().cast());
             ck();
-            let color_attribute =
-                gl::GetAttribLocation(program.object, "aColor\0".as_ptr() as *const GLchar);
+            let color_attribute = gl::GetAttribLocation(program.object, c"aColor".as_ptr().cast());
             ck();
             TriProgram {
                 program,
