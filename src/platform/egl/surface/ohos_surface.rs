@@ -10,25 +10,42 @@ use euclid::default::Size2D;
 use log::info;
 
 use crate::egl;
-use crate::egl::types::EGLSurface;
+use crate::egl::types::{EGLSurface, EGLint};
 use crate::gl;
 use crate::gl::types::{GLenum, GLuint};
+use crate::gl_utils;
+use crate::platform::egl::ohos_ffi::{eglGetNativeClientBufferANDROID, EGL_NATIVE_BUFFER_OHOS};
+use crate::platform::generic;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGLImageKHR;
 use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
+use crate::platform::generic::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
 use crate::platform::generic::egl::ffi::EGL_NO_IMAGE_KHR;
+use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 
 use super::super::context::{Context, GL_FUNCTIONS};
 use super::super::device::Device;
 use super::super::ohos_ffi::{
-    NativeWindowOperation, OHNativeWindow, OH_NativeWindow_NativeWindowHandleOpt,
+    NativeWindowOperation, OHNativeWindow, OH_NativeBuffer, OH_NativeBuffer_Alloc,
+    OH_NativeBuffer_Config, OH_NativeBuffer_Format, OH_NativeBuffer_Unreference,
+    OH_NativeBuffer_Usage, OH_NativeWindow_NativeWindowHandleOpt,
 };
 use super::{Surface, SurfaceTexture};
 
 const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
 
 pub(crate) enum SurfaceObjects {
-    Window { egl_surface: EGLSurface },
+    HardwareBuffer {
+        hardware_buffer: *mut OH_NativeBuffer,
+        egl_image: EGLImageKHR,
+        framebuffer_object: GLuint,
+        texture_object: GLuint,
+        renderbuffers: Renderbuffers,
+    },
+    Window {
+        egl_surface: EGLSurface,
+    },
 }
 
 /// An OHOS native window.
@@ -58,10 +75,65 @@ impl Device {
 
     fn create_generic_surface(
         &mut self,
-        _context: &Context,
-        _size: &Size2D<i32>,
+        context: &Context,
+        size: &Size2D<i32>,
     ) -> Result<Surface, Error> {
-        Err(Error::Unimplemented)
+        let _guard = self.temporarily_make_context_current(context)?;
+
+        let usage = OH_NativeBuffer_Usage::HW_RENDER | OH_NativeBuffer_Usage::HW_TEXTURE;
+
+        let config = OH_NativeBuffer_Config {
+            width: size.width,
+            height: size.height,
+            format: OH_NativeBuffer_Format::RGBA_8888,
+            usage: usage,
+            stride: 10, // used same magic number as android. I have no idea
+        };
+
+        GL_FUNCTIONS.with(|gl| {
+            unsafe {
+                let hardware_buffer = OH_NativeBuffer_Alloc(&config as *const _);
+                assert!(!hardware_buffer.is_null(), "Failed to create native buffer");
+
+                // Create an EGL image, and bind it to a texture.
+                let egl_image = self.create_egl_image(context, hardware_buffer);
+
+                // Initialize and bind the image to the texture.
+                let texture_object =
+                    generic::egl::surface::bind_egl_image_to_gl_texture(gl, egl_image);
+
+                // Create the framebuffer, and bind the texture to it.
+                let framebuffer_object = gl_utils::create_and_bind_framebuffer(
+                    gl,
+                    SURFACE_GL_TEXTURE_TARGET,
+                    texture_object,
+                );
+
+                // Bind renderbuffers as appropriate.
+                let context_descriptor = self.context_descriptor(context);
+                let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+                let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
+                renderbuffers.bind_to_current_framebuffer(gl);
+
+                debug_assert_eq!(
+                    gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
+                    gl::FRAMEBUFFER_COMPLETE
+                );
+
+                Ok(Surface {
+                    size: *size,
+                    context_id: context.id,
+                    objects: SurfaceObjects::HardwareBuffer {
+                        hardware_buffer,
+                        egl_image,
+                        framebuffer_object,
+                        texture_object,
+                        renderbuffers,
+                    },
+                    destroyed: false,
+                })
+            }
+        })
     }
 
     unsafe fn create_window_surface(
@@ -110,14 +182,34 @@ impl Device {
     /// in another context.
     ///
     /// Calling this method on a widget surface returns a `WidgetAttached` error.
-    /// On OpenHarmony, currently only widget surfaces are implemented in surfman, so
-    /// this method unconditionally returns the `WidgetAttached` error.
     pub fn create_surface_texture(
         &self,
-        _context: &mut Context,
+        context: &mut Context,
         surface: Surface,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
-        Err((Error::WidgetAttached, surface))
+        unsafe {
+            match surface.objects {
+                SurfaceObjects::Window { .. } => return Err((Error::WidgetAttached, surface)),
+                SurfaceObjects::HardwareBuffer {
+                    hardware_buffer, ..
+                } => GL_FUNCTIONS.with(|gl| {
+                    let _guard = match self.temporarily_make_context_current(context) {
+                        Ok(guard) => guard,
+                        Err(err) => return Err((err, surface)),
+                    };
+
+                    let local_egl_image = self.create_egl_image(context, hardware_buffer);
+                    let texture_object =
+                        generic::egl::surface::bind_egl_image_to_gl_texture(gl, local_egl_image);
+                    Ok(SurfaceTexture {
+                        surface,
+                        local_egl_image,
+                        texture_object,
+                        phantom: PhantomData,
+                    })
+                }),
+            }
+        }
     }
 
     /// Displays the contents of a widget surface on screen.
@@ -138,6 +230,7 @@ impl Device {
                     egl.SwapBuffers(self.egl_display, egl_surface);
                     Ok(())
                 }
+                SurfaceObjects::HardwareBuffer { .. } => Err(Error::NoWidgetAttached),
             }
         })
     }
@@ -151,6 +244,34 @@ impl Device {
     ) -> Result<(), Error> {
         surface.size = size;
         Ok(())
+    }
+
+    #[allow(non_snake_case)]
+    unsafe fn create_egl_image(
+        &self,
+        _: &Context,
+        hardware_buffer: *mut OH_NativeBuffer,
+    ) -> EGLImageKHR {
+        let client_buffer = eglGetNativeClientBufferANDROID(hardware_buffer as *const _);
+        assert!(!client_buffer.is_null());
+
+        // Create the EGL image.
+        let egl_image_attributes = [
+            EGL_IMAGE_PRESERVED_KHR as EGLint,
+            egl::TRUE as EGLint,
+            egl::NONE as EGLint,
+            0,
+        ];
+        let egl_image = (EGL_EXTENSION_FUNCTIONS.CreateImageKHR)(
+            self.egl_display,
+            egl::NO_CONTEXT,
+            EGL_NATIVE_BUFFER_OHOS,
+            client_buffer.cast_mut().cast(),
+            egl_image_attributes.as_ptr(),
+        );
+        assert_ne!(egl_image, EGL_NO_IMAGE_KHR);
+        info!("surfman created an EGL image succesfully!");
+        egl_image
     }
 
     /// Destroys a surface.
@@ -171,6 +292,34 @@ impl Device {
 
         unsafe {
             match surface.objects {
+                SurfaceObjects::HardwareBuffer {
+                    ref mut hardware_buffer,
+                    ref mut egl_image,
+                    ref mut framebuffer_object,
+                    ref mut texture_object,
+                    ref mut renderbuffers,
+                } => {
+                    GL_FUNCTIONS.with(|gl| {
+                        gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+                        gl.DeleteFramebuffers(1, framebuffer_object);
+                        *framebuffer_object = 0;
+
+                        renderbuffers.destroy(gl);
+
+                        gl.DeleteTextures(1, texture_object);
+                        *texture_object = 0;
+
+                        let egl_display = self.egl_display;
+                        let result =
+                            (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display, *egl_image);
+                        assert_ne!(result, egl::FALSE);
+                        *egl_image = EGL_NO_IMAGE_KHR;
+
+                        let res = OH_NativeBuffer_Unreference(*hardware_buffer);
+                        assert_eq!(res, 0, "OH_NativeBuffer_Unreference failed");
+                        *hardware_buffer = ptr::null_mut();
+                    });
+                }
                 SurfaceObjects::Window {
                     ref mut egl_surface,
                 } => EGL_FUNCTIONS.with(|egl| {
@@ -242,6 +391,9 @@ impl Device {
             id: surface.id(),
             context_id: surface.context_id,
             framebuffer_object: match surface.objects {
+                SurfaceObjects::HardwareBuffer {
+                    framebuffer_object, ..
+                } => framebuffer_object,
                 SurfaceObjects::Window { .. } => 0,
             },
         }
@@ -267,6 +419,7 @@ impl NativeWidget {
 impl Surface {
     pub(super) fn id(&self) -> SurfaceID {
         match self.objects {
+            SurfaceObjects::HardwareBuffer { egl_image, .. } => SurfaceID(egl_image as usize),
             SurfaceObjects::Window { egl_surface } => SurfaceID(egl_surface as usize),
         }
     }
