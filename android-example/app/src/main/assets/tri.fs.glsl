@@ -1,1 +1,1 @@
-../../../../../surfman/resources/examples/tri.fs.glsl
+../../../../../resources/examples/tri.fs.glsl

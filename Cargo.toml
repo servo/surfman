@@ -42,6 +42,7 @@ sparkle = { version = "0.1", optional = true }
 osmesa-sys = { version = "0.1", optional = true }
 rwh_05 = { package = "raw-window-handle", version = "0.5.2", features = ["std"], optional = true }
 rwh_06 = { package = "raw-window-handle", version = "0.6.2", features = ["std"], optional = true }
+serial_test = "3.1.0"
 
 [dev-dependencies]
 clap = "2"
@@ -49,7 +50,6 @@ gl = "0.14"
 png = "0.17"
 rand = "0.8"
 winit = "0.29"
-serial_test = "3.1.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cgl = "0.3.2"
