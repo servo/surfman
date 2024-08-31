@@ -8,8 +8,7 @@ pub mod context;
 pub mod device;
 pub mod surface;
 
-#[path = "../../../implementation/mod.rs"]
-mod implementation;
+crate::implement_interfaces!();
 
 #[cfg(test)]
 #[path = "../../../tests.rs"]
