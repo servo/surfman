@@ -10,8 +10,7 @@ pub mod surface;
 mod error;
 mod ffi;
 
-#[path = "../../../implementation/mod.rs"]
-mod implementation;
+crate::implement_interfaces!();
 
 #[cfg(test)]
 #[path = "../../../tests.rs"]

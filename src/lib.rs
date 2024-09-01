@@ -54,6 +54,7 @@ mod surface;
 pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
 
 pub mod macros;
+pub(crate) use macros::implement_interfaces;
 
 #[cfg(not(any(target_os = "android", target_env = "ohos")))]
 pub(crate) use crate::gl::Gl;

@@ -13,8 +13,7 @@ mod android_ffi;
 #[cfg(ohos_platform)]
 mod ohos_ffi;
 
-#[path = "../../implementation/mod.rs"]
-mod implementation;
+crate::implement_interfaces!();
 
 #[cfg(feature = "sm-test")]
 #[path = "../../tests.rs"]
