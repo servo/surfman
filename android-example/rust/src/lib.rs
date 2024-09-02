@@ -14,10 +14,10 @@ use log::Level;
 use std::cell::{Cell, RefCell};
 use std::mem;
 use std::thread::{self, JoinHandle};
-use surfman::platform::android::tests;
+use surfman::platform::egl::tests;
 use surfman::{Connection, NativeContext, NativeDevice};
 
-#[path = "../../../surfman/examples/threads.rs"]
+#[path = "../../../examples/threads.rs"]
 mod threads;
 
 thread_local! {

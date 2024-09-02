@@ -1,1 +1,1 @@
-../../../../../surfman/resources/examples/tri.vs.glsl
+../../../../../resources/examples/tri.vs.glsl
