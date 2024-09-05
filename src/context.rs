@@ -19,10 +19,8 @@ use std::sync::Mutex;
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ContextID(pub u64);
 
-lazy_static! {
-    #[doc(hidden)]
-    pub static ref CREATE_CONTEXT_MUTEX: Mutex<ContextID> = Mutex::new(ContextID(0));
-}
+#[doc(hidden)]
+pub static CREATE_CONTEXT_MUTEX: Mutex<ContextID> = Mutex::new(ContextID(0));
 
 bitflags! {
     /// Various flags that control attributes of the context and/or surfaces created from that
