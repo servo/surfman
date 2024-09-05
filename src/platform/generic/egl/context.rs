@@ -355,14 +355,11 @@ impl ContextDescriptor {
             }
 
             // Sanitize configs.
-            let egl_config = configs
-                .into_iter()
-                .filter(|&egl_config| {
-                    required_config_attributes
-                        .chunks(2)
-                        .all(|pair| get_config_attr(egl_display, egl_config, pair[0]) == pair[1])
-                })
-                .next();
+            let egl_config = configs.into_iter().find(|&egl_config| {
+                required_config_attributes
+                    .chunks(2)
+                    .all(|pair| get_config_attr(egl_display, egl_config, pair[0]) == pair[1])
+            });
             let egl_config = match egl_config {
                 None => return Err(Error::NoPixelFormatFound),
                 Some(egl_config) => egl_config,
