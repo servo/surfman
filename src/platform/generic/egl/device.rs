@@ -4,12 +4,12 @@
 
 use crate::egl::Egl;
 
+#[cfg(not(target_os = "windows"))]
+use libc::{dlopen, dlsym, RTLD_LAZY};
 use std::ffi::{CStr, CString};
 use std::mem;
 use std::os::raw::c_void;
-
-#[cfg(not(target_os = "windows"))]
-use libc::{dlopen, dlsym, RTLD_LAZY};
+use std::sync::LazyLock;
 #[cfg(target_os = "windows")]
 use winapi::shared::minwindef::HMODULE;
 #[cfg(target_os = "windows")]
@@ -20,29 +20,23 @@ thread_local! {
 }
 
 #[cfg(target_os = "windows")]
-lazy_static! {
-    static ref EGL_LIBRARY: EGLLibraryWrapper = {
-        unsafe {
-            let module = libloaderapi::LoadLibraryA(c"libEGL.dll".as_ptr());
-            EGLLibraryWrapper(module)
-        }
-    };
-}
+static EGL_LIBRARY: LazyLock<EGLLibraryWrapper> = LazyLock::new(|| unsafe {
+    let module = libloaderapi::LoadLibraryA(c"libEGL.dll".as_ptr());
+    EGLLibraryWrapper(module)
+});
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-lazy_static! {
-    static ref EGL_LIBRARY: EGLLibraryWrapper = {
-        for soname in [c"libEGL.so.1".as_ptr(), c"libEGL.so".as_ptr()] {
-            unsafe {
-                let handle = dlopen(soname as *const _, RTLD_LAZY);
-                if !handle.is_null() {
-                    return EGLLibraryWrapper(handle);
-                }
+static EGL_LIBRARY: LazyLock<EGLLibraryWrapper> = LazyLock::new(|| {
+    for soname in [c"libEGL.so.1".as_ptr(), c"libEGL.so".as_ptr()] {
+        unsafe {
+            let handle = dlopen(soname as *const _, RTLD_LAZY);
+            if !handle.is_null() {
+                return EGLLibraryWrapper(handle);
             }
         }
-        panic!("Unable to load the libEGL shared object");
-    };
-}
+    }
+    panic!("Unable to load the libEGL shared object");
+});
 
 #[cfg(target_os = "windows")]
 struct EGLLibraryWrapper(HMODULE);

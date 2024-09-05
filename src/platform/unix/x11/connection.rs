@@ -17,16 +17,10 @@ use euclid::default::Size2D;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
 
-lazy_static! {
-    static ref X_THREADS_INIT: () = {
-        unsafe {
-            XInitThreads();
-        }
-    };
-}
+static X_THREADS_INIT: Once = Once::new();
 
 /// A connection to the X11 display server.
 #[derive(Clone)]
@@ -72,7 +66,9 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         unsafe {
-            *X_THREADS_INIT;
+            X_THREADS_INIT.call_once(|| {
+                XInitThreads();
+            });
 
             let x11_display = XOpenDisplay(ptr::null());
             if x11_display.is_null() {
@@ -93,7 +89,9 @@ impl Connection {
 
     /// Wraps an existing X11 `Display` in a `Connection`.
     ///
-    /// Important: Before calling this function, X11 must have be initialized in a thread-safe
+    /// # Safety
+    ///
+    /// Before calling this function, X11 must have be initialized in a thread-safe
     /// manner by using `XInitThreads()`. Otherwise, it will not be safe to use `surfman` from
     /// multiple threads.
     ///
