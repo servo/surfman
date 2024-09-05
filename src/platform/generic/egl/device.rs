@@ -25,11 +25,17 @@ static EGL_LIBRARY: LazyLock<EGLLibraryWrapper> = LazyLock::new(|| unsafe {
     EGLLibraryWrapper(module)
 });
 
+#[cfg(target_env = "ohos")]
+static EGL_POTENTIAL_SO_NAMES: [&CStr; 1] = [c"libEGL.so"];
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_env = "ohos")))]
+static EGL_POTENTIAL_SO_NAMES: [&CStr; 2] = [c"libEGL.so.1", c"libEGL.so"];
+
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 static EGL_LIBRARY: LazyLock<EGLLibraryWrapper> = LazyLock::new(|| {
-    for soname in [c"libEGL.so.1".as_ptr(), c"libEGL.so".as_ptr()] {
+    for soname in EGL_POTENTIAL_SO_NAMES {
         unsafe {
-            let handle = dlopen(soname as *const _, RTLD_LAZY);
+            let handle = dlopen(soname.as_ptr(), RTLD_LAZY);
             if !handle.is_null() {
                 return EGLLibraryWrapper(handle);
             }
