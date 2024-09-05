@@ -8,8 +8,8 @@ use crate::{Error, GLApi};
 use std::env;
 use std::sync::Arc;
 
-static MESA_SOFTWARE_RENDERING_ENV_VAR: &'static str = "LIBGL_ALWAYS_SOFTWARE";
-static MESA_DRI_PRIME_ENV_VAR: &'static str = "DRI_PRIME";
+static MESA_SOFTWARE_RENDERING_ENV_VAR: &str = "LIBGL_ALWAYS_SOFTWARE";
+static MESA_DRI_PRIME_ENV_VAR: &str = "DRI_PRIME";
 
 /// Represents a hardware display adapter that can be used for rendering (including the CPU).
 ///
