@@ -17,6 +17,7 @@ use std::ffi::{CStr, CString};
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
+use std::sync::LazyLock;
 use std::thread;
 use winapi::shared::minwindef::{BOOL, FALSE, FLOAT, HMODULE, LPARAM, LPVOID, LRESULT, UINT};
 use winapi::shared::minwindef::{WORD, WPARAM};
@@ -153,10 +154,8 @@ thread_local! {
     };
 }
 
-lazy_static! {
-    pub(crate) static ref WGL_EXTENSION_FUNCTIONS: WGLExtensionFunctions =
-        thread::spawn(extension_loader_thread).join().unwrap();
-}
+pub(crate) static WGL_EXTENSION_FUNCTIONS: LazyLock<WGLExtensionFunctions> =
+    LazyLock::new(|| thread::spawn(extension_loader_thread).join().unwrap());
 
 impl Device {
     /// Creates a context descriptor with the given attributes.

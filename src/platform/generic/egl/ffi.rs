@@ -8,6 +8,7 @@ use crate::egl::types::{EGLAttrib, EGLBoolean, EGLContext, EGLDeviceEXT, EGLDisp
 use crate::egl::types::{EGLenum, EGLint};
 
 use std::os::raw::c_void;
+use std::sync::LazyLock;
 
 pub enum EGLClientBufferOpaque {}
 pub type EGLClientBuffer = *mut EGLClientBufferOpaque;
@@ -76,22 +77,20 @@ pub(crate) struct EGLExtensionFunctions {
     >,
 }
 
-lazy_static! {
-    pub(crate) static ref EGL_EXTENSION_FUNCTIONS: EGLExtensionFunctions = {
-        use crate::platform::generic::egl::device::lookup_egl_extension as get;
-        use std::mem::transmute as cast;
-        unsafe {
-            EGLExtensionFunctions {
-                CreateImageKHR: cast(get(c"eglCreateImageKHR")),
-                DestroyImageKHR: cast(get(c"eglDestroyImageKHR")),
-                ImageTargetTexture2DOES: cast(get(c"glEGLImageTargetTexture2DOES")),
+pub(crate) static EGL_EXTENSION_FUNCTIONS: LazyLock<EGLExtensionFunctions> = LazyLock::new(|| {
+    use crate::platform::generic::egl::device::lookup_egl_extension as get;
+    use std::mem::transmute as cast;
+    unsafe {
+        EGLExtensionFunctions {
+            CreateImageKHR: cast(get(c"eglCreateImageKHR")),
+            DestroyImageKHR: cast(get(c"eglDestroyImageKHR")),
+            ImageTargetTexture2DOES: cast(get(c"glEGLImageTargetTexture2DOES")),
 
-                CreateDeviceANGLE: cast(get(c"eglCreateDeviceANGLE")),
-                GetNativeClientBufferANDROID: cast(get(c"eglGetNativeClientBufferANDROID")),
-                QueryDeviceAttribEXT: cast(get(c"eglQueryDeviceAttribEXT")),
-                QueryDisplayAttribEXT: cast(get(c"eglQueryDisplayAttribEXT")),
-                QuerySurfacePointerANGLE: cast(get(c"eglQuerySurfacePointerANGLE")),
-            }
+            CreateDeviceANGLE: cast(get(c"eglCreateDeviceANGLE")),
+            GetNativeClientBufferANDROID: cast(get(c"eglGetNativeClientBufferANDROID")),
+            QueryDeviceAttribEXT: cast(get(c"eglQueryDeviceAttribEXT")),
+            QueryDisplayAttribEXT: cast(get(c"eglQueryDisplayAttribEXT")),
+            QuerySurfacePointerANGLE: cast(get(c"eglQuerySurfacePointerANGLE")),
         }
-    };
-}
+    }
+});
