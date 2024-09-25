@@ -26,13 +26,22 @@ use crate::device::Device as DeviceAPI;
 use crate::{ContextID, Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
 use fnv::{FnvHashMap, FnvHashSet};
+use glow as gl;
+use glow::Context as Gl;
+use glow::HasContext;
 use log::debug;
-use sparkle::gl::{self, GLuint, Gl};
 use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::mem;
+use std::num::NonZero;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
+impl crate::SurfaceInfo {
+    fn framebuffer(&self) -> Option<gl::NativeFramebuffer> {
+        NonZero::new(self.framebuffer_object).map(gl::NativeFramebuffer)
+    }
+}
 
 // The data stored for each swap chain.
 struct SwapChainData<Device: DeviceAPI> {
@@ -191,23 +200,25 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
 
         if let PreserveBuffer::Yes(gl) = preserve_buffer {
             let front_info = device.surface_info(&new_front_buffer);
-            gl.bind_framebuffer(gl::READ_FRAMEBUFFER, front_info.framebuffer_object);
-            debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
-            gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, back_info.framebuffer_object);
-            debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
-            gl.blit_framebuffer(
-                0,
-                0,
-                front_info.size.width,
-                front_info.size.height,
-                0,
-                0,
-                back_info.size.width,
-                back_info.size.height,
-                gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT,
-                gl::NEAREST,
-            );
-            debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
+            unsafe {
+                gl.bind_framebuffer(gl::READ_FRAMEBUFFER, front_info.framebuffer());
+                debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
+                gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, back_info.framebuffer());
+                debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
+                gl.blit_framebuffer(
+                    0,
+                    0,
+                    front_info.size.width,
+                    front_info.size.height,
+                    0,
+                    0,
+                    back_info.size.width,
+                    back_info.size.height,
+                    gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT,
+                    gl::NEAREST,
+                );
+                debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
+            }
         }
 
         // Update the state
@@ -344,24 +355,25 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
         self.validate_context(device, context)?;
 
         // Save the current GL state
-        let mut bound_fbos = [0, 0];
+        let draw_fbo;
+        let read_fbo;
         let mut clear_color = [0., 0., 0., 0.];
         let mut clear_depth = [0.];
         let mut clear_stencil = [0];
-        let mut color_mask = [0, 0, 0, 0];
-        let mut depth_mask = [0];
+        let color_mask;
+        let depth_mask;
         let mut stencil_mask = [0];
-        let scissor_enabled = gl.is_enabled(gl::SCISSOR_TEST);
-        let rasterizer_enabled = gl.is_enabled(gl::RASTERIZER_DISCARD);
+        let scissor_enabled = unsafe { gl.is_enabled(gl::SCISSOR_TEST) };
+        let rasterizer_enabled = unsafe { gl.is_enabled(gl::RASTERIZER_DISCARD) };
         unsafe {
-            gl.get_integer_v(gl::DRAW_FRAMEBUFFER_BINDING, &mut bound_fbos[0..]);
-            gl.get_integer_v(gl::READ_FRAMEBUFFER_BINDING, &mut bound_fbos[1..]);
-            gl.get_float_v(gl::COLOR_CLEAR_VALUE, &mut clear_color[..]);
-            gl.get_float_v(gl::DEPTH_CLEAR_VALUE, &mut clear_depth[..]);
-            gl.get_integer_v(gl::STENCIL_CLEAR_VALUE, &mut clear_stencil[..]);
-            gl.get_boolean_v(gl::DEPTH_WRITEMASK, &mut depth_mask[..]);
-            gl.get_integer_v(gl::STENCIL_WRITEMASK, &mut stencil_mask[..]);
-            gl.get_boolean_v(gl::COLOR_WRITEMASK, &mut color_mask[..]);
+            draw_fbo = gl.get_parameter_framebuffer(gl::DRAW_FRAMEBUFFER_BINDING);
+            read_fbo = gl.get_parameter_framebuffer(gl::READ_FRAMEBUFFER_BINDING);
+            gl.get_parameter_f32_slice(gl::COLOR_CLEAR_VALUE, &mut clear_color[..]);
+            gl.get_parameter_f32_slice(gl::DEPTH_CLEAR_VALUE, &mut clear_depth[..]);
+            gl.get_parameter_i32_slice(gl::STENCIL_CLEAR_VALUE, &mut clear_stencil[..]);
+            depth_mask = gl.get_parameter_bool(gl::DEPTH_WRITEMASK);
+            gl.get_parameter_i32_slice(gl::STENCIL_WRITEMASK, &mut stencil_mask[..]);
+            color_mask = gl.get_parameter_bool_array::<4>(gl::COLOR_WRITEMASK);
         }
 
         // Make the back buffer the current surface
@@ -386,18 +398,19 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
             .context_surface_info(context)
             .unwrap()
             .unwrap()
-            .framebuffer_object;
-        gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
-        gl.clear_color(color[0], color[1], color[2], color[3]);
-        gl.clear_depth(1.);
-        gl.clear_stencil(0);
-        gl.disable(gl::SCISSOR_TEST);
-        gl.disable(gl::RASTERIZER_DISCARD);
-        gl.depth_mask(true);
-        gl.stencil_mask(0xFFFFFFFF);
-        gl.color_mask(true, true, true, true);
-        gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
-
+            .framebuffer();
+        unsafe {
+            gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
+            gl.clear_color(color[0], color[1], color[2], color[3]);
+            gl.clear_depth_f64(1.);
+            gl.clear_stencil(0);
+            gl.disable(gl::SCISSOR_TEST);
+            gl.disable(gl::RASTERIZER_DISCARD);
+            gl.depth_mask(true);
+            gl.stencil_mask(0xFFFFFFFF);
+            gl.color_mask(true, true, true, true);
+            gl.clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT | gl::STENCIL_BUFFER_BIT);
+        }
         // Reattach the old surface
         if let Some(surface) = reattach {
             let mut old_surface = device.unbind_surface_from_context(context)?.unwrap();
@@ -412,29 +425,26 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
         }
 
         // Restore the GL state
-        gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, bound_fbos[0] as GLuint);
-        gl.bind_framebuffer(gl::READ_FRAMEBUFFER, bound_fbos[1] as GLuint);
-        gl.clear_color(
-            clear_color[0],
-            clear_color[1],
-            clear_color[2],
-            clear_color[3],
-        );
-        gl.color_mask(
-            color_mask[0] != 0,
-            color_mask[1] != 0,
-            color_mask[2] != 0,
-            color_mask[3] != 0,
-        );
-        gl.clear_depth(clear_depth[0] as f64);
-        gl.clear_stencil(clear_stencil[0]);
-        gl.depth_mask(depth_mask[0] != 0);
-        gl.stencil_mask(stencil_mask[0] as gl::GLuint);
-        if scissor_enabled {
-            gl.enable(gl::SCISSOR_TEST);
-        }
-        if rasterizer_enabled {
-            gl.enable(gl::RASTERIZER_DISCARD);
+        unsafe {
+            gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, draw_fbo);
+            gl.bind_framebuffer(gl::READ_FRAMEBUFFER, read_fbo);
+            gl.clear_color(
+                clear_color[0],
+                clear_color[1],
+                clear_color[2],
+                clear_color[3],
+            );
+            gl.color_mask(color_mask[0], color_mask[1], color_mask[2], color_mask[3]);
+            gl.clear_depth_f64(clear_depth[0] as f64);
+            gl.clear_stencil(clear_stencil[0]);
+            gl.depth_mask(depth_mask);
+            gl.stencil_mask(stencil_mask[0] as _);
+            if scissor_enabled {
+                gl.enable(gl::SCISSOR_TEST);
+            }
+            if rasterizer_enabled {
+                gl.enable(gl::RASTERIZER_DISCARD);
+            }
         }
 
         Ok(())
