@@ -37,8 +37,7 @@ euclid = "0.22"
 fnv = { version = "1.0", optional = true }
 libc = "0.2"
 log = "0.4"
-#glow = { version = "0.14.2", optional = true }
-glow = { git = "https://github.com/grovesNL/glow", optional = true }
+glow = { version = "0.15", optional = true }
 osmesa-sys = { version = "0.1", optional = true }
 rwh_05 = { package = "raw-window-handle", version = "0.5.2", features = ["std"], optional = true }
 rwh_06 = { package = "raw-window-handle", version = "0.6.2", features = ["std"], optional = true }
