@@ -10,12 +10,15 @@ use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLVersio
 use crate::{SurfaceInfo, WindowingApiError};
 
 use crate::gl;
-use crate::gl::types::{GLenum, GLint, GLuint};
+type GLenum = c_uint;
+type GLint = c_int;
+type GLuint = c_uint;
 use crate::Gl;
+use glow::HasContext;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 use std::mem;
-use std::os::raw::{c_char, c_int, c_void};
+use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::ptr;
 use std::sync::LazyLock;
 use std::thread;
@@ -295,7 +298,7 @@ impl Device {
                 assert_ne!(ok, FALSE);
 
                 // Load the GL functions.
-                gl = Gl::load_with(get_proc_address);
+                gl = Gl::from_loader_function(get_proc_address);
             }
 
             // Create the initial context.
@@ -331,7 +334,7 @@ impl Device {
             let _guard = CurrentContextGuard::new();
             let ok = wglMakeCurrent(dc, native_context.0);
             assert_ne!(ok, FALSE);
-            Gl::load_with(get_proc_address)
+            Gl::from_loader_function(get_proc_address)
         };
 
         let context = Context {
@@ -453,11 +456,11 @@ impl Device {
     pub(crate) fn temporarily_bind_framebuffer<'a>(
         &self,
         context: &'a Context,
-        framebuffer: GLuint,
+        framebuffer: Option<glow::Framebuffer>,
     ) -> FramebufferGuard<'a> {
         unsafe {
             let guard = FramebufferGuard::new(context);
-            context.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer);
+            context.gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer);
             guard
         }
     }
@@ -805,8 +808,8 @@ extern "system" fn extension_loader_window_proc(
 #[must_use]
 pub(crate) struct FramebufferGuard<'a> {
     context: &'a Context,
-    old_read_framebuffer: GLuint,
-    old_draw_framebuffer: GLuint,
+    old_read_framebuffer: Option<glow::Framebuffer>,
+    old_draw_framebuffer: Option<glow::Framebuffer>,
 }
 
 impl<'a> Drop for FramebufferGuard<'a> {
@@ -815,10 +818,10 @@ impl<'a> Drop for FramebufferGuard<'a> {
         unsafe {
             self.context
                 .gl
-                .BindFramebuffer(gl::READ_FRAMEBUFFER, self.old_read_framebuffer);
+                .bind_framebuffer(gl::READ_FRAMEBUFFER, self.old_read_framebuffer);
             self.context
                 .gl
-                .BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.old_draw_framebuffer);
+                .bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.old_draw_framebuffer);
         }
     }
 }
@@ -826,18 +829,17 @@ impl<'a> Drop for FramebufferGuard<'a> {
 impl<'a> FramebufferGuard<'a> {
     fn new(context: &'a Context) -> FramebufferGuard<'a> {
         unsafe {
-            let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
-            context
+            let current_draw_framebuffer = context
                 .gl
-                .GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut current_draw_framebuffer);
-            context
+                .get_parameter_framebuffer(gl::DRAW_FRAMEBUFFER_BINDING);
+            let current_read_framebuffer = context
                 .gl
-                .GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut current_read_framebuffer);
+                .get_parameter_framebuffer(gl::READ_FRAMEBUFFER_BINDING);
 
             FramebufferGuard {
                 context,
-                old_draw_framebuffer: current_draw_framebuffer as GLuint,
-                old_read_framebuffer: current_read_framebuffer as GLuint,
+                old_draw_framebuffer: current_draw_framebuffer,
+                old_read_framebuffer: current_read_framebuffer,
             }
         }
     }
