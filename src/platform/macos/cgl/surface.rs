@@ -5,7 +5,6 @@
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 use crate::context::ContextID;
-use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
 use crate::platform::macos::system::surface::Surface as SystemSurface;
 use crate::renderbuffers::Renderbuffers;
@@ -13,14 +12,14 @@ use crate::{gl, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, Windo
 
 use core_foundation::base::TCFType;
 use euclid::default::Size2D;
-use glow::HasContext;
+use glow::{HasContext, Texture};
 use io_surface::{self, IOSurface};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
 pub use crate::platform::macos::system::surface::{NativeSurface, NativeWidget};
 
-const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
+const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_RECTANGLE;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
@@ -41,8 +40,8 @@ const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
 pub struct Surface {
     pub(crate) system_surface: SystemSurface,
     pub(crate) context_id: ContextID,
-    pub(crate) framebuffer_object: GLuint,
-    pub(crate) texture_object: GLuint,
+    pub(crate) framebuffer_object: Option<glow::Framebuffer>,
+    pub(crate) texture_object: Option<Texture>,
     pub(crate) renderbuffers: Renderbuffers,
 }
 
@@ -57,7 +56,7 @@ pub struct Surface {
 /// `destroy_surface_texture()` method, or a panic will occur.
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
-    pub(crate) texture_object: GLuint,
+    pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
@@ -102,7 +101,7 @@ impl Device {
                     gl::FRAMEBUFFER,
                     gl::COLOR_ATTACHMENT0,
                     SURFACE_GL_TEXTURE_TARGET,
-                    texture_object,
+                    Some(texture_object),
                     0,
                 );
 
@@ -120,9 +119,7 @@ impl Device {
                     // the way to tell that it has failed is to look at the framebuffer status
                     // while the surface is attached.
                     renderbuffers.destroy(gl);
-                    if let Some(framebuffer) = framebuffer_object {
-                        gl.delete_framebuffer(framebuffer);
-                    }
+                    gl.delete_framebuffer(framebuffer);
                     if let Some(texture) = texture_object {
                         gl.delete_texture(texture);
                     }
@@ -134,8 +131,8 @@ impl Device {
                 Ok(Surface {
                     system_surface,
                     context_id: context.id,
-                    framebuffer_object,
-                    texture_object,
+                    framebuffer_object: Some(framebuffer_object),
+                    texture_object: Some(texture_object),
                     renderbuffers,
                 })
             }
@@ -169,12 +166,12 @@ impl Device {
         );
         Ok(SurfaceTexture {
             surface,
-            texture_object,
+            texture_object: Some(texture_object),
             phantom: PhantomData,
         })
     }
 
-    fn bind_to_gl_texture(&self, io_surface: &IOSurface, size: &Size2D<i32>) -> GLuint {
+    fn bind_to_gl_texture(&self, io_surface: &IOSurface, size: &Size2D<i32>) -> Texture {
         GL_FUNCTIONS.with(|gl| unsafe {
             let texture = gl.create_texture().unwrap();
 
@@ -268,7 +265,7 @@ impl Device {
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.texture_object
     }
 
@@ -276,7 +273,7 @@ impl Device {
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
+    pub fn surface_gl_texture_target(&self) -> u32 {
         SURFACE_GL_TEXTURE_TARGET
     }
 
@@ -333,7 +330,7 @@ impl Device {
                     gl::FRAMEBUFFER,
                     gl::COLOR_ATTACHMENT0,
                     SURFACE_GL_TEXTURE_TARGET,
-                    texture_object,
+                    Some(texture_object),
                     0,
                 );
 
@@ -346,7 +343,7 @@ impl Device {
                 }
                 surface.renderbuffers.destroy(gl);
 
-                surface.texture_object = texture_object;
+                surface.texture_object = Some(texture_object);
                 surface.renderbuffers = renderbuffers;
 
                 debug_assert_eq!(
