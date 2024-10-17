@@ -3,10 +3,10 @@
 //! Surface management for Android and OpenHarmony using the `GraphicBuffer` class and EGL.
 
 use crate::context::ContextID;
-use crate::gl::types::GLuint;
 use crate::platform::generic::egl::ffi::EGLImageKHR;
 
 use euclid::default::Size2D;
+use glow::Texture;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::thread;
@@ -60,7 +60,7 @@ pub struct Surface {
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_image: EGLImageKHR,
-    pub(crate) texture_object: GLuint,
+    pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
