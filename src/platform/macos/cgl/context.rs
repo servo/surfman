@@ -23,6 +23,7 @@ use core_foundation::bundle::CFBundleGetBundleWithIdentifier;
 use core_foundation::bundle::CFBundleGetFunctionPointerForName;
 use core_foundation::bundle::CFBundleRef;
 use core_foundation::string::CFString;
+use glow::HasContext;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
@@ -47,7 +48,7 @@ static OPENGL_FRAMEWORK_IDENTIFIER: &str = "com.apple.opengl";
 
 thread_local! {
     #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
+    pub static GL_FUNCTIONS: Gl = unsafe {Gl::from_loader_function(get_proc_address)};
 }
 
 thread_local! {
@@ -387,7 +388,7 @@ impl Device {
                 GL_FUNCTIONS.with(|gl| {
                     let _guard = self.temporarily_make_context_current(context)?;
                     unsafe {
-                        gl.Flush();
+                        gl.flush();
                     }
 
                     gl_utils::unbind_framebuffer_if_necessary(gl, surface.framebuffer_object);
