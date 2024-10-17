@@ -391,7 +391,9 @@ impl Device {
                         gl.flush();
                     }
 
-                    gl_utils::unbind_framebuffer_if_necessary(gl, surface.framebuffer_object);
+                    if let Some(framebuffer) = surface.framebuffer_object {
+                        gl_utils::unbind_framebuffer_if_necessary(gl, framebuffer);
+                    }
                     Ok(Some(surface))
                 })
             }

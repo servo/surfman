@@ -95,7 +95,7 @@ impl Device {
                     self.bind_to_gl_texture(&system_surface.io_surface, &system_surface.size);
 
                 let mut framebuffer_object = gl.create_framebuffer().unwrap();
-                let _guard = self.temporarily_bind_framebuffer(framebuffer_object);
+                let _guard = self.temporarily_bind_framebuffer(Some(framebuffer_object));
 
                 gl.framebuffer_texture_2d(
                     gl::FRAMEBUFFER,
@@ -119,10 +119,8 @@ impl Device {
                     // the way to tell that it has failed is to look at the framebuffer status
                     // while the surface is attached.
                     renderbuffers.destroy(gl);
-                    gl.delete_framebuffer(framebuffer);
-                    if let Some(texture) = texture_object {
-                        gl.delete_texture(texture);
-                    }
+                    gl.delete_framebuffer(framebuffer_object);
+                    gl.delete_texture(texture_object);
                     let _ = self.0.destroy_surface(&mut system_surface);
                     // TODO: convert the GL error into a surfman error?
                     return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
@@ -225,11 +223,12 @@ impl Device {
             }
 
             unsafe {
-                gl_utils::destroy_framebuffer(gl, surface.framebuffer_object);
-                surface.framebuffer_object = 0;
+                if let Some(fbo) = surface.framebuffer_object.take() {
+                    gl_utils::destroy_framebuffer(gl, fbo);
+                }
 
                 surface.renderbuffers.destroy(gl);
-                if let Some(texture) = surface.texture_object.textutre_object.take() {
+                if let Some(texture) = surface.textutre_object.take() {
                     gl.delete_texture(texture);
                 }
             }
@@ -356,13 +355,16 @@ impl Device {
         })
     }
 
-    fn temporarily_bind_framebuffer(&self, new_framebuffer: glow::Framebuffer) -> FramebufferGuard {
+    fn temporarily_bind_framebuffer(
+        &self,
+        new_framebuffer: Option<glow::Framebuffer>,
+    ) -> FramebufferGuard {
         GL_FUNCTIONS.with(|gl| unsafe {
             let current_draw_framebuffer =
                 gl.get_parameter_framebuffer(gl::DRAW_FRAMEBUFFER_BINDING);
             let current_read_framebuffer =
                 gl.get_parameter_framebuffer(gl::READ_FRAMEBUFFER_BINDING);
-            gl.bind_framebuffer(gl::FRAMEBUFFER, Some(new_framebuffer));
+            gl.bind_framebuffer(gl::FRAMEBUFFER, new_framebuffer);
             FramebufferGuard {
                 draw: current_draw_framebuffer,
                 read: current_read_framebuffer,
