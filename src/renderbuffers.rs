@@ -4,25 +4,29 @@
 
 use crate::context::{ContextAttributeFlags, ContextAttributes};
 use crate::gl;
-use crate::gl::types::GLuint;
 use crate::Gl;
 use std::thread;
 
 use euclid::default::Size2D;
+use gl::Renderbuffer;
+use glow::HasContext;
 
 pub(crate) enum Renderbuffers {
-    IndividualDepthStencil { depth: GLuint, stencil: GLuint },
-    CombinedDepthStencil(GLuint),
+    IndividualDepthStencil {
+        depth: Option<Renderbuffer>,
+        stencil: Option<Renderbuffer>,
+    },
+    CombinedDepthStencil(Option<Renderbuffer>),
 }
 
 impl Drop for Renderbuffers {
     fn drop(&mut self) {
         match *self {
             Renderbuffers::IndividualDepthStencil {
-                depth: 0,
-                stencil: 0,
+                depth: None,
+                stencil: None,
             }
-            | Renderbuffers::CombinedDepthStencil(0) => {}
+            | Renderbuffers::CombinedDepthStencil(None) => {}
             _ => {
                 if !thread::panicking() {
                     panic!("Should have destroyed the FBO renderbuffers with `destroy()`!")
@@ -43,24 +47,23 @@ impl Renderbuffers {
                 .flags
                 .contains(ContextAttributeFlags::DEPTH | ContextAttributeFlags::STENCIL)
             {
-                let mut renderbuffer = 0;
-                gl.GenRenderbuffers(1, &mut renderbuffer);
-                gl.BindRenderbuffer(gl::RENDERBUFFER, renderbuffer);
-                gl.RenderbufferStorage(
+                let renderbuffer = gl.create_renderbuffer().unwrap();
+                gl.bind_renderbuffer(gl::RENDERBUFFER, Some(renderbuffer));
+                gl.renderbuffer_storage(
                     gl::RENDERBUFFER,
                     gl::DEPTH24_STENCIL8,
                     size.width,
                     size.height,
                 );
-                gl.BindRenderbuffer(gl::RENDERBUFFER, 0);
-                return Renderbuffers::CombinedDepthStencil(renderbuffer);
+                gl.bind_renderbuffer(gl::RENDERBUFFER, None);
+                return Renderbuffers::CombinedDepthStencil(Some(renderbuffer));
             }
 
-            let (mut depth_renderbuffer, mut stencil_renderbuffer) = (0, 0);
+            let (mut depth_renderbuffer, mut stencil_renderbuffer) = (None, None);
             if attributes.flags.contains(ContextAttributeFlags::DEPTH) {
-                gl.GenRenderbuffers(1, &mut depth_renderbuffer);
-                gl.BindRenderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
-                gl.RenderbufferStorage(
+                depth_renderbuffer = Some(gl.create_renderbuffer().unwrap());
+                gl.bind_renderbuffer(gl::RENDERBUFFER, depth_renderbuffer);
+                gl.renderbuffer_storage(
                     gl::RENDERBUFFER,
                     gl::DEPTH_COMPONENT24,
                     size.width,
@@ -68,16 +71,16 @@ impl Renderbuffers {
                 );
             }
             if attributes.flags.contains(ContextAttributeFlags::STENCIL) {
-                gl.GenRenderbuffers(1, &mut stencil_renderbuffer);
-                gl.BindRenderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
-                gl.RenderbufferStorage(
+                stencil_renderbuffer = Some(gl.create_renderbuffer().unwrap());
+                gl.bind_renderbuffer(gl::RENDERBUFFER, stencil_renderbuffer);
+                gl.renderbuffer_storage(
                     gl::RENDERBUFFER,
                     gl::STENCIL_INDEX8,
                     size.width,
                     size.height,
                 );
             }
-            gl.BindRenderbuffer(gl::RENDERBUFFER, 0);
+            gl.bind_renderbuffer(gl::RENDERBUFFER, None);
 
             Renderbuffers::IndividualDepthStencil {
                 depth: depth_renderbuffer,
@@ -90,8 +93,8 @@ impl Renderbuffers {
         unsafe {
             match *self {
                 Renderbuffers::CombinedDepthStencil(renderbuffer) => {
-                    if renderbuffer != 0 {
-                        gl.FramebufferRenderbuffer(
+                    if renderbuffer.is_some() {
+                        gl.framebuffer_renderbuffer(
                             gl::FRAMEBUFFER,
                             gl::DEPTH_STENCIL_ATTACHMENT,
                             gl::RENDERBUFFER,
@@ -103,16 +106,16 @@ impl Renderbuffers {
                     depth: depth_renderbuffer,
                     stencil: stencil_renderbuffer,
                 } => {
-                    if depth_renderbuffer != 0 {
-                        gl.FramebufferRenderbuffer(
+                    if depth_renderbuffer.is_some() {
+                        gl.framebuffer_renderbuffer(
                             gl::FRAMEBUFFER,
                             gl::DEPTH_ATTACHMENT,
                             gl::RENDERBUFFER,
                             depth_renderbuffer,
                         );
                     }
-                    if stencil_renderbuffer != 0 {
-                        gl.FramebufferRenderbuffer(
+                    if stencil_renderbuffer.is_some() {
+                        gl.framebuffer_renderbuffer(
                             gl::FRAMEBUFFER,
                             gl::STENCIL_ATTACHMENT,
                             gl::RENDERBUFFER,
@@ -126,26 +129,23 @@ impl Renderbuffers {
 
     pub(crate) fn destroy(&mut self, gl: &Gl) {
         unsafe {
-            gl.BindRenderbuffer(gl::RENDERBUFFER, 0);
+            gl.bind_renderbuffer(gl::RENDERBUFFER, None);
 
             match *self {
                 Renderbuffers::CombinedDepthStencil(ref mut renderbuffer) => {
-                    if *renderbuffer != 0 {
-                        gl.DeleteRenderbuffers(1, renderbuffer);
-                        *renderbuffer = 0;
+                    if let Some(renderbuffer) = renderbuffer.take() {
+                        gl.delete_renderbuffer(renderbuffer);
                     }
                 }
                 Renderbuffers::IndividualDepthStencil {
                     depth: ref mut depth_renderbuffer,
                     stencil: ref mut stencil_renderbuffer,
                 } => {
-                    if *stencil_renderbuffer != 0 {
-                        gl.DeleteRenderbuffers(1, stencil_renderbuffer);
-                        *stencil_renderbuffer = 0;
+                    if let Some(stencil_renderbuffer) = stencil_renderbuffer.take() {
+                        gl.delete_renderbuffer(stencil_renderbuffer);
                     }
-                    if *depth_renderbuffer != 0 {
-                        gl.DeleteRenderbuffers(1, depth_renderbuffer);
-                        *depth_renderbuffer = 0;
+                    if let Some(depth_renderbuffer) = depth_renderbuffer.take() {
+                        gl.delete_renderbuffer(depth_renderbuffer);
                     }
                 }
             }

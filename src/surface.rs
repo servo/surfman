@@ -4,8 +4,8 @@
 
 use crate::context::ContextID;
 
-use crate::gl::types::GLuint;
 use euclid::default::Size2D;
+use glow::NativeFramebuffer;
 use std::fmt::{self, Display, Formatter};
 
 /// Various data about the surface.
@@ -27,7 +27,7 @@ pub struct SurfaceInfo {
     /// The OpenGL framebuffer object that can be used to render to this surface.
     ///
     /// This is only valid when the surface is actually attached to a context.
-    pub framebuffer_object: GLuint,
+    pub framebuffer_object: Option<glow::Framebuffer>,
 }
 
 // The default framebuffer for a context.
