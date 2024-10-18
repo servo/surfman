@@ -7,12 +7,12 @@ use std::os::raw::c_void;
 use std::ptr;
 
 use euclid::default::Size2D;
+use glow::{HasContext, Texture};
 use log::info;
 
 use crate::egl;
 use crate::egl::types::{EGLSurface, EGLint};
 use crate::gl;
-use crate::gl::types::{GLenum, GLuint};
 use crate::gl_utils;
 use crate::platform::egl::ohos_ffi::{eglGetNativeClientBufferANDROID, EGL_NATIVE_BUFFER_OHOS};
 use crate::platform::generic;
@@ -33,14 +33,14 @@ use super::super::ohos_ffi::{
 };
 use super::{Surface, SurfaceTexture};
 
-const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 
 pub(crate) enum SurfaceObjects {
     HardwareBuffer {
         hardware_buffer: *mut OH_NativeBuffer,
         egl_image: EGLImageKHR,
-        framebuffer_object: GLuint,
-        texture_object: GLuint,
+        framebuffer_object: Option<glow::Framebuffer>,
+        texture_object: Option<Texture>,
         renderbuffers: Renderbuffers,
     },
     Window {
@@ -106,7 +106,7 @@ impl Device {
                 let framebuffer_object = gl_utils::create_and_bind_framebuffer(
                     gl,
                     SURFACE_GL_TEXTURE_TARGET,
-                    texture_object,
+                    Some(texture_object),
                 );
 
                 // Bind renderbuffers as appropriate.
@@ -116,7 +116,7 @@ impl Device {
                 renderbuffers.bind_to_current_framebuffer(gl);
 
                 debug_assert_eq!(
-                    gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
+                    gl.check_framebuffer_status(gl::FRAMEBUFFER),
                     gl::FRAMEBUFFER_COMPLETE
                 );
 
@@ -126,8 +126,8 @@ impl Device {
                     objects: SurfaceObjects::HardwareBuffer {
                         hardware_buffer,
                         egl_image,
-                        framebuffer_object,
-                        texture_object,
+                        framebuffer_object: Some(framebuffer_object),
+                        texture_object: Some(texture_object),
                         renderbuffers,
                     },
                     destroyed: false,
@@ -204,7 +204,7 @@ impl Device {
                     Ok(SurfaceTexture {
                         surface,
                         local_egl_image,
-                        texture_object,
+                        texture_object: Some(texture_object),
                         phantom: PhantomData,
                     })
                 }),
@@ -300,14 +300,16 @@ impl Device {
                     ref mut renderbuffers,
                 } => {
                     GL_FUNCTIONS.with(|gl| {
-                        gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
-                        gl.DeleteFramebuffers(1, framebuffer_object);
-                        *framebuffer_object = 0;
+                        gl.bind_framebuffer(gl::FRAMEBUFFER, None);
+                        if let Some(framebuffer) = framebuffer_object.take() {
+                            gl.delete_framebuffer(framebuffer);
+                        }
 
                         renderbuffers.destroy(gl);
 
-                        gl.DeleteTextures(1, texture_object);
-                        *texture_object = 0;
+                        if let Some(texture) = texture_object.take() {
+                            gl.delete_texture(texture);
+                        }
 
                         let egl_display = self.egl_display;
                         let result =
@@ -348,8 +350,9 @@ impl Device {
         let _guard = self.temporarily_make_context_current(context);
         GL_FUNCTIONS.with(|gl| {
             unsafe {
-                gl.DeleteTextures(1, &surface_texture.texture_object);
-                surface_texture.texture_object = 0;
+                if let Some(texture) = surface_texture.texture_object.take() {
+                    gl.delete_texture(texture);
+                }
 
                 let egl_display = self.egl_display;
                 let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(
@@ -375,7 +378,7 @@ impl Device {
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
+    pub fn surface_gl_texture_target(&self) -> u32 {
         SURFACE_GL_TEXTURE_TARGET
     }
 
@@ -394,7 +397,7 @@ impl Device {
                 SurfaceObjects::HardwareBuffer {
                     framebuffer_object, ..
                 } => framebuffer_object,
-                SurfaceObjects::Window { .. } => 0,
+                SurfaceObjects::Window { .. } => None,
             },
         }
     }
@@ -403,7 +406,7 @@ impl Device {
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.texture_object
     }
 }
