@@ -91,10 +91,10 @@ impl Device {
         let _guard = self.temporarily_make_context_current(context);
         GL_FUNCTIONS.with(|gl| {
             unsafe {
-                let mut texture_object =
+                let texture_object =
                     self.bind_to_gl_texture(&system_surface.io_surface, &system_surface.size);
 
-                let mut framebuffer_object = gl.create_framebuffer().unwrap();
+                let framebuffer_object = gl.create_framebuffer().unwrap();
                 let _guard = self.temporarily_bind_framebuffer(Some(framebuffer_object));
 
                 gl.framebuffer_texture_2d(
@@ -228,7 +228,7 @@ impl Device {
                 }
 
                 surface.renderbuffers.destroy(gl);
-                if let Some(texture) = surface.textutre_object.take() {
+                if let Some(texture) = surface.texture_object.take() {
                     gl.delete_texture(texture);
                 }
             }
@@ -250,7 +250,7 @@ impl Device {
         mut surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         GL_FUNCTIONS.with(|gl| {
-            if let Some(texture) = surface_texture.texture_object.textutre_object.take() {
+            if let Some(texture) = surface_texture.texture_object.take() {
                 unsafe {
                     gl.delete_texture(texture);
                 }
