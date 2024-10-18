@@ -5,7 +5,6 @@
 use super::context::{Context, GL_FUNCTIONS};
 use super::device::Device;
 use crate::context::ContextID;
-use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::gl_utils;
 use crate::platform::macos::system::surface::Surface as SystemSurface;
 use crate::renderbuffers::Renderbuffers;
@@ -13,13 +12,14 @@ use crate::{gl, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, Windo
 
 use core_foundation::base::TCFType;
 use euclid::default::Size2D;
+use glow::{HasContext, Texture};
 use io_surface::{self, IOSurface};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 
 pub use crate::platform::macos::system::surface::{NativeSurface, NativeWidget};
 
-const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
+const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_RECTANGLE;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
@@ -40,8 +40,8 @@ const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_RECTANGLE;
 pub struct Surface {
     pub(crate) system_surface: SystemSurface,
     pub(crate) context_id: ContextID,
-    pub(crate) framebuffer_object: GLuint,
-    pub(crate) texture_object: GLuint,
+    pub(crate) framebuffer_object: Option<glow::Framebuffer>,
+    pub(crate) texture_object: Option<Texture>,
     pub(crate) renderbuffers: Renderbuffers,
 }
 
@@ -56,7 +56,7 @@ pub struct Surface {
 /// `destroy_surface_texture()` method, or a panic will occur.
 pub struct SurfaceTexture {
     pub(crate) surface: Surface,
-    pub(crate) texture_object: GLuint,
+    pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
@@ -91,18 +91,17 @@ impl Device {
         let _guard = self.temporarily_make_context_current(context);
         GL_FUNCTIONS.with(|gl| {
             unsafe {
-                let mut texture_object =
+                let texture_object =
                     self.bind_to_gl_texture(&system_surface.io_surface, &system_surface.size);
 
-                let mut framebuffer_object = 0;
-                gl.GenFramebuffers(1, &mut framebuffer_object);
-                let _guard = self.temporarily_bind_framebuffer(framebuffer_object);
+                let framebuffer_object = gl.create_framebuffer().unwrap();
+                let _guard = self.temporarily_bind_framebuffer(Some(framebuffer_object));
 
-                gl.FramebufferTexture2D(
+                gl.framebuffer_texture_2d(
                     gl::FRAMEBUFFER,
                     gl::COLOR_ATTACHMENT0,
                     SURFACE_GL_TEXTURE_TARGET,
-                    texture_object,
+                    Some(texture_object),
                     0,
                 );
 
@@ -113,19 +112,15 @@ impl Device {
                     Renderbuffers::new(gl, &system_surface.size, &context_attributes);
                 renderbuffers.bind_to_current_framebuffer(gl);
 
-                if gl.GetError() != gl::NO_ERROR
-                    || gl.CheckFramebufferStatus(gl::FRAMEBUFFER) != gl::FRAMEBUFFER_COMPLETE
+                if gl.get_error() != gl::NO_ERROR
+                    || gl.check_framebuffer_status(gl::FRAMEBUFFER) != gl::FRAMEBUFFER_COMPLETE
                 {
                     // On macos, surface creation can fail silently (e.g. due to OOM) and AFAICT
                     // the way to tell that it has failed is to look at the framebuffer status
                     // while the surface is attached.
                     renderbuffers.destroy(gl);
-                    if framebuffer_object != 0 {
-                        gl.DeleteFramebuffers(1, &mut framebuffer_object);
-                    }
-                    if texture_object != 0 {
-                        gl.DeleteTextures(1, &mut texture_object);
-                    }
+                    gl.delete_framebuffer(framebuffer_object);
+                    gl.delete_texture(texture_object);
                     let _ = self.0.destroy_surface(&mut system_surface);
                     // TODO: convert the GL error into a surfman error?
                     return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
@@ -134,8 +129,8 @@ impl Device {
                 Ok(Surface {
                     system_surface,
                     context_id: context.id,
-                    framebuffer_object,
-                    texture_object,
+                    framebuffer_object: Some(framebuffer_object),
+                    texture_object: Some(texture_object),
                     renderbuffers,
                 })
             }
@@ -169,44 +164,42 @@ impl Device {
         );
         Ok(SurfaceTexture {
             surface,
-            texture_object,
+            texture_object: Some(texture_object),
             phantom: PhantomData,
         })
     }
 
-    fn bind_to_gl_texture(&self, io_surface: &IOSurface, size: &Size2D<i32>) -> GLuint {
+    fn bind_to_gl_texture(&self, io_surface: &IOSurface, size: &Size2D<i32>) -> Texture {
         GL_FUNCTIONS.with(|gl| unsafe {
-            let mut texture = 0;
-            gl.GenTextures(1, &mut texture);
-            debug_assert_ne!(texture, 0);
+            let texture = gl.create_texture().unwrap();
 
-            gl.BindTexture(gl::TEXTURE_RECTANGLE, texture);
+            gl.bind_texture(gl::TEXTURE_RECTANGLE, Some(texture));
             io_surface.bind_to_gl_texture(size.width, size.height, true);
 
-            gl.TexParameteri(
+            gl.tex_parameter_i32(
                 gl::TEXTURE_RECTANGLE,
                 gl::TEXTURE_MAG_FILTER,
-                gl::NEAREST as GLint,
+                gl::NEAREST as _,
             );
-            gl.TexParameteri(
+            gl.tex_parameter_i32(
                 gl::TEXTURE_RECTANGLE,
                 gl::TEXTURE_MIN_FILTER,
-                gl::NEAREST as GLint,
+                gl::NEAREST as _,
             );
-            gl.TexParameteri(
+            gl.tex_parameter_i32(
                 gl::TEXTURE_RECTANGLE,
                 gl::TEXTURE_WRAP_S,
-                gl::CLAMP_TO_EDGE as GLint,
+                gl::CLAMP_TO_EDGE as _,
             );
-            gl.TexParameteri(
+            gl.tex_parameter_i32(
                 gl::TEXTURE_RECTANGLE,
                 gl::TEXTURE_WRAP_T,
-                gl::CLAMP_TO_EDGE as GLint,
+                gl::CLAMP_TO_EDGE as _,
             );
 
-            gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
+            gl.bind_texture(gl::TEXTURE_RECTANGLE, None);
 
-            debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
+            debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
 
             texture
         })
@@ -230,12 +223,14 @@ impl Device {
             }
 
             unsafe {
-                gl_utils::destroy_framebuffer(gl, surface.framebuffer_object);
-                surface.framebuffer_object = 0;
+                if let Some(fbo) = surface.framebuffer_object.take() {
+                    gl_utils::destroy_framebuffer(gl, fbo);
+                }
 
                 surface.renderbuffers.destroy(gl);
-                gl.DeleteTextures(1, &surface.texture_object);
-                surface.texture_object = 0;
+                if let Some(texture) = surface.texture_object.take() {
+                    gl.delete_texture(texture);
+                }
             }
 
             self.0.destroy_surface(&mut surface.system_surface)
@@ -255,9 +250,10 @@ impl Device {
         mut surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.DeleteTextures(1, &surface_texture.texture_object);
-                surface_texture.texture_object = 0;
+            if let Some(texture) = surface_texture.texture_object.take() {
+                unsafe {
+                    gl.delete_texture(texture);
+                }
             }
 
             Ok(surface_texture.surface)
@@ -268,7 +264,7 @@ impl Device {
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.texture_object
     }
 
@@ -276,7 +272,7 @@ impl Device {
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
+    pub fn surface_gl_texture_target(&self) -> u32 {
         SURFACE_GL_TEXTURE_TARGET
     }
 
@@ -293,12 +289,12 @@ impl Device {
         GL_FUNCTIONS.with(|gl| {
             unsafe {
                 let size = surface.system_surface.size;
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, surface.texture_object);
+                gl.bind_texture(gl::TEXTURE_RECTANGLE, surface.texture_object);
                 surface
                     .system_surface
                     .io_surface
                     .bind_to_gl_texture(size.width, size.height, true);
-                gl.BindTexture(gl::TEXTURE_RECTANGLE, 0);
+                gl.bind_texture(gl::TEXTURE_RECTANGLE, None);
             }
 
             Ok(())
@@ -329,11 +325,11 @@ impl Device {
                 // Recreate the GL texture and bind it to the FBO
                 let texture_object =
                     self.bind_to_gl_texture(&surface.system_surface.io_surface, &size);
-                gl.FramebufferTexture2D(
+                gl.framebuffer_texture_2d(
                     gl::FRAMEBUFFER,
                     gl::COLOR_ATTACHMENT0,
                     SURFACE_GL_TEXTURE_TARGET,
-                    texture_object,
+                    Some(texture_object),
                     0,
                 );
 
@@ -341,14 +337,16 @@ impl Device {
                 let renderbuffers = Renderbuffers::new(gl, &size, &context_attributes);
                 renderbuffers.bind_to_current_framebuffer(gl);
 
-                gl.DeleteTextures(1, &surface.texture_object);
+                if let Some(texture) = surface.texture_object {
+                    gl.delete_texture(texture);
+                }
                 surface.renderbuffers.destroy(gl);
 
-                surface.texture_object = texture_object;
+                surface.texture_object = Some(texture_object);
                 surface.renderbuffers = renderbuffers;
 
                 debug_assert_eq!(
-                    (gl.GetError(), gl.CheckFramebufferStatus(gl::FRAMEBUFFER)),
+                    (gl.get_error(), gl.check_framebuffer_status(gl::FRAMEBUFFER)),
                     (gl::NO_ERROR, gl::FRAMEBUFFER_COMPLETE),
                 );
             }
@@ -357,15 +355,19 @@ impl Device {
         })
     }
 
-    fn temporarily_bind_framebuffer(&self, new_framebuffer: GLuint) -> FramebufferGuard {
+    fn temporarily_bind_framebuffer(
+        &self,
+        new_framebuffer: Option<glow::Framebuffer>,
+    ) -> FramebufferGuard {
         GL_FUNCTIONS.with(|gl| unsafe {
-            let (mut current_draw_framebuffer, mut current_read_framebuffer) = (0, 0);
-            gl.GetIntegerv(gl::DRAW_FRAMEBUFFER_BINDING, &mut current_draw_framebuffer);
-            gl.GetIntegerv(gl::READ_FRAMEBUFFER_BINDING, &mut current_read_framebuffer);
-            gl.BindFramebuffer(gl::FRAMEBUFFER, new_framebuffer);
+            let current_draw_framebuffer =
+                gl.get_parameter_framebuffer(gl::DRAW_FRAMEBUFFER_BINDING);
+            let current_read_framebuffer =
+                gl.get_parameter_framebuffer(gl::READ_FRAMEBUFFER_BINDING);
+            gl.bind_framebuffer(gl::FRAMEBUFFER, new_framebuffer);
             FramebufferGuard {
-                draw: current_draw_framebuffer as GLuint,
-                read: current_read_framebuffer as GLuint,
+                draw: current_draw_framebuffer,
+                read: current_read_framebuffer,
             }
         })
     }
@@ -405,15 +407,15 @@ impl Surface {
 
 #[must_use]
 struct FramebufferGuard {
-    draw: GLuint,
-    read: GLuint,
+    draw: Option<glow::Framebuffer>,
+    read: Option<glow::Framebuffer>,
 }
 
 impl Drop for FramebufferGuard {
     fn drop(&mut self) {
         GL_FUNCTIONS.with(|gl| unsafe {
-            gl.BindFramebuffer(gl::READ_FRAMEBUFFER, self.read);
-            gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, self.draw);
+            gl.bind_framebuffer(gl::READ_FRAMEBUFFER, self.read);
+            gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, self.draw);
         })
     }
 }

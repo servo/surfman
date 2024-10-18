@@ -6,9 +6,9 @@ use super::context::Context;
 use super::device::Device;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
-use crate::gl::types::{GLenum, GLuint};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
+use glow::Texture;
 
 use std::fmt::{self, Debug, Formatter};
 
@@ -299,7 +299,7 @@ where
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
+    pub fn surface_gl_texture_target(&self) -> u32 {
         match *self {
             Device::Default(ref device) => device.surface_gl_texture_target(),
             Device::Alternate(ref device) => device.surface_gl_texture_target(),
@@ -327,7 +327,10 @@ where
     /// Returns the OpenGL texture object containing the contents of this surface.
     ///
     /// It is only legal to read from, not write to, this texture object.
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture<Def, Alt>) -> GLuint {
+    pub fn surface_texture_object(
+        &self,
+        surface_texture: &SurfaceTexture<Def, Alt>,
+    ) -> Option<Texture> {
         match (self, surface_texture) {
             (Device::Default(device), SurfaceTexture::Default(ref surface_texture)) => {
                 device.surface_texture_object(surface_texture)

@@ -14,6 +14,7 @@ use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
 
+use glow::HasContext;
 use std::mem;
 use std::os::raw::c_void;
 use std::thread;
@@ -24,7 +25,7 @@ pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContex
 
 thread_local! {
     #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
+    pub static GL_FUNCTIONS: Gl = unsafe {Gl::from_loader_function(context::get_proc_address)};
 }
 
 /// Represents an OpenGL rendering context.
@@ -287,7 +288,7 @@ impl Device {
         if surface.uses_gl_finish() {
             if let Ok(_guard) = self.temporarily_make_context_current(context) {
                 unsafe {
-                    GL_FUNCTIONS.with(|gl| gl.Finish());
+                    GL_FUNCTIONS.with(|gl| gl.finish());
                 }
             }
         }

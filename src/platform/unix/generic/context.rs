@@ -16,7 +16,7 @@ pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContex
 
 thread_local! {
     #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
+    pub static GL_FUNCTIONS: Gl = unsafe {Gl::from_loader_function(context::get_proc_address)};
 }
 
 /// Represents an OpenGL rendering context.

@@ -2,6 +2,8 @@
 //
 //! OpenGL rendering contexts on X11 via EGL.
 
+use glow::HasContext;
+
 use super::device::Device;
 use super::surface::Surface;
 use crate::context::ContextID;
@@ -16,7 +18,7 @@ pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContex
 
 thread_local! {
     #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
+    pub static GL_FUNCTIONS: Gl = unsafe {Gl::from_loader_function(context::get_proc_address)};
 }
 
 /// Represents an OpenGL rendering context.
@@ -214,7 +216,7 @@ impl Device {
         GL_FUNCTIONS.with(|gl| {
             unsafe {
                 // Flush to avoid races on Mesa/Intel and possibly other GPUs.
-                gl.Flush();
+                gl.flush();
 
                 context
                     .0

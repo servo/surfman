@@ -7,18 +7,18 @@ use super::device::Device;
 use crate::egl;
 use crate::egl::types::EGLint;
 use crate::gl;
-use crate::gl::types::{GLenum, GLuint};
 use crate::platform::generic::egl::context;
 use crate::platform::generic::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 
 use euclid::default::Size2D;
+use glow::Texture;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use x11::xlib::{Window, XGetGeometry};
 
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
-const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
@@ -233,7 +233,7 @@ impl Device {
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
+    pub fn surface_gl_texture_target(&self) -> u32 {
         SURFACE_GL_TEXTURE_TARGET
     }
 
@@ -251,7 +251,7 @@ impl Device {
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.0.texture_object
     }
 }
