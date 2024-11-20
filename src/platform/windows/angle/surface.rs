@@ -9,7 +9,6 @@ use crate::egl::types::EGLNativeWindowType;
 use crate::egl::types::EGLSurface;
 use crate::egl::{self, EGLint};
 use crate::gl;
-use crate::gl::types::{GLenum, GLint, GLuint};
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::platform::generic::egl::ffi::EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE;
@@ -19,6 +18,7 @@ use crate::platform::generic::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 
 use euclid::default::Size2D;
+use glow::HasContext;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
@@ -32,7 +32,7 @@ use winapi::um::winbase::INFINITE;
 use winapi::um::winnt::HANDLE;
 use wio::com::ComPtr;
 
-const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
@@ -71,7 +71,7 @@ pub struct SurfaceTexture {
     pub(crate) surface: Surface,
     pub(crate) local_egl_surface: EGLSurface,
     pub(crate) local_keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
-    pub(crate) gl_texture: GLuint,
+    pub(crate) gl_texture: Option<glow::Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
@@ -388,16 +388,11 @@ impl Device {
 
                 GL_FUNCTIONS.with(|gl| {
                     // Then bind that surface to the texture.
-                    let mut texture = 0;
-                    gl.GenTextures(1, &mut texture);
-                    debug_assert_ne!(texture, 0);
+                    let mut texture = gl.create_texture().unwrap();
 
-                    gl.BindTexture(gl::TEXTURE_2D, texture);
-                    if egl.BindTexImage(
-                        self.egl_display,
-                        local_egl_surface,
-                        egl::BACK_BUFFER as GLint,
-                    ) == egl::FALSE
+                    gl.bind_texture(gl::TEXTURE_2D, Some(texture));
+                    if egl.BindTexImage(self.egl_display, local_egl_surface, egl::BACK_BUFFER as _)
+                        == egl::FALSE
                     {
                         let windowing_api_error = egl.GetError().to_windowing_api_error();
                         return Err((
@@ -407,27 +402,27 @@ impl Device {
                     }
 
                     // Initialize the texture, for convenience.
-                    gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-                    gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-                    gl.TexParameteri(
+                    gl.tex_parameter_i32(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as _);
+                    gl.tex_parameter_i32(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as _);
+                    gl.tex_parameter_i32(
                         gl::TEXTURE_2D,
                         gl::TEXTURE_WRAP_S,
-                        gl::CLAMP_TO_EDGE as GLint,
+                        gl::CLAMP_TO_EDGE as _,
                     );
-                    gl.TexParameteri(
+                    gl.tex_parameter_i32(
                         gl::TEXTURE_2D,
                         gl::TEXTURE_WRAP_T,
-                        gl::CLAMP_TO_EDGE as GLint,
+                        gl::CLAMP_TO_EDGE as _,
                     );
 
-                    gl.BindTexture(gl::TEXTURE_2D, 0);
-                    debug_assert_eq!(gl.GetError(), gl::NO_ERROR);
+                    gl.bind_texture(gl::TEXTURE_2D, None);
+                    debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
 
                     Ok(SurfaceTexture {
                         surface,
                         local_egl_surface,
                         local_keyed_mutex,
-                        gl_texture: texture,
+                        gl_texture: Some(texture),
                         phantom: PhantomData,
                     })
                 })
@@ -504,8 +499,9 @@ impl Device {
         mut surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         unsafe {
-            GL_FUNCTIONS.with(|gl| gl.DeleteTextures(1, &surface_texture.gl_texture));
-            surface_texture.gl_texture = 0;
+            if let Some(texture) = surface_texture.gl_texture.take() {
+                GL_FUNCTIONS.with(|gl| gl.delete_texture(texture));
+            }
 
             if let Some(ref local_keyed_mutex) = surface_texture.local_keyed_mutex {
                 let result = local_keyed_mutex.ReleaseSync(0);
@@ -524,7 +520,7 @@ impl Device {
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
+    pub fn surface_gl_texture_target(&self) -> u32 {
         SURFACE_GL_TEXTURE_TARGET
     }
 
@@ -580,7 +576,7 @@ impl Device {
             size: surface.size,
             id: surface.id(),
             context_id: surface.context_id,
-            framebuffer_object: 0,
+            framebuffer_object: None,
         }
     }
 
@@ -588,7 +584,10 @@ impl Device {
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(
+        &self,
+        surface_texture: &SurfaceTexture,
+    ) -> Option<glow::Texture> {
         surface_texture.gl_texture
     }
 }

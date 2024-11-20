@@ -2,6 +2,8 @@
 //
 //! OpenGL rendering contexts.
 
+use glow::HasContext;
+
 use super::device::Device;
 use super::surface::{Surface, SurfaceObjects};
 use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
@@ -22,7 +24,7 @@ pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContex
 
 thread_local! {
     #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
+    pub static GL_FUNCTIONS: Gl = unsafe {Gl::from_loader_function(context::get_proc_address)};
 }
 
 /// Represents an OpenGL rendering context.
@@ -287,7 +289,7 @@ impl Device {
         // FIXME(pcwalton): Is this necessary?
         let _guard = self.temporarily_make_context_current(context)?;
         GL_FUNCTIONS.with(|gl| unsafe {
-            gl.Flush();
+            gl.flush();
         });
 
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
