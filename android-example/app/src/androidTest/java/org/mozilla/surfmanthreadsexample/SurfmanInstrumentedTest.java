@@ -23,7 +23,7 @@ public class SurfmanInstrumentedTest {
     private static native void testDeviceCreation();
     private static native void testGenericSurfaceCreation();
     private static native void testGL();
-    private static native void testNewlyCreatedContextsAreNotCurrent();
+    private static native void testNewlyCreatedContextsAreCurrent();
     private static native void testSurfaceTextureBlitFramebuffer();
     private static native void testSurfaceTextureRightSideUp();
 
@@ -75,8 +75,8 @@ public class SurfmanInstrumentedTest {
     }
 
     @Test
-    public void newlyCreatedContextsAreNotCurrent() {
-        testNewlyCreatedContextsAreNotCurrent();
+    public void newlyCreatedContextsAreCurrent() {
+        testNewlyCreatedContextsAreCurrent();
     }
 
     @Test

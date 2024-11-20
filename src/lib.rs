@@ -54,18 +54,10 @@ pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, Sys
 pub mod macros;
 pub(crate) use macros::implement_interfaces;
 
-#[cfg(not(any(target_os = "android", target_env = "ohos")))]
-pub(crate) use crate::gl::Gl;
-#[cfg(any(target_os = "android", target_env = "ohos"))]
-pub(crate) use crate::gl::Gles2 as Gl;
+pub(crate) use glow::{self as gl, Context as Gl};
 
 mod gl_utils;
 mod renderbuffers;
-
-#[allow(clippy::all)]
-mod gl {
-    include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
-}
 
 #[cfg(any(
     target_os = "android",

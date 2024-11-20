@@ -377,18 +377,22 @@ impl ContextDescriptor {
         })
     }
 
-    pub(crate) unsafe fn from_egl_context(
-        gl: &Gl,
+    pub(crate) unsafe fn from_egl_context<F>(
+        get_proc_address: F,
         egl_display: EGLDisplay,
         egl_context: EGLContext,
-    ) -> ContextDescriptor {
+    ) -> ContextDescriptor
+    where
+        F: FnMut(&str) -> *const c_void,
+    {
         let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
 
         EGL_FUNCTIONS.with(|egl| {
             let _guard = CurrentContextGuard::new();
             egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
-            let gl_version = GLVersion::current(gl);
-            let compatibility_profile = context::current_context_uses_compatibility_profile(gl);
+            let gl = unsafe { Gl::from_loader_function(get_proc_address) };
+            let gl_version = GLVersion::current(&gl);
+            let compatibility_profile = context::current_context_uses_compatibility_profile(&gl);
 
             ContextDescriptor {
                 egl_config_id,

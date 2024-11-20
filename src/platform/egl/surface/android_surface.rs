@@ -13,13 +13,12 @@ use super::super::android_ffi::{
 use super::super::android_ffi::{
     AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER, AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER,
 };
-use super::super::context::{Context, GL_FUNCTIONS};
+use super::super::context::Context;
 use super::super::device::Device;
 use super::{Surface, SurfaceTexture};
 use crate::egl;
 use crate::egl::types::{EGLSurface, EGLint};
 use crate::gl;
-use crate::gl::types::{GLenum, GLuint};
 use crate::gl_utils;
 use crate::platform::generic;
 use crate::platform::generic::egl::device::EGL_FUNCTIONS;
@@ -32,18 +31,19 @@ use crate::renderbuffers::Renderbuffers;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
 
 use euclid::default::Size2D;
+use glow::{HasContext, Texture};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
 
-const SURFACE_GL_TEXTURE_TARGET: GLenum = crate::gl::TEXTURE_2D;
+const SURFACE_GL_TEXTURE_TARGET: u32 = crate::gl::TEXTURE_2D;
 
 pub(crate) enum SurfaceObjects {
     HardwareBuffer {
         hardware_buffer: *mut AHardwareBuffer,
         egl_image: EGLImageKHR,
-        framebuffer_object: GLuint,
-        texture_object: GLuint,
+        framebuffer_object: Option<glow::Framebuffer>,
+        texture_object: Option<Texture>,
         renderbuffers: Renderbuffers,
     },
     Window {
@@ -81,68 +81,65 @@ impl Device {
         size: &Size2D<i32>,
     ) -> Result<Surface, Error> {
         let _guard = self.temporarily_make_context_current(context)?;
-
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                // Create a native hardware buffer.
-                let hardware_buffer_desc = AHardwareBuffer_Desc {
-                    format: AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
-                    height: size.height as u32,
-                    width: size.width as u32,
-                    layers: 1,
-                    rfu0: 0,
-                    rfu1: 0,
-                    stride: 10,
-                    usage: AHARDWAREBUFFER_USAGE_CPU_READ_NEVER
-                        | AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER
-                        | AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER
-                        | AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
-                };
-                let mut hardware_buffer = ptr::null_mut();
-                let result = AHardwareBuffer_allocate(&hardware_buffer_desc, &mut hardware_buffer);
-                if result != 0 {
-                    return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
-                }
-
-                // Create an EGL image, and bind it to a texture.
-                let egl_image = self.create_egl_image(context, hardware_buffer);
-
-                // Initialize and bind the image to the texture.
-                let texture_object =
-                    generic::egl::surface::bind_egl_image_to_gl_texture(gl, egl_image);
-
-                // Create the framebuffer, and bind the texture to it.
-                let framebuffer_object = gl_utils::create_and_bind_framebuffer(
-                    gl,
-                    SURFACE_GL_TEXTURE_TARGET,
-                    texture_object,
-                );
-
-                // Bind renderbuffers as appropriate.
-                let context_descriptor = self.context_descriptor(context);
-                let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-                let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
-                renderbuffers.bind_to_current_framebuffer(gl);
-
-                debug_assert_eq!(
-                    gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
-                    gl::FRAMEBUFFER_COMPLETE
-                );
-
-                Ok(Surface {
-                    size: *size,
-                    context_id: context.id,
-                    objects: SurfaceObjects::HardwareBuffer {
-                        hardware_buffer,
-                        egl_image,
-                        framebuffer_object,
-                        texture_object,
-                        renderbuffers,
-                    },
-                    destroyed: false,
-                })
+        let gl = &context.gl;
+        unsafe {
+            // Create a native hardware buffer.
+            let hardware_buffer_desc = AHardwareBuffer_Desc {
+                format: AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
+                height: size.height as u32,
+                width: size.width as u32,
+                layers: 1,
+                rfu0: 0,
+                rfu1: 0,
+                stride: 10,
+                usage: AHARDWAREBUFFER_USAGE_CPU_READ_NEVER
+                    | AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER
+                    | AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER
+                    | AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+            };
+            let mut hardware_buffer = ptr::null_mut();
+            let result = AHardwareBuffer_allocate(&hardware_buffer_desc, &mut hardware_buffer);
+            if result != 0 {
+                return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
             }
-        })
+
+            // Create an EGL image, and bind it to a texture.
+            let egl_image = self.create_egl_image(context, hardware_buffer);
+
+            // Initialize and bind the image to the texture.
+            let texture_object = generic::egl::surface::bind_egl_image_to_gl_texture(gl, egl_image);
+
+            // Create the framebuffer, and bind the texture to it.
+            let framebuffer_object = gl_utils::create_and_bind_framebuffer(
+                gl,
+                SURFACE_GL_TEXTURE_TARGET,
+                Some(texture_object),
+            );
+
+            // Bind renderbuffers as appropriate.
+            let context_descriptor = self.context_descriptor(context);
+            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+            let renderbuffers = Renderbuffers::new(gl, size, &context_attributes);
+            renderbuffers.bind_to_current_framebuffer(gl);
+
+            debug_assert_eq!(
+                gl.check_framebuffer_status(gl::FRAMEBUFFER),
+                gl::FRAMEBUFFER_COMPLETE
+            );
+
+            Ok(Surface {
+                size: *size,
+                context_id: context.id,
+                objects: SurfaceObjects::HardwareBuffer {
+                    hardware_buffer,
+                    egl_image,
+                    framebuffer_object: Some(framebuffer_object),
+                    texture_object: Some(texture_object),
+                    renderbuffers,
+                },
+                destroyed: false,
+            })
+        }
     }
 
     unsafe fn create_window_surface(
@@ -191,11 +188,12 @@ impl Device {
                 SurfaceObjects::Window { .. } => return Err((Error::WidgetAttached, surface)),
                 SurfaceObjects::HardwareBuffer {
                     hardware_buffer, ..
-                } => GL_FUNCTIONS.with(|gl| {
+                } => {
                     let _guard = match self.temporarily_make_context_current(context) {
                         Ok(guard) => guard,
                         Err(err) => return Err((err, surface)),
                     };
+                    let gl = &context.gl;
 
                     let local_egl_image = self.create_egl_image(context, hardware_buffer);
                     let texture_object =
@@ -203,10 +201,10 @@ impl Device {
                     Ok(SurfaceTexture {
                         surface,
                         local_egl_image,
-                        texture_object,
+                        texture_object: Some(texture_object),
                         phantom: PhantomData,
                     })
-                }),
+                }
             }
         }
     }
@@ -304,25 +302,25 @@ impl Device {
                     ref mut texture_object,
                     ref mut renderbuffers,
                 } => {
-                    GL_FUNCTIONS.with(|gl| {
-                        gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
-                        gl.DeleteFramebuffers(1, framebuffer_object);
-                        *framebuffer_object = 0;
+                    let gl = &context.gl;
+                    gl.bind_framebuffer(gl::FRAMEBUFFER, None);
+                    if let Some(framebuffer) = framebuffer_object.take() {
+                        gl.delete_framebuffer(framebuffer);
+                    }
 
-                        renderbuffers.destroy(gl);
+                    renderbuffers.destroy(gl);
 
-                        gl.DeleteTextures(1, texture_object);
-                        *texture_object = 0;
+                    if let Some(texture) = texture_object.take() {
+                        gl.delete_texture(texture);
+                    }
 
-                        let egl_display = self.egl_display;
-                        let result =
-                            (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display, *egl_image);
-                        assert_ne!(result, egl::FALSE);
-                        *egl_image = EGL_NO_IMAGE_KHR;
+                    let egl_display = self.egl_display;
+                    let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display, *egl_image);
+                    assert_ne!(result, egl::FALSE);
+                    *egl_image = EGL_NO_IMAGE_KHR;
 
-                        AHardwareBuffer_release(*hardware_buffer);
-                        *hardware_buffer = ptr::null_mut();
-                    });
+                    AHardwareBuffer_release(*hardware_buffer);
+                    *hardware_buffer = ptr::null_mut();
                 }
                 SurfaceObjects::Window {
                     ref mut egl_surface,
@@ -350,22 +348,22 @@ impl Device {
         mut surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         let _guard = self.temporarily_make_context_current(context);
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                gl.DeleteTextures(1, &surface_texture.texture_object);
-                surface_texture.texture_object = 0;
-
-                let egl_display = self.egl_display;
-                let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(
-                    egl_display,
-                    surface_texture.local_egl_image,
-                );
-                assert_ne!(result, egl::FALSE);
-                surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
+        let gl = &context.gl;
+        unsafe {
+            if let Some(texture) = surface_texture.texture_object.take() {
+                gl.delete_texture(texture);
             }
 
-            Ok(surface_texture.surface)
-        })
+            let egl_display = self.egl_display;
+            let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(
+                egl_display,
+                surface_texture.local_egl_image,
+            );
+            assert_ne!(result, egl::FALSE);
+            surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
+        }
+
+        Ok(surface_texture.surface)
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
@@ -379,7 +377,7 @@ impl Device {
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
+    pub fn surface_gl_texture_target(&self) -> u32 {
         SURFACE_GL_TEXTURE_TARGET
     }
 
@@ -398,7 +396,7 @@ impl Device {
                 SurfaceObjects::HardwareBuffer {
                     framebuffer_object, ..
                 } => framebuffer_object,
-                SurfaceObjects::Window { .. } => 0,
+                SurfaceObjects::Window { .. } => None,
             },
         }
     }
@@ -407,7 +405,7 @@ impl Device {
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.texture_object
     }
 }

@@ -23,9 +23,11 @@ use core_foundation::bundle::CFBundleGetBundleWithIdentifier;
 use core_foundation::bundle::CFBundleGetFunctionPointerForName;
 use core_foundation::bundle::CFBundleRef;
 use core_foundation::string::CFString;
+use glow::HasContext;
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
+use std::rc::Rc;
 use std::str::FromStr;
 use std::thread;
 
@@ -44,11 +46,6 @@ const kCGLOGLPVersion_3_2_Core: CGLPixelFormatAttribute = 0x3200;
 const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
 
 static OPENGL_FRAMEWORK_IDENTIFIER: &str = "com.apple.opengl";
-
-thread_local! {
-    #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(get_proc_address);
-}
 
 thread_local! {
     static OPENGL_FRAMEWORK: CFBundleRef = {
@@ -83,6 +80,7 @@ pub struct Context {
     pub(crate) cgl_context: CGLContextObj,
     pub(crate) id: ContextID,
     framebuffer: Framebuffer<Surface, ()>,
+    pub(crate) gl: Rc<Gl>,
 }
 
 /// Wraps a native CGL context object.
@@ -122,6 +120,16 @@ impl Clone for ContextDescriptor {
                 cgl_pixel_format: CGLRetainPixelFormat(self.cgl_pixel_format),
             }
         }
+    }
+}
+
+fn make_cgl_context_current(cgl_context: CGLContextObj) -> Result<(), Error> {
+    unsafe {
+        let err = CGLSetCurrentContext(cgl_context);
+        if err != kCGLNoError {
+            return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
+        }
+        Ok(())
     }
 }
 
@@ -235,11 +243,13 @@ impl Device {
             }
             debug_assert_ne!(cgl_context, ptr::null_mut());
 
+            make_cgl_context_current(cgl_context)?;
             // Wrap and return the context.
             let context = Context {
                 cgl_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
+                gl: Rc::new(Gl::from_loader_function(get_proc_address)),
             };
             next_context_id.0 += 1;
             Ok(context)
@@ -259,6 +269,7 @@ impl Device {
             cgl_context: native_context.0,
             id: *next_context_id,
             framebuffer: Framebuffer::None,
+            gl: Rc::new(Gl::from_loader_function(get_proc_address)),
         };
         next_context_id.0 += 1;
         mem::forget(native_context);
@@ -302,13 +313,7 @@ impl Device {
     ///
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
-        unsafe {
-            let err = CGLSetCurrentContext(context.cgl_context);
-            if err != kCGLNoError {
-                return Err(Error::MakeCurrentFailed(err.to_windowing_api_error()));
-            }
-            Ok(())
-        }
+        make_cgl_context_current(context.cgl_context)
     }
 
     /// Removes the current OpenGL context from this thread.
@@ -384,15 +389,17 @@ impl Device {
                 //
                 // TODO(pcwalton): Use `glClientWaitSync` instead to avoid starving the window
                 // server.
-                GL_FUNCTIONS.with(|gl| {
-                    let _guard = self.temporarily_make_context_current(context)?;
-                    unsafe {
-                        gl.Flush();
-                    }
 
-                    gl_utils::unbind_framebuffer_if_necessary(gl, surface.framebuffer_object);
-                    Ok(Some(surface))
-                })
+                let _guard = self.temporarily_make_context_current(context)?;
+                let gl = &context.gl;
+                unsafe {
+                    gl.flush();
+                }
+
+                if let Some(framebuffer) = surface.framebuffer_object {
+                    gl_utils::unbind_framebuffer_if_necessary(gl, framebuffer);
+                }
+                Ok(Some(surface))
             }
         }
     }

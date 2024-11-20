@@ -34,14 +34,7 @@ use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::mem;
-use std::num::NonZero;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
-
-impl crate::SurfaceInfo {
-    fn framebuffer(&self) -> Option<gl::NativeFramebuffer> {
-        NonZero::new(self.framebuffer_object).map(gl::NativeFramebuffer)
-    }
-}
 
 // The data stored for each swap chain.
 struct SwapChainData<Device: DeviceAPI> {
@@ -201,9 +194,9 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
         if let PreserveBuffer::Yes(gl) = preserve_buffer {
             let front_info = device.surface_info(&new_front_buffer);
             unsafe {
-                gl.bind_framebuffer(gl::READ_FRAMEBUFFER, front_info.framebuffer());
+                gl.bind_framebuffer(gl::READ_FRAMEBUFFER, front_info.framebuffer_object);
                 debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
-                gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, back_info.framebuffer());
+                gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, back_info.framebuffer_object);
                 debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
                 gl.blit_framebuffer(
                     0,
@@ -398,7 +391,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
             .context_surface_info(context)
             .unwrap()
             .unwrap()
-            .framebuffer();
+            .framebuffer_object;
         unsafe {
             gl.bind_framebuffer(gl::FRAMEBUFFER, fbo);
             gl.clear_color(color[0], color[1], color[2], color[3]);

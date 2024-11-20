@@ -5,7 +5,6 @@
 #![allow(unused_imports)]
 
 use crate::gl;
-use crate::gl::types::GLuint;
 use crate::info::GLVersion;
 use crate::Gl;
 
@@ -79,29 +78,18 @@ pub(crate) fn current_context_uses_compatibility_profile(_gl: &Gl) -> bool {
 #[cfg(not(any(target_os = "android", target_env = "ohos")))]
 #[allow(dead_code)]
 pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
+    use glow::HasContext;
+
     unsafe {
         // First, try `GL_CONTEXT_PROFILE_MASK`.
-        let mut context_profile_mask = 0;
-        gl.GetIntegerv(gl::CONTEXT_PROFILE_MASK, &mut context_profile_mask);
-        if gl.GetError() == gl::NO_ERROR
+        let context_profile_mask = gl.get_parameter_i32(gl::CONTEXT_PROFILE_MASK);
+        if gl.get_error() == gl::NO_ERROR
             && (context_profile_mask & gl::CONTEXT_COMPATIBILITY_PROFILE_BIT as i32) != 0
         {
             return true;
         }
 
         // Second, look for the `GL_ARB_compatibility` extension.
-        let mut num_extensions = 0;
-        gl.GetIntegerv(gl::NUM_EXTENSIONS, &mut num_extensions);
-        if gl.GetError() == gl::NO_ERROR {
-            for extension_index in 0..(num_extensions as GLuint) {
-                let extension = gl.GetStringi(gl::EXTENSIONS, extension_index) as *const c_char;
-                let extension = CStr::from_ptr(extension);
-                if extension.to_str() == Ok("GL_ARB_compatibility") {
-                    return true;
-                }
-            }
-        }
-
-        false
+        gl.supported_extensions().contains("GL_ARB_compatibility")
     }
 }

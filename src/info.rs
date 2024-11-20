@@ -2,11 +2,8 @@
 //
 //! OpenGL information.
 
-use crate::gl;
 use crate::Gl;
-
-use std::ffi::CStr;
-use std::os::raw::c_char;
+use glow::HasContext;
 
 /// The API (OpenGL or OpenGL ES).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -38,28 +35,10 @@ impl GLVersion {
 
     #[allow(dead_code)]
     pub(crate) fn current(gl: &Gl) -> GLVersion {
-        unsafe {
-            let version_string = gl.GetString(gl::VERSION) as *const c_char;
-            let version_string = CStr::from_ptr(version_string)
-                .to_string_lossy()
-                .trim_start_matches("OpenGL ES")
-                .trim_start()
-                .to_owned();
-            let mut version_string_iter = version_string.split(|c| c == '.' || c == ' ');
-            let major_version: u8 = version_string_iter
-                .next()
-                .expect("Where's the major GL version?")
-                .parse()
-                .expect("Couldn't parse the major GL version!");
-            let minor_version: u8 = version_string_iter
-                .next()
-                .expect("Where's the minor GL version?")
-                .parse()
-                .expect("Couldn't parse the minor GL version!");
-            GLVersion {
-                major: major_version,
-                minor: minor_version,
-            }
+        let version = gl.version();
+        Self {
+            major: version.major as u8,
+            minor: version.minor as u8,
         }
     }
 }
