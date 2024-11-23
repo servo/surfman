@@ -168,7 +168,7 @@ impl Connection {
         raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        create_native_widget_from_rwh_05_handle(raw_handle)
+        Self::create_native_widget_from_rwh_05_handle(raw_handle)
     }
 
     #[cfg(all(feature = "sm-raw-window-handle-06", android_platform))]
