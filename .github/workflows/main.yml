@@ -13,74 +13,77 @@ env:
 
 jobs:
   Build:
-    runs-on: ${{ matrix.os }}
+    name: ${{ format('{0} {1}', matrix.platform.target, matrix.features)}}
+    runs-on: ${{ matrix.platform.os }}
+    env:
+      RUST_BACKTRACE: 1
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-22.04, windows-latest]
-        rust: [stable]
-        features: ["", "--features 'chains sm-raw-window-handle-06'",  "--features 'chains sm-raw-window-handle-05'"]
-        target: ["default"]
+        platform:
+          - { target: aarch64-apple-darwin, os: macos-14, test: true }
+          - { target: x86_64-apple-darwin, os: macos-13, test: true }
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, test: true }
+          - { target: i686-pc-windows-msvc, os: windows-latest, test: false }
+          - { target: aarch64-pc-windows-msvc, os: windows-latest, test: false }
+          - {
+              target: aarch64-unknown-linux-ohos,
+              os: ubuntu-24.04,
+              test: false,
+            }
+          - { target: arm-linux-androideabi, os: ubuntu-24.04, test: false }
+        features:
+          [
+            "",
+            "chains sm-raw-window-handle-06",
+            "chains sm-raw-window-handle-05",
+          ]
         include:
-          # rust stable
-          - os: ubuntu-22.04
-            features: "--features 'sm-x11 sm-wayland-default'"
-            rust: stable
-            target: "default"
-          - os: ubuntu-22.04
-            target: "arm-linux-androideabi"
-            rust: stable
-          - os: windows-latest
-            features: "--features 'chains sm-angle-builtin'"
-            rust: stable
-            target: "default"
-          - os: windows-latest
-            features: "--features 'chains sm-no-wgl sm-angle-builtin'"
-            rust: stable
-            target: "default"
-          - os: windows-latest
-            target: "aarch64-pc-windows-msvc"
-            rust: stable
-          - os: ubuntu-22.04
-            target: "aarch64-unknown-linux-ohos"
-            rust: stable
+          - features: "sm-x11 sm-wayland-default"
+            platform:
+              { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
+          - features: "chains sm-angle-builtin"
+            platform:
+              { target: x86_64-pc-windows-msvc, os: windows-latest, test: true }
+          - features: "chains sm-no-wgl sm-angle-builtin"
+            platform:
+              { target: x86_64-pc-windows-msvc, os: windows-latest, test: true }
     steps:
-    - uses: actions/checkout@v4
-    - name: Install dependencies (Linux)
-      if: startsWith(matrix.os, 'ubuntu')
-      run: |
-        sudo apt update
-        sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev -y
-    - name: Install rust
-      id: toolchain
-      uses: dtolnay/rust-toolchain@master
-      with:
-          toolchain: ${{ matrix.rust }}
-    - name: Build target
-      if: matrix.target != 'default' && startsWith(matrix.target, 'aarch64-uwp-windows-msvc') != true
-      run: |
-        rustup +${{steps.toolchain.outputs.name}} target add ${{ matrix.target }}
-        cargo +${{steps.toolchain.outputs.name}} build --verbose ${{ matrix.features }} --target=${{ matrix.target }}
-    - name: Build
-      if: matrix.target == 'default'
-      run: |
-        cargo +${{steps.toolchain.outputs.name}} build --verbose ${{ matrix.features }}
-    - name: Build Windows
-      if: startsWith(matrix.target, 'aarch64-uwp-windows-msvc')
-      shell: cmd
-      run: |
-        rustup +${{steps.toolchain.outputs.name}} component add rust-src --target=aarch64-uwp-windows-msvc
-        cargo +${{steps.toolchain.outputs.name}} build -Z build-std --verbose --target=aarch64-uwp-windows-msvc
+      - uses: actions/checkout@v4
+      - name: Install dependencies (Linux)
+        if: startsWith(matrix.platform.os, 'ubuntu')
+        run: |
+          sudo apt update
+          sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev xvfb weston -y
+      - name: Install rust
+        id: toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+      - name: Build
+        run: |
+          rustup target add ${{ matrix.platform.target }}
+          cargo build --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
+      - name: Test
+        if: ${{ matrix.platform.test && startsWith(matrix.platform.os, 'ubuntu') }}
+        run: |
+          weston --no-config --socket=wl-test-env --backend=headless &
+          WAYLAND_DISPLAY=wl-test-env xvfb-run cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
+      - name: Test
+        if: ${{ matrix.platform.test && !startsWith(matrix.platform.os, 'ubuntu') }}
+        run: |
+          cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
   Format:
     name: Run `rustfmt`
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: mkroening/rust-toolchain-toml@main
       - run: cargo fmt --check
   build_result:
     name: Result
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: ["Build", "Format"]
     if: always()
     steps:

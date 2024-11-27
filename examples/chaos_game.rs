@@ -2,13 +2,15 @@
 //
 //! Demonstrates how to use `surfman` to draw to a window surface via the CPU.
 
-use euclid::default::Point2D;
+use euclid::default::{Point2D, Size2D};
 use rand::{self, Rng};
 use surfman::{SurfaceAccess, SurfaceType};
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent::KeyboardInput;
-use winit::event::{DeviceEvent, Event, WindowEvent};
+use winit::event::{DeviceEvent, ElementState, Event, KeyEvent, RawKeyEvent, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
+use winit::keyboard::{Key, NamedKey, PhysicalKey};
+use winit::raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle, HasWindowHandle};
 use winit::window::WindowBuilder;
 
 #[cfg(target_os = "macos")]
@@ -29,18 +31,18 @@ static TRIANGLE_POINTS: [(f32, f32); 3] = [
     (400.0 - 259.81, 300.0 + 75.0 - 300.0),
 ];
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(all(target_os = "macos", feature = "sm-raw-window-handle-06")))]
 fn main() {
     println!("The `chaos_game` demo is not yet supported on this platform.");
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "sm-raw-window-handle-06"))]
 fn main() {
     let connection = SystemConnection::new().unwrap();
     let adapter = connection.create_adapter().unwrap();
     let mut device = connection.create_device(&adapter).unwrap();
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let physical_size = PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let window = WindowBuilder::new()
         .with_title("Chaos game example")
@@ -54,7 +56,7 @@ fn main() {
     let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
     let handle = window.window_handle().unwrap();
     let native_widget = connection
-        .create_native_widget_from_raw_window_handle(handle.as_raw(), window_size)
+        .create_native_widget_from_window_handle(handle, window_size)
         .unwrap();
 
     let surface_type = SurfaceType::Widget { native_widget };
@@ -66,20 +68,25 @@ fn main() {
     let mut point = Point2D::new(WINDOW_WIDTH as f32 * 0.5, WINDOW_HEIGHT as f32 * 0.5);
     let mut data = vec![0; WINDOW_WIDTH as usize * WINDOW_HEIGHT as usize * 4];
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, event_loop| {
         match event {
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
             }
-            | Event::DeviceEvent {
+            | Event::WindowEvent {
                 event:
-                    DeviceEvent::Key(KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
+                                logical_key: Key::Named(NamedKey::Escape),
+                                ..
+                            },
                         ..
-                    }),
+                    },
                 ..
-            } => *control_flow = ControlFlow::Exit,
+            } => event_loop.exit(),
             _ => {
                 for _ in 0..ITERATIONS_PER_FRAME {
                     let (dest_x, dest_y) = TRIANGLE_POINTS[rng.gen_range(0..3)];
@@ -93,7 +100,6 @@ fn main() {
                     .data()
                     .copy_from_slice(&data);
                 device.present_surface(&mut surface).unwrap();
-                *control_flow = ControlFlow::Poll;
             }
         };
     });

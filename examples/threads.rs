@@ -2,6 +2,8 @@
 //
 // This example demonstrates how to create a multithreaded OpenGL application using `surfman`.
 
+#![cfg(feature = "sm-raw-window-handle-06")]
+
 use self::common::{ck, Buffer, Program, ResourceLoader, Shader, ShaderKind};
 
 use euclid::default::{Point2D, Rect, Size2D, Vector2D};
@@ -24,9 +26,6 @@ use winit::{
     window::WindowBuilder,
 };
 
-#[cfg(feature = "sm-raw-window-handle-05")]
-use rwh_05::{HasRawDisplayHandle, HasRawWindowHandle};
-#[cfg(not(feature = "sm-raw-window-handle-05"))]
 use rwh_06::{HasDisplayHandle, HasWindowHandle};
 
 pub mod common;
@@ -90,14 +89,6 @@ static BACKGROUND_COLOR: [f32; 4] = [
     1.0,
 ];
 
-#[cfg(feature = "sm-raw-window-handle-05")]
-fn make_connection(window: &winit::window::Window) -> surfman::Connection {
-    let raw_display_handle = window.raw_display_handle();
-    let connection = Connection::from_raw_display_handle(raw_display_handle).unwrap();
-    connection
-}
-
-#[cfg(not(feature = "sm-raw-window-handle-05"))]
 fn make_connection(window: &winit::window::Window) -> surfman::Connection {
     let display_handle = window
         .display_handle()
@@ -106,20 +97,6 @@ fn make_connection(window: &winit::window::Window) -> surfman::Connection {
     connection
 }
 
-#[cfg(feature = "sm-raw-window-handle-05")]
-fn make_native_widget(
-    window: &winit::window::Window,
-    connection: &surfman::Connection,
-    window_size: Size2D<i32>,
-) -> surfman::NativeWidget {
-    let raw_window_handle = window.raw_window_handle();
-    let native_widget = connection
-        .create_native_widget_from_raw_window_handle(raw_window_handle, window_size)
-        .unwrap();
-    native_widget
-}
-
-#[cfg(not(feature = "sm-raw-window-handle-05"))]
 fn make_native_widget(
     window: &winit::window::Window,
     connection: &surfman::Connection,
