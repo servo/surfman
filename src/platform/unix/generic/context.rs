@@ -16,7 +16,7 @@ pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContex
 
 thread_local! {
     #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
+    pub static GL_FUNCTIONS: Gl = unsafe {Gl::from_loader_function(context::get_proc_address)};
 }
 
 /// Represents an OpenGL rendering context.
@@ -124,13 +124,13 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        GL_FUNCTIONS.with(|gl| unsafe {
+        unsafe {
             ContextDescriptor::from_egl_context(
-                gl,
+                context::get_proc_address,
                 self.native_connection.egl_display,
                 context.0.egl_context,
             )
-        })
+        }
     }
 
     /// Makes the context the current OpenGL context for this thread.
