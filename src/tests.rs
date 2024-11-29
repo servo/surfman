@@ -607,14 +607,14 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
         let mut context = device
             .create_context(&other_context_descriptor, None)
             .unwrap();
-        let gl =
-            unsafe { Gl::from_loader_function(|symbol| device.get_proc_address(&context, symbol)) };
 
         let surface = make_surface(&mut device, &context);
         device
             .bind_surface_to_context(&mut context, surface)
             .unwrap();
         device.make_context_current(&context).unwrap();
+        let gl =
+            unsafe { Gl::from_loader_function(|symbol| device.get_proc_address(&context, symbol)) };
         bind_context_fbo(&gl, &device, &context);
 
         clear(&gl, &[0, 255, 0, 255]);
