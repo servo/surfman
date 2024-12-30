@@ -12,14 +12,10 @@ use crate::egl::types::EGLint;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, EGLBackedContext};
 use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
 
+use std::cell::LazyCell;
 use std::os::raw::c_void;
 
 pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
-
-thread_local! {
-    #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = unsafe {Gl::from_loader_function(context::get_proc_address)};
-}
 
 /// Represents an OpenGL rendering context.
 ///
@@ -37,7 +33,7 @@ thread_local! {
 /// allow for sharing of texture data. Contexts are local to a single thread and device.
 ///
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
-pub struct Context(pub(crate) EGLBackedContext);
+pub struct Context(pub(crate) EGLBackedContext, pub(crate) LazyCell<Gl>);
 
 impl Device {
     /// Creates a context descriptor with the given attributes.
@@ -75,15 +71,17 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
-        unsafe {
-            EGLBackedContext::new(
-                self.native_connection.egl_display,
-                descriptor,
-                share_with.map(|ctx| &ctx.0),
-                self.gl_api(),
-            )
-            .map(Context)
-        }
+        Ok(Context(
+            unsafe {
+                EGLBackedContext::new(
+                    self.native_connection.egl_display,
+                    descriptor,
+                    share_with.map(|ctx| &ctx.0),
+                    self.gl_api(),
+                )?
+            },
+            LazyCell::new(|| unsafe { Gl::from_loader_function(context::get_proc_address) }),
+        ))
     }
 
     /// Wraps an `EGLContext` in a native context and returns it.
@@ -96,9 +94,10 @@ impl Device {
         &self,
         native_context: NativeContext,
     ) -> Result<Context, Error> {
-        Ok(Context(EGLBackedContext::from_native_context(
-            native_context,
-        )))
+        Ok(Context(
+            EGLBackedContext::from_native_context(native_context),
+            LazyCell::new(|| unsafe { Gl::from_loader_function(context::get_proc_address) }),
+        ))
     }
 
     /// Destroys a context.
@@ -213,17 +212,12 @@ impl Device {
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
-        GL_FUNCTIONS.with(|gl| {
-            unsafe {
-                // Flush to avoid races on Mesa/Intel and possibly other GPUs.
-                gl.flush();
-
-                context
-                    .0
-                    .unbind_surface(gl, self.native_connection.egl_display)
-                    .map(|maybe_surface| maybe_surface.map(Surface))
-            }
-        })
+        unsafe {
+            context
+                .0
+                .unbind_surface(&context.1, self.native_connection.egl_display)
+                .map(|maybe_surface| maybe_surface.map(Surface))
+        }
     }
 
     /// Returns a unique ID representing a context.

@@ -14,6 +14,7 @@ use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
 use crate::{Gl, SurfaceInfo};
 
+use std::cell::LazyCell;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::c_void;
@@ -211,7 +212,7 @@ impl EGLBackedContext {
 
     pub(crate) unsafe fn unbind_surface(
         &mut self,
-        gl: &Gl,
+        gl: &LazyCell<Gl>,
         egl_display: EGLDisplay,
     ) -> Result<Option<EGLBackedSurface>, Error> {
         match self.framebuffer {

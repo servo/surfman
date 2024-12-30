@@ -47,6 +47,7 @@ pub struct Context {
     pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
     pub(crate) pbuffer: EGLSurface,
+    pub(crate) gl: LazyCell<Gl>,
     framebuffer: Framebuffer<Surface, ExternalEGLSurfaces>,
     context_is_owned: bool,
 }

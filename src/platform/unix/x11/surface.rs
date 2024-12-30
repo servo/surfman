@@ -2,7 +2,7 @@
 //
 //! A surface implementation using X11 surfaces backed by TextureImage.
 
-use super::context::{Context, GL_FUNCTIONS};
+use super::context::Context;
 use super::device::Device;
 use crate::egl;
 use crate::egl::types::EGLint;
@@ -86,16 +86,15 @@ impl Device {
         let _guard = self.temporarily_make_context_current(context)?;
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-        GL_FUNCTIONS.with(|gl| {
-            Ok(Surface(EGLBackedSurface::new_generic(
-                gl,
-                self.native_connection.egl_display,
-                context.0.egl_context,
-                context.0.id,
-                &context_attributes,
-                size,
-            )))
-        })
+
+        Ok(Surface(EGLBackedSurface::new_generic(
+            &context.1,
+            self.native_connection.egl_display,
+            context.0.egl_context,
+            context.0.id,
+            &context_attributes,
+            size,
+        )))
     }
 
     unsafe fn create_window_surface(
@@ -156,10 +155,10 @@ impl Device {
             Err(err) => return Err((err, surface)),
         };
 
-        GL_FUNCTIONS.with(|gl| match surface.0.to_surface_texture(gl) {
+        match surface.0.to_surface_texture(&context.1) {
             Ok(surface_texture) => Ok(SurfaceTexture(surface_texture)),
             Err((err, surface)) => Err((err, Surface(surface))),
-        })
+        }
     }
 
     /// Destroys a surface.
@@ -174,11 +173,9 @@ impl Device {
         context: &mut Context,
         surface: &mut Surface,
     ) -> Result<(), Error> {
-        GL_FUNCTIONS.with(|gl| {
-            let egl_display = self.native_connection.egl_display;
-            surface.0.destroy(gl, egl_display, context.0.id)?;
-            Ok(())
-        })
+        let egl_display = self.native_connection.egl_display;
+        surface.0.destroy(&context.1, egl_display, context.0.id)?;
+        Ok(())
     }
 
     /// Destroys a surface texture and returns the underlying surface.
@@ -194,7 +191,7 @@ impl Device {
         surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         match self.temporarily_make_context_current(context) {
-            Ok(_guard) => GL_FUNCTIONS.with(|gl| Ok(Surface(surface_texture.0.destroy(gl)))),
+            Ok(_guard) => Ok(Surface(surface_texture.0.destroy(&context.1))),
             Err(err) => Err((err, surface_texture)),
         }
     }

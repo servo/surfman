@@ -21,6 +21,7 @@ use crate::{ContextAttributes, ContextID, Error, SurfaceID, SurfaceInfo};
 
 use euclid::default::Size2D;
 use glow::{Framebuffer, HasContext, PixelUnpackData, Texture};
+use std::cell::LazyCell;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
@@ -207,7 +208,7 @@ impl EGLBackedSurface {
 
     pub(crate) fn destroy(
         &mut self,
-        gl: &Gl,
+        gl: &LazyCell<Gl>,
         egl_display: EGLDisplay,
         context_id: ContextID,
     ) -> Result<Option<*const c_void>, Error> {
@@ -315,13 +316,21 @@ impl EGLBackedSurface {
         }
     }
 
-    pub(crate) fn unbind(&self, gl: &Gl, egl_display: EGLDisplay, egl_context: EGLContext) {
+    pub(crate) fn unbind(
+        &self,
+        gl: &LazyCell<Gl>,
+        egl_display: EGLDisplay,
+        egl_context: EGLContext,
+    ) {
         // If we're current, we stay current, but with no surface attached.
         unsafe {
             EGL_FUNCTIONS.with(|egl| {
                 if egl.GetCurrentContext() != egl_context {
                     return;
                 }
+
+                // Flush to avoid races on Mesa/Intel and possibly other GPUs.
+                gl.flush();
 
                 egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
 
