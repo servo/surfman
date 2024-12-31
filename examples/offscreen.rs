@@ -129,7 +129,13 @@ fn main() {
 
     unsafe {
         let surface_info = device.context_surface_info(&context).unwrap().unwrap();
-        gl::BindFramebuffer(gl::FRAMEBUFFER, surface_info.framebuffer_object);
+        gl::BindFramebuffer(
+            gl::FRAMEBUFFER,
+            surface_info
+                .framebuffer_object
+                .map(|fbo| fbo.0.get())
+                .unwrap_or(0),
+        );
         gl::Viewport(0, 0, FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT);
         ck();
         gl::ClearColor(0.0, 0.0, 0.0, 1.0);
@@ -200,7 +206,7 @@ impl TriVertexArray {
                 gl::FLOAT,
                 gl::FALSE,
                 12,
-                0 as *const GLvoid,
+                0 as _,
             );
             ck();
             gl::VertexAttribPointer(
@@ -209,7 +215,7 @@ impl TriVertexArray {
                 gl::UNSIGNED_BYTE,
                 gl::TRUE,
                 12,
-                8 as *const GLvoid,
+                8 as _,
             );
             ck();
             gl::EnableVertexAttribArray(tri_program.position_attribute as GLuint);

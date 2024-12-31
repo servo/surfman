@@ -2,22 +2,22 @@
 //
 //! A surface implementation using Wayland surfaces backed by TextureImage.
 
-use super::context::{Context, GL_FUNCTIONS};
+use super::context::Context;
 use super::device::Device;
 use crate::gl;
-use crate::gl::types::{GLenum, GLuint};
 use crate::platform::generic::egl::context;
 use crate::platform::generic::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 
 use euclid::default::Size2D;
+use glow::Texture;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use wayland_sys::client::wl_proxy;
 use wayland_sys::egl::{wl_egl_window, WAYLAND_EGL_HANDLE};
 
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
-const SURFACE_GL_TEXTURE_TARGET: GLenum = gl::TEXTURE_2D;
+const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
@@ -90,16 +90,15 @@ impl Device {
         let _guard = self.temporarily_make_context_current(context)?;
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-        GL_FUNCTIONS.with(|gl| {
-            Ok(Surface(EGLBackedSurface::new_generic(
-                gl,
-                self.native_connection.egl_display,
-                context.0.egl_context,
-                context.0.id,
-                &context_attributes,
-                size,
-            )))
-        })
+
+        Ok(Surface(EGLBackedSurface::new_generic(
+            &context.1,
+            self.native_connection.egl_display,
+            context.0.egl_context,
+            context.0.id,
+            &context_attributes,
+            size,
+        )))
     }
 
     unsafe fn create_window_surface(
@@ -147,10 +146,10 @@ impl Device {
             Err(err) => return Err((err, surface)),
         };
 
-        GL_FUNCTIONS.with(|gl| match surface.0.to_surface_texture(gl) {
+        match surface.0.to_surface_texture(&context.1) {
             Ok(surface_texture) => Ok(SurfaceTexture(surface_texture)),
             Err((err, surface)) => Err((err, Surface(surface))),
-        })
+        }
     }
 
     /// Destroys a surface.
@@ -165,16 +164,16 @@ impl Device {
         context: &mut Context,
         surface: &mut Surface,
     ) -> Result<(), Error> {
-        GL_FUNCTIONS.with(|gl| {
-            let egl_display = self.native_connection.egl_display;
-            if let Some(wayland_egl_window) = surface.0.destroy(gl, egl_display, context.0.id)? {
-                unsafe {
-                    let wayland_egl_window = wayland_egl_window as *mut wl_egl_window;
-                    (WAYLAND_EGL_HANDLE.wl_egl_window_destroy)(wayland_egl_window);
-                }
+        let egl_display = self.native_connection.egl_display;
+        if let Some(wayland_egl_window) =
+            surface.0.destroy(&context.1, egl_display, context.0.id)?
+        {
+            unsafe {
+                let wayland_egl_window = wayland_egl_window as *mut wl_egl_window;
+                (WAYLAND_EGL_HANDLE.wl_egl_window_destroy)(wayland_egl_window);
             }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
     /// Destroys a surface texture and returns the underlying surface.
@@ -190,7 +189,7 @@ impl Device {
         surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         match self.temporarily_make_context_current(context) {
-            Ok(_guard) => GL_FUNCTIONS.with(|gl| Ok(Surface(surface_texture.0.destroy(gl)))),
+            Ok(_guard) => Ok(Surface(surface_texture.0.destroy(&context.1))),
             Err(err) => Err((err, surface_texture)),
         }
     }
@@ -239,7 +238,7 @@ impl Device {
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     #[inline]
-    pub fn surface_gl_texture_target(&self) -> GLenum {
+    pub fn surface_gl_texture_target(&self) -> u32 {
         SURFACE_GL_TEXTURE_TARGET
     }
 
@@ -257,7 +256,7 @@ impl Device {
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.0.texture_object
     }
 }

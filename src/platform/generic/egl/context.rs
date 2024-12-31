@@ -14,6 +14,7 @@ use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
 use crate::{Gl, SurfaceInfo};
 
+use std::cell::LazyCell;
 use std::ffi::CString;
 use std::mem;
 use std::os::raw::c_void;
@@ -211,7 +212,7 @@ impl EGLBackedContext {
 
     pub(crate) unsafe fn unbind_surface(
         &mut self,
-        gl: &Gl,
+        gl: &LazyCell<Gl>,
         egl_display: EGLDisplay,
     ) -> Result<Option<EGLBackedSurface>, Error> {
         match self.framebuffer {
@@ -377,18 +378,22 @@ impl ContextDescriptor {
         })
     }
 
-    pub(crate) unsafe fn from_egl_context(
-        gl: &Gl,
+    pub(crate) unsafe fn from_egl_context<F>(
+        get_proc_address: F,
         egl_display: EGLDisplay,
         egl_context: EGLContext,
-    ) -> ContextDescriptor {
+    ) -> ContextDescriptor
+    where
+        F: FnMut(&str) -> *const c_void,
+    {
         let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
 
         EGL_FUNCTIONS.with(|egl| {
             let _guard = CurrentContextGuard::new();
             egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
-            let gl_version = GLVersion::current(gl);
-            let compatibility_profile = context::current_context_uses_compatibility_profile(gl);
+            let gl = unsafe { Gl::from_loader_function(get_proc_address) };
+            let gl_version = GLVersion::current(&gl);
+            let compatibility_profile = context::current_context_uses_compatibility_profile(&gl);
 
             ContextDescriptor {
                 egl_config_id,

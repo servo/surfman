@@ -41,10 +41,10 @@ macro_rules! implement_interfaces {
             use super::device::{Adapter, Device, NativeDevice};
             use super::surface::{NativeWidget, Surface, SurfaceTexture};
             use euclid::default::Size2D;
+            use glow::Texture;
             use std::os::raw::c_void;
             use $crate::connection::Connection as ConnectionInterface;
             use $crate::device::Device as DeviceInterface;
-            use $crate::gl::types::{GLenum, GLuint};
             use $crate::info::GLApi;
             use $crate::Error;
             use $crate::{ContextAttributes, ContextID, SurfaceAccess, SurfaceInfo, SurfaceType};
@@ -318,7 +318,7 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn surface_gl_texture_target(&self) -> GLenum {
+                fn surface_gl_texture_target(&self) -> u32 {
                     Device::surface_gl_texture_target(self)
                 }
 
@@ -347,7 +347,10 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn surface_texture_object(&self, surface_texture: &Self::SurfaceTexture) -> GLuint {
+                fn surface_texture_object(
+                    &self,
+                    surface_texture: &Self::SurfaceTexture,
+                ) -> Option<Texture> {
                     Device::surface_texture_object(self, surface_texture)
                 }
             }

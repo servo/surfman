@@ -2,6 +2,8 @@
 //
 //! OpenGL rendering contexts.
 
+use glow::HasContext;
+
 use super::device::Device;
 use super::surface::{Surface, SurfaceObjects};
 use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
@@ -22,7 +24,7 @@ pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContex
 
 thread_local! {
     #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
+    pub static GL_FUNCTIONS: Gl = unsafe {Gl::from_loader_function(context::get_proc_address)};
 }
 
 /// Represents an OpenGL rendering context.
@@ -45,6 +47,7 @@ pub struct Context {
     pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
     pub(crate) pbuffer: EGLSurface,
+    pub(crate) gl: LazyCell<Gl>,
     framebuffer: Framebuffer<Surface, ExternalEGLSurfaces>,
     context_is_owned: bool,
 }
@@ -193,9 +196,13 @@ impl Device {
 
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        GL_FUNCTIONS.with(|gl| unsafe {
-            ContextDescriptor::from_egl_context(gl, self.egl_display, context.egl_context)
-        })
+        unsafe {
+            ContextDescriptor::from_egl_context(
+                context::get_proc_address,
+                self.egl_display,
+                context.egl_context,
+            )
+        }
     }
 
     /// Makes the context the current OpenGL context for this thread.
@@ -287,7 +294,7 @@ impl Device {
         // FIXME(pcwalton): Is this necessary?
         let _guard = self.temporarily_make_context_current(context)?;
         GL_FUNCTIONS.with(|gl| unsafe {
-            gl.Flush();
+            gl.flush();
         });
 
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
