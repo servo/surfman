@@ -487,6 +487,8 @@ impl Drop for ViewInfo {
 
             // Drop the reference that the callback was holding onto.
             let _ = mem::transmute_copy::<Arc<VblankCond>, Arc<VblankCond>>(&self.next_vblank);
+
+            self.layer.remove_from_superlayer();
         }
     }
 }
