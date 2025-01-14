@@ -14,11 +14,6 @@ use std::os::raw::c_void;
 
 pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
 
-thread_local! {
-    #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
-}
-
 /// Represents an OpenGL rendering context.
 ///
 /// A context allows you to issue rendering commands to a surface. When initially created, a
@@ -35,7 +30,7 @@ thread_local! {
 /// allow for sharing of texture data. Contexts are local to a single thread and device.
 ///
 /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
-pub struct Context(pub(crate) EGLBackedContext);
+pub struct Context(pub(crate) EGLBackedContext, pub(crate) Gl);
 
 impl Device {
     /// Creates a context descriptor with the given attributes.
@@ -76,17 +71,21 @@ impl Device {
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
         unsafe {
-            EGLBackedContext::new(
+            let context = EGLBackedContext::new(
                 self.native_connection.egl_display,
                 descriptor,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
-            )
-            .map(Context)
+            )?;
+            context.make_current(self.native_connection.egl_display)?;
+            Ok(Context(
+                context,
+                Gl::from_loader_function(context::get_proc_address),
+            ))
         }
     }
 
-    /// Wraps an `EGLContext` in a native context and returns it.
+    /// Wraps an `EGLContext` in a native context and returns it. The context must be current.
     ///
     /// The context is not retained, as there is no way to do this in the EGL API. Therefore,
     /// it is the caller's responsibility to ensure that the returned `Context` object remains
@@ -96,9 +95,10 @@ impl Device {
         &self,
         native_context: NativeContext,
     ) -> Result<Context, Error> {
-        Ok(Context(EGLBackedContext::from_native_context(
-            native_context,
-        )))
+        Ok(Context(
+            EGLBackedContext::from_native_context(native_context),
+            Gl::from_loader_function(context::get_proc_address),
+        ))
     }
 
     /// Destroys a context.
@@ -124,13 +124,13 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-        GL_FUNCTIONS.with(|gl| unsafe {
+        unsafe {
             ContextDescriptor::from_egl_context(
-                gl,
+                context::get_proc_address,
                 self.native_connection.egl_display,
                 context.0.egl_context,
             )
-        })
+        }
     }
 
     /// Makes the context the current OpenGL context for this thread.
@@ -213,12 +213,12 @@ impl Device {
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
-        GL_FUNCTIONS.with(|gl| unsafe {
+        unsafe {
             context
                 .0
-                .unbind_surface(gl, self.native_connection.egl_display)
+                .unbind_surface(&context.1, self.native_connection.egl_display)
                 .map(|maybe_surface| maybe_surface.map(Surface))
-        })
+        }
     }
 
     /// Returns a unique ID representing a context.

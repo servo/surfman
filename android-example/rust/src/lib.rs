@@ -128,11 +128,11 @@ pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInst
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testNewlyCreatedContextsAreNotCurrent(
+pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanInstrumentedTest_testNewlyCreatedContextsAreCurrent(
     _env: JNIEnv,
     _class: JClass,
 ) {
-    tests::test_newly_created_contexts_are_not_current();
+    tests::test_newly_created_contexts_are_current();
 }
 
 #[no_mangle]

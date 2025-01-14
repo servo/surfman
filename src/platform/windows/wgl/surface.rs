@@ -9,9 +9,12 @@ use crate::renderbuffers::Renderbuffers;
 use crate::{ContextID, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 
 use crate::gl;
-use crate::gl::types::{GLenum, GLint, GLuint};
+type GLenum = c_uint;
+type GLint = c_int;
 use crate::gl_utils;
 use euclid::default::Size2D;
+use glow::HasContext;
+use std::ffi::{c_int, c_uint};
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem;
@@ -67,8 +70,8 @@ pub(crate) enum Win32Objects {
         d3d11_texture: ComPtr<ID3D11Texture2D>,
         dxgi_share_handle: HANDLE,
         gl_dx_interop_object: HANDLE,
-        gl_texture: GLuint,
-        gl_framebuffer: GLuint,
+        gl_texture: Option<glow::Texture>,
+        gl_framebuffer: Option<glow::Framebuffer>,
         renderbuffers: Renderbuffers,
     },
     Widget {
@@ -90,7 +93,7 @@ pub struct SurfaceTexture {
     #[allow(dead_code)]
     pub(crate) local_d3d11_texture: ComPtr<ID3D11Texture2D>,
     local_gl_dx_interop_object: HANDLE,
-    pub(crate) gl_texture: GLuint,
+    pub(crate) gl_texture: Option<glow::Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
@@ -209,14 +212,13 @@ impl Device {
             assert_ne!(ok, FALSE);
 
             // Make our texture object on the GL side.
-            let mut gl_texture = 0;
-            context.gl.GenTextures(1, &mut gl_texture);
+            let gl_texture = context.gl.create_texture().unwrap();
 
             // Bind the GL texture to the D3D11 texture.
             let gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
                 self.gl_dx_interop_device,
                 d3d11_texture.as_raw() as *mut c_void,
-                gl_texture,
+                gl_texture.0.get(),
                 gl::TEXTURE_2D,
                 WGL_ACCESS_READ_WRITE_NV,
             );
@@ -231,16 +233,15 @@ impl Device {
             }
 
             // Build our FBO.
-            let mut gl_framebuffer = 0;
-            context.gl.GenFramebuffers(1, &mut gl_framebuffer);
-            let _guard = self.temporarily_bind_framebuffer(context, gl_framebuffer);
+            let gl_framebuffer = context.gl.create_framebuffer().unwrap();
+            let _guard = self.temporarily_bind_framebuffer(context, Some(gl_framebuffer));
 
             // Attach the reflected D3D11 texture to that FBO.
-            context.gl.FramebufferTexture2D(
+            context.gl.framebuffer_texture_2d(
                 gl::FRAMEBUFFER,
                 gl::COLOR_ATTACHMENT0,
                 SURFACE_GL_TEXTURE_TARGET,
-                gl_texture,
+                Some(gl_texture),
                 0,
             );
 
@@ -260,8 +261,8 @@ impl Device {
                     d3d11_texture,
                     dxgi_share_handle,
                     gl_dx_interop_object,
-                    gl_texture,
-                    gl_framebuffer,
+                    gl_texture: Some(gl_texture),
+                    gl_framebuffer: Some(gl_framebuffer),
                     renderbuffers,
                 },
                 destroyed: false,
@@ -339,11 +340,13 @@ impl Device {
                 } => {
                     renderbuffers.destroy(&context.gl);
 
-                    gl_utils::destroy_framebuffer(&context.gl, *gl_framebuffer);
-                    *gl_framebuffer = 0;
+                    if let Some(fbo) = gl_framebuffer.take() {
+                        gl_utils::destroy_framebuffer(&context.gl, fbo);
+                    }
 
-                    context.gl.DeleteTextures(1, gl_texture);
-                    *gl_texture = 0;
+                    if let Some(texture) = gl_texture.take() {
+                        context.gl.delete_texture(texture);
+                    }
 
                     let ok = (dx_interop_functions.DXUnregisterObjectNV)(
                         self.gl_dx_interop_device,
@@ -417,14 +420,13 @@ impl Device {
             assert_ne!(ok, FALSE);
 
             // Create a GL texture.
-            let mut gl_texture = 0;
-            context.gl.GenTextures(1, &mut gl_texture);
+            let gl_texture = context.gl.create_texture().unwrap();
 
             // Register that texture with GL/DX interop.
             let mut local_gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
                 self.gl_dx_interop_device,
                 local_d3d11_texture.as_raw() as *mut c_void,
-                gl_texture,
+                gl_texture.0.get(),
                 gl::TEXTURE_2D,
                 WGL_ACCESS_READ_ONLY_NV,
             );
@@ -439,19 +441,23 @@ impl Device {
 
             // Initialize the texture, for convenience.
             // FIXME(pcwalton): We should probably reset the bound texture after this.
-            context.gl.BindTexture(gl::TEXTURE_2D, gl_texture);
-            context
-                .gl
-                .TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-            context
-                .gl
-                .TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-            context.gl.TexParameteri(
+            context.gl.bind_texture(gl::TEXTURE_2D, Some(gl_texture));
+            context.gl.tex_parameter_i32(
+                gl::TEXTURE_2D,
+                gl::TEXTURE_MAG_FILTER,
+                gl::LINEAR as GLint,
+            );
+            context.gl.tex_parameter_i32(
+                gl::TEXTURE_2D,
+                gl::TEXTURE_MIN_FILTER,
+                gl::LINEAR as GLint,
+            );
+            context.gl.tex_parameter_i32(
                 gl::TEXTURE_2D,
                 gl::TEXTURE_WRAP_S,
                 gl::CLAMP_TO_EDGE as GLint,
             );
-            context.gl.TexParameteri(
+            context.gl.tex_parameter_i32(
                 gl::TEXTURE_2D,
                 gl::TEXTURE_WRAP_T,
                 gl::CLAMP_TO_EDGE as GLint,
@@ -462,7 +468,7 @@ impl Device {
                 surface,
                 local_d3d11_texture,
                 local_gl_dx_interop_object,
-                gl_texture,
+                gl_texture: Some(gl_texture),
                 phantom: PhantomData,
             })
         }
@@ -508,8 +514,9 @@ impl Device {
             surface_texture.local_gl_dx_interop_object = INVALID_HANDLE_VALUE;
 
             // Destroy the GL texture.
-            context.gl.DeleteTextures(1, &surface_texture.gl_texture);
-            surface_texture.gl_texture = 0;
+            if let Some(texture) = surface_texture.gl_texture.take() {
+                context.gl.delete_texture(texture);
+            }
         }
 
         Ok(surface_texture.surface)
@@ -627,7 +634,7 @@ impl Device {
             context_id: surface.context_id,
             framebuffer_object: match surface.win32_objects {
                 Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
-                Win32Objects::Widget { .. } => 0,
+                Win32Objects::Widget { .. } => None,
             },
         }
     }
@@ -636,7 +643,10 @@ impl Device {
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
-    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> GLuint {
+    pub fn surface_texture_object(
+        &self,
+        surface_texture: &SurfaceTexture,
+    ) -> Option<glow::Texture> {
         surface_texture.gl_texture
     }
 }

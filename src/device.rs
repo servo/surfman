@@ -3,9 +3,9 @@
 //! The abstract interface that all devices conform to.
 
 use super::connection::Connection as ConnectionInterface;
-use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
+use glow::Texture;
 
 use std::os::raw::c_void;
 
@@ -200,7 +200,7 @@ where
     /// Returns the OpenGL texture target needed to read from this surface texture.
     ///
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
-    fn surface_gl_texture_target(&self) -> GLenum;
+    fn surface_gl_texture_target(&self) -> u32;
 
     /// Displays the contents of a widget surface on screen.
     ///
@@ -234,5 +234,5 @@ where
     /// Returns the OpenGL texture object containing the contents of this surface.
     ///
     /// It is only legal to read from, not write to, this texture object.
-    fn surface_texture_object(&self, surface_texture: &Self::SurfaceTexture) -> GLuint;
+    fn surface_texture_object(&self, surface_texture: &Self::SurfaceTexture) -> Option<Texture>;
 }

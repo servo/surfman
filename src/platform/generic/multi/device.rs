@@ -8,9 +8,9 @@ use super::surface::{NativeWidget, Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
-use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
+use glow::Texture;
 
 use std::os::raw::c_void;
 
@@ -280,7 +280,7 @@ where
     }
 
     #[inline]
-    fn surface_gl_texture_target(&self) -> GLenum {
+    fn surface_gl_texture_target(&self) -> u32 {
         Device::surface_gl_texture_target(self)
     }
 
@@ -309,7 +309,10 @@ where
     }
 
     #[inline]
-    fn surface_texture_object(&self, surface_texture: &SurfaceTexture<Def, Alt>) -> GLuint {
+    fn surface_texture_object(
+        &self,
+        surface_texture: &SurfaceTexture<Def, Alt>,
+    ) -> Option<Texture> {
         Device::surface_texture_object(self, surface_texture)
     }
 }

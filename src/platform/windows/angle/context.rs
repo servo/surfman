@@ -14,6 +14,7 @@ use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
 
+use glow::HasContext;
 use std::mem;
 use std::os::raw::c_void;
 use std::thread;
@@ -21,11 +22,6 @@ use winapi::shared::winerror::S_OK;
 use winapi::um::winbase::INFINITE;
 
 pub use crate::platform::generic::egl::context::{ContextDescriptor, NativeContext};
-
-thread_local! {
-    #[doc(hidden)]
-    pub static GL_FUNCTIONS: Gl = Gl::load_with(context::get_proc_address);
-}
 
 /// Represents an OpenGL rendering context.
 ///
@@ -48,6 +44,7 @@ pub struct Context {
     pub(crate) id: ContextID,
     framebuffer: Framebuffer<Surface, ExternalEGLSurfaces>,
     context_is_owned: bool,
+    pub(crate) gl: Gl,
 }
 
 impl Drop for Context {
@@ -102,11 +99,26 @@ impl Device {
                 self.gl_api(),
             )?;
 
+            EGL_FUNCTIONS.with(|egl| {
+                let result = egl.MakeCurrent(
+                    self.egl_display,
+                    egl::NO_SURFACE,
+                    egl::NO_SURFACE,
+                    egl_context,
+                );
+                if result == egl::FALSE {
+                    let err = egl.GetError().to_windowing_api_error();
+                    return Err(Error::MakeCurrentFailed(err));
+                }
+                Ok(())
+            });
+
             let context = Context {
                 egl_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
                 context_is_owned: true,
+                gl: Gl::from_loader_function(context::get_proc_address),
             };
             next_context_id.0 += 1;
             Ok(context)
@@ -133,6 +145,7 @@ impl Device {
                 read: native_context.egl_read_surface,
             }),
             context_is_owned: false,
+            gl: Gl::from_loader_function(context::get_proc_address),
         };
         next_context_id.0 += 1;
 
@@ -174,9 +187,11 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            GL_FUNCTIONS.with(|gl| {
-                ContextDescriptor::from_egl_context(gl, self.egl_display, context.egl_context)
-            })
+            ContextDescriptor::from_egl_context(
+                context::get_proc_address,
+                self.egl_display,
+                context.egl_context,
+            )
         }
     }
 
@@ -287,7 +302,7 @@ impl Device {
         if surface.uses_gl_finish() {
             if let Ok(_guard) = self.temporarily_make_context_current(context) {
                 unsafe {
-                    GL_FUNCTIONS.with(|gl| gl.Finish());
+                    context.gl.finish();
                 }
             }
         }

@@ -13,14 +13,13 @@ use super::context::{Context, ContextDescriptor, NativeContext};
 use super::device::{Adapter, Device};
 use super::surface::Surface;
 use crate::gl;
-use crate::gl::types::{GLenum, GLuint};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, Gl, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
 
 use euclid::default::Size2D;
+use glow::{Framebuffer, HasContext, PixelPackData, Texture};
 #[cfg(not(feature = "sm-test"))]
 use serial_test::serial;
-use std::os::raw::c_void;
 use std::sync::mpsc;
 use std::thread;
 
@@ -172,10 +171,10 @@ pub fn test_context_creation() {
     }
 }
 
-// Tests that newly-created contexts are not immediately made current (issue #7).
+// Tests that newly-created contexts are made current (https://github.com/pcwalton/surfman/issues/7).
 #[cfg_attr(not(feature = "sm-test"), test)]
 #[cfg_attr(not(feature = "sm-test"), serial)]
-pub fn test_newly_created_contexts_are_not_current() {
+pub fn test_newly_created_contexts_are_current() {
     let connection = Connection::new().unwrap();
     let adapter = connection
         .create_low_power_adapter()
@@ -200,12 +199,17 @@ pub fn test_newly_created_contexts_are_not_current() {
     device.make_no_context_current().unwrap();
 
     let mut context = device.create_context(&context_descriptor, None).unwrap();
-    let gl = Gl::load_with(|symbol| device.get_proc_address(&context, symbol));
+    // This fails if context is not current
+    let gl =
+        unsafe { Gl::from_loader_function(|symbol| device.get_proc_address(&context, symbol)) };
 
     unsafe {
-        // Check to make sure GL calls don't work before a context is made current.
+        // Check to make sure GL calls don't work, because there is no surface.
         clear(&gl, &[255, 0, 0, 255]);
+        assert_eq!(gl.get_error(), glow::INVALID_FRAMEBUFFER_OPERATION);
         assert_ne!(get_pixel_from_bottom_row(&gl), [255, 0, 0, 255]);
+        assert_eq!(gl.get_error(), glow::INVALID_FRAMEBUFFER_OPERATION);
+        assert_eq!(gl.get_error(), glow::NO_ERROR);
 
         // Make a context current.
         let surface = make_surface(&mut device, &context);
@@ -218,7 +222,7 @@ pub fn test_newly_created_contexts_are_not_current() {
             .unwrap()
             .unwrap()
             .framebuffer_object;
-        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
 
         // Now that a context is current, GL calls should work.
         clear(&gl, &[0, 255, 0, 255]);
@@ -362,18 +366,18 @@ pub fn test_gl() {
 
     unsafe {
         // Check basic clear.
-        env.gl.ClearColor(0.0, 1.0, 0.0, 1.0);
-        env.gl.Clear(gl::COLOR_BUFFER_BIT);
+        env.gl.clear_color(0.0, 1.0, 0.0, 1.0);
+        env.gl.clear(gl::COLOR_BUFFER_BIT);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Check that GL commands don't work after `make_no_context_current()`.
         //
         // The `glGetError()` calls are there to clear any errors.
         env.device.make_no_context_current().unwrap();
-        env.gl.ClearColor(1.0, 0.0, 0.0, 1.0);
-        env.gl.GetError();
-        env.gl.Clear(gl::COLOR_BUFFER_BIT);
-        env.gl.GetError();
+        env.gl.clear_color(1.0, 0.0, 0.0, 1.0);
+        env.gl.get_error();
+        env.gl.clear(gl::COLOR_BUFFER_BIT);
+        env.gl.get_error();
         env.device.make_context_current(&env.context).unwrap();
 
         let framebuffer_object = env
@@ -382,7 +386,7 @@ pub fn test_gl() {
             .unwrap()
             .unwrap()
             .framebuffer_object;
-        env.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        env.gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Make sure GL commands don't work when no surface is attached.
@@ -393,15 +397,15 @@ pub fn test_gl() {
             .unbind_surface_from_context(&mut env.context)
             .unwrap()
             .unwrap();
-        env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
-        env.gl.ClearColor(1.0, 0.0, 0.0, 1.0);
-        env.gl.GetError();
-        env.gl.Clear(gl::COLOR_BUFFER_BIT);
-        env.gl.GetError();
+        env.gl.bind_framebuffer(gl::FRAMEBUFFER, None);
+        env.gl.clear_color(1.0, 0.0, 0.0, 1.0);
+        env.gl.get_error();
+        env.gl.clear(gl::COLOR_BUFFER_BIT);
+        env.gl.get_error();
         env.device
             .bind_surface_to_context(&mut env.context, green_surface)
             .unwrap();
-        env.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        env.gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Make sure GL commands go to the right surface.
@@ -421,9 +425,9 @@ pub fn test_gl() {
             .unwrap()
             .framebuffer_object;
         env.gl
-            .BindFramebuffer(gl::FRAMEBUFFER, red_framebuffer_object);
-        env.gl.ClearColor(1.0, 0.0, 0.0, 1.0);
-        env.gl.Clear(gl::COLOR_BUFFER_BIT);
+            .bind_framebuffer(gl::FRAMEBUFFER, red_framebuffer_object);
+        env.gl.clear_color(1.0, 0.0, 0.0, 1.0);
+        env.gl.clear(gl::COLOR_BUFFER_BIT);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
         let mut red_surface = env
@@ -434,7 +438,7 @@ pub fn test_gl() {
         env.device
             .bind_surface_to_context(&mut env.context, green_surface)
             .unwrap();
-        env.gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        env.gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Clean up.
@@ -480,27 +484,31 @@ pub fn test_surface_texture_blit_framebuffer() {
             .unwrap()
             .framebuffer_object;
         env.gl
-            .BindFramebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
+            .bind_framebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
         clear(&env.gl, &[255, 0, 0, 255]);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
-        let mut green_framebuffer_object = make_fbo(
+        let green_framebuffer_object = make_fbo(
             &env.gl,
             env.device.surface_gl_texture_target(),
             env.device.surface_texture_object(&green_surface_texture),
         );
 
         // Blit to main framebuffer.
-        blit_fbo(&env.gl, main_framebuffer_object, green_framebuffer_object);
+        blit_fbo(
+            &env.gl,
+            main_framebuffer_object,
+            Some(green_framebuffer_object),
+        );
         env.gl
-            .BindFramebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
+            .bind_framebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
         check_gl(&env.gl);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Clean up.
-        env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+        env.gl.bind_framebuffer(gl::FRAMEBUFFER, None);
         check_gl(&env.gl);
-        env.gl.DeleteFramebuffers(1, &mut green_framebuffer_object);
+        env.gl.delete_framebuffer(green_framebuffer_object);
 
         let mut green_surface = env
             .device
@@ -552,7 +560,7 @@ pub fn test_cross_device_surface_texture_blit_framebuffer() {
         env.device.make_context_current(&env.context).unwrap();
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
-        let mut green_framebuffer_object = make_fbo(
+        let green_framebuffer_object = make_fbo(
             &env.gl,
             env.device.surface_gl_texture_target(),
             env.device.surface_texture_object(&green_surface_texture),
@@ -562,15 +570,15 @@ pub fn test_cross_device_surface_texture_blit_framebuffer() {
         blit_fbo(
             &env.gl,
             context_fbo(&env.device, &env.context),
-            green_framebuffer_object,
+            Some(green_framebuffer_object),
         );
         bind_context_fbo(&env.gl, &env.device, &env.context);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Clean up.
-        env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+        env.gl.bind_framebuffer(gl::FRAMEBUFFER, None);
         check_gl(&env.gl);
-        env.gl.DeleteFramebuffers(1, &mut green_framebuffer_object);
+        env.gl.delete_framebuffer(green_framebuffer_object);
 
         let mut green_surface = env
             .device
@@ -603,13 +611,14 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
         let mut context = device
             .create_context(&other_context_descriptor, None)
             .unwrap();
-        let gl = Gl::load_with(|symbol| device.get_proc_address(&context, symbol));
 
         let surface = make_surface(&mut device, &context);
         device
             .bind_surface_to_context(&mut context, surface)
             .unwrap();
         device.make_context_current(&context).unwrap();
+        let gl =
+            unsafe { Gl::from_loader_function(|symbol| device.get_proc_address(&context, symbol)) };
         bind_context_fbo(&gl, &device, &context);
 
         clear(&gl, &[0, 255, 0, 255]);
@@ -639,7 +648,7 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
         env.device.make_context_current(&env.context).unwrap();
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
-        let mut green_framebuffer_object = make_fbo(
+        let green_framebuffer_object = make_fbo(
             &env.gl,
             env.device.surface_gl_texture_target(),
             env.device.surface_texture_object(&green_surface_texture),
@@ -649,15 +658,15 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
         blit_fbo(
             &env.gl,
             context_fbo(&env.device, &env.context),
-            green_framebuffer_object,
+            Some(green_framebuffer_object),
         );
         bind_context_fbo(&env.gl, &env.device, &env.context);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
 
         // Clean up.
-        env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+        env.gl.bind_framebuffer(gl::FRAMEBUFFER, None);
         check_gl(&env.gl);
-        env.gl.DeleteFramebuffers(1, &mut green_framebuffer_object);
+        env.gl.delete_framebuffer(green_framebuffer_object);
 
         let green_surface = env
             .device
@@ -705,7 +714,7 @@ pub fn test_surface_texture_right_side_up() {
             .unwrap()
             .framebuffer_object;
         env.gl
-            .BindFramebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
+            .bind_framebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
         clear(&env.gl, &[255, 0, 0, 255]);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
@@ -716,9 +725,13 @@ pub fn test_surface_texture_right_side_up() {
         );
 
         // Blit to main framebuffer.
-        blit_fbo(&env.gl, main_framebuffer_object, subframebuffer_object);
+        blit_fbo(
+            &env.gl,
+            main_framebuffer_object,
+            Some(subframebuffer_object),
+        );
         env.gl
-            .BindFramebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
+            .bind_framebuffer(gl::FRAMEBUFFER, main_framebuffer_object);
         check_gl(&env.gl);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [0, 255, 0, 255]);
         assert_eq!(
@@ -727,9 +740,9 @@ pub fn test_surface_texture_right_side_up() {
         );
 
         // Clean up.
-        env.gl.BindFramebuffer(gl::FRAMEBUFFER, 0);
+        env.gl.bind_framebuffer(gl::FRAMEBUFFER, None);
         check_gl(&env.gl);
-        env.gl.DeleteFramebuffers(1, &mut subframebuffer_object);
+        env.gl.delete_framebuffer(subframebuffer_object);
 
         let mut subsurface = env
             .device
@@ -746,6 +759,11 @@ pub fn test_surface_texture_right_side_up() {
 #[cfg_attr(not(feature = "sm-test"), test)]
 #[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_depth_and_stencil() {
+    use core::slice;
+    use std::ptr::addr_of_mut;
+
+    use glow::PixelPackData;
+
     let connection = Connection::new().unwrap();
     let adapter = connection
         .create_low_power_adapter()
@@ -782,7 +800,9 @@ pub fn test_depth_and_stencil() {
         .unwrap();
     device.make_context_current(&depth_context).unwrap();
 
-    let gl = Gl::load_with(|symbol| device.get_proc_address(&depth_context, symbol));
+    let gl = unsafe {
+        Gl::from_loader_function(|symbol| device.get_proc_address(&depth_context, symbol))
+    };
 
     unsafe {
         let framebuffer_object = device
@@ -790,21 +810,24 @@ pub fn test_depth_and_stencil() {
             .unwrap()
             .unwrap()
             .framebuffer_object;
-        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        gl.Viewport(0, 0, 640, 480);
+        gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl.viewport(0, 0, 640, 480);
 
-        gl.ClearDepth(0.5);
-        gl.Clear(gl::DEPTH_BUFFER_BIT);
+        gl.clear_depth(0.5);
+        gl.clear(gl::DEPTH_BUFFER_BIT);
 
         let mut depth_value: f32 = -1.0;
-        gl.ReadPixels(
+        gl.read_pixels(
             0,
             0,
             1,
             1,
             gl::DEPTH_COMPONENT,
             gl::FLOAT,
-            (&mut depth_value) as *mut f32 as *mut c_void,
+            PixelPackData::Slice(Some(slice::from_raw_parts_mut(
+                addr_of_mut!(depth_value) as *mut u8,
+                size_of_val(&depth_value),
+            ))),
         );
         assert!(
             approx_eq(depth_value, 0.5),
@@ -833,7 +856,9 @@ pub fn test_depth_and_stencil() {
         .unwrap();
     device.make_context_current(&stencil_context).unwrap();
 
-    let gl = Gl::load_with(|symbol| device.get_proc_address(&stencil_context, symbol));
+    let gl = unsafe {
+        Gl::from_loader_function(|symbol| device.get_proc_address(&stencil_context, symbol))
+    };
 
     unsafe {
         let framebuffer_object = device
@@ -841,21 +866,21 @@ pub fn test_depth_and_stencil() {
             .unwrap()
             .unwrap()
             .framebuffer_object;
-        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-        gl.Viewport(0, 0, 640, 480);
+        gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl.viewport(0, 0, 640, 480);
 
-        gl.ClearStencil(99);
-        gl.Clear(gl::STENCIL_BUFFER_BIT);
+        gl.clear_stencil(99);
+        gl.clear(gl::STENCIL_BUFFER_BIT);
 
         let mut stencil_value: u8 = 200;
-        gl.ReadPixels(
+        gl.read_pixels(
             0,
             0,
             1,
             1,
             gl::STENCIL_INDEX,
             gl::UNSIGNED_BYTE,
-            (&mut stencil_value) as *mut u8 as *mut c_void,
+            PixelPackData::Slice(Some(slice::from_raw_parts_mut(&mut stencil_value, 1))),
         );
         assert_eq!(stencil_value, 99);
     }
@@ -894,12 +919,12 @@ pub fn test_get_native_context() {
 
 fn bind_context_fbo(gl: &Gl, device: &Device, context: &Context) {
     unsafe {
-        gl.BindFramebuffer(gl::FRAMEBUFFER, context_fbo(device, context));
+        gl.bind_framebuffer(gl::FRAMEBUFFER, context_fbo(device, context));
         check_gl(gl);
     }
 }
 
-fn context_fbo(device: &Device, context: &Context) -> GLuint {
+fn context_fbo(device: &Device, context: &Context) -> Option<Framebuffer> {
     device
         .context_surface_info(context)
         .unwrap()
@@ -919,13 +944,13 @@ fn make_surface(device: &mut Device, context: &Context) -> Surface {
         .unwrap()
 }
 
-fn blit_fbo(gl: &Gl, dest_fbo: GLuint, src_fbo: GLuint) {
+fn blit_fbo(gl: &Gl, dest_fbo: Option<Framebuffer>, src_fbo: Option<Framebuffer>) {
     unsafe {
-        gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, dest_fbo);
+        gl.bind_framebuffer(gl::DRAW_FRAMEBUFFER, dest_fbo);
         check_gl(gl);
-        gl.BindFramebuffer(gl::READ_FRAMEBUFFER, src_fbo);
+        gl.bind_framebuffer(gl::READ_FRAMEBUFFER, src_fbo);
         check_gl(gl);
-        gl.BlitFramebuffer(
+        gl.blit_framebuffer(
             0,
             0,
             640,
@@ -941,14 +966,13 @@ fn blit_fbo(gl: &Gl, dest_fbo: GLuint, src_fbo: GLuint) {
     }
 }
 
-fn make_fbo(gl: &Gl, texture_target: GLenum, texture: GLuint) -> GLuint {
+fn make_fbo(gl: &Gl, texture_target: u32, texture: Option<Texture>) -> Framebuffer {
     unsafe {
-        let mut framebuffer_object = 0;
-        gl.GenFramebuffers(1, &mut framebuffer_object);
+        let framebuffer_object = gl.create_framebuffer().unwrap();
         check_gl(gl);
-        gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+        gl.bind_framebuffer(gl::FRAMEBUFFER, Some(framebuffer_object));
         check_gl(gl);
-        gl.FramebufferTexture2D(
+        gl.framebuffer_texture_2d(
             gl::FRAMEBUFFER,
             gl::COLOR_ATTACHMENT0,
             texture_target,
@@ -957,7 +981,7 @@ fn make_fbo(gl: &Gl, texture_target: GLenum, texture: GLuint) -> GLuint {
         );
         check_gl(gl);
         assert_eq!(
-            gl.CheckFramebufferStatus(gl::FRAMEBUFFER),
+            gl.check_framebuffer_status(gl::FRAMEBUFFER),
             gl::FRAMEBUFFER_COMPLETE
         );
         framebuffer_object
@@ -1002,7 +1026,8 @@ impl BasicEnvironment {
             .unwrap();
         device.make_context_current(&context).unwrap();
 
-        let gl = Gl::load_with(|symbol| device.get_proc_address(&context, symbol));
+        let gl =
+            unsafe { Gl::from_loader_function(|symbol| device.get_proc_address(&context, symbol)) };
 
         unsafe {
             let framebuffer_object = device
@@ -1010,8 +1035,8 @@ impl BasicEnvironment {
                 .unwrap()
                 .unwrap()
                 .framebuffer_object;
-            gl.BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
-            gl.Viewport(0, 0, 640, 480);
+            gl.bind_framebuffer(gl::FRAMEBUFFER, framebuffer_object);
+            gl.viewport(0, 0, 640, 480);
         }
 
         Some(BasicEnvironment {
@@ -1027,43 +1052,43 @@ impl BasicEnvironment {
 
 fn clear(gl: &Gl, color: &[u8; 4]) {
     unsafe {
-        gl.ClearColor(
+        gl.clear_color(
             color[0] as f32 / 255.0,
             color[1] as f32 / 255.0,
             color[2] as f32 / 255.0,
             color[3] as f32 / 255.0,
         );
-        gl.Clear(gl::COLOR_BUFFER_BIT);
+        gl.clear(gl::COLOR_BUFFER_BIT);
     }
 }
 
 fn clear_bottom_row(gl: &Gl, color: &[u8; 4]) {
     unsafe {
-        gl.Scissor(0, 0, 640, 1);
-        gl.Enable(gl::SCISSOR_TEST);
-        gl.ClearColor(
+        gl.scissor(0, 0, 640, 1);
+        gl.enable(gl::SCISSOR_TEST);
+        gl.clear_color(
             color[0] as f32 / 255.0,
             color[1] as f32 / 255.0,
             color[2] as f32 / 255.0,
             color[3] as f32 / 255.0,
         );
-        gl.Clear(gl::COLOR_BUFFER_BIT);
-        gl.Disable(gl::SCISSOR_TEST);
-        gl.Scissor(0, 0, 640, 480);
+        gl.clear(gl::COLOR_BUFFER_BIT);
+        gl.disable(gl::SCISSOR_TEST);
+        gl.scissor(0, 0, 640, 480);
     }
 }
 
 fn get_pixel_from_bottom_row(gl: &Gl) -> [u8; 4] {
     unsafe {
         let mut pixel: [u8; 4] = [0; 4];
-        gl.ReadPixels(
+        gl.read_pixels(
             0,
             0,
             1,
             1,
             gl::RGBA,
             gl::UNSIGNED_BYTE,
-            pixel.as_mut_ptr() as *mut c_void,
+            PixelPackData::Slice(Some(&mut pixel)),
         );
         pixel
     }
@@ -1072,14 +1097,14 @@ fn get_pixel_from_bottom_row(gl: &Gl) -> [u8; 4] {
 fn get_pixel_from_second_from_bottom_row(gl: &Gl) -> [u8; 4] {
     unsafe {
         let mut pixel: [u8; 4] = [0; 4];
-        gl.ReadPixels(
+        gl.read_pixels(
             0,
             1,
             1,
             1,
             gl::RGBA,
             gl::UNSIGNED_BYTE,
-            pixel.as_mut_ptr() as *mut c_void,
+            PixelPackData::Slice(Some(&mut pixel)),
         );
         pixel
     }
@@ -1087,7 +1112,7 @@ fn get_pixel_from_second_from_bottom_row(gl: &Gl) -> [u8; 4] {
 
 fn check_gl(gl: &Gl) {
     unsafe {
-        assert_eq!(gl.GetError(), gl::NO_ERROR);
+        assert_eq!(gl.get_error(), gl::NO_ERROR);
     }
 }
 

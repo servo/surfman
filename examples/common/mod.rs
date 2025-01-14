@@ -3,10 +3,9 @@
 // OpenGL convenience wrappers used in the examples.
 
 use gl;
-use gl::types::{GLchar, GLenum, GLint, GLuint};
+use gl::types::{GLenum, GLint, GLuint};
 use std::fs::File;
 use std::io::Read;
-use std::os::raw::c_void;
 use std::ptr;
 use surfman::GLApi;
 

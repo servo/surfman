@@ -285,12 +285,17 @@ impl App {
         unsafe {
             self.device.make_context_current(&self.context).unwrap();
 
-            let framebuffer_object = match self.device.context_surface_info(&self.context) {
-                Ok(Some(surface_info)) => surface_info.framebuffer_object,
-                _ => 0,
-            };
+            let framebuffer_object = self
+                .device
+                .context_surface_info(&self.context)
+                .ok()
+                .flatten()
+                .and_then(|surface_info| surface_info.framebuffer_object);
 
-            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+            gl::BindFramebuffer(
+                gl::FRAMEBUFFER,
+                framebuffer_object.map_or(0, |fbo| fbo.0.get()),
+            );
             gl::Viewport(0, 0, self.window_size.width, self.window_size.height);
 
             gl::ClearColor(0.0, 0.0, 1.0, 1.0);
@@ -400,7 +405,8 @@ impl App {
             gl::BindTexture(
                 self.device.surface_gl_texture_target(),
                 self.device
-                    .surface_texture_object(self.texture.as_ref().unwrap()),
+                    .surface_texture_object(self.texture.as_ref().unwrap())
+                    .map_or(0, |tex| tex.0.get()),
             );
             gl::Uniform1i(self.blit_vertex_array.blit_program.source_uniform, 0);
             ck();
@@ -498,7 +504,10 @@ fn worker_thread(
                 .unwrap()
                 .framebuffer_object;
 
-            gl::BindFramebuffer(gl::FRAMEBUFFER, framebuffer_object);
+            gl::BindFramebuffer(
+                gl::FRAMEBUFFER,
+                framebuffer_object.map_or(0, |fbo| fbo.0.get()),
+            );
             gl::Viewport(0, 0, size.width, size.height);
 
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
@@ -650,7 +659,7 @@ impl BlitVertexArray {
                 gl::UNSIGNED_BYTE,
                 gl::FALSE,
                 2,
-                0 as *const GLvoid,
+                0 as _,
             );
             ck();
             gl::EnableVertexAttribArray(blit_program.position_attribute as GLuint);
@@ -695,7 +704,7 @@ impl GridVertexArray {
                 gl::UNSIGNED_BYTE,
                 gl::FALSE,
                 2,
-                0 as *const GLvoid,
+                0 as _,
             );
             ck();
             gl::EnableVertexAttribArray(grid_program.position_attribute as GLuint);
@@ -740,7 +749,7 @@ impl CheckVertexArray {
                 gl::UNSIGNED_BYTE,
                 gl::FALSE,
                 2,
-                0 as *const GLvoid,
+                0 as _,
             );
             ck();
             gl::EnableVertexAttribArray(check_program.position_attribute as GLuint);
