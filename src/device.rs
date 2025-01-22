@@ -53,7 +53,7 @@ where
         attributes: &ContextAttributes,
     ) -> Result<Self::ContextDescriptor, Error>;
 
-    /// Creates a new OpenGL context.
+    /// Creates a new OpenGL context and makes it current.
     ///
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
@@ -64,6 +64,8 @@ where
     ) -> Result<Self::Context, Error>;
 
     /// Wraps a native context object in an OpenGL context.
+    ///
+    /// Panics if context is not current.
     unsafe fn create_context_from_native_context(
         &self,
         native_context: Self::NativeContext,
