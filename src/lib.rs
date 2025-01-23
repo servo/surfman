@@ -16,10 +16,6 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 
-#[cfg(target_os = "macos")]
-#[macro_use]
-extern crate objc;
-
 pub mod platform;
 pub use platform::default::connection::{Connection, NativeConnection};
 pub use platform::default::context::{Context, ContextDescriptor, NativeContext};

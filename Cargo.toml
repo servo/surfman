@@ -56,14 +56,62 @@ serial_test = "3.1.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cgl = "0.3.2"
-cocoa = "0.25"
-core-foundation = "0.9"
-core-graphics = "0.23"
-servo-display-link = "0.2"
-io-surface = "0.15"
 mach2 = "0.4"
-metal = "0.24"
-objc = "0.2"
+objc2 = "0.6.1"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2-quartz-core",
+    "objc2-core-foundation",
+    "NSResponder",
+    "NSScreen",
+    "NSView",
+    "NSGraphics",
+    "NSWindow",
+] }
+objc2-core-foundation = { version = "0.3.1", default-features = false, features = [
+    "std",
+    "CFBase",
+    "CFBundle",
+    "CFCGTypes",
+    "CFDictionary",
+    "CFNumber",
+    "CFString",
+] }
+objc2-core-video = { version = "0.3.1", default-features = false, features = [
+    "std",
+    "objc2-core-graphics",
+    "CVBase",
+    "CVDisplayLink",
+    "CVPixelBuffer",
+    "CVReturn",
+] }
+objc2-foundation = { version = "0.3.1", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "NSEnumerator",
+    "NSGeometry",
+    "NSString",
+    "NSValue",
+] }
+objc2-io-surface = { version = "0.3.1", default-features = false, features = [
+    "std",
+    "libc",
+    "objc2",
+    "objc2-core-foundation",
+    "IOSurfaceRef",
+    "IOSurfaceTypes",
+] }
+objc2-metal = { version = "0.3.1", default-features = false, features = [
+    "std",
+    "MTLDevice",
+] }
+objc2-quartz-core = { version = "0.3.1", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "CALayer",
+    "CATransaction",
+    "CATransform3D",
+] }
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.wayland-sys]
 version = "0.30"
