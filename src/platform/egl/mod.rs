@@ -18,3 +18,7 @@ crate::implement_interfaces!();
 #[cfg(feature = "sm-test")]
 #[path = "../../tests.rs"]
 pub mod tests;
+
+#[cfg(all(not(feature = "sm-test"), test))]
+#[path = "../../tests.rs"]
+pub mod tests;

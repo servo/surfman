@@ -10,13 +10,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
 
 jobs:
   Build:
     name: ${{ format('{0} {1}', matrix.platform.target, matrix.features)}}
     runs-on: ${{ matrix.platform.os }}
-    env:
-      RUST_BACKTRACE: 1
     strategy:
       fail-fast: false
       matrix:
@@ -58,12 +57,11 @@ jobs:
           sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev xvfb weston -y
       - name: Install rust
         id: toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.81.0
         with:
           targets: ${{ matrix.platform.target }}
       - name: Build
         run: |
-          rustup target add ${{ matrix.platform.target }}
           cargo build --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
       - name: Test
         if: ${{ matrix.platform.test && startsWith(matrix.platform.os, 'ubuntu') }}
@@ -74,6 +72,51 @@ jobs:
         if: ${{ matrix.platform.test && !startsWith(matrix.platform.os, 'ubuntu') }}
         run: |
           cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
+
+  android-test:
+    name: ${{ format('x86_64-linux-android {0}', matrix.features)}}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          [
+            "",
+            "chains sm-raw-window-handle-06",
+            "chains sm-raw-window-handle-05",
+          ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust
+        id: toolchain
+        uses: dtolnay/rust-toolchain@1.81.0
+        with:
+          targets: x86_64-linux-android
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dinghy
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run tests in android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          RANLIB: "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ranlib"
+        with:
+          api-level: 30
+          arch: x86_64
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: |
+            cargo dinghy all-platforms
+            cargo dinghy all-devices
+            cargo dinghy -p auto-android-x86_64-api30 --env RUST_BACKTRACE=${{ env.RUST_BACKTRACE }} test --features "${{ matrix.features }}" -- --test-threads 1
+
   Format:
     name: Run `rustfmt`
     runs-on: ubuntu-24.04
@@ -84,7 +127,7 @@ jobs:
   build_result:
     name: Result
     runs-on: ubuntu-24.04
-    needs: ["Build", "Format"]
+    needs: ["Build", "android-test", "Format"]
     if: always()
     steps:
       - name: Mark the job as successful
