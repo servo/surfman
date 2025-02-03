@@ -107,6 +107,14 @@ impl Device {
             // Create a dummy pbuffer.
             let pbuffer = context::create_dummy_pbuffer(egl_display, egl_context);
 
+            EGL_FUNCTIONS.with(|egl| {
+                if egl.MakeCurrent(egl_display, pbuffer, pbuffer, egl_context) == egl::FALSE {
+                    let err = egl.GetError().to_windowing_api_error();
+                    return Err(Error::MakeCurrentFailed(err));
+                }
+                Ok(())
+            })?;
+
             // Wrap up the EGL context.
             let context = Context {
                 egl_context,

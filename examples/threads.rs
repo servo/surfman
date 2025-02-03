@@ -111,6 +111,9 @@ fn make_native_widget(
     native_widget
 }
 
+#[cfg(target_os = "android")]
+fn main() {}
+
 #[cfg(not(target_os = "android"))]
 fn main() {
     use winit::{

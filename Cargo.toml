@@ -39,15 +39,19 @@ libc = "0.2"
 log = "0.4"
 glow = "0.16"
 osmesa-sys = { version = "0.1", optional = true }
-rwh_05 = { package = "raw-window-handle", version = "0.5.2", features = ["std"], optional = true }
-rwh_06 = { package = "raw-window-handle", version = "0.6.2", features = ["std"], optional = true }
+rwh_05 = { package = "raw-window-handle", version = "0.5.2", features = [
+    "std",
+], optional = true }
+rwh_06 = { package = "raw-window-handle", version = "0.6.2", features = [
+    "std",
+], optional = true }
 
 [dev-dependencies]
 clap = "2"
 gl = "0.14"
 png = "0.17"
 rand = "0.8"
-winit = "0.29"
+winit = { version = "0.29.10", features = ["android-native-activity"] }
 serial_test = "3.1.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]

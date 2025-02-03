@@ -204,14 +204,7 @@ pub fn test_newly_created_contexts_are_current() {
         unsafe { Gl::from_loader_function(|symbol| device.get_proc_address(&context, symbol)) };
 
     unsafe {
-        // Check to make sure GL calls don't work, because there is no surface.
-        clear(&gl, &[255, 0, 0, 255]);
-        assert_eq!(gl.get_error(), glow::INVALID_FRAMEBUFFER_OPERATION);
-        assert_ne!(get_pixel_from_bottom_row(&gl), [255, 0, 0, 255]);
-        assert_eq!(gl.get_error(), glow::INVALID_FRAMEBUFFER_OPERATION);
-        assert_eq!(gl.get_error(), glow::NO_ERROR);
-
-        // Make a context current.
+        // Make a context current with surface.
         let surface = make_surface(&mut device, &context);
         device
             .bind_surface_to_context(&mut context, surface)

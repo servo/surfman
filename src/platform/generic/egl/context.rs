@@ -295,6 +295,11 @@ impl ContextDescriptor {
             return Err(Error::UnsupportedGLProfile);
         }
 
+        // Android/OHOS does not support OpenGL compatibility profile at all
+        if cfg!(any(android_platform, ohos_platform)) && compatibility_profile {
+            return Err(Error::UnsupportedGLProfile);
+        }
+
         // Create required config attributes.
         //
         // We check these separately because `eglChooseConfig` on its own might give us 32-bit
