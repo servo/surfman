@@ -202,11 +202,7 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            ContextDescriptor::from_egl_context(
-                context::get_proc_address,
-                self.egl_display,
-                context.egl_context,
-            )
+            ContextDescriptor::from_egl_context(&context.gl, self.egl_display, context.egl_context)
         }
     }
 
