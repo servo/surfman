@@ -13,6 +13,7 @@ use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
 use crate::{Gl, SurfaceInfo};
+use glow::HasContext;
 
 use std::ffi::CString;
 use std::mem;
@@ -214,6 +215,9 @@ impl EGLBackedContext {
         gl: &Gl,
         egl_display: EGLDisplay,
     ) -> Result<Option<EGLBackedSurface>, Error> {
+        // Flush to avoid races on Mesa/Intel and possibly other GPUs.
+        gl.flush();
+
         match self.framebuffer {
             Framebuffer::None => return Ok(None),
             Framebuffer::Surface(_) => {}

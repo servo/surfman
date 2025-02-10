@@ -329,9 +329,6 @@ impl EGLBackedSurface {
                     return;
                 }
 
-                // Flush to avoid races on Mesa/Intel and possibly other GPUs.
-                gl.flush();
-
                 egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
 
                 match self.objects {
