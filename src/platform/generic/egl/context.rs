@@ -28,6 +28,7 @@ const RGB_CHANNEL_BIT_DEPTH: EGLint = 8;
 pub(crate) struct EGLBackedContext {
     pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
+    pbuffer: EGLSurface,
     framebuffer: Framebuffer<EGLBackedSurface, ExternalEGLSurfaces>,
     context_is_owned: bool,
 }
@@ -102,12 +103,16 @@ impl EGLBackedContext {
             gl_api,
         )?;
 
+        // Create a dummy pbuffer.
+        let pbuffer = create_dummy_pbuffer(egl_display, egl_context).unwrap_or(egl::NO_SURFACE);
+
         // Wrap and return it.
         let context = EGLBackedContext {
             egl_context,
             id: *next_context_id,
             framebuffer: Framebuffer::None,
             context_is_owned: true,
+            pbuffer,
         };
         next_context_id.0 += 1;
         Ok(context)
@@ -123,6 +128,7 @@ impl EGLBackedContext {
                 read: native_context.egl_read_surface,
             }),
             context_is_owned: false,
+            pbuffer: egl::NO_SURFACE,
         };
         next_context_id.0 += 1;
         context
@@ -130,6 +136,12 @@ impl EGLBackedContext {
 
     pub(crate) unsafe fn destroy(&mut self, egl_display: EGLDisplay) {
         EGL_FUNCTIONS.with(|egl| {
+            if self.pbuffer != egl::NO_SURFACE {
+                let result = egl.DestroySurface(egl_display, self.pbuffer);
+                assert_ne!(result, egl::FALSE);
+                self.pbuffer = egl::NO_SURFACE;
+            }
+
             egl.MakeCurrent(
                 egl_display,
                 egl::NO_SURFACE,
@@ -164,7 +176,10 @@ impl EGLBackedContext {
         let egl_surfaces = match self.framebuffer {
             Framebuffer::Surface(ref surface) => surface.egl_surfaces(),
             Framebuffer::External(ref surfaces) => (*surfaces).clone(),
-            Framebuffer::None => ExternalEGLSurfaces::default(),
+            Framebuffer::None => ExternalEGLSurfaces {
+                draw: self.pbuffer,
+                read: self.pbuffer,
+            },
         };
 
         EGL_FUNCTIONS.with(|egl| {
@@ -604,7 +619,7 @@ pub(crate) fn get_proc_address(symbol_name: &str) -> *const c_void {
 pub(crate) unsafe fn create_dummy_pbuffer(
     egl_display: EGLDisplay,
     egl_context: EGLContext,
-) -> EGLSurface {
+) -> Option<EGLSurface> {
     let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
     let egl_config = egl_config_from_id(egl_display, egl_config_id);
 
@@ -622,7 +637,10 @@ pub(crate) unsafe fn create_dummy_pbuffer(
     EGL_FUNCTIONS.with(|egl| {
         let pbuffer =
             egl.CreatePbufferSurface(egl_display, egl_config, pbuffer_attributes.as_ptr());
-        assert_ne!(pbuffer, egl::NO_SURFACE);
-        pbuffer
+        if pbuffer == egl::NO_SURFACE {
+            None
+        } else {
+            Some(pbuffer)
+        }
     })
 }
