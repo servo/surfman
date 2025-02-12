@@ -71,7 +71,7 @@ jobs:
       - name: Test
         if: ${{ matrix.platform.test && !startsWith(matrix.platform.os, 'ubuntu') }}
         run: |
-          cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }} -- --test-threads 1
+          cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
 
   android-test:
     name: ${{ format('x86_64-linux-android {0}', matrix.features)}}
