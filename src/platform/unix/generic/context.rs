@@ -126,7 +126,7 @@ impl Device {
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
             ContextDescriptor::from_egl_context(
-                context::get_proc_address,
+                &context.1,
                 self.native_connection.egl_display,
                 context.0.egl_context,
             )

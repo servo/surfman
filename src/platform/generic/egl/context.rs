@@ -13,6 +13,7 @@ use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
 use crate::{Gl, SurfaceInfo};
+use glow::HasContext;
 
 use std::ffi::CString;
 use std::mem;
@@ -27,6 +28,7 @@ const RGB_CHANNEL_BIT_DEPTH: EGLint = 8;
 pub(crate) struct EGLBackedContext {
     pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
+    pbuffer: EGLSurface,
     framebuffer: Framebuffer<EGLBackedSurface, ExternalEGLSurfaces>,
     context_is_owned: bool,
 }
@@ -101,12 +103,16 @@ impl EGLBackedContext {
             gl_api,
         )?;
 
+        // Create a dummy pbuffer.
+        let pbuffer = create_dummy_pbuffer(egl_display, egl_context).unwrap_or(egl::NO_SURFACE);
+
         // Wrap and return it.
         let context = EGLBackedContext {
             egl_context,
             id: *next_context_id,
             framebuffer: Framebuffer::None,
             context_is_owned: true,
+            pbuffer,
         };
         next_context_id.0 += 1;
         Ok(context)
@@ -122,6 +128,7 @@ impl EGLBackedContext {
                 read: native_context.egl_read_surface,
             }),
             context_is_owned: false,
+            pbuffer: egl::NO_SURFACE,
         };
         next_context_id.0 += 1;
         context
@@ -129,6 +136,12 @@ impl EGLBackedContext {
 
     pub(crate) unsafe fn destroy(&mut self, egl_display: EGLDisplay) {
         EGL_FUNCTIONS.with(|egl| {
+            if self.pbuffer != egl::NO_SURFACE {
+                let result = egl.DestroySurface(egl_display, self.pbuffer);
+                assert_ne!(result, egl::FALSE);
+                self.pbuffer = egl::NO_SURFACE;
+            }
+
             egl.MakeCurrent(
                 egl_display,
                 egl::NO_SURFACE,
@@ -163,7 +176,10 @@ impl EGLBackedContext {
         let egl_surfaces = match self.framebuffer {
             Framebuffer::Surface(ref surface) => surface.egl_surfaces(),
             Framebuffer::External(ref surfaces) => (*surfaces).clone(),
-            Framebuffer::None => ExternalEGLSurfaces::default(),
+            Framebuffer::None => ExternalEGLSurfaces {
+                draw: self.pbuffer,
+                read: self.pbuffer,
+            },
         };
 
         EGL_FUNCTIONS.with(|egl| {
@@ -214,6 +230,9 @@ impl EGLBackedContext {
         gl: &Gl,
         egl_display: EGLDisplay,
     ) -> Result<Option<EGLBackedSurface>, Error> {
+        // Flush to avoid races on Mesa/Intel and possibly other GPUs.
+        gl.flush();
+
         match self.framebuffer {
             Framebuffer::None => return Ok(None),
             Framebuffer::Surface(_) => {}
@@ -382,29 +401,20 @@ impl ContextDescriptor {
         })
     }
 
-    pub(crate) unsafe fn from_egl_context<F>(
-        get_proc_address: F,
+    pub(crate) unsafe fn from_egl_context(
+        gl: &Gl,
         egl_display: EGLDisplay,
         egl_context: EGLContext,
-    ) -> ContextDescriptor
-    where
-        F: FnMut(&str) -> *const c_void,
-    {
+    ) -> ContextDescriptor {
         let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
+        let gl_version = GLVersion::current(&gl);
+        let compatibility_profile = context::current_context_uses_compatibility_profile(&gl);
 
-        EGL_FUNCTIONS.with(|egl| {
-            let _guard = CurrentContextGuard::new();
-            egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
-            let gl = unsafe { Gl::from_loader_function(get_proc_address) };
-            let gl_version = GLVersion::current(&gl);
-            let compatibility_profile = context::current_context_uses_compatibility_profile(&gl);
-
-            ContextDescriptor {
-                egl_config_id,
-                gl_version,
-                compatibility_profile,
-            }
-        })
+        ContextDescriptor {
+            egl_config_id,
+            gl_version,
+            compatibility_profile,
+        }
     }
 
     #[allow(dead_code)]
@@ -609,7 +619,7 @@ pub(crate) fn get_proc_address(symbol_name: &str) -> *const c_void {
 pub(crate) unsafe fn create_dummy_pbuffer(
     egl_display: EGLDisplay,
     egl_context: EGLContext,
-) -> EGLSurface {
+) -> Option<EGLSurface> {
     let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
     let egl_config = egl_config_from_id(egl_display, egl_config_id);
 
@@ -627,7 +637,10 @@ pub(crate) unsafe fn create_dummy_pbuffer(
     EGL_FUNCTIONS.with(|egl| {
         let pbuffer =
             egl.CreatePbufferSurface(egl_display, egl_config, pbuffer_attributes.as_ptr());
-        assert_ne!(pbuffer, egl::NO_SURFACE);
-        pbuffer
+        if pbuffer == egl::NO_SURFACE {
+            None
+        } else {
+            Some(pbuffer)
+        }
     })
 }

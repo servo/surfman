@@ -271,7 +271,12 @@ impl EGLBackedSurface {
                     let _guard = CurrentContextGuard::new();
 
                     EGL_FUNCTIONS.with(|egl| {
-                        egl.MakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
+                        let result =
+                            egl.MakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
+                        if result == egl::FALSE {
+                            let err = egl.GetError().to_windowing_api_error();
+                            return Err(Error::MakeCurrentFailed(err));
+                        }
 
                         let ok = egl.SwapBuffers(egl_display, egl_surface);
                         if ok != egl::FALSE {
@@ -323,9 +328,6 @@ impl EGLBackedSurface {
                 if egl.GetCurrentContext() != egl_context {
                     return;
                 }
-
-                // Flush to avoid races on Mesa/Intel and possibly other GPUs.
-                gl.flush();
 
                 egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
 
