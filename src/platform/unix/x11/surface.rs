@@ -15,7 +15,7 @@ use euclid::default::Size2D;
 use glow::Texture;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
-use x11::xlib::{Window, XGetGeometry};
+use x11_dl::xlib::Window;
 
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
@@ -113,7 +113,7 @@ impl Device {
         let display_guard = self.native_connection.lock_display();
         let (mut root_window, mut x, mut y, mut width, mut height) = (0, 0, 0, 0, 0);
         let (mut border_width, mut depth) = (0, 0);
-        XGetGeometry(
+        (self.native_connection.xlib.XGetGeometry)(
             display_guard.display(),
             x11_window,
             &mut root_window,

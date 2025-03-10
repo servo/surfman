@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
 use std::sync::{Arc, Once};
-use x11::xlib::{Display, XCloseDisplay, XInitThreads, XLockDisplay, XOpenDisplay, XUnlockDisplay};
+use x11_dl::xlib::{Display, Xlib};
 
 static X_THREADS_INIT: Once = Once::new();
 
@@ -31,6 +31,7 @@ pub struct Connection {
 unsafe impl Send for Connection {}
 
 pub(crate) struct NativeConnectionWrapper {
+    pub(crate) xlib: Xlib,
     pub(crate) egl_display: EGLDisplay,
     x11_display: *mut Display,
     x11_display_is_owned: bool,
@@ -54,7 +55,7 @@ impl Drop for NativeConnectionWrapper {
     fn drop(&mut self) {
         unsafe {
             if self.x11_display_is_owned {
-                XCloseDisplay(self.x11_display);
+                (self.xlib.XCloseDisplay)(self.x11_display);
             }
             self.x11_display = ptr::null_mut();
         }
@@ -66,11 +67,13 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         unsafe {
+            let xlib = Xlib::open().map_err(|_| Error::ConnectionFailed)?;
+
             X_THREADS_INIT.call_once(|| {
-                XInitThreads();
+                (xlib.XInitThreads)();
             });
 
-            let x11_display = XOpenDisplay(ptr::null());
+            let x11_display = (xlib.XOpenDisplay)(ptr::null());
             if x11_display.is_null() {
                 return Err(Error::ConnectionFailed);
             }
@@ -79,6 +82,7 @@ impl Connection {
 
             Ok(Connection {
                 native_connection: Arc::new(NativeConnectionWrapper {
+                    xlib,
                     x11_display,
                     x11_display_is_owned: true,
                     egl_display,
@@ -102,8 +106,10 @@ impl Connection {
     pub unsafe fn from_native_connection(
         native_connection: NativeConnection,
     ) -> Result<Connection, Error> {
+        let xlib = Xlib::open().map_err(|_| Error::ConnectionFailed)?;
         Ok(Connection {
             native_connection: Arc::new(NativeConnectionWrapper {
+                xlib,
                 egl_display: native_connection.egl_display,
                 x11_display: native_connection.x11_display,
                 x11_display_is_owned: false,
@@ -112,10 +118,12 @@ impl Connection {
     }
 
     fn from_x11_display(x11_display: *mut Display, is_owned: bool) -> Result<Connection, Error> {
+        let xlib = Xlib::open().map_err(|_| Error::ConnectionFailed)?;
         unsafe {
             let egl_display = create_egl_display(x11_display);
             Ok(Connection {
                 native_connection: Arc::new(NativeConnectionWrapper {
+                    xlib,
                     egl_display,
                     x11_display,
                     x11_display_is_owned: is_owned,
@@ -271,8 +279,10 @@ impl NativeConnectionWrapper {
     pub(crate) fn lock_display(&self) -> DisplayGuard {
         unsafe {
             let display = self.x11_display;
-            XLockDisplay(display);
+            let xlib = &self.xlib;
+            (xlib.XLockDisplay)(display);
             DisplayGuard {
+                xlib,
                 display,
                 phantom: PhantomData,
             }
@@ -281,6 +291,7 @@ impl NativeConnectionWrapper {
 }
 
 pub(crate) struct DisplayGuard<'a> {
+    xlib: &'a Xlib,
     display: *mut Display,
     phantom: PhantomData<&'a ()>,
 }
@@ -288,7 +299,7 @@ pub(crate) struct DisplayGuard<'a> {
 impl<'a> Drop for DisplayGuard<'a> {
     fn drop(&mut self) {
         unsafe {
-            XUnlockDisplay(self.display);
+            (self.xlib.XUnlockDisplay)(self.display);
         }
     }
 }
