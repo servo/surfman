@@ -26,7 +26,7 @@ sm-angle-default = ["sm-angle"]
 sm-no-wgl = ["sm-angle-default"]
 sm-test = []
 sm-wayland-default = []
-sm-x11 = ["x11"]
+sm-x11 = ["x11-dl"]
 sm-raw-window-handle-generic = []
 sm-raw-window-handle-05 = ["dep:rwh_05"]
 sm-raw-window-handle-06 = ["dep:rwh_06"]
@@ -69,9 +69,8 @@ objc = "0.2"
 version = "0.30"
 features = ["client", "dlopen", "egl"]
 
-[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.x11]
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.x11-dl]
 version = "2.3.0"
-features = ["xlib"]
 optional = true
 
 # Ensure that we have a static libEGL.lib present for linking with EGL bindings.
