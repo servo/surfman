@@ -170,7 +170,9 @@ impl Connection {
                 // SAFETY: The pointer is valid for as long as the handle is,
                 // and we just checked that we're on the main thread.
                 let ns_view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
-                let ns_window = ns_view.window().expect("view must be in window");
+                let ns_window = ns_view
+                    .window()
+                    .expect("view must be installed in a window");
                 Ok(NativeWidget {
                     // Extend the lifetime of the view.
                     view: ns_view.retain(),

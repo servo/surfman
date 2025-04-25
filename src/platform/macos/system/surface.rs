@@ -122,7 +122,10 @@ impl Device {
             let size = match surface_type {
                 SurfaceType::Generic { size } => size,
                 SurfaceType::Widget { ref native_widget } => {
-                    let window = native_widget.view.window().unwrap();
+                    let window = native_widget
+                        .view
+                        .window()
+                        .expect("view must be installed in a window");
                     let bounds = window.convertRectToBacking(native_widget.view.bounds());
 
                     // The surface will not appear if its width is not a multiple of 4 (i.e. stride
@@ -181,7 +184,10 @@ impl Device {
     ) -> ViewInfo {
         let front_surface = self.create_io_surface(size, surface_access);
 
-        let window = native_widget.view.window().unwrap();
+        let window = native_widget
+            .view
+            .window()
+            .expect("view must be installed in a window");
         let device_description = window.screen().unwrap().deviceDescription();
         let display_id = device_description
             .objectForKey(ns_string!("NSScreenNumber"))
@@ -214,7 +220,10 @@ impl Device {
         native_widget.view.setWantsLayer(true);
 
         // Compute logical size.
-        let window = native_widget.view.window().unwrap();
+        let window = native_widget
+            .view
+            .window()
+            .expect("view must be installed in a window");
         let logical_rect = window.convertRectFromBacking(NSRect {
             origin: NSPoint { x: 0.0, y: 0.0 },
             size: NSSize {
@@ -288,7 +297,10 @@ impl Device {
         CATransaction::setDisableActions(true);
 
         // Compute logical size.
-        let window = view_info.view.window().unwrap();
+        let window = view_info
+            .view
+            .window()
+            .expect("view must be installed in a window");
         let logical_rect = unsafe {
             window.convertRectFromBacking(NSRect {
                 origin: NSPoint { x: 0.0, y: 0.0 },
