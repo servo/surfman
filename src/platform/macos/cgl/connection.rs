@@ -125,7 +125,7 @@ impl Connection {
         raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use objc2::{rc::Retained, MainThreadMarker};
+        use objc2::{MainThreadMarker, Message};
         use objc2_app_kit::{NSView, NSWindow};
         use rwh_05::RawWindowHandle::AppKit;
 
@@ -137,12 +137,11 @@ impl Connection {
                 );
                 // SAFETY: The pointer is valid for as long as the handle is,
                 // and we just checked that we're on the main thread.
-                let ns_view = unsafe { Retained::retain(handle.ns_view.cast::<NSView>()).unwrap() };
-                let ns_window =
-                    unsafe { Retained::retain(handle.ns_window.cast::<NSWindow>()).unwrap() };
+                let ns_view = unsafe { handle.ns_view.cast::<NSView>().as_ref().unwrap() };
+                let ns_window = unsafe { handle.ns_window.cast::<NSWindow>().as_ref().unwrap() };
 
                 Ok(NativeWidget {
-                    view: ns_view,
+                    view: ns_view.retain(),
                     opaque: unsafe { ns_window.isOpaque() },
                 })
             }
