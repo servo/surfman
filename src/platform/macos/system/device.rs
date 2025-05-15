@@ -5,7 +5,8 @@
 use super::connection::Connection;
 use crate::Error;
 
-use metal::Device as MetalDevice;
+use objc2::{rc::Retained, runtime::ProtocolObject};
+use objc2_metal::{MTLCopyAllDevices, MTLDevice};
 use std::marker::PhantomData;
 
 /// Represents a hardware display adapter that can be used for rendering (including the CPU).
@@ -27,7 +28,7 @@ pub struct Device {
 
 /// The Metal device corresponding to this device.
 #[derive(Clone)]
-pub struct NativeDevice(pub MetalDevice);
+pub struct NativeDevice(pub Retained<ProtocolObject<dyn MTLDevice>>);
 
 impl Device {
     #[inline]
@@ -41,9 +42,9 @@ impl Device {
     /// Returns the native device corresponding to this device.
     pub fn native_device(&self) -> NativeDevice {
         NativeDevice(
-            MetalDevice::all()
+            MTLCopyAllDevices()
                 .into_iter()
-                .find(|device| device.is_low_power() == self.adapter.is_low_power)
+                .find(|device| device.isLowPower() == self.adapter.is_low_power)
                 .expect("No Metal device found!"),
         )
     }

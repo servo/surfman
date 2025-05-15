@@ -18,17 +18,12 @@ use cgl::{
 };
 use cgl::{CGLGetCurrentContext, CGLGetPixelFormat, CGLPixelFormatAttribute, CGLPixelFormatObj};
 use cgl::{CGLReleasePixelFormat, CGLRetainPixelFormat, CGLSetCurrentContext};
-use core_foundation::base::TCFType;
-use core_foundation::bundle::CFBundleGetBundleWithIdentifier;
-use core_foundation::bundle::CFBundleGetFunctionPointerForName;
-use core_foundation::bundle::CFBundleRef;
-use core_foundation::string::CFString;
 use glow::HasContext;
+use objc2_core_foundation::{CFBundle, CFRetained, CFString};
 use std::mem;
 use std::os::raw::c_void;
 use std::ptr;
 use std::rc::Rc;
-use std::str::FromStr;
 use std::thread;
 
 // No CGL error occurred.
@@ -48,15 +43,10 @@ const kCGLOGLPVersion_GL4_Core: CGLPixelFormatAttribute = 0x4100;
 static OPENGL_FRAMEWORK_IDENTIFIER: &str = "com.apple.opengl";
 
 thread_local! {
-    static OPENGL_FRAMEWORK: CFBundleRef = {
-        unsafe {
-            let framework_identifier: CFString =
-                FromStr::from_str(OPENGL_FRAMEWORK_IDENTIFIER).unwrap();
-            let framework =
-                CFBundleGetBundleWithIdentifier(framework_identifier.as_concrete_TypeRef());
-            assert!(!framework.is_null());
-            framework
-        }
+    static OPENGL_FRAMEWORK: CFRetained<CFBundle> = {
+        let framework_identifier = CFString::from_str(OPENGL_FRAMEWORK_IDENTIFIER);
+        let framework = CFBundle::bundle_with_identifier(Some(&framework_identifier));
+        framework.unwrap()
     };
 }
 
@@ -495,9 +485,9 @@ impl Device {
 }
 
 fn get_proc_address(symbol_name: &str) -> *const c_void {
-    OPENGL_FRAMEWORK.with(|framework| unsafe {
-        let symbol_name: CFString = FromStr::from_str(symbol_name).unwrap();
-        CFBundleGetFunctionPointerForName(*framework, symbol_name.as_concrete_TypeRef())
+    OPENGL_FRAMEWORK.with(|framework| {
+        let symbol_name = CFString::from_str(symbol_name);
+        framework.function_pointer_for_name(Some(&symbol_name))
     })
 }
 

@@ -6,21 +6,16 @@
 //! global window server connection.
 
 use super::device::{Adapter, Device, NativeDevice};
-use super::surface::{NSView, NativeWidget};
+use super::surface::NativeWidget;
 use crate::Error;
 
-use cocoa::base::id;
-use core_foundation::base::TCFType;
-use core_foundation::boolean::CFBoolean;
-use core_foundation::bundle::CFBundleGetInfoDictionary;
-use core_foundation::bundle::CFBundleGetMainBundle;
-use core_foundation::dictionary::{CFMutableDictionary, CFMutableDictionaryRef};
-use core_foundation::string::CFString;
+use objc2::rc::Retained;
+use objc2_app_kit::NSView;
+use objc2_core_foundation::{CFBoolean, CFBundle, CFMutableDictionary, CFRetained, CFString};
 
 use euclid::default::Size2D;
 
 use std::os::raw::c_void;
-use std::str::FromStr;
 
 /// A no-op connection.
 ///
@@ -40,21 +35,21 @@ impl Connection {
     pub fn new() -> Result<Connection, Error> {
         unsafe {
             // Adjust the `NSSupportsAutomaticGraphicsSwitching` key in our `Info.plist` so that we
-            // can opt into the integrated GPU if available. This is a total hack, as there's no
-            // guarantee `Info.plist` dictionaries are mutable.
-            let main_bundle = CFBundleGetMainBundle();
-            assert!(!main_bundle.is_null());
+            // can opt into the integrated GPU if available.
+            let main_bundle = CFBundle::main_bundle().unwrap();
+            let bundle_info_dictionary = main_bundle.info_dictionary().unwrap();
+
+            // This is a total hack, as there's no guarantee `Info.plist` dictionaries are mutable.
             let bundle_info_dictionary =
-                CFBundleGetInfoDictionary(main_bundle) as CFMutableDictionaryRef;
-            assert!(!bundle_info_dictionary.is_null());
-            let mut bundle_info_dictionary =
-                CFMutableDictionary::wrap_under_get_rule(bundle_info_dictionary);
-            let supports_automatic_graphics_switching_key: CFString =
-                FromStr::from_str("NSSupportsAutomaticGraphicsSwitching").unwrap();
-            let supports_automatic_graphics_switching_value: CFBoolean = CFBoolean::true_value();
-            bundle_info_dictionary.set(
-                supports_automatic_graphics_switching_key,
-                supports_automatic_graphics_switching_value,
+                CFRetained::cast_unchecked::<CFMutableDictionary>(bundle_info_dictionary);
+
+            let supports_automatic_graphics_switching_key =
+                CFString::from_str("NSSupportsAutomaticGraphicsSwitching");
+            let supports_automatic_graphics_switching_value = CFBoolean::new(true);
+            CFMutableDictionary::set_value(
+                Some(&bundle_info_dictionary),
+                &*supports_automatic_graphics_switching_key as *const _ as *const c_void,
+                &*supports_automatic_graphics_switching_value as *const _ as *const c_void,
             );
         }
 
@@ -136,8 +131,12 @@ impl Connection {
         raw: *mut c_void,
         _size: Size2D<i32>,
     ) -> NativeWidget {
+        let view_ptr: *mut NSView = raw.cast();
         NativeWidget {
-            view: NSView(raw as id),
+            // SAFETY: Validity of the NSView is upheld by caller.
+            // TODO(madsmtm): We should probably `retain` here, rather than
+            // take ownership of the pointer.
+            view: unsafe { Retained::from_raw(view_ptr).unwrap() },
             opaque: true,
         }
     }
@@ -150,13 +149,26 @@ impl Connection {
         raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
+        use objc2::{MainThreadMarker, Message};
+        use objc2_app_kit::NSWindow;
         use rwh_05::RawWindowHandle::AppKit;
 
         match raw_handle {
-            AppKit(handle) => Ok(NativeWidget {
-                view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
-                opaque: unsafe { msg_send![handle.ns_window as id, isOpaque] },
-            }),
+            AppKit(handle) => {
+                assert!(
+                    MainThreadMarker::new().is_some(),
+                    "NSView is only usable on the main thread"
+                );
+                // SAFETY: The pointer is valid for as long as the handle is,
+                // and we just checked that we're on the main thread.
+                let ns_view = unsafe { handle.ns_view.cast::<NSView>().as_ref().unwrap() };
+                let ns_window = unsafe { handle.ns_window.cast::<NSWindow>().as_ref().unwrap() };
+
+                Ok(NativeWidget {
+                    view: ns_view.retain(),
+                    opaque: unsafe { ns_window.isOpaque() },
+                })
+            }
             _ => Err(Error::IncompatibleNativeWidget),
         }
     }
@@ -169,19 +181,25 @@ impl Connection {
         handle: rwh_06::WindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
+        use objc2::{MainThreadMarker, Message};
         use rwh_06::RawWindowHandle::AppKit;
 
         match handle.as_raw() {
             AppKit(handle) => {
-                let ns_view = handle.ns_view.as_ptr() as id;
-                // https://developer.apple.com/documentation/appkit/nsview/1483301-window
-                let ns_window: id = unsafe { msg_send![ns_view, window] };
+                assert!(
+                    MainThreadMarker::new().is_some(),
+                    "NSView is only usable on the main thread"
+                );
+                // SAFETY: The pointer is valid for as long as the handle is,
+                // and we just checked that we're on the main thread.
+                let ns_view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
+                let ns_window = ns_view
+                    .window()
+                    .expect("view must be installed in a window");
                 Ok(NativeWidget {
-                    // Increment the nsview's reference count with retain. See:
-                    // https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571946-retain
-                    view: NSView(unsafe { msg_send![ns_view, retain] }),
-                    // https://developer.apple.com/documentation/appkit/nswindow/1419086-isopaque
-                    opaque: unsafe { msg_send![ns_window, isOpaque] },
+                    // Extend the lifetime of the view.
+                    view: ns_view.retain(),
+                    opaque: unsafe { ns_window.isOpaque() },
                 })
             }
             _ => Err(Error::IncompatibleNativeWidget),

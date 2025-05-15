@@ -9,12 +9,13 @@ use crate::gl_utils;
 use crate::platform::macos::system::surface::Surface as SystemSurface;
 use crate::renderbuffers::Renderbuffers;
 use crate::{gl, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
+use cgl::{kCGLNoError, CGLErrorString, CGLGetCurrentContext, CGLTexImageIOSurface2D, GLenum};
 use glow::Context as Gl;
 
-use core_foundation::base::TCFType;
 use euclid::default::Size2D;
 use glow::{HasContext, Texture};
-use io_surface::{self, IOSurface};
+use objc2_io_surface::IOSurfaceRef;
+use std::ffi::CStr;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::rc::Rc;
@@ -73,6 +74,38 @@ impl Debug for Surface {
 impl Debug for SurfaceTexture {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
+fn surface_bind_to_gl_texture(surface: &IOSurfaceRef, width: i32, height: i32, has_alpha: bool) {
+    const BGRA: GLenum = 0x80E1;
+    const RGBA: GLenum = 0x1908;
+    const RGB: GLenum = 0x1907;
+    const TEXTURE_RECTANGLE_ARB: GLenum = 0x84F5;
+    const UNSIGNED_INT_8_8_8_8_REV: GLenum = 0x8367;
+
+    unsafe {
+        let context = CGLGetCurrentContext();
+        let gl_error = CGLTexImageIOSurface2D(
+            context,
+            TEXTURE_RECTANGLE_ARB,
+            if has_alpha {
+                RGBA as GLenum
+            } else {
+                RGB as GLenum
+            },
+            width,
+            height,
+            BGRA as GLenum,
+            UNSIGNED_INT_8_8_8_8_REV,
+            surface as *const IOSurfaceRef as cgl::IOSurfaceRef,
+            0,
+        );
+
+        if gl_error != kCGLNoError {
+            let error_msg = CStr::from_ptr(CGLErrorString(gl_error));
+            panic!("{}", error_msg.to_string_lossy());
+        }
     }
 }
 
@@ -172,12 +205,17 @@ impl Device {
         })
     }
 
-    fn bind_to_gl_texture(&self, gl: &Gl, io_surface: &IOSurface, size: &Size2D<i32>) -> Texture {
+    fn bind_to_gl_texture(
+        &self,
+        gl: &Gl,
+        io_surface: &IOSurfaceRef,
+        size: &Size2D<i32>,
+    ) -> Texture {
         unsafe {
             let texture = gl.create_texture().unwrap();
 
             gl.bind_texture(gl::TEXTURE_RECTANGLE, Some(texture));
-            io_surface.bind_to_gl_texture(size.width, size.height, true);
+            surface_bind_to_gl_texture(io_surface, size.width, size.height, true);
 
             gl.tex_parameter_i32(
                 gl::TEXTURE_RECTANGLE,
@@ -291,10 +329,12 @@ impl Device {
         unsafe {
             let size = surface.system_surface.size;
             gl.bind_texture(gl::TEXTURE_RECTANGLE, surface.texture_object);
-            surface
-                .system_surface
-                .io_surface
-                .bind_to_gl_texture(size.width, size.height, true);
+            surface_bind_to_gl_texture(
+                &surface.system_surface.io_surface,
+                size.width,
+                size.height,
+                true,
+            );
             gl.bind_texture(gl::TEXTURE_RECTANGLE, None);
         }
 
@@ -403,7 +443,7 @@ impl Device {
 impl Surface {
     #[inline]
     fn id(&self) -> SurfaceID {
-        SurfaceID(self.system_surface.io_surface.as_concrete_TypeRef() as usize)
+        SurfaceID(&*self.system_surface.io_surface as *const IOSurfaceRef as usize)
     }
 }
 

@@ -125,15 +125,26 @@ impl Connection {
         raw_handle: rwh_05::RawWindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use crate::platform::macos::system::surface::NSView;
-        use cocoa::base::id;
+        use objc2::{MainThreadMarker, Message};
+        use objc2_app_kit::{NSView, NSWindow};
         use rwh_05::RawWindowHandle::AppKit;
 
         match raw_handle {
-            AppKit(handle) => Ok(NativeWidget {
-                view: NSView(unsafe { msg_send![handle.ns_view as id, retain] }),
-                opaque: unsafe { msg_send![handle.ns_window as id, isOpaque] },
-            }),
+            AppKit(handle) => {
+                assert!(
+                    MainThreadMarker::new().is_some(),
+                    "NSView is only usable on the main thread"
+                );
+                // SAFETY: The pointer is valid for as long as the handle is,
+                // and we just checked that we're on the main thread.
+                let ns_view = unsafe { handle.ns_view.cast::<NSView>().as_ref().unwrap() };
+                let ns_window = unsafe { handle.ns_window.cast::<NSWindow>().as_ref().unwrap() };
+
+                Ok(NativeWidget {
+                    view: ns_view.retain(),
+                    opaque: unsafe { ns_window.isOpaque() },
+                })
+            }
             _ => Err(Error::IncompatibleNativeWidget),
         }
     }
@@ -146,21 +157,26 @@ impl Connection {
         handle: rwh_06::WindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        use crate::platform::macos::system::surface::NSView;
-        use cocoa::base::id;
+        use objc2::{MainThreadMarker, Message};
+        use objc2_app_kit::NSView;
         use rwh_06::RawWindowHandle::AppKit;
 
         match handle.as_raw() {
             AppKit(handle) => {
-                let ns_view = handle.ns_view.as_ptr() as id;
-                // https://developer.apple.com/documentation/appkit/nsview/1483301-window
-                let ns_window: id = unsafe { msg_send![ns_view, window] };
+                assert!(
+                    MainThreadMarker::new().is_some(),
+                    "NSView is only usable on the main thread"
+                );
+                // SAFETY: The pointer is valid for as long as the handle is,
+                // and we just checked that we're on the main thread.
+                let ns_view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
+                let ns_window = ns_view
+                    .window()
+                    .expect("view must be installed in a window");
                 Ok(NativeWidget {
-                    // Increment the nsview's reference count with retain. See:
-                    // https://developer.apple.com/documentation/objectivec/1418956-nsobject/1571946-retain
-                    view: NSView(unsafe { msg_send![ns_view, retain] }),
-                    // https://developer.apple.com/documentation/appkit/nswindow/1419086-isopaque
-                    opaque: unsafe { msg_send![ns_window, isOpaque] },
+                    // Extend the lifetime of the view.
+                    view: ns_view.retain(),
+                    opaque: unsafe { ns_window.isOpaque() },
                 })
             }
             _ => Err(Error::IncompatibleNativeWidget),
