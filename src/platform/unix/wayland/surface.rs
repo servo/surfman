@@ -14,7 +14,7 @@ use glow::Texture;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use wayland_sys::client::wl_proxy;
-use wayland_sys::egl::{wl_egl_window, WAYLAND_EGL_HANDLE};
+use wayland_sys::egl::{wayland_egl_handle, wl_egl_window};
 
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
@@ -108,7 +108,7 @@ impl Device {
         size: &Size2D<i32>,
     ) -> Result<Surface, Error> {
         let egl_window =
-            (WAYLAND_EGL_HANDLE.wl_egl_window_create)(wayland_surface, size.width, size.height);
+            (wayland_egl_handle().wl_egl_window_create)(wayland_surface, size.width, size.height);
         assert!(!egl_window.is_null());
 
         let context_descriptor = self.context_descriptor(context);
@@ -170,7 +170,7 @@ impl Device {
         {
             unsafe {
                 let wayland_egl_window = wayland_egl_window as *mut wl_egl_window;
-                (WAYLAND_EGL_HANDLE.wl_egl_window_destroy)(wayland_egl_window);
+                (wayland_egl_handle().wl_egl_window_destroy)(wayland_egl_window);
             }
         }
         Ok(())
@@ -216,7 +216,7 @@ impl Device {
     ) -> Result<(), Error> {
         let wayland_egl_window = surface.0.native_window()? as *mut c_void as *mut wl_egl_window;
         unsafe {
-            (WAYLAND_EGL_HANDLE.wl_egl_window_resize)(
+            (wayland_egl_handle().wl_egl_window_resize)(
                 wayland_egl_window,
                 size.width,
                 size.height,
