@@ -114,7 +114,7 @@ objc2-quartz-core = { version = "0.3.1", default-features = false, features = [
 ] }
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.wayland-sys]
-version = "0.30"
+version = "0.31"
 features = ["client", "dlopen", "egl"]
 
 [target.'cfg(all(unix, not(any(target_os = "macos", target_os = "android", target_env = "ohos"))))'.dependencies.x11-dl]

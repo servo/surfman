@@ -15,7 +15,7 @@ use euclid::default::Size2D;
 use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Arc;
-use wayland_sys::client::{wl_display, wl_proxy, WAYLAND_CLIENT_HANDLE};
+use wayland_sys::client::{wayland_client_handle, wl_display, wl_proxy};
 
 /// A connection to the Wayland server.
 #[derive(Clone)]
@@ -38,7 +38,7 @@ impl Connection {
     #[inline]
     pub fn new() -> Result<Connection, Error> {
         unsafe {
-            let wayland_display = (WAYLAND_CLIENT_HANDLE.wl_display_connect)(ptr::null());
+            let wayland_display = (wayland_client_handle().wl_display_connect)(ptr::null());
             Connection::from_wayland_display(wayland_display, true)
         }
     }
@@ -251,7 +251,7 @@ impl Drop for NativeConnectionWrapper {
     fn drop(&mut self) {
         unsafe {
             if let Some(wayland_display) = self.wayland_display {
-                (WAYLAND_CLIENT_HANDLE.wl_display_disconnect)(wayland_display);
+                (wayland_client_handle().wl_display_disconnect)(wayland_display);
             }
         }
     }
