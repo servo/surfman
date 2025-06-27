@@ -55,6 +55,11 @@ jobs:
         run: |
           sudo apt update
           sudo apt install gcc libxxf86vm-dev libosmesa6-dev libgles2-mesa-dev xvfb weston -y
+      - name: Install LLVM and Clang
+        if: ${{ !contains(matrix.platform.os, 'macos') }}
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "20"
       - name: Install rust
         id: toolchain
         uses: dtolnay/rust-toolchain@1.81.0
