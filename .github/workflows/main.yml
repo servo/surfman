@@ -75,6 +75,7 @@ jobs:
           WAYLAND_DISPLAY=wl-test-env xvfb-run cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }} -- --test-threads 1
       - name: Test
         if: ${{ matrix.platform.test && !startsWith(matrix.platform.os, 'ubuntu') }}
+        timeout-minutes: 30 # https://github.com/servo/surfman/issues/329
         run: |
           cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
 
