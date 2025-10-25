@@ -62,7 +62,7 @@ jobs:
           version: "20"
       - name: Install rust
         id: toolchain
-        uses: dtolnay/rust-toolchain@1.81.0
+        uses: dtolnay/rust-toolchain@1.89.0
         with:
           targets: ${{ matrix.platform.target }}
       - name: Build
