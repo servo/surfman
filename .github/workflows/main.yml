@@ -94,7 +94,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install rust
         id: toolchain
-        uses: dtolnay/rust-toolchain@1.81.0
+        uses: dtolnay/rust-toolchain@1.89.0
         with:
           targets: x86_64-linux-android
 
