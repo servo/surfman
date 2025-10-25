@@ -7,7 +7,7 @@ use super::ffi::{kIOMapDefaultCache, kIOMapWriteCombineCache};
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, SystemSurfaceInfo};
 
 use euclid::default::Size2D;
-use mach2::kern_return::KERN_SUCCESS;
+use libc::KERN_SUCCESS;
 use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2_app_kit::NSView;
