@@ -191,7 +191,7 @@ macro_rules! implement_interfaces {
 
                 #[inline]
                 fn create_context(
-                    &mut self,
+                    &self,
                     descriptor: &Self::ContextDescriptor,
                     share_with: Option<&Self::Context>,
                 ) -> Result<Self::Context, Error> {
@@ -282,7 +282,7 @@ macro_rules! implement_interfaces {
 
                 #[inline]
                 fn create_surface(
-                    &mut self,
+                    &self,
                     context: &Self::Context,
                     surface_access: SurfaceAccess,
                     surface_type: SurfaceType<NativeWidget>,

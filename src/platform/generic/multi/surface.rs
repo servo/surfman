@@ -101,13 +101,13 @@ where
     /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
     /// up in a `SurfaceTexture` for reading by other contexts.
     pub fn create_surface(
-        &mut self,
+        &self,
         context: &Context<Def, Alt>,
         surface_access: SurfaceAccess,
         surface_type: SurfaceType<NativeWidget<Def, Alt>>,
     ) -> Result<Surface<Def, Alt>, Error> {
-        match (&mut *self, context) {
-            (&mut Device::Default(ref mut device), Context::Default(context)) => {
+        match (self, context) {
+            (&Device::Default(ref device), Context::Default(context)) => {
                 let surface_type = match surface_type {
                     SurfaceType::Generic { size } => SurfaceType::Generic { size },
                     SurfaceType::Widget {
@@ -121,7 +121,7 @@ where
                     .create_surface(context, surface_access, surface_type)
                     .map(Surface::Default)
             }
-            (&mut Device::Alternate(ref mut device), Context::Alternate(context)) => {
+            (&Device::Alternate(ref device), Context::Alternate(context)) => {
                 let surface_type = match surface_type {
                     SurfaceType::Generic { size } => SurfaceType::Generic { size },
                     SurfaceType::Widget {

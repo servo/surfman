@@ -58,7 +58,7 @@ where
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
     fn create_context(
-        &mut self,
+        &self,
         descriptor: &Self::ContextDescriptor,
         share_with: Option<&Self::Context>,
     ) -> Result<Self::Context, Error>;
@@ -151,7 +151,7 @@ where
     /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
     /// up in a `SurfaceTexture` for reading by other contexts.
     fn create_surface(
-        &mut self,
+        &self,
         context: &Self::Context,
         surface_access: SurfaceAccess,
         surface_type: SurfaceType<<Self::Connection as ConnectionInterface>::NativeWidget>,

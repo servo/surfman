@@ -128,7 +128,7 @@ impl Device {
     /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
     /// up in a `SurfaceTexture` for reading by other contexts.
     pub fn create_surface(
-        &mut self,
+        &self,
         context: &Context,
         _: SurfaceAccess,
         surface_type: SurfaceType<NativeWidget>,
@@ -143,7 +143,7 @@ impl Device {
 
     #[allow(non_snake_case)]
     fn create_pbuffer_surface(
-        &mut self,
+        &self,
         context: &Context,
         size: &Size2D<i32>,
         texture: Option<ComPtr<d3d11::ID3D11Texture2D>>,
@@ -238,7 +238,7 @@ impl Device {
     /// Given a D3D11 texture, create a surface that wraps that texture. This method is unsafe
     /// in that the resulting surface is only valid on the current thread.
     pub unsafe fn create_surface_from_texture(
-        &mut self,
+        &self,
         context: &Context,
         size: &Size2D<i32>,
         texture: ComPtr<d3d11::ID3D11Texture2D>,
@@ -247,7 +247,7 @@ impl Device {
     }
 
     fn create_window_surface(
-        &mut self,
+        &self,
         context: &Context,
         native_widget: &NativeWidget,
     ) -> Result<Surface, Error> {
@@ -425,7 +425,7 @@ impl Device {
     /// in that the resulting surface is only valid on the current thread, for the lifetime of `texture`.
     /// It is the caller's responsibility to ensure that `texture` is not freed while the `SurfaceTexture` is live.
     pub unsafe fn create_surface_texture_from_texture(
-        &mut self,
+        &self,
         context: &mut Context,
         size: &Size2D<i32>,
         texture: ComPtr<d3d11::ID3D11Texture2D>,

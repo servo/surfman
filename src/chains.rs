@@ -144,7 +144,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     // Returns an error if `context` is not the producer context for this swap chain.
     fn swap_buffers(
         &mut self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         preserve_buffer: PreserveBuffer<'_>,
     ) -> Result<(), Error> {
@@ -235,7 +235,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     // Returns an error if this swap chain is attached, or the other swap chain is detached.
     fn take_attachment_from(
         &mut self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         other: &mut SwapChainData<Device>,
     ) -> Result<(), Error> {
@@ -260,7 +260,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     // Returns an error if `size` is smaller than (1, 1).
     fn resize(
         &mut self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
@@ -340,7 +340,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     // Returns an error if `context` is not the producer context for this swap chain.
     fn clear_surface(
         &mut self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         gl: &Gl,
         color: [f32; 4],
@@ -454,7 +454,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     // Destroy the swap chain.
     // Called by the producer.
     // Returns an error if `context` is not the producer context for this swap chain.
-    fn destroy(&mut self, device: &mut Device, context: &mut Device::Context) -> Result<(), Error> {
+    fn destroy(&mut self, device: &Device, context: &mut Device::Context) -> Result<(), Error> {
         self.validate_context(device, context)?;
         let surfaces = self
             .pending_surface
@@ -490,7 +490,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     /// Returns an error if `context` is not the producer context for this swap chain.
     pub fn swap_buffers(
         &self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         preserve_buffer: PreserveBuffer<'_>,
     ) -> Result<(), Error> {
@@ -503,7 +503,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     /// Returns an error if this swap chain is attached, or the other swap chain is detached.
     pub fn take_attachment_from(
         &self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         other: &SwapChain<Device>,
     ) -> Result<(), Error> {
@@ -518,7 +518,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     /// Returns an error if `context` is not the producer context for this swap chain.
     pub fn resize(
         &self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
@@ -565,7 +565,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     /// Returns an error if `context` is not the producer context for this swap chain.
     pub fn clear_surface(
         &self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         gl: &Gl,
         color: [f32; 4],
@@ -581,13 +581,13 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     /// Destroy the swap chain.
     /// Called by the producer.
     /// Returns an error if `context` is not the producer context for this swap chain.
-    pub fn destroy(&self, device: &mut Device, context: &mut Device::Context) -> Result<(), Error> {
+    pub fn destroy(&self, device: &Device, context: &mut Device::Context) -> Result<(), Error> {
         self.lock().destroy(device, context)
     }
 
     /// Create a new attached swap chain
     pub fn create_attached(
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         surface_access: SurfaceAccess,
     ) -> Result<SwapChain<Device>, Error> {
@@ -604,7 +604,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
 
     /// Create a new detached swap chain
     pub fn create_detached(
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         surface_access: SurfaceAccess,
         size: Size2D<i32>,
@@ -695,7 +695,7 @@ where
     pub fn create_attached_swap_chain(
         &self,
         id: SwapChainID,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         surface_access: SurfaceAccess,
     ) -> Result<(), Error> {
@@ -718,7 +718,7 @@ where
         &self,
         id: SwapChainID,
         size: Size2D<i32>,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
         surface_access: SurfaceAccess,
     ) -> Result<(), Error> {
@@ -744,7 +744,7 @@ where
     pub fn destroy(
         &self,
         id: SwapChainID,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
     ) -> Result<(), Error> {
         if let Some(swap_chain) = self.table_mut().remove(&id) {
@@ -758,11 +758,7 @@ where
 
     /// Destroy all the swap chains for a particular producer context.
     /// Called by the producer.
-    pub fn destroy_all(
-        &self,
-        device: &mut Device,
-        context: &mut Device::Context,
-    ) -> Result<(), Error> {
+    pub fn destroy_all(&self, device: &Device, context: &mut Device::Context) -> Result<(), Error> {
         if let Some(mut ids) = self.ids().remove(&device.context_id(context)) {
             for id in ids.drain() {
                 if let Some(swap_chain) = self.table_mut().remove(&id) {
@@ -777,7 +773,7 @@ where
     /// Called by the producer.
     pub fn iter(
         &self,
-        device: &mut Device,
+        device: &Device,
         context: &mut Device::Context,
     ) -> impl Iterator<Item = (SwapChainID, SwapChain<Device>)> {
         self.ids()

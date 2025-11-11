@@ -157,7 +157,7 @@ where
 
     #[inline]
     fn create_context(
-        &mut self,
+        &self,
         descriptor: &ContextDescriptor<Def, Alt>,
         share_with: Option<&Context<Def, Alt>>,
     ) -> Result<Context<Def, Alt>, Error> {
@@ -244,7 +244,7 @@ where
 
     #[inline]
     fn create_surface(
-        &mut self,
+        &self,
         context: &Context<Def, Alt>,
         surface_access: SurfaceAccess,
         surface_type: SurfaceType<NativeWidget<Def, Alt>>,
