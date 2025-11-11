@@ -90,7 +90,7 @@ pub fn test_context_creation() {
     let adapter = connection
         .create_low_power_adapter()
         .expect("Failed to create adapter!");
-    let mut device = match connection.create_device(&adapter) {
+    let device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
             // Can't run these tests on this hardware.
@@ -246,7 +246,7 @@ pub fn test_context_sharing() {
     let adapter = connection
         .create_low_power_adapter()
         .expect("Failed to create adapter!");
-    let mut device = match connection.create_device(&adapter) {
+    let device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
             // Can't run these tests on this hardware.
@@ -287,7 +287,7 @@ pub fn test_generic_surface_creation() {
     let adapter = connection
         .create_low_power_adapter()
         .expect("Failed to create adapter!");
-    let mut device = match connection.create_device(&adapter) {
+    let device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
             // Can't run these tests on this hardware.
@@ -711,7 +711,7 @@ pub fn test_surface_texture_right_side_up() {
         clear(&env.gl, &[255, 0, 0, 255]);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
-        let mut subframebuffer_object = make_fbo(
+        let subframebuffer_object = make_fbo(
             &env.gl,
             env.device.surface_gl_texture_target(),
             env.device.surface_texture_object(&subsurface_texture),

@@ -211,7 +211,7 @@ impl Device {
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
     pub fn create_context(
-        &mut self,
+        &self,
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {

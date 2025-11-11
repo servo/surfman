@@ -139,7 +139,7 @@ fn main() {
     let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
     let native_widget = make_native_widget(&window, &connection, window_size);
     let adapter = connection.create_low_power_adapter().unwrap();
-    let mut device = connection.create_device(&adapter).unwrap();
+    let device = connection.create_device(&adapter).unwrap();
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 0),
@@ -449,7 +449,7 @@ fn worker_thread(
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
     let surface_type = SurfaceType::Generic { size };
-    let mut device = connection.create_device(&adapter).unwrap();
+    let device = connection.create_device(&adapter).unwrap();
     let mut context = device.create_context(&context_descriptor, None).unwrap();
     let surface = device
         .create_surface(&context, SurfaceAccess::GPUOnly, surface_type)

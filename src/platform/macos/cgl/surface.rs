@@ -115,7 +115,7 @@ impl Device {
     /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
     /// up in a `SurfaceTexture` for reading by other contexts.
     pub fn create_surface(
-        &mut self,
+        &self,
         context: &Context,
         access: SurfaceAccess,
         surface_type: SurfaceType<NativeWidget>,

@@ -114,7 +114,7 @@ pub struct SurfaceDataGuard<'a> {
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
     pub fn create_surface(
-        &mut self,
+        &self,
         access: SurfaceAccess,
         surface_type: SurfaceType<NativeWidget>,
     ) -> Result<Surface, Error> {
@@ -177,7 +177,7 @@ impl Device {
 
     #[allow(deprecated)]
     unsafe fn create_view_info(
-        &mut self,
+        &self,
         size: &Size2D<i32>,
         surface_access: SurfaceAccess,
         native_widget: &NativeWidget,

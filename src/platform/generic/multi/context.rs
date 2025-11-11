@@ -90,12 +90,12 @@ where
     /// The context initially has no surface attached. Until a surface is bound to it, rendering
     /// commands will fail or have no effect.
     pub fn create_context(
-        &mut self,
+        &self,
         descriptor: &ContextDescriptor<Def, Alt>,
         share_with: Option<&Context<Def, Alt>>,
     ) -> Result<Context<Def, Alt>, Error> {
-        match (&mut *self, descriptor) {
-            (&mut Device::Default(ref mut device), ContextDescriptor::Default(descriptor)) => {
+        match (self, descriptor) {
+            (&Device::Default(ref device), ContextDescriptor::Default(descriptor)) => {
                 let shared = match share_with {
                     Some(Context::Default(other)) => Some(other),
                     Some(_) => {
@@ -107,7 +107,7 @@ where
                     .create_context(descriptor, shared)
                     .map(Context::Default)
             }
-            (&mut Device::Alternate(ref mut device), ContextDescriptor::Alternate(descriptor)) => {
+            (&Device::Alternate(ref device), ContextDescriptor::Alternate(descriptor)) => {
                 let shared = match share_with {
                     Some(Context::Alternate(other)) => Some(other),
                     Some(_) => {

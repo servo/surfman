@@ -98,7 +98,7 @@ fn main() {
     let output_path = Path::new(matches.value_of("OUTPUT").unwrap()).to_owned();
     let output_file = File::create(output_path).unwrap();
 
-    let mut device = connection.create_device(&adapter).unwrap();
+    let device = connection.create_device(&adapter).unwrap();
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 3),
