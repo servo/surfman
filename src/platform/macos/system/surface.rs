@@ -301,15 +301,13 @@ impl Device {
             .view
             .window()
             .expect("view must be installed in a window");
-        let logical_rect = unsafe {
-            window.convertRectFromBacking(NSRect {
-                origin: NSPoint { x: 0.0, y: 0.0 },
-                size: NSSize {
-                    width: size.width as f64,
-                    height: size.height as f64,
-                },
-            })
-        };
+        let logical_rect = window.convertRectFromBacking(NSRect {
+            origin: NSPoint { x: 0.0, y: 0.0 },
+            size: NSSize {
+                width: size.width as f64,
+                height: size.height as f64,
+            },
+        });
         let logical_size = logical_rect.size;
         let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
 
@@ -457,7 +455,7 @@ impl Surface {
         }
     }
 
-    pub(crate) fn lock_data(&mut self) -> Result<SurfaceDataGuard, Error> {
+    pub(crate) fn lock_data<'a>(&'a mut self) -> Result<SurfaceDataGuard<'a>, Error> {
         if !self.access.cpu_access_allowed() {
             return Err(Error::SurfaceDataInaccessible);
         }

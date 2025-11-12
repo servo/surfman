@@ -142,7 +142,7 @@ impl Connection {
 
                 Ok(NativeWidget {
                     view: ns_view.retain(),
-                    opaque: unsafe { ns_window.isOpaque() },
+                    opaque: ns_window.isOpaque(),
                 })
             }
             _ => Err(Error::IncompatibleNativeWidget),
@@ -176,7 +176,7 @@ impl Connection {
                 Ok(NativeWidget {
                     // Extend the lifetime of the view.
                     view: ns_view.retain(),
-                    opaque: unsafe { ns_window.isOpaque() },
+                    opaque: ns_window.isOpaque(),
                 })
             }
             _ => Err(Error::IncompatibleNativeWidget),
