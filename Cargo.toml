@@ -57,7 +57,7 @@ serial_test = "3.1.0"
 [target.'cfg(target_os = "macos")'.dependencies]
 cgl = "0.3.2"
 objc2 = "0.6.1"
-objc2-app-kit = { version = "0.3", default-features = false, features = [
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-quartz-core",
     "objc2-core-foundation",
@@ -67,7 +67,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
     "NSGraphics",
     "NSWindow",
 ] }
-objc2-core-foundation = { version = "0.3.1", default-features = false, features = [
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "CFBase",
     "CFBundle",
@@ -76,7 +76,7 @@ objc2-core-foundation = { version = "0.3.1", default-features = false, features 
     "CFNumber",
     "CFString",
 ] }
-objc2-core-video = { version = "0.3.1", default-features = false, features = [
+objc2-core-video = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-core-graphics",
     "CVBase",
@@ -84,7 +84,7 @@ objc2-core-video = { version = "0.3.1", default-features = false, features = [
     "CVPixelBuffer",
     "CVReturn",
 ] }
-objc2-foundation = { version = "0.3.1", default-features = false, features = [
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-core-foundation",
     "NSEnumerator",
@@ -92,7 +92,7 @@ objc2-foundation = { version = "0.3.1", default-features = false, features = [
     "NSString",
     "NSValue",
 ] }
-objc2-io-surface = { version = "0.3.1", default-features = false, features = [
+objc2-io-surface = { version = "0.3.2", default-features = false, features = [
     "std",
     "libc",
     "objc2",
@@ -100,11 +100,11 @@ objc2-io-surface = { version = "0.3.1", default-features = false, features = [
     "IOSurfaceRef",
     "IOSurfaceTypes",
 ] }
-objc2-metal = { version = "0.3.1", default-features = false, features = [
+objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
     "MTLDevice",
 ] }
-objc2-quartz-core = { version = "0.3.1", default-features = false, features = [
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",
     "objc2-core-foundation",
     "CALayer",
