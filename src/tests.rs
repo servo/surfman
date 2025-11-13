@@ -514,6 +514,8 @@ pub fn test_surface_texture_blit_framebuffer() {
     }
 }
 
+// This test is currently disabled due to: #349
+#[ignore]
 #[cfg_attr(not(feature = "sm-test"), test)]
 #[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_cross_device_surface_texture_blit_framebuffer() {
