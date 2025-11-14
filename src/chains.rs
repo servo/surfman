@@ -756,19 +756,6 @@ where
         Ok(())
     }
 
-    /// Destroy all the swap chains for a particular producer context.
-    /// Called by the producer.
-    pub fn destroy_all(&self, device: &Device, context: &mut Device::Context) -> Result<(), Error> {
-        if let Some(mut ids) = self.ids().remove(&device.context_id(context)) {
-            for id in ids.drain() {
-                if let Some(swap_chain) = self.table_mut().remove(&id) {
-                    swap_chain.destroy(device, context)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Iterate over all the swap chains for a particular producer context.
     /// Called by the producer.
     pub fn iter(
