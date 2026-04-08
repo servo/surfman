@@ -660,6 +660,17 @@ impl Surface {
             Win32Objects::Widget { window_handle } => SurfaceID(window_handle as usize),
         }
     }
+
+    /// Returns the DXGI share handle if it has one.
+    #[inline]
+    pub fn share_handle(&self) -> Option<HANDLE> {
+        match self.win32_objects {
+            Win32Objects::Texture {
+                dxgi_share_handle, ..
+            } => Some(dxgi_share_handle),
+            Win32Objects::Widget { .. } => None,
+        }
+    }
 }
 
 /// Represents the CPU view of the pixel data of this surface.

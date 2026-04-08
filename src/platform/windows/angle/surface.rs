@@ -599,6 +599,15 @@ impl Surface {
             _ => false,
         }
     }
+
+    /// Returns the DXGI share handle if it has one.
+    #[inline]
+    pub fn share_handle(&self) -> Option<HANDLE> {
+        match self.win32_objects {
+            Win32Objects::Pbuffer { share_handle, .. } => Some(share_handle),
+            _ => None,
+        }
+    }
 }
 
 /// Represents the CPU view of the pixel data of this surface.
