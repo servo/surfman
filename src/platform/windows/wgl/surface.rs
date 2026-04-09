@@ -668,7 +668,7 @@ impl Surface {
             Win32Objects::Texture {
                 dxgi_share_handle, ..
             } => Some(dxgi_share_handle),
-            Win32Objects::Widget { .. } => None,
+            _ => None,
         }
     }
 }
