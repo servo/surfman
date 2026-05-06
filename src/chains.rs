@@ -221,11 +221,6 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
             self.context_id
         );
         self.pending_surface = Some(new_front_buffer);
-        for mut surface in self.recycled_surfaces.drain(..) {
-            debug!("Destroying a surface for context {:?}", self.context_id);
-            device.destroy_surface(context, &mut surface)?;
-        }
-
         Ok(())
     }
 
@@ -279,6 +274,9 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
         self.back_buffer
             .replace_surface(device, context, new_back_buffer)?;
         device.destroy_surface(context, &mut old_back_buffer)?;
+        for mut surface in self.recycled_surfaces.drain(..) {
+            device.destroy_surface(context, &mut surface)?;
+        }
         self.size = size;
         Ok(())
     }
