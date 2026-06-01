@@ -28,7 +28,7 @@ use objc2_io_surface::{
     kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow, kIOSurfaceCacheMode, kIOSurfaceHeight,
     kIOSurfacePixelFormat, kIOSurfaceWidth, IOSurfaceLockOptions, IOSurfaceRef,
 };
-use objc2_quartz_core::{CALayer, CATransaction, CATransform3D};
+use objc2_quartz_core::{kCAGravityTopLeft, CALayer, CATransaction, CATransform3D};
 use std::fmt::{self, Debug, Formatter};
 use std::mem;
 use std::os::raw::c_void;
@@ -322,11 +322,6 @@ impl Device {
         view_info
             .layer
             .setFrame(CGRect::new(CGPoint::ZERO, layer_size));
-        unsafe {
-            view_info
-                .layer
-                .setContents(Some(view_info.front_surface.as_ref()))
-        };
         view_info.layer.setOpaque(view_info.opaque);
         // TODO: The `contentsOpaque` property does not exist?
         let _: () = unsafe { msg_send![&view_info.layer, setContentsOpaque: view_info.opaque] };
