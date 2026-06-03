@@ -7,7 +7,7 @@
 use self::common::{ck, Buffer, Program, ResourceLoader, Shader, ShaderKind};
 
 use euclid::default::{Point2D, Rect, Size2D, Vector2D};
-use gl::types::{GLchar, GLenum, GLint, GLuint, GLvoid};
+use gl::types::{GLenum, GLint, GLuint};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use surfman::{declare_surfman, SurfaceAccess, SurfaceTexture, SurfaceType};
@@ -122,7 +122,6 @@ fn main() {
     };
 
     let event_loop = EventLoop::new().expect("couldn't create eventloop");
-    let window_size = Size2D::new(WINDOW_WIDTH, WINDOW_HEIGHT);
     let physical_size = PhysicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT);
 
     let window = WindowBuilder::new()

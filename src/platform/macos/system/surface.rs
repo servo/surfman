@@ -28,7 +28,7 @@ use objc2_io_surface::{
     kIOSurfaceBytesPerElement, kIOSurfaceBytesPerRow, kIOSurfaceCacheMode, kIOSurfaceHeight,
     kIOSurfacePixelFormat, kIOSurfaceWidth, IOSurfaceLockOptions, IOSurfaceRef,
 };
-use objc2_quartz_core::{kCAGravityTopLeft, CALayer, CATransaction, CATransform3D};
+use objc2_quartz_core::{CALayer, CATransaction, CATransform3D};
 use std::fmt::{self, Debug, Formatter};
 use std::mem;
 use std::os::raw::c_void;
