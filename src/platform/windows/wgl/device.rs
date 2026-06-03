@@ -299,7 +299,7 @@ impl HiddenWindow {
     }
 
     #[inline]
-    pub(crate) fn get_dc(&self) -> DCGuard {
+    pub(crate) fn get_dc(&self) -> DCGuard<'_> {
         unsafe { DCGuard::new(winuser::GetDC(self.window), Some(self.window)) }
     }
 
