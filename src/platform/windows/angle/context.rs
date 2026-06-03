@@ -359,6 +359,18 @@ impl Device {
         Ok(Some(surface))
     }
 
+    /// Displays the contents of the currently bound surface to the screen, if
+    /// it is a widget surface.
+    ///
+    /// Widget surfaces are internally double-buffered, so changes to them don't
+    /// show up in their associated widgets until this method is called.
+    pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        match &context.framebuffer {
+            Framebuffer::Surface(surface) => surface.present(self),
+            _ => Ok(()),
+        }
+    }
+
     /// Returns a unique ID representing a context.
     ///
     /// This ID is unique to all currently-allocated contexts. If you destroy a context and create

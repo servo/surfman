@@ -394,6 +394,19 @@ impl Device {
         }
     }
 
+    /// Displays the contents of the currently bound surface to the screen, if
+    /// it is a widget surface.
+    ///
+    /// Widget surfaces are internally double-buffered, so changes to them don't
+    /// show up in their associated widgets until this method is called.
+    pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        if let Framebuffer::Surface(surface) = &mut context.framebuffer {
+            self.0.present_surface(&mut surface.system_surface)?;
+            surface.bind_to_texture(&context.gl);
+        }
+        Ok(())
+    }
+
     /// Returns the attributes that the context descriptor was created with.
     pub fn context_descriptor_attributes(
         &self,

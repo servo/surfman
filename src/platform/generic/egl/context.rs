@@ -250,6 +250,13 @@ impl EGLBackedContext {
         Ok(Some(surface))
     }
 
+    pub fn present_bound_surface(&self, egl_display: EGLDisplay) -> Result<(), Error> {
+        match &self.framebuffer {
+            Framebuffer::Surface(surface) => surface.present(egl_display, self.egl_context),
+            Framebuffer::None | Framebuffer::External(_) => Ok(()),
+        }
+    }
+
     pub(crate) fn surface_info(&self) -> Result<Option<SurfaceInfo>, Error> {
         match self.framebuffer {
             Framebuffer::None => Ok(None),

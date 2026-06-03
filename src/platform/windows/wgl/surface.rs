@@ -595,18 +595,7 @@ impl Device {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        let window_handle = match surface.win32_objects {
-            Win32Objects::Widget { window_handle } => window_handle,
-            _ => return Err(Error::NoWidgetAttached),
-        };
-
-        unsafe {
-            let dc = winuser::GetDC(window_handle);
-            let ok = wingdi::SwapBuffers(dc);
-            assert_ne!(ok, FALSE);
-            winuser::ReleaseDC(window_handle, dc);
-            Ok(())
-        }
+        surface.present()
     }
 
     /// Resizes a widget surface.
@@ -669,6 +658,21 @@ impl Surface {
                 dxgi_share_handle, ..
             } => Some(dxgi_share_handle),
             _ => None,
+        }
+    }
+
+    pub(crate) fn present(&self) -> Result<(), Error> {
+        let window_handle = match self.win32_objects {
+            Win32Objects::Widget { window_handle } => window_handle,
+            _ => return Err(Error::NoWidgetAttached),
+        };
+
+        unsafe {
+            let dc = winuser::GetDC(window_handle);
+            let ok = wingdi::SwapBuffers(dc);
+            assert_ne!(ok, FALSE);
+            winuser::ReleaseDC(window_handle, dc);
+            Ok(())
         }
     }
 }

@@ -264,6 +264,23 @@ where
         }
     }
 
+    /// Displays the contents of the currently bound surface to the screen, if
+    /// it is a widget surface.
+    ///
+    /// Widget surfaces are internally double-buffered, so changes to them don't
+    /// show up in their associated widgets until this method is called.
+    pub fn present_bound_surface(&self, context: &mut Context<Def, Alt>) -> Result<(), Error> {
+        match (self, context) {
+            (Device::Default(device), Context::Default(context)) => {
+                device.present_bound_surface(context)
+            }
+            (Device::Alternate(device), Context::Alternate(context)) => {
+                device.present_bound_surface(context)
+            }
+            _ => Err(Error::IncompatibleContext),
+        }
+    }
+
     /// Returns the attributes that the context descriptor was created with.
     pub fn context_descriptor_attributes(
         &self,

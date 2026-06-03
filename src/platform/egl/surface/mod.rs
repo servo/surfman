@@ -4,7 +4,9 @@
 
 use crate::context::ContextID;
 use crate::platform::generic::egl::ffi::EGLImageKHR;
+use crate::{Context, Device, Error};
 
+use crate::platform::generic::egl::device::EGL_FUNCTIONS;
 use euclid::default::Size2D;
 use glow::Texture;
 use std::fmt::{self, Debug, Formatter};
@@ -83,5 +85,38 @@ impl Drop for Surface {
 impl Debug for SurfaceTexture {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "SurfaceTexture({:?})", self.surface)
+    }
+}
+
+impl Device {
+    /// Displays the contents of a widget surface on screen.
+    ///
+    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
+    /// associated widgets until this method is called.
+    ///
+    /// The supplied context must match the context the surface was created with, or an
+    /// `IncompatibleSurface` error is returned.
+    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
+        self.present_surface_inner(context, surface)
+    }
+
+    pub(crate) fn present_surface_inner(
+        &self,
+        context: &Context,
+        surface: &Surface,
+    ) -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
+        EGL_FUNCTIONS.with(|egl| unsafe {
+            match surface.objects {
+                SurfaceObjects::Window { egl_surface } => {
+                    egl.SwapBuffers(self.egl_display, egl_surface);
+                    Ok(())
+                }
+                _ => Err(Error::NoWidgetAttached),
+            }
+        })
     }
 }

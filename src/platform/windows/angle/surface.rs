@@ -532,16 +532,7 @@ impl Device {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        match surface.win32_objects {
-            Win32Objects::Window { .. } => {}
-            _ => return Err(Error::NoWidgetAttached),
-        }
-
-        EGL_FUNCTIONS.with(|egl| unsafe {
-            let ok = egl.SwapBuffers(self.egl_display, surface.egl_surface);
-            assert_ne!(ok, egl::FALSE);
-            Ok(())
-        })
+        surface.present(self)
     }
 
     /// Resizes a widget surface.
@@ -607,6 +598,19 @@ impl Surface {
             Win32Objects::Pbuffer { share_handle, .. } => Some(share_handle),
             _ => None,
         }
+    }
+
+    pub(crate) fn present(&self, device: &Device) -> Result<(), Error> {
+        match self.win32_objects {
+            Win32Objects::Window { .. } => {}
+            _ => return Err(Error::NoWidgetAttached),
+        }
+
+        EGL_FUNCTIONS.with(|egl| unsafe {
+            let ok = egl.SwapBuffers(device.egl_display, self.egl_surface);
+            assert_ne!(ok, egl::FALSE);
+            Ok(())
+        })
     }
 }
 

@@ -285,6 +285,11 @@ where
     }
 
     #[inline]
+    fn present_bound_surface(&self, context: &mut Context<Def, Alt>) -> Result<(), Error> {
+        Device::present_bound_surface(self, context)
+    }
+
+    #[inline]
     fn present_surface(
         &self,
         context: &Context<Def, Alt>,

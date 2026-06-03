@@ -204,6 +204,13 @@ where
     /// This will be `GL_TEXTURE_2D` or `GL_TEXTURE_RECTANGLE`, depending on platform.
     fn surface_gl_texture_target(&self) -> u32;
 
+    /// Displays the contents of the currently bound surface to the screen, if
+    /// it is a widget surface.
+    ///
+    /// Widget surfaces are internally double-buffered, so changes to them don't
+    /// show up in their associated widgets until this method is called.
+    fn present_bound_surface(&self, context: &mut Self::Context) -> Result<(), Error>;
+
     /// Displays the contents of a widget surface on screen.
     ///
     /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
