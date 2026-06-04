@@ -62,27 +62,51 @@ pub(crate) struct CurrentContextGuard {
     old_egl_context: EGLContext,
 }
 
-impl Drop for EGLBackedContext {
-    #[inline]
-    fn drop(&mut self) {
-        if self.egl_context != egl::NO_CONTEXT && !thread::panicking() {
-            panic!("Contexts must be destroyed explicitly with `destroy_context`!")
-        }
+impl CurrentContextGuard {
+    pub(crate) fn new() -> CurrentContextGuard {
+        EGL_FUNCTIONS.with(|egl| unsafe {
+            CurrentContextGuard {
+                egl_display: egl.GetCurrentDisplay(),
+                old_egl_draw_surface: egl.GetCurrentSurface(egl::DRAW as EGLint),
+                old_egl_read_surface: egl.GetCurrentSurface(egl::READ as EGLint),
+                old_egl_context: egl.GetCurrentContext(),
+            }
+        })
     }
 }
 
 impl Drop for CurrentContextGuard {
     fn drop(&mut self) {
         EGL_FUNCTIONS.with(|egl| unsafe {
-            if self.egl_display != egl::NO_DISPLAY {
-                egl.MakeCurrent(
-                    self.egl_display,
-                    self.old_egl_draw_surface,
-                    self.old_egl_read_surface,
-                    self.old_egl_context,
-                );
+            if self.egl_display == egl::NO_DISPLAY {
+                return;
             }
+
+            // Only call eglMakeCurrent again if anything has changed.
+            if egl.GetCurrentDisplay() == self.egl_display
+                && egl.GetCurrentSurface(egl::DRAW as EGLint) == self.old_egl_draw_surface
+                && egl.GetCurrentSurface(egl::READ as EGLint) == self.old_egl_read_surface
+                && egl.GetCurrentContext() == self.old_egl_context
+            {
+                return;
+            }
+
+            egl.MakeCurrent(
+                self.egl_display,
+                self.old_egl_draw_surface,
+                self.old_egl_read_surface,
+                self.old_egl_context,
+            );
         })
+    }
+}
+
+impl Drop for EGLBackedContext {
+    #[inline]
+    fn drop(&mut self) {
+        if self.egl_context != egl::NO_CONTEXT && !thread::panicking() {
+            panic!("Contexts must be destroyed explicitly with `destroy_context`!")
+        }
     }
 }
 
@@ -466,19 +490,6 @@ impl ContextDescriptor {
             flags: attribute_flags,
             version: self.gl_version,
         }
-    }
-}
-
-impl CurrentContextGuard {
-    pub(crate) fn new() -> CurrentContextGuard {
-        EGL_FUNCTIONS.with(|egl| unsafe {
-            CurrentContextGuard {
-                egl_display: egl.GetCurrentDisplay(),
-                old_egl_draw_surface: egl.GetCurrentSurface(egl::DRAW as EGLint),
-                old_egl_read_surface: egl.GetCurrentSurface(egl::READ as EGLint),
-                old_egl_context: egl.GetCurrentContext(),
-            }
-        })
     }
 }
 
