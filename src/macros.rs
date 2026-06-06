@@ -323,6 +323,11 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
+                fn present_bound_surface(&self, context: &mut Self::Context) -> Result<(), Error> {
+                    Device::present_bound_surface(self, context)
+                }
+
+                #[inline]
                 fn present_surface(
                     &self,
                     context: &Self::Context,

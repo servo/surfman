@@ -211,29 +211,6 @@ impl Device {
         }
     }
 
-    /// Displays the contents of a widget surface on screen.
-    ///
-    /// Widget surfaces are internally double-buffered, so changes to them don't show up in their
-    /// associated widgets until this method is called.
-    ///
-    /// The supplied context must match the context the surface was created with, or an
-    /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
-        if context.id != surface.context_id {
-            return Err(Error::IncompatibleSurface);
-        }
-
-        EGL_FUNCTIONS.with(|egl| unsafe {
-            match surface.objects {
-                SurfaceObjects::Window { egl_surface } => {
-                    egl.SwapBuffers(self.egl_display, egl_surface);
-                    Ok(())
-                }
-                SurfaceObjects::HardwareBuffer { .. } => Err(Error::NoWidgetAttached),
-            }
-        })
-    }
-
     /// Resizes a widget surface.
     pub fn resize_surface(
         &self,

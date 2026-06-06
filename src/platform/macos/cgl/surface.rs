@@ -109,6 +109,20 @@ fn surface_bind_to_gl_texture(surface: &IOSurfaceRef, width: i32, height: i32, h
     }
 }
 
+impl Surface {
+    pub(crate) fn bind_to_texture(&self, gl: &Rc<Gl>) {
+        let size = self.system_surface.size;
+        unsafe { gl.bind_texture(gl::TEXTURE_RECTANGLE, self.texture_object) };
+        surface_bind_to_gl_texture(
+            &self.system_surface.io_surface,
+            size.width,
+            size.height,
+            true,
+        );
+        unsafe { gl.bind_texture(gl::TEXTURE_RECTANGLE, None) };
+    }
+}
+
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
     ///
@@ -324,20 +338,7 @@ impl Device {
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         self.0.present_surface(&mut surface.system_surface)?;
-
-        let gl = &context.gl;
-        unsafe {
-            let size = surface.system_surface.size;
-            gl.bind_texture(gl::TEXTURE_RECTANGLE, surface.texture_object);
-            surface_bind_to_gl_texture(
-                &surface.system_surface.io_surface,
-                size.width,
-                size.height,
-                true,
-            );
-            gl.bind_texture(gl::TEXTURE_RECTANGLE, None);
-        }
-
+        surface.bind_to_texture(&context.gl);
         Ok(())
     }
 

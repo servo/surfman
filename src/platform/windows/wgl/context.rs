@@ -578,6 +578,18 @@ impl Device {
         }
     }
 
+    /// Displays the contents of the currently bound surface to the screen, if
+    /// it is a widget surface.
+    ///
+    /// Widget surfaces are internally double-buffered, so changes to them don't
+    /// show up in their associated widgets until this method is called.
+    pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        match &context.framebuffer {
+            Framebuffer::Surface(surface) => surface.present(),
+            _ => Ok(()),
+        }
+    }
+
     pub(crate) fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
         unsafe {
             match context.framebuffer {
