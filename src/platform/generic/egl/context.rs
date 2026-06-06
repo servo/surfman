@@ -13,6 +13,7 @@ use crate::egl::types::{EGLConfig, EGLContext, EGLDisplay, EGLSurface, EGLint};
 use crate::surface::Framebuffer;
 use crate::{ContextAttributeFlags, ContextAttributes, ContextID, Error, GLApi, GLVersion};
 use crate::{Gl, SurfaceInfo};
+use euclid::default::Size2D;
 use glow::HasContext;
 
 use std::ffi::CString;
@@ -29,7 +30,7 @@ pub(crate) struct EGLBackedContext {
     pub(crate) egl_context: EGLContext,
     pub(crate) id: ContextID,
     pbuffer: EGLSurface,
-    framebuffer: Framebuffer<EGLBackedSurface, ExternalEGLSurfaces>,
+    pub(crate) framebuffer: Framebuffer<EGLBackedSurface, ExternalEGLSurfaces>,
     context_is_owned: bool,
 }
 
@@ -274,11 +275,18 @@ impl EGLBackedContext {
         Ok(Some(surface))
     }
 
-    pub fn present_bound_surface(&self, egl_display: EGLDisplay) -> Result<(), Error> {
+    pub(crate) fn present_bound_surface(&self, egl_display: EGLDisplay) -> Result<(), Error> {
         match &self.framebuffer {
             Framebuffer::Surface(surface) => surface.present(egl_display, self.egl_context),
             Framebuffer::None | Framebuffer::External(_) => Ok(()),
         }
+    }
+
+    pub(crate) fn resize_bound_surface(&mut self, size: Size2D<i32>) -> Result<(), Error> {
+        if let Framebuffer::Surface(surface) = &mut self.framebuffer {
+            surface.resize(size);
+        }
+        Ok(())
     }
 
     pub(crate) fn surface_info(&self) -> Result<Option<SurfaceInfo>, Error> {

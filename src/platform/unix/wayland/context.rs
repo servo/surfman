@@ -2,12 +2,15 @@
 //
 //! OpenGL rendering contexts on Wayland.
 
+use euclid::default::Size2D;
+
 use super::device::Device;
 use super::surface::Surface;
 use crate::context::ContextID;
 use crate::egl;
 use crate::egl::types::EGLint;
 use crate::platform::generic::egl::context::{self, CurrentContextGuard, EGLBackedContext};
+use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
 
 use std::os::raw::c_void;
@@ -228,6 +231,18 @@ impl Device {
         context
             .0
             .present_bound_surface(self.native_connection.egl_display)
+    }
+
+    /// If the currently bound surface is a widget surface, resize it,
+    pub fn resize_bound_surface(
+        &self,
+        context: &mut Context,
+        size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        match &mut context.0.framebuffer {
+            Framebuffer::Surface(surface) => surface.resize_for_wayland(size),
+            _ => Ok(()),
+        }
     }
 
     /// Returns a unique ID representing a context.

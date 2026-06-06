@@ -214,18 +214,7 @@ impl Device {
         surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        let wayland_egl_window = surface.0.native_window()? as *mut c_void as *mut wl_egl_window;
-        unsafe {
-            (wayland_egl_handle().wl_egl_window_resize)(
-                wayland_egl_window,
-                size.width,
-                size.height,
-                0,
-                0,
-            )
-        };
-        surface.0.size = size;
-        Ok(())
+        surface.0.resize_for_wayland(size)
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
@@ -264,4 +253,21 @@ impl Device {
 /// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
+}
+
+impl EGLBackedSurface {
+    pub(crate) fn resize_for_wayland(&mut self, size: Size2D<i32>) -> Result<(), Error> {
+        let wayland_egl_window = self.native_window()? as *mut c_void as *mut wl_egl_window;
+        unsafe {
+            (wayland_egl_handle().wl_egl_window_resize)(
+                wayland_egl_window,
+                size.width,
+                size.height,
+                0,
+                0,
+            )
+        };
+        self.resize(size);
+        Ok(())
+    }
 }

@@ -14,6 +14,7 @@ type GLenum = c_uint;
 type GLint = c_int;
 type GLuint = c_uint;
 use crate::Gl;
+use euclid::default::Size2D;
 use glow::HasContext;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
@@ -588,6 +589,18 @@ impl Device {
             Framebuffer::Surface(surface) => surface.present(),
             _ => Ok(()),
         }
+    }
+
+    /// If the currently bound surface is a widget surface, resize it,
+    pub fn resize_bound_surface(
+        &self,
+        context: &mut Context,
+        size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        if let Framebuffer::Surface(surface) = &mut context.framebuffer {
+            surface.resize(size);
+        }
+        Ok(())
     }
 
     pub(crate) fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {

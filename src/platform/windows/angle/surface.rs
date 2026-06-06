@@ -542,7 +542,7 @@ impl Device {
         surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        surface.size = size;
+        surface.resize(size);
         Ok(())
     }
 
@@ -611,6 +611,10 @@ impl Surface {
             assert_ne!(ok, egl::FALSE);
             Ok(())
         })
+    }
+
+    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
+        self.size = size;
     }
 }
 

@@ -18,6 +18,7 @@ use cgl::{
 };
 use cgl::{CGLGetCurrentContext, CGLGetPixelFormat, CGLPixelFormatAttribute, CGLPixelFormatObj};
 use cgl::{CGLReleasePixelFormat, CGLRetainPixelFormat, CGLSetCurrentContext};
+use euclid::default::Size2D;
 use glow::HasContext;
 use objc2_core_foundation::{CFBundle, CFRetained, CFString};
 use std::mem;
@@ -403,6 +404,21 @@ impl Device {
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
             self.0.present_surface(&mut surface.system_surface)?;
             surface.bind_to_texture(&context.gl);
+        }
+        Ok(())
+    }
+
+    /// If the currently bound surface is a widget surface, resize it,
+    pub fn resize_bound_surface(
+        &self,
+        context: &mut Context,
+        size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        let _guard = self.temporarily_make_context_current(context);
+        let context_descriptor = self.context_descriptor(context);
+        let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+        if let Framebuffer::Surface(surface) = &mut context.framebuffer {
+            return self.resize_inner(surface, size, &context.gl, context_attributes);
         }
         Ok(())
     }

@@ -13,6 +13,7 @@ use crate::platform::generic::egl::error::ToWindowingApiError;
 use crate::platform::generic::egl::surface::ExternalEGLSurfaces;
 use crate::surface::Framebuffer;
 use crate::{ContextAttributes, Error, Gl, SurfaceInfo};
+use euclid::default::Size2D;
 
 use glow::HasContext;
 use std::mem;
@@ -374,6 +375,18 @@ impl Device {
             Framebuffer::Surface(surface) => surface.present(self),
             _ => Ok(()),
         }
+    }
+
+    /// If the currently bound surface is a widget surface, resize it,
+    pub fn resize_bound_surface(
+        &self,
+        context: &mut Context,
+        size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        if let Framebuffer::Surface(surface) = &mut context.framebuffer {
+            surface.resize(size);
+        }
+        Ok(())
     }
 
     /// Returns a unique ID representing a context.
