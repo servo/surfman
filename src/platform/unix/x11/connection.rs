@@ -33,7 +33,12 @@ unsafe impl Send for Connection {}
 pub(crate) struct NativeConnectionWrapper {
     pub(crate) xlib: Xlib,
     pub(crate) egl_display: EGLDisplay,
+    /// Whether or not this [`NativeConnectionWrapper`] created its [`EGLDisplay`].
+    /// If true, the `Drop` handler is reponsible for cleaning it up.
+    egl_display_is_owned: bool,
     x11_display: *mut Display,
+    /// Whether or not this [`NativeConnectionWrapper`] created its X11 [`Display`].
+    /// If true, the `Drop` handler is reponsible for cleaning it up.
     x11_display_is_owned: bool,
 }
 
@@ -54,6 +59,9 @@ impl Drop for NativeConnectionWrapper {
     #[inline]
     fn drop(&mut self) {
         unsafe {
+            if self.egl_display_is_owned {
+                terminate_egl_display(self.egl_display);
+            }
             if self.x11_display_is_owned {
                 (self.xlib.XCloseDisplay)(self.x11_display);
             }
@@ -83,9 +91,10 @@ impl Connection {
             Ok(Connection {
                 native_connection: Arc::new(NativeConnectionWrapper {
                     xlib,
+                    egl_display,
+                    egl_display_is_owned: true,
                     x11_display,
                     x11_display_is_owned: true,
-                    egl_display,
                 }),
             })
         }
@@ -111,6 +120,7 @@ impl Connection {
             native_connection: Arc::new(NativeConnectionWrapper {
                 xlib,
                 egl_display: native_connection.egl_display,
+                egl_display_is_owned: false,
                 x11_display: native_connection.x11_display,
                 x11_display_is_owned: false,
             }),
@@ -125,6 +135,7 @@ impl Connection {
                 native_connection: Arc::new(NativeConnectionWrapper {
                     xlib,
                     egl_display,
+                    egl_display_is_owned: true,
                     x11_display,
                     x11_display_is_owned: is_owned,
                 }),
@@ -325,5 +336,11 @@ unsafe fn create_egl_display(display: *mut Display) -> EGLDisplay {
         assert_ne!(ok, egl::FALSE);
 
         egl_display
+    })
+}
+
+unsafe fn terminate_egl_display(display: EGLDisplay) {
+    EGL_FUNCTIONS.with(|egl| {
+        egl.Terminate(display);
     })
 }
