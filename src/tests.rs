@@ -18,8 +18,6 @@ use crate::{SurfaceType, WindowingApiError};
 
 use euclid::default::Size2D;
 use glow::{Framebuffer, HasContext, PixelPackData, Texture};
-#[cfg(not(feature = "sm-test"))]
-use serial_test::serial;
 use std::sync::mpsc;
 use std::thread;
 
@@ -40,7 +38,6 @@ static GL_ES_VERSIONS: [GLVersion; 4] = [
 ];
 
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_adapter_creation() {
     let connection = Connection::new().unwrap();
     connection.create_hardware_adapter().unwrap();
@@ -49,7 +46,6 @@ pub fn test_adapter_creation() {
 }
 
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_device_creation() {
     let connection = Connection::new().unwrap();
     let adapter = connection
@@ -65,7 +61,6 @@ pub fn test_device_creation() {
 }
 
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_device_accessors() {
     let connection = Connection::new().unwrap();
     let adapter = connection.create_low_power_adapter().unwrap();
@@ -84,7 +79,6 @@ pub fn test_device_accessors() {
 // Tests that all combinations of flags result in the creation of valid context descriptors and
 // contexts.
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_context_creation() {
     let connection = Connection::new().unwrap();
     let adapter = connection
@@ -173,7 +167,6 @@ pub fn test_context_creation() {
 
 // Tests that newly-created contexts are made current (https://github.com/pcwalton/surfman/issues/7).
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_newly_created_contexts_are_current() {
     let connection = Connection::new().unwrap();
     let adapter = connection
@@ -240,7 +233,6 @@ pub fn test_newly_created_contexts_are_current() {
 
 // Tests a simple case of one context being shared with another.
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_context_sharing() {
     let connection = Connection::new().unwrap();
     let adapter = connection
@@ -281,7 +273,6 @@ pub fn test_context_sharing() {
 
 // Tests that generic surfaces can be created.
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_generic_surface_creation() {
     let connection = Connection::new().unwrap();
     let adapter = connection
@@ -350,7 +341,6 @@ pub fn test_generic_surface_creation() {
 
 // Tests that basic GL commands work.
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_gl() {
     let mut env = match BasicEnvironment::new() {
         None => return,
@@ -444,7 +434,6 @@ pub fn test_gl() {
 }
 
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_surface_texture_blit_framebuffer() {
     let mut env = match BasicEnvironment::new() {
         None => return,
@@ -517,7 +506,6 @@ pub fn test_surface_texture_blit_framebuffer() {
 // This test is currently disabled due to: #349
 #[ignore]
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_cross_device_surface_texture_blit_framebuffer() {
     let mut env = match BasicEnvironment::new() {
         None => return,
@@ -588,7 +576,6 @@ pub fn test_cross_device_surface_texture_blit_framebuffer() {
 }
 
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_cross_thread_surface_texture_blit_framebuffer() {
     let mut env = match BasicEnvironment::new() {
         None => return,
@@ -601,7 +588,7 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
     let other_connection = env.connection.clone();
     let other_adapter = env.adapter.clone();
     let other_context_descriptor = env.context_descriptor.clone();
-    thread::spawn(move || {
+    let worker_thread = thread::spawn(move || {
         let mut device = other_connection.create_device(&other_adapter).unwrap();
         let mut context = device
             .create_context(&other_context_descriptor, None)
@@ -671,11 +658,14 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
 
         env.device.destroy_context(&mut env.context).unwrap();
     }
+
+    worker_thread
+        .join()
+        .expect("Worker thread should successfully join.");
 }
 
 // Tests that surface textures are not upside-down.
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_surface_texture_right_side_up() {
     let mut env = match BasicEnvironment::new() {
         None => return,
@@ -752,7 +742,6 @@ pub fn test_surface_texture_right_side_up() {
 
 #[cfg(not(any(target_os = "android", target_env = "ohos")))]
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_depth_and_stencil() {
     use core::slice;
     use std::ptr::addr_of_mut;
@@ -886,7 +875,6 @@ pub fn test_depth_and_stencil() {
 // Make sure that the current native context can be fetched and that they can be correctly wrapped
 // in `surfman` contexts.
 #[cfg_attr(not(feature = "sm-test"), test)]
-#[cfg_attr(not(feature = "sm-test"), serial)]
 pub fn test_get_native_context() {
     let mut env = match BasicEnvironment::new() {
         None => return,
