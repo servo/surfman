@@ -2,7 +2,7 @@
 name = "surfman"
 license = "MIT OR Apache-2.0 OR MPL-2.0"
 edition = "2021"
-version = "0.12.2"
+version = "0.12.3"
 authors = [
     "Patrick Walton <pcwalton@mimiga.net>",
     "Emilio Cobos Álvarez <emilio@crisal.io>",
