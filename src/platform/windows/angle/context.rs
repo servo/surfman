@@ -90,15 +90,21 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
-        let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-        unsafe {
-            let egl_context = context::create_context(
-                self.egl_display,
-                descriptor,
-                share_with.map_or(egl::NO_CONTEXT, |ctx| ctx.egl_context),
-                self.gl_api(),
-            )?;
+        let (egl_context, id) = {
+            let mut next_context_id_lock = CREATE_CONTEXT_MUTEX.lock().unwrap();
+            let egl_context = unsafe {
+                context::create_context(
+                    self.egl_display,
+                    descriptor,
+                    share_with.map_or(egl::NO_CONTEXT, |ctx| ctx.egl_context),
+                    self.gl_api(),
+                )?
+            };
+            next_context_id_lock.0 += 1;
+            (egl_context, *next_context_id_lock)
+        };
 
+        unsafe {
             EGL_FUNCTIONS.with(|egl| {
                 let result = egl.MakeCurrent(
                     self.egl_display,
@@ -107,22 +113,22 @@ impl Device {
                     egl_context,
                 );
                 if result == egl::FALSE {
-                    let err = egl.GetError().to_windowing_api_error();
-                    return Err(Error::MakeCurrentFailed(err));
+                    return Err(Error::MakeCurrentFailed(
+                        egl.GetError().to_windowing_api_error(),
+                    ));
                 }
                 Ok(())
-            });
-
-            let context = Context {
-                egl_context,
-                id: *next_context_id,
-                framebuffer: Framebuffer::None,
-                context_is_owned: true,
-                gl: Gl::from_loader_function(context::get_proc_address),
-            };
-            next_context_id.0 += 1;
-            Ok(context)
+            })?;
         }
+
+        let context = Context {
+            egl_context,
+            id,
+            framebuffer: Framebuffer::None,
+            context_is_owned: true,
+            gl: unsafe { Gl::from_loader_function(context::get_proc_address) },
+        };
+        Ok(context)
     }
 
     /// Wraps a native `EGLContext` in a context object.
