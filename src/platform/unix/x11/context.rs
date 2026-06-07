@@ -2,6 +2,8 @@
 //
 //! OpenGL rendering contexts on X11 via EGL.
 
+use euclid::default::Size2D;
+
 use super::device::Device;
 use super::surface::Surface;
 use crate::context::ContextID;
@@ -228,6 +230,15 @@ impl Device {
         context
             .0
             .present_bound_surface(self.native_connection.egl_display)
+    }
+
+    /// If the currently bound surface is a widget surface, resize it,
+    pub fn resize_bound_surface(
+        &self,
+        context: &mut Context,
+        size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        context.0.resize_bound_surface(size)
     }
 
     /// Returns a unique ID representing a context.

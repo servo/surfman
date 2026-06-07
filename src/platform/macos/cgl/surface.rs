@@ -8,7 +8,10 @@ use crate::context::ContextID;
 use crate::gl_utils;
 use crate::platform::macos::system::surface::Surface as SystemSurface;
 use crate::renderbuffers::Renderbuffers;
-use crate::{gl, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
+use crate::{
+    gl, ContextAttributes, Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType,
+    WindowingApiError,
+};
 use cgl::{kCGLNoError, CGLErrorString, CGLGetCurrentContext, CGLTexImageIOSurface2D, GLenum};
 use glow::Context as Gl;
 
@@ -354,15 +357,22 @@ impl Device {
         }
 
         let _guard = self.temporarily_make_context_current(context);
-        let _guard =
-            self.temporarily_bind_framebuffer(context.gl.clone(), surface.framebuffer_object);
+        let context_descriptor = self.context_descriptor(context);
+        let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+        self.resize_inner(surface, size, &context.gl, context_attributes)
+    }
+
+    pub(crate) fn resize_inner(
+        &self,
+        surface: &mut Surface,
+        size: Size2D<i32>,
+        gl: &Rc<gl::Context>,
+        context_attributes: ContextAttributes,
+    ) -> Result<(), Error> {
+        let _guard = self.temporarily_bind_framebuffer(gl.clone(), surface.framebuffer_object);
 
         self.0.resize_surface(&mut surface.system_surface, size)?;
 
-        let context_descriptor = self.context_descriptor(context);
-        let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-
-        let gl = &context.gl;
         unsafe {
             // Recreate the GL texture and bind it to the FBO
             let texture_object =

@@ -2,6 +2,8 @@
 //
 //! A context abstraction that allows the choice of backends dynamically.
 
+use euclid::default::Size2D;
+
 use super::device::Device;
 use super::surface::Surface;
 use crate::device::Device as DeviceInterface;
@@ -276,6 +278,23 @@ where
             }
             (Device::Alternate(device), Context::Alternate(context)) => {
                 device.present_bound_surface(context)
+            }
+            _ => Err(Error::IncompatibleContext),
+        }
+    }
+
+    /// Resizes the currently bound surface.
+    pub fn resize_bound_surface(
+        &self,
+        context: &mut Context<Def, Alt>,
+        size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        match (self, context) {
+            (Device::Default(device), Context::Default(context)) => {
+                device.resize_bound_surface(context, size)
+            }
+            (Device::Alternate(device), Context::Alternate(context)) => {
+                device.resize_bound_surface(context, size)
             }
             _ => Err(Error::IncompatibleContext),
         }

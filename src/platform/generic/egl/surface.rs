@@ -353,6 +353,10 @@ impl EGLBackedSurface {
             EGLSurfaceObjects::TextureImage { .. } => ExternalEGLSurfaces::default(),
         }
     }
+
+    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
+        self.size = size;
+    }
 }
 
 impl EGLSurfaceTexture {

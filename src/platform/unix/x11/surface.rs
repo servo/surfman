@@ -216,7 +216,7 @@ impl Device {
         surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        surface.0.size = size;
+        surface.0.resize(size);
         Ok(())
     }
 

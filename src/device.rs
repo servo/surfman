@@ -224,6 +224,13 @@ where
         surface: &mut Self::Surface,
     ) -> Result<(), Error>;
 
+    /// If the currently bound surface is a widget surface, resize it,
+    fn resize_bound_surface(
+        &self,
+        context: &mut Self::Context,
+        size: Size2D<i32>,
+    ) -> Result<(), Error>;
+
     /// Resizes a widget surface.
     fn resize_surface(
         &self,

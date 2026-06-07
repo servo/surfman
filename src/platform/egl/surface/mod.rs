@@ -82,6 +82,12 @@ impl Drop for Surface {
     }
 }
 
+impl Surface {
+    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
+        self.size = size;
+    }
+}
+
 impl Debug for SurfaceTexture {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "SurfaceTexture({:?})", self.surface)
@@ -118,5 +124,16 @@ impl Device {
                 _ => Err(Error::NoWidgetAttached),
             }
         })
+    }
+
+    /// Resizes a widget surface.
+    pub fn resize_surface(
+        &self,
+        _context: &Context,
+        surface: &mut Surface,
+        size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        surface.resize(size);
+        Ok(())
     }
 }
