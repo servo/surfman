@@ -61,9 +61,13 @@ jobs:
           version: "20"
       - name: Install rust
         id: toolchain
-        uses: dtolnay/rust-toolchain@1.89.0
+        uses: dtolnay/rust-toolchain@1.91.0
         with:
           targets: ${{ matrix.platform.target }}
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: Build
         run: |
           cargo build --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
@@ -71,12 +75,12 @@ jobs:
         if: ${{ matrix.platform.test && startsWith(matrix.platform.os, 'ubuntu') }}
         run: |
           weston --no-config --socket=wl-test-env --backend=headless &
-          WAYLAND_DISPLAY=wl-test-env xvfb-run cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }} -- --test-threads 1
+          WAYLAND_DISPLAY=wl-test-env xvfb-run cargo nextest run --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
       - name: Test
         if: ${{ matrix.platform.test && !startsWith(matrix.platform.os, 'ubuntu') }}
         timeout-minutes: 30 # https://github.com/servo/surfman/issues/329
         run: |
-          cargo test --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
+          cargo nextest run --features "${{ matrix.features }}" --target ${{ matrix.platform.target }}
 
   android-test:
     name: ${{ format('x86_64-linux-android {0}', matrix.features)}}
@@ -94,7 +98,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install rust
         id: toolchain
-        uses: dtolnay/rust-toolchain@1.89.0
+        uses: dtolnay/rust-toolchain@1.91.0
         with:
           targets: x86_64-linux-android
 
