@@ -500,6 +500,11 @@ impl Device {
             }
 
             EGL_FUNCTIONS.with(|egl| {
+                egl.ReleaseTexImage(
+                    self.egl_display,
+                    surface_texture.local_egl_surface,
+                    egl::BACK_BUFFER as _,
+                );
                 egl.DestroySurface(self.egl_display, surface_texture.local_egl_surface);
             })
         }
