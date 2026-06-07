@@ -174,7 +174,6 @@ impl Device {
 
             if context.context_is_owned {
                 let result = egl.DestroyContext(self.egl_display, context.egl_context);
-                egl.DestroyContext(self.egl_display, context.egl_context);
                 assert_ne!(result, egl::FALSE);
             }
 
