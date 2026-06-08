@@ -1,5 +1,3 @@
-// surfman/surfman/src/info.rs
-//
 //! OpenGL information.
 
 use crate::Gl;

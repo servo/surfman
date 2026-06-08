@@ -1,5 +1,3 @@
-// surfman/surfman/src/connection.rs
-//
 //! The abstract interface that all connections conform to.
 
 use crate::Error;

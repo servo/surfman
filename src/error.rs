@@ -1,5 +1,3 @@
-// surfman/surfman/src/error.rs
-//
 //! Various errors that methods can produce.
 
 /// Various errors that methods can produce.

@@ -1,5 +1,3 @@
-// surfman/surfman/src/surface.rs
-//
 //! Information related to hardware surfaces.
 
 use crate::context::ContextID;

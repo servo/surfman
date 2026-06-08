@@ -1,5 +1,3 @@
-// surfman/surfman/src/renderbuffers.rs
-//
 //! A utility module for backends that wrap surfaces in OpenGL FBOs.
 
 use crate::context::{ContextAttributeFlags, ContextAttributes};

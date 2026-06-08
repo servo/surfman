@@ -1,5 +1,3 @@
-// surfman/surfman/build.rs
-//
 //! The `surfman` build script.
 
 use cfg_aliases::cfg_aliases;

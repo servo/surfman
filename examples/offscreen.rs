@@ -1,5 +1,3 @@
-// surfman/surfman/examples/offscreen.rs
-//
 //! This example demonstrates how to create an off-screen context and render into it using
 //! `surfman` alone, without any other windowing libraries.
 

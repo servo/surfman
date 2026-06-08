@@ -1,5 +1,3 @@
-// surfman/surfman/src/device.rs
-//
 //! The abstract interface that all devices conform to.
 
 use super::connection::Connection as ConnectionInterface;

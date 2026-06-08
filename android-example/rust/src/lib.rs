@@ -14,7 +14,7 @@ use log::Level;
 use std::cell::{Cell, RefCell};
 use std::mem;
 use std::thread::{self, JoinHandle};
-use surfman::platform::egl::tests;
+use surfman::hardware_buffer::tests;
 use surfman::{Connection, NativeContext, NativeDevice};
 
 #[path = "../../../examples/threads.rs"]
