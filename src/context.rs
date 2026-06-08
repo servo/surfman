@@ -1,5 +1,3 @@
-// surfman/surfman/src/context.rs
-//
 //! Declarations common to all platform contexts.
 
 #![allow(unused_imports)]

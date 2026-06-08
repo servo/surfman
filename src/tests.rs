@@ -1,5 +1,3 @@
-// surfman/surfman/src/tests.rs
-//
 //! Unit tests.
 
 // NB: If you add tests to this file, add them to the Android

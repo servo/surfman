@@ -1,5 +1,3 @@
-// surfman/surfman/examples/chaos_game.rs
-//
 //! Demonstrates how to use `surfman` to draw to a window surface via the CPU.
 
 use euclid::default::{Point2D, Size2D};

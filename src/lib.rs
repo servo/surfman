@@ -1,5 +1,3 @@
-// surfman/surfman/src/lib.rs
-//
 //! Cross-platform GPU device and surface management.
 //!
 //! You can use this crate to multithread a graphics application so that rendering happens on
@@ -16,44 +14,67 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 
-pub mod platform;
-pub use platform::default::connection::{Connection, NativeConnection};
-pub use platform::default::context::{Context, ContextDescriptor, NativeContext};
-pub use platform::default::device::{Adapter, Device, NativeDevice};
-pub use platform::default::surface::{NativeWidget, Surface, SurfaceTexture};
-
-// TODO(pcwalton): Fill this in with other OS's.
-#[cfg(target_os = "macos")]
-pub use platform::system::connection::Connection as SystemConnection;
-#[cfg(target_os = "macos")]
-pub use platform::system::device::{Adapter as SystemAdapter, Device as SystemDevice};
-#[cfg(target_os = "macos")]
-pub use platform::system::surface::Surface as SystemSurface;
-
+#[cfg(all(windows_platform, feature = "sm-angle"))]
+pub mod angle;
+pub(crate) mod base;
+#[cfg(macos_platform)]
+pub mod cgl;
 #[cfg(feature = "chains")]
 pub mod chains;
 pub mod connection;
-pub mod device;
-
-pub mod error;
-pub use crate::error::{Error, WindowingApiError};
-
 mod context;
-pub use crate::context::{ContextAttributeFlags, ContextAttributes, ContextID};
-
+pub mod device;
+pub mod error;
+mod gl_utils;
+#[cfg(any(android_platform, ohos_platform))]
+pub mod hardware_buffer;
 mod info;
-pub use crate::info::{GLApi, GLVersion};
-
-mod surface;
-pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
-
 pub mod macros;
+#[cfg(free_unix)]
+pub mod mesa_surfaceless;
+pub mod multi;
+mod renderbuffers;
+mod surface;
+#[cfg(all(x11_platform, not(wayland_default)))]
+pub mod unix;
+#[cfg(wayland_platform)]
+pub mod wayland;
+#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+pub mod wgl;
+#[cfg(x11_platform)]
+pub mod x11;
+
+#[cfg(all(windows_platform, angle_default))]
+pub use angle as default;
+#[cfg(macos_platform)]
+pub use cgl as default;
+#[cfg(any(android_platform, ohos_platform))]
+pub use hardware_buffer as default;
+#[cfg(all(x11_platform, not(wayland_default)))]
+pub use unix as default;
+#[cfg(wayland_default)]
+pub use wayland as default;
+#[cfg(all(windows_platform, not(angle_default)))]
+pub use wgl as default;
+
+pub use crate::context::{ContextAttributeFlags, ContextAttributes, ContextID};
+pub use crate::error::{Error, WindowingApiError};
+pub use crate::info::{GLApi, GLVersion};
+pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
+pub use default::connection::{Connection, NativeConnection};
+pub use default::context::{Context, ContextDescriptor, NativeContext};
+pub use default::device::{Adapter, Device, NativeDevice};
+pub use default::surface::{NativeWidget, Surface, SurfaceTexture};
+pub(crate) use glow::{self as gl, Context as Gl};
 pub(crate) use macros::implement_interfaces;
 
-pub(crate) use glow::{self as gl, Context as Gl};
-
-mod gl_utils;
-mod renderbuffers;
+// TODO(pcwalton): Fill this in with other OS's.
+#[cfg(target_os = "macos")]
+pub use base::io_surface::connection::Connection as SystemConnection;
+#[cfg(target_os = "macos")]
+pub use base::io_surface::device::{Adapter as SystemAdapter, Device as SystemDevice};
+#[cfg(target_os = "macos")]
+pub use base::io_surface::surface::Surface as SystemSurface;
 
 #[cfg(any(
     target_os = "android",
