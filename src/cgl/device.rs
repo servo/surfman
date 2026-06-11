@@ -370,6 +370,12 @@ impl Device {
     /// show up in their associated widgets until this method is called.
     pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
+            // Presenting the surface is not a GL operation on macOS, it's just
+            // CoreAnimation and IOSurface management. This means that it will
+            // leave any unprocessed OpenGL commands in the pipeline. Flushing
+            // here ensures that doesn't happen.
+            unsafe { context.gl.flush() };
+
             self.0.present_surface(&mut surface.system_surface)?;
             surface.bind_to_texture(&context.gl);
         }
