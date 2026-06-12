@@ -1,10 +1,10 @@
 //! A thread-local handle to the device.
 
-use super::connection::Connection;
-use super::context::{Context, ContextDescriptor};
-use super::surface::{Surface, Synchronization, Win32Objects};
-use crate::angle::context::NativeContext;
-use crate::angle::surface::{NativeWidget, SurfaceDataGuard, SurfaceTexture};
+use crate::angle::connection::Connection;
+use crate::angle::context::{Context, ContextDescriptor, NativeContext};
+use crate::angle::surface::{
+    NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture, Synchronization, Win32Objects,
+};
 use crate::base::egl::context::{self, CurrentContextGuard};
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::error::ToWindowingApiError;
@@ -14,16 +14,12 @@ use crate::base::egl::ffi::{
     EGL_PLATFORM_DEVICE_EXT,
 };
 use crate::base::egl::surface::ExternalEGLSurfaces;
-use crate::context::ContextID;
-use crate::context::CREATE_CONTEXT_MUTEX;
-use crate::egl;
+use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::egl::types::{EGLAttrib, EGLConfig, EGLDeviceEXT, EGLDisplay, EGLSurface, EGLint};
-use crate::gl;
 use crate::surface::Framebuffer;
-use crate::GLApi;
-use crate::Gl;
-use crate::{ContextAttributes, Error, SurfaceInfo};
-use crate::{SurfaceAccess, SurfaceType};
+use crate::{
+    egl, gl, ContextAttributes, Error, GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType,
+};
 use euclid::default::Size2D;
 use glow::HasContext;
 use std::cell::{RefCell, RefMut};
