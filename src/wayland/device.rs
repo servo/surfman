@@ -1,7 +1,8 @@
 //! A wrapper around Wayland `EGLDisplay`s.
 
 use super::connection::{Connection, NativeConnectionWrapper};
-use super::surface::{Surface, SurfaceDataGuard, SurfaceTexture};
+use super::context::{Context, ContextDescriptor, NativeContext};
+use super::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture};
 use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
@@ -10,11 +11,8 @@ use crate::egl::types::EGLint;
 use crate::gl;
 pub use crate::mesa_surfaceless::device::Adapter;
 use crate::surface::Framebuffer;
-use crate::{
-    Context, ContextDescriptor, Error, GLApi, NativeContext, NativeWidget, SurfaceAccess,
-    SurfaceType,
-};
 use crate::{ContextAttributes, Gl, SurfaceInfo};
+use crate::{Error, GLApi, SurfaceAccess, SurfaceType};
 use euclid::default::Size2D;
 use glow::Texture;
 use std::os::raw::c_void;

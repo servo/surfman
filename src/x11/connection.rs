@@ -285,7 +285,7 @@ impl Connection {
 
 impl NativeConnectionWrapper {
     #[inline]
-    pub(crate) fn lock_display(&self) -> DisplayGuard {
+    pub(crate) fn lock_display(&self) -> DisplayGuard<'_> {
         unsafe {
             let display = self.x11_display;
             let xlib = &self.xlib;

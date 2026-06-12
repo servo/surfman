@@ -1,7 +1,7 @@
 //! A wrapper around X11 `EGLDisplay`s.
 
 use super::connection::{Connection, NativeConnectionWrapper};
-use super::context::Context;
+use super::context::{Context, ContextDescriptor, NativeContext};
 use super::surface::Surface;
 use crate::base::egl::{
     context::{self, CurrentContextGuard, EGLBackedContext},
@@ -9,13 +9,10 @@ use crate::base::egl::{
 };
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
+use crate::gl;
 pub use crate::mesa_surfaceless::device::Adapter;
 use crate::x11::surface::{NativeWidget, SurfaceDataGuard, SurfaceTexture};
-use crate::{
-    egl, ContextAttributes, ContextDescriptor, Error, GLApi, Gl, SurfaceAccess, SurfaceInfo,
-    SurfaceType,
-};
-use crate::{gl, NativeContext};
+use crate::{egl, ContextAttributes, Error, GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
 use glow::Texture;
 use std::os::raw::c_void;
