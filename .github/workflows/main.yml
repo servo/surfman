@@ -37,6 +37,9 @@ jobs:
             "chains sm-raw-window-handle-05",
           ]
         include:
+          - features: "sm-x11"
+            platform:
+              { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
           - features: "sm-x11 sm-wayland-default"
             platform:
               { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
