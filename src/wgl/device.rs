@@ -2,21 +2,18 @@
 //
 //! An implementation of the GPU device for Windows using the WGL API.
 
-use super::connection::Connection;
-use super::context::WGL_EXTENSION_FUNCTIONS;
-use super::surface::{Surface, Win32Objects};
-use crate::context::{self, ContextID, CREATE_CONTEXT_MUTEX};
+use crate::context::{current_context_uses_compatibility_profile, ContextID, CREATE_CONTEXT_MUTEX};
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
 use crate::surface::Framebuffer;
-use crate::wgl::context::{ContextStatus, CurrentContextGuard, FramebufferGuard, OPENGL_LIBRARY};
-use crate::wgl::surface::SurfaceDataGuard;
-use crate::{gl, ContextDescriptor, SurfaceAccess, SurfaceType};
-use crate::{gl_utils, NativeWidget};
-use crate::{Context, GLApi};
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
-use crate::{Gl, NativeContext};
-use crate::{SurfaceInfo, SurfaceTexture};
+use crate::wgl::connection::Connection;
+use crate::wgl::context::{
+    Context, ContextDescriptor, ContextStatus, CurrentContextGuard, FramebufferGuard,
+    NativeContext, OPENGL_LIBRARY, WGL_EXTENSION_FUNCTIONS,
+};
+use crate::wgl::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture, Win32Objects};
+use crate::{gl, gl_utils, GLApi, Gl, SurfaceAccess, SurfaceType};
+use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use euclid::default::Size2D;
 use glow::HasContext;
 use libc::c_uint;
@@ -514,8 +511,7 @@ impl Device {
             let _guard = self.temporarily_make_context_current(context);
 
             let gl_version = GLVersion::current(&context.gl);
-            let compatibility_profile =
-                context::current_context_uses_compatibility_profile(&context.gl);
+            let compatibility_profile = current_context_uses_compatibility_profile(&context.gl);
 
             ContextDescriptor {
                 pixel_format,
