@@ -133,7 +133,7 @@ impl Connection {
                 native_connection: Arc::new(NativeConnectionWrapper {
                     xlib,
                     egl_display,
-                    egl_display_is_owned: true,
+                    egl_display_is_owned: is_owned,
                     x11_display,
                     x11_display_is_owned: is_owned,
                 }),
