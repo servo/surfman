@@ -13,18 +13,11 @@ pub trait Connection: Sized {
     type Adapter;
     /// The device type associated with this connection.
     type Device;
-    /// The native type associated with this connection.
-    type NativeConnection;
-    /// The native device type associated with this connection.
-    type NativeDevice;
     /// The native widget type associated with this connection.
     type NativeWidget;
 
     /// Connects to the default display.
     fn new() -> Result<Self, Error>;
-
-    /// Returns the native connection corresponding to this connection.
-    fn native_connection(&self) -> Self::NativeConnection;
 
     /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
     fn gl_api(&self) -> GLApi;
@@ -45,12 +38,6 @@ pub trait Connection: Sized {
 
     /// Opens a device.
     fn create_device(&self, adapter: &Self::Adapter) -> Result<Self::Device, Error>;
-
-    /// Wraps an existing native device type in a device.
-    unsafe fn create_device_from_native_device(
-        &self,
-        native_device: Self::NativeDevice,
-    ) -> Result<Self::Device, Error>;
 
     /// Opens the display connection corresponding to the given `RawDisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle-05")]

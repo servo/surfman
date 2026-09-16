@@ -6,7 +6,6 @@
 pub mod connection {
     use crate::mesa_surfaceless::device::Device as SWDevice;
     use crate::multi::connection::Connection as MultiConnection;
-    use crate::multi::connection::NativeConnection as MultiNativeConnection;
     use crate::multi::device::Device as MultiDevice;
     use crate::wayland::device::Device as WaylandDevice;
     use crate::x11::device::Device as X11Device;
@@ -14,9 +13,6 @@ pub mod connection {
 
     /// Either a Wayland or an X11 display server connection.
     pub type Connection = MultiConnection<HWDevice, SWDevice>;
-
-    /// Either a Wayland or an X11 native connection
-    pub type NativeConnection = MultiNativeConnection<HWDevice, SWDevice>;
 }
 
 /// OpenGL rendering contexts.
@@ -24,7 +20,6 @@ pub mod context {
     use crate::mesa_surfaceless::device::Device as SWDevice;
     use crate::multi::context::Context as MultiContext;
     use crate::multi::context::ContextDescriptor as MultiContextDescriptor;
-    use crate::multi::context::NativeContext as MultiNativeContext;
     use crate::multi::device::Device as MultiDevice;
     use crate::wayland::device::Device as WaylandDevice;
     use crate::x11::device::Device as X11Device;
@@ -53,16 +48,12 @@ pub mod context {
     ///
     /// These are local to a device.
     pub type ContextDescriptor = MultiContextDescriptor<HWDevice, SWDevice>;
-
-    /// Either a Wayland or an X11 native context
-    pub type NativeContext = MultiNativeContext<HWDevice, SWDevice>;
 }
 
 /// Thread-local handles to devices.
 pub mod device {
     use crate::mesa_surfaceless::device::Device as SWDevice;
     use crate::multi::device::Adapter as MultiAdapter;
-    use crate::multi::device::NativeDevice as MultiNativeDevice;
     use crate::wayland::device::Device as WaylandDevice;
     use crate::x11::device::Device as X11Device;
 
@@ -79,9 +70,6 @@ pub mod device {
     ///
     /// Devices contain most of the relevant surface management methods.
     pub type Device = MultiDevice<HWDevice, SWDevice>;
-
-    /// Either a Wayland or an X11 native device
-    pub type NativeDevice = MultiNativeDevice<HWDevice, SWDevice>;
 }
 
 /// Hardware buffers of pixels.

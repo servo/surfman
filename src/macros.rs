@@ -34,9 +34,9 @@ macro_rules! declare_surfman {
 macro_rules! implement_interfaces {
     () => {
         mod implementation {
-            use super::connection::{Connection, NativeConnection};
-            use super::context::{Context, ContextDescriptor, NativeContext};
-            use super::device::{Adapter, Device, NativeDevice};
+            use super::connection::Connection;
+            use super::context::{Context, ContextDescriptor};
+            use super::device::{Adapter, Device};
             use super::surface::{NativeWidget, Surface, SurfaceTexture};
             use euclid::default::Size2D;
             use glow::Texture;
@@ -50,18 +50,11 @@ macro_rules! implement_interfaces {
             impl ConnectionInterface for Connection {
                 type Adapter = Adapter;
                 type Device = Device;
-                type NativeConnection = NativeConnection;
-                type NativeDevice = NativeDevice;
                 type NativeWidget = NativeWidget;
 
                 #[inline]
                 fn new() -> Result<Connection, Error> {
                     Connection::new()
-                }
-
-                #[inline]
-                fn native_connection(&self) -> Self::NativeConnection {
-                    Connection::native_connection(self)
                 }
 
                 #[inline]
@@ -92,14 +85,6 @@ macro_rules! implement_interfaces {
                 #[inline]
                 fn create_device(&self, adapter: &Adapter) -> Result<Self::Device, Error> {
                     Connection::create_device(self, adapter)
-                }
-
-                #[inline]
-                unsafe fn create_device_from_native_device(
-                    &self,
-                    native_device: Self::NativeDevice,
-                ) -> Result<Device, Error> {
-                    Connection::create_device_from_native_device(self, native_device)
                 }
 
                 #[inline]
@@ -150,17 +135,10 @@ macro_rules! implement_interfaces {
                 type Connection = Connection;
                 type Context = Context;
                 type ContextDescriptor = ContextDescriptor;
-                type NativeContext = NativeContext;
                 type Surface = Surface;
                 type SurfaceTexture = SurfaceTexture;
 
                 // device.rs
-
-                /// Returns the native device associated with this device.
-                #[inline]
-                fn native_device(&self) -> <Self::Connection as ConnectionInterface>::NativeDevice {
-                    Device::native_device(self)
-                }
 
                 #[inline]
                 fn connection(&self) -> Connection {
@@ -194,14 +172,6 @@ macro_rules! implement_interfaces {
                     share_with: Option<&Self::Context>,
                 ) -> Result<Self::Context, Error> {
                     Device::create_context(self, descriptor, share_with)
-                }
-
-                #[inline]
-                unsafe fn create_context_from_native_context(
-                    &self,
-                    native_context: Self::NativeContext,
-                ) -> Result<Self::Context, Error> {
-                    Device::create_context_from_native_context(self, native_context)
                 }
 
                 #[inline]
@@ -269,11 +239,6 @@ macro_rules! implement_interfaces {
                     context: &Self::Context,
                 ) -> Result<Option<SurfaceInfo>, Error> {
                     Device::context_surface_info(self, context)
-                }
-
-                #[inline]
-                fn native_context(&self, context: &Self::Context) -> Self::NativeContext {
-                    Device::native_context(self, context)
                 }
 
                 // surface.rs
