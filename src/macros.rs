@@ -88,16 +88,10 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                #[cfg(feature = "sm-raw-window-handle-05")]
-                fn from_raw_display_handle(
-                    raw_handle: rwh_05::RawDisplayHandle,
+                #[cfg(feature = "sm-raw-window-handle")]
+                fn from_display_handle(
+                    handle: raw_window_handle::DisplayHandle,
                 ) -> Result<Connection, Error> {
-                    Connection::from_raw_display_handle(raw_handle)
-                }
-
-                #[inline]
-                #[cfg(feature = "sm-raw-window-handle-06")]
-                fn from_display_handle(handle: rwh_06::DisplayHandle) -> Result<Connection, Error> {
                     Connection::from_display_handle(handle)
                 }
 
@@ -111,20 +105,10 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                #[cfg(feature = "sm-raw-window-handle-05")]
-                fn create_native_widget_from_raw_window_handle(
-                    &self,
-                    window: rwh_05::RawWindowHandle,
-                    size: Size2D<i32>,
-                ) -> Result<Self::NativeWidget, Error> {
-                    Connection::create_native_widget_from_raw_window_handle(self, window, size)
-                }
-
-                #[inline]
-                #[cfg(feature = "sm-raw-window-handle-06")]
+                #[cfg(feature = "sm-raw-window-handle")]
                 fn create_native_widget_from_window_handle(
                     &self,
-                    window: rwh_06::WindowHandle,
+                    window: raw_window_handle::WindowHandle,
                     size: Size2D<i32>,
                 ) -> Result<Self::NativeWidget, Error> {
                     Connection::create_native_widget_from_window_handle(self, window, size)

@@ -2,7 +2,7 @@
 //
 // This example demonstrates how to create a multithreaded OpenGL application using `surfman`.
 
-#![cfg(feature = "sm-raw-window-handle-06")]
+#![cfg(feature = "sm-raw-window-handle")]
 
 use self::common::{ck, Buffer, Program, ResourceLoader, Shader, ShaderKind};
 
@@ -26,7 +26,7 @@ use winit::{
     window::WindowBuilder,
 };
 
-use rwh_06::{HasDisplayHandle, HasWindowHandle};
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 pub mod common;
 
