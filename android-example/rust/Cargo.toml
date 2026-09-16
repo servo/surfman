@@ -14,15 +14,17 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
+[features]
+default = ["sm-raw-window-handle-06"]
+sm-raw-window-handle-06 = []
+
+
 [dependencies]
 android_logger = "0.13"
 euclid = { version = "0.22" }
 gl = "0.14"
 jni = "0.21"
 log = "0.4"
-surfman = { version = "0.9.4", features = [ "sm-test" ] }
+surfman = { path = "../../", features = [ "sm-test", "sm-raw-window-handle-06" ] }
 winit = { version = "0.29.10", features = [ "android-native-activity", "rwh_06" ] }
 rwh_06 = { package = "raw-window-handle", version = "0.6" }
-
-[patch.crates-io]
-surfman = { path = "../../" }

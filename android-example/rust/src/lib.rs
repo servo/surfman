@@ -1,6 +1,5 @@
 // surfman/android-example/rust/src/lib.rs
 
-#[macro_use]
 extern crate log;
 
 use crate::threads::common::ResourceLoader;
@@ -10,12 +9,12 @@ use android_logger::Config;
 use euclid::default::Size2D;
 use jni::objects::{GlobalRef, JByteBuffer, JClass, JObject, JValue, JValueGen};
 use jni::{JNIEnv, JavaVM};
-use log::Level;
 use std::cell::{Cell, RefCell};
 use std::mem;
-use std::thread::{self, JoinHandle};
+use surfman::hardware_buffer::context::NativeContext;
+use surfman::hardware_buffer::device::NativeDevice;
 use surfman::hardware_buffer::tests;
-use surfman::{Connection, NativeContext, NativeDevice};
+use surfman::Connection;
 
 #[path = "../../../examples/threads.rs"]
 mod threads;

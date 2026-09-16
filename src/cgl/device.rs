@@ -2,7 +2,7 @@
 
 use super::connection::Connection;
 use crate::base::io_surface::device::{Adapter as SystemAdapter, Device as SystemDevice};
-use crate::cgl::context::CurrentContextGuard;
+use crate::cgl::context::{CurrentContextGuard, NativeContext};
 use crate::cgl::error::ToWindowingApiError;
 use crate::cgl::ffi::{CGLReleaseContext, CGLRetainContext};
 use crate::cgl::surface::{surface_bind_to_gl_texture, NativeSurface};
@@ -10,8 +10,8 @@ use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::renderbuffers::Renderbuffers;
 use crate::surface::Framebuffer;
 use crate::{
-    gl, gl_utils, Context, GLVersion, NativeContext, NativeWidget, Surface, SurfaceAccess,
-    SurfaceInfo, SurfaceTexture, SurfaceType, WindowingApiError,
+    gl, gl_utils, Context, GLVersion, NativeWidget, Surface, SurfaceAccess, SurfaceInfo,
+    SurfaceTexture, SurfaceType, WindowingApiError,
 };
 use crate::{ContextAttributeFlags, ContextAttributes, ContextDescriptor, Error, GLApi, Gl};
 use cgl::{

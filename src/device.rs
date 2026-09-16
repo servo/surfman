@@ -20,17 +20,12 @@ where
     type Context;
     /// The context descriptor type associated with this device.
     type ContextDescriptor;
-    /// The native context type associated with this device.
-    type NativeContext;
     /// The surface type associated with this device.
     type Surface;
     /// The surface texture type associated with this device.
     type SurfaceTexture;
 
     // device.rs
-
-    /// Returns the native device associated with this device.
-    fn native_device(&self) -> <Self::Connection as ConnectionInterface>::NativeDevice;
 
     /// Returns the display server connection that this device was created with.
     fn connection(&self) -> Self::Connection;
@@ -59,14 +54,6 @@ where
         &self,
         descriptor: &Self::ContextDescriptor,
         share_with: Option<&Self::Context>,
-    ) -> Result<Self::Context, Error>;
-
-    /// Wraps a native context object in an OpenGL context.
-    ///
-    /// Panics if context is not current.
-    unsafe fn create_context_from_native_context(
-        &self,
-        native_context: Self::NativeContext,
     ) -> Result<Self::Context, Error>;
 
     /// Destroys a context.
@@ -138,9 +125,6 @@ where
     ///
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
     fn context_surface_info(&self, context: &Self::Context) -> Result<Option<SurfaceInfo>, Error>;
-
-    /// Returns the native context associated with the given context.
-    fn native_context(&self, context: &Self::Context) -> Self::NativeContext;
 
     // surface.rs
 

@@ -1,7 +1,7 @@
 //! A device abstraction that allows the choice of backends dynamically.
 
 use super::connection::Connection;
-use super::context::{Context, ContextDescriptor, NativeContext};
+use super::context::{Context, ContextDescriptor};
 use super::surface::{NativeWidget, Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
@@ -55,18 +55,6 @@ where
     Alternate(Alt),
 }
 
-/// Represents a native platform-specific device.
-pub enum NativeDevice<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    /// The default native device type.
-    Default(<Def::Connection as ConnectionInterface>::NativeDevice),
-    /// The alternate native device type.
-    Alternate(<Alt::Connection as ConnectionInterface>::NativeDevice),
-}
-
 impl<Def, Alt> Device<Def, Alt>
 where
     Def: DeviceInterface,
@@ -74,14 +62,6 @@ where
     Def::Connection: ConnectionInterface,
     Alt::Connection: ConnectionInterface,
 {
-    /// Returns the native device underlying this device.
-    pub fn native_device(&self) -> NativeDevice<Def, Alt> {
-        match *self {
-            Device::Default(ref device) => NativeDevice::Default(device.native_device()),
-            Device::Alternate(ref device) => NativeDevice::Alternate(device.native_device()),
-        }
-    }
-
     /// Returns the display server connection that this device was created with.
     pub fn connection(&self) -> Connection<Def, Alt> {
         match *self {
@@ -117,16 +97,10 @@ where
     type Connection = Connection<Def, Alt>;
     type Context = Context<Def, Alt>;
     type ContextDescriptor = ContextDescriptor<Def, Alt>;
-    type NativeContext = NativeContext<Def, Alt>;
     type Surface = Surface<Def, Alt>;
     type SurfaceTexture = SurfaceTexture<Def, Alt>;
 
     // device.rs
-
-    #[inline]
-    fn native_device(&self) -> NativeDevice<Def, Alt> {
-        Device::native_device(self)
-    }
 
     #[inline]
     fn connection(&self) -> Connection<Def, Alt> {
@@ -163,21 +137,8 @@ where
     }
 
     #[inline]
-    unsafe fn create_context_from_native_context(
-        &self,
-        native_context: Self::NativeContext,
-    ) -> Result<Context<Def, Alt>, Error> {
-        Device::create_context_from_native_context(self, native_context)
-    }
-
-    #[inline]
     fn destroy_context(&self, context: &mut Context<Def, Alt>) -> Result<(), Error> {
         Device::destroy_context(self, context)
-    }
-
-    #[inline]
-    fn native_context(&self, context: &Context<Def, Alt>) -> Self::NativeContext {
-        Device::native_context(self, context)
     }
 
     #[inline]
