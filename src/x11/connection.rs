@@ -304,3 +304,43 @@ unsafe fn terminate_egl_display(display: EGLDisplay) {
         assert_ne!(ok, egl::FALSE);
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg_attr(not(feature = "sm-test"), test)]
+    pub fn test_from_x11_display() {
+        use crate::{ContextAttributeFlags, ContextAttributes, GLVersion};
+
+        let connection = Connection::new().unwrap();
+        let adapter = connection
+            .create_low_power_adapter()
+            .expect("Failed to create adapter!");
+        let mut device = match connection.create_device(&adapter) {
+            Ok(device) => device,
+            Err(Error::RequiredExtensionUnavailable) => {
+                // Can't run this test on this hardware.
+                return;
+            }
+            Err(err) => panic!("Failed to create device: {:?}", err),
+        };
+
+        let context_descriptor = device
+            .create_context_descriptor(&ContextAttributes {
+                version: GLVersion::new(3, 0),
+                flags: ContextAttributeFlags::empty(),
+            })
+            .unwrap();
+
+        let mut context = device.create_context(&context_descriptor, None).unwrap();
+        device.make_context_current(&context).unwrap();
+
+        {
+            let _second_connection =
+                Connection::from_x11_display(connection.native_connection().x11_display, false);
+        }
+
+        device.destroy_context(&mut context).unwrap();
+    }
+}
