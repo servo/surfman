@@ -14,6 +14,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 
+pub mod adapter;
 #[cfg(all(windows_platform, feature = "sm-angle"))]
 pub mod angle;
 pub(crate) mod base;
@@ -25,6 +26,8 @@ pub mod connection;
 mod context;
 pub mod device;
 pub mod error;
+#[cfg(free_unix)]
+pub mod free_unix;
 mod gl_utils;
 #[cfg(any(android_platform, ohos_platform))]
 pub mod hardware_buffer;
@@ -61,18 +64,21 @@ pub use crate::context::{ContextAttributeFlags, ContextAttributes, ContextID};
 pub use crate::error::{Error, WindowingApiError};
 pub use crate::info::{GLApi, GLVersion};
 pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
+pub use adapter::Adapter;
 pub use default::connection::Connection;
 pub use default::context::{Context, ContextDescriptor};
-pub use default::device::{Adapter, Device};
+pub use default::device::Device;
 pub use default::surface::{NativeWidget, Surface, SurfaceTexture};
 pub(crate) use glow::{self as gl, Context as Gl};
 pub(crate) use macros::implement_interfaces;
 
 // TODO(pcwalton): Fill this in with other OS's.
 #[cfg(target_os = "macos")]
+pub use base::io_surface::adapter::AppleAdapter;
+#[cfg(target_os = "macos")]
 pub use base::io_surface::connection::Connection as SystemConnection;
 #[cfg(target_os = "macos")]
-pub use base::io_surface::device::{Adapter as SystemAdapter, Device as SystemDevice};
+pub use base::io_surface::device::Device as SystemDevice;
 #[cfg(target_os = "macos")]
 pub use base::io_surface::surface::Surface as SystemSurface;
 

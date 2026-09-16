@@ -1,5 +1,6 @@
 //! The abstract interface that all connections conform to.
 
+use crate::Adapter;
 use crate::Error;
 use crate::GLApi;
 
@@ -9,8 +10,6 @@ use std::os::raw::c_void;
 
 /// Methods relating to display server connections.
 pub trait Connection: Sized {
-    /// The adapter type associated with this connection.
-    type Adapter;
     /// The device type associated with this connection.
     type Device;
     /// The native widget type associated with this connection.
@@ -25,19 +24,19 @@ pub trait Connection: Sized {
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
-    fn create_adapter(&self) -> Result<Self::Adapter, Error>;
+    fn create_adapter(&self) -> Result<Adapter, Error>;
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    fn create_hardware_adapter(&self) -> Result<Self::Adapter, Error>;
+    fn create_hardware_adapter(&self) -> Result<Adapter, Error>;
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    fn create_low_power_adapter(&self) -> Result<Self::Adapter, Error>;
+    fn create_low_power_adapter(&self) -> Result<Adapter, Error>;
 
     /// Returns the "best" adapter on this system, preferring software adapters.
-    fn create_software_adapter(&self) -> Result<Self::Adapter, Error>;
+    fn create_software_adapter(&self) -> Result<Adapter, Error>;
 
     /// Opens a device.
-    fn create_device(&self, adapter: &Self::Adapter) -> Result<Self::Device, Error>;
+    fn create_device(&self, adapter: &Adapter) -> Result<Self::Device, Error>;
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     #[cfg(feature = "sm-raw-window-handle")]

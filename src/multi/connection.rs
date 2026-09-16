@@ -1,11 +1,11 @@
 //! A connection abstraction that allows the choice of backends dynamically.
 
-use super::device::{Adapter, Device};
+use super::device::Device;
 use super::surface::NativeWidget;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
-use crate::Error;
 use crate::GLApi;
+use crate::{Adapter, Error};
 
 use euclid::default::Size2D;
 
@@ -67,65 +67,44 @@ where
     /// Returns the "best" adapter on this system.
     ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
-    pub fn create_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+    pub fn create_adapter(&self) -> Result<Adapter, Error> {
         match *self {
-            Connection::Default(ref connection) => {
-                connection.create_adapter().map(Adapter::Default)
-            }
-            Connection::Alternate(ref connection) => {
-                connection.create_adapter().map(Adapter::Alternate)
-            }
+            Self::Default(ref connection) => connection.create_adapter(),
+            Self::Alternate(ref connection) => connection.create_adapter(),
         }
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    pub fn create_hardware_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
         match *self {
-            Connection::Default(ref connection) => {
-                connection.create_hardware_adapter().map(Adapter::Default)
-            }
-            Connection::Alternate(ref connection) => {
-                connection.create_hardware_adapter().map(Adapter::Alternate)
-            }
+            Self::Default(ref connection) => connection.create_hardware_adapter(),
+            Self::Alternate(ref connection) => connection.create_hardware_adapter(),
         }
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    pub fn create_low_power_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
         match *self {
-            Connection::Default(ref connection) => {
-                connection.create_low_power_adapter().map(Adapter::Default)
-            }
-            Connection::Alternate(ref connection) => connection
-                .create_low_power_adapter()
-                .map(Adapter::Alternate),
+            Self::Default(ref connection) => connection.create_low_power_adapter(),
+            Self::Alternate(ref connection) => connection.create_low_power_adapter(),
         }
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
-    pub fn create_software_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
         match *self {
-            Connection::Default(ref connection) => {
-                connection.create_software_adapter().map(Adapter::Default)
-            }
-            Connection::Alternate(ref connection) => {
-                connection.create_software_adapter().map(Adapter::Alternate)
-            }
+            Self::Default(ref connection) => connection.create_software_adapter(),
+            Self::Alternate(ref connection) => connection.create_software_adapter(),
         }
     }
 
     /// Opens the hardware device corresponding to the given adapter.
     ///
     /// Device handles are local to a single thread.
-    pub fn create_device(&self, adapter: &Adapter<Def, Alt>) -> Result<Device<Def, Alt>, Error> {
-        match (self, adapter) {
-            (Connection::Default(connection), Adapter::Default(adapter)) => {
-                connection.create_device(adapter).map(Device::Default)
-            }
-            (Connection::Alternate(connection), Adapter::Alternate(adapter)) => {
-                connection.create_device(adapter).map(Device::Alternate)
-            }
-            _ => Err(Error::IncompatibleAdapter),
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device<Def, Alt>, Error> {
+        match self {
+            Self::Default(connection) => connection.create_device(adapter).map(Device::Default),
+            Self::Alternate(connection) => connection.create_device(adapter).map(Device::Alternate),
         }
     }
 
@@ -181,7 +160,6 @@ where
     Def::Connection: ConnectionInterface<Device = Def>,
     Alt::Connection: ConnectionInterface<Device = Alt>,
 {
-    type Adapter = Adapter<Def, Alt>;
     type Device = Device<Def, Alt>;
     type NativeWidget = NativeWidget<Def, Alt>;
 
@@ -196,27 +174,27 @@ where
     }
 
     #[inline]
-    fn create_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+    fn create_adapter(&self) -> Result<Adapter, Error> {
         Connection::create_adapter(self)
     }
 
     #[inline]
-    fn create_hardware_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+    fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
         Connection::create_hardware_adapter(self)
     }
 
     #[inline]
-    fn create_low_power_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+    fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
         Connection::create_low_power_adapter(self)
     }
 
     #[inline]
-    fn create_software_adapter(&self) -> Result<Adapter<Def, Alt>, Error> {
+    fn create_software_adapter(&self) -> Result<Adapter, Error> {
         Connection::create_software_adapter(self)
     }
 
     #[inline]
-    fn create_device(&self, adapter: &Adapter<Def, Alt>) -> Result<Device<Def, Alt>, Error> {
+    fn create_device(&self, adapter: &Adapter) -> Result<Device<Def, Alt>, Error> {
         Connection::create_device(self, adapter)
     }
 

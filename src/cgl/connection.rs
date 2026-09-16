@@ -3,7 +3,8 @@
 //! Connection types are zero-sized on macOS, because the system APIs automatically manage the
 //! global window server connection.
 
-use super::device::{Adapter, Device};
+use super::device::Device;
+use crate::adapter::Adapter;
 use crate::base::io_surface::connection::Connection as SystemConnection;
 use crate::base::io_surface::device::NativeDevice;
 use crate::base::io_surface::surface::NativeWidget;
@@ -52,25 +53,25 @@ impl Connection {
     /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
     pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        self.0.create_adapter().map(Adapter)
+        self.0.create_adapter().map(Into::into)
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        self.0.create_hardware_adapter().map(Adapter)
+        self.0.create_hardware_adapter().map(Into::into)
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        self.0.create_low_power_adapter().map(Adapter)
+        self.0.create_low_power_adapter().map(Into::into)
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        self.0.create_software_adapter().map(Adapter)
+        self.0.create_software_adapter().map(Into::into)
     }
 
     /// Opens the hardware device corresponding to the given adapter.
@@ -78,7 +79,7 @@ impl Connection {
     /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        self.0.create_device(&adapter.0).map(Device)
+        self.0.create_device(adapter.apple()?).map(Device)
     }
 
     /// An alias for `connection.create_device()` with the default adapter.

@@ -5,11 +5,11 @@
 //! thread-safe. So we need to use the DXGI/Direct3D concept of a connection instead. These are
 //! implicit in the Win32 API, and as such this type is a no-op.
 
-use super::device::{Adapter, Device, NativeDevice, VendorPreference};
+use super::adapter::AngleAdapter;
+use super::device::{Device, NativeDevice, VendorPreference};
 use super::surface::NativeWidget;
 use crate::egl::types::{EGLDisplay, EGLNativeWindowType};
-use crate::Error;
-use crate::GLApi;
+use crate::{Adapter, Error, GLApi};
 
 use euclid::default::Size2D;
 
@@ -74,25 +74,27 @@ impl Connection {
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::new(
+        AngleAdapter::new(
             D3D_DRIVER_TYPE_UNKNOWN,
             VendorPreference::Avoid(INTEL_PCI_ID),
         )
+        .map(Into::into)
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::new(
+        AngleAdapter::new(
             D3D_DRIVER_TYPE_UNKNOWN,
             VendorPreference::Prefer(INTEL_PCI_ID),
         )
+        .map(Into::into)
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Adapter::new(D3D_DRIVER_TYPE_WARP, VendorPreference::None)
+        AngleAdapter::new(D3D_DRIVER_TYPE_WARP, VendorPreference::None).map(Into::into)
     }
 
     /// Opens the hardware device corresponding to the given adapter.
@@ -100,7 +102,7 @@ impl Connection {
     /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new(adapter)
+        Device::new(adapter.angle()?)
     }
 
     /// Wraps a `NativeDevice` in a `Device` and returns it.

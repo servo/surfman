@@ -1,5 +1,6 @@
 //! Bindings to EGL on Android.
 
+pub mod adapter;
 pub mod connection;
 pub mod context;
 pub mod device;

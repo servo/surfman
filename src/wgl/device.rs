@@ -6,19 +6,20 @@ use crate::context::{current_context_uses_compatibility_profile, ContextID, CREA
 use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
 use crate::surface::Framebuffer;
+use crate::wgl::adapter::WglAdapter;
 use crate::wgl::connection::Connection;
 use crate::wgl::context::{
     Context, ContextDescriptor, ContextStatus, CurrentContextGuard, FramebufferGuard,
     NativeContext, OPENGL_LIBRARY, WGL_EXTENSION_FUNCTIONS,
 };
 use crate::wgl::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture, Win32Objects};
+use crate::Adapter;
 use crate::{gl, gl_utils, GLApi, Gl, SurfaceAccess, SurfaceType};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use euclid::default::Size2D;
 use glow::HasContext;
 use libc::c_uint;
-use log::warn;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_int, c_void};
@@ -79,20 +80,6 @@ pub(crate) const HIDDEN_WINDOW_SIZE: c_int = 16;
 
 const INTEL_PCI_ID: UINT = 0x8086;
 
-static NVIDIA_GPU_SELECT_SYMBOL: &CStr = c"NvOptimusEnablement";
-static AMD_GPU_SELECT_SYMBOL: &CStr = c"AmdPowerXpressRequestHighPerformance";
-
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
-#[derive(Clone, Debug)]
-pub enum Adapter {
-    #[doc(hidden)]
-    HighPerformance,
-    #[doc(hidden)]
-    LowPower,
-}
-
 struct SendableHWND(HWND);
 
 unsafe impl Send for SendableHWND {}
@@ -102,7 +89,7 @@ unsafe impl Send for SendableHWND {}
 /// Devices contain most of the relevant surface management methods.
 #[allow(dead_code)]
 pub struct Device {
-    pub(crate) adapter: Adapter,
+    pub(crate) adapter: WglAdapter,
     pub(crate) d3d11_device: ComPtr<ID3D11Device>,
     pub(crate) d3d11_device_context: ComPtr<ID3D11DeviceContext>,
     pub(crate) gl_dx_interop_device: HANDLE,
@@ -122,44 +109,6 @@ pub struct NativeDevice {
     pub gl_dx_interop_device: HANDLE,
 }
 
-impl Adapter {
-    pub(crate) fn set_exported_variables(&self) {
-        unsafe {
-            let current_module = libloaderapi::GetModuleHandleA(ptr::null());
-            assert!(!current_module.is_null());
-            let nvidia_gpu_select_variable: *mut i32 =
-                libloaderapi::GetProcAddress(current_module, NVIDIA_GPU_SELECT_SYMBOL.as_ptr())
-                    as *mut i32;
-            let amd_gpu_select_variable: *mut i32 =
-                libloaderapi::GetProcAddress(current_module, AMD_GPU_SELECT_SYMBOL.as_ptr())
-                    as *mut i32;
-            if nvidia_gpu_select_variable.is_null() || amd_gpu_select_variable.is_null() {
-                println!(
-                    "surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
-                       Your application may end up using the wrong GPU (discrete vs. \
-                       integrated). To fix this issue, ensure that you are using the MSVC \
-                       version of Rust and invoke the `declare_surfman!()` macro at the root of \
-                       your crate."
-                );
-                warn!(
-                    "surfman: Could not find the NVIDIA and/or AMD GPU selection symbols. \
-                       Your application may end up using the wrong GPU (discrete vs. \
-                       integrated). To fix this issue, ensure that you are using the MSVC \
-                       version of Rust and invoke the `declare_surfman!()` macro at the root of \
-                       your crate."
-                );
-                return;
-            }
-            let value = match *self {
-                Adapter::HighPerformance => 1,
-                Adapter::LowPower => 0,
-            };
-            *nvidia_gpu_select_variable = value;
-            *amd_gpu_select_variable = value;
-        }
-    }
-}
-
 impl Drop for Device {
     fn drop(&mut self) {
         let dx_interop_functions = WGL_EXTENSION_FUNCTIONS
@@ -173,7 +122,7 @@ impl Drop for Device {
 }
 
 impl Device {
-    pub(crate) fn new(adapter: &Adapter) -> Result<Device, Error> {
+    pub(crate) fn new(adapter: &WglAdapter) -> Result<Device, Error> {
         adapter.set_exported_variables();
 
         let dx_interop_functions = match WGL_EXTENSION_FUNCTIONS.dx_interop_functions {
@@ -210,7 +159,7 @@ impl Device {
             let hidden_window = HiddenWindow::new();
 
             Ok(Device {
-                adapter: (*adapter).clone(),
+                adapter: adapter.clone(),
                 d3d11_device,
                 d3d11_device_context,
                 gl_dx_interop_device,
@@ -278,7 +227,7 @@ impl Device {
     /// Returns the adapter that this device was created with.
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        self.adapter.clone()
+        self.adapter.clone().into()
     }
 
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
@@ -1283,16 +1232,16 @@ impl Device {
 }
 
 impl Adapter {
-    fn from_dxgi_adapter(dxgi_adapter: &ComPtr<IDXGIAdapter>) -> Adapter {
+    fn from_dxgi_adapter(dxgi_adapter: &ComPtr<IDXGIAdapter>) -> WglAdapter {
         unsafe {
             let mut adapter_desc = mem::zeroed();
             let result = dxgi_adapter.GetDesc(&mut adapter_desc);
             assert_eq!(result, S_OK);
 
             if adapter_desc.VendorId == INTEL_PCI_ID {
-                Adapter::LowPower
+                WglAdapter::LowPower
             } else {
-                Adapter::HighPerformance
+                WglAdapter::HighPerformance
             }
         }
     }

@@ -2,6 +2,7 @@
 
 //! A backend using the native Windows OpenGL WGL API.
 
+pub mod adapter;
 pub mod connection;
 pub mod context;
 pub mod device;
