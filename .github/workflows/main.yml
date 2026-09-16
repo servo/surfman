@@ -20,7 +20,6 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - { target: aarch64-apple-darwin, os: macos-15, test: true }
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
           - { target: x86_64-pc-windows-msvc, os: windows-latest, test: true }
           - { target: aarch64-pc-windows-msvc, os: windows-latest, test: false }
@@ -37,6 +36,9 @@ jobs:
             "chains sm-raw-window-handle-05",
           ]
         include:
+          - features: "chains sm-raw-window-handle-06"
+            platform:
+              { target: aarch64-apple-darwin, os: macos-15, test: true }
           - features: "sm-x11"
             platform:
               { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
