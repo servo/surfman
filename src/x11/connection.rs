@@ -301,7 +301,9 @@ unsafe fn create_egl_display(display: *mut Display) -> EGLDisplay {
 unsafe fn terminate_egl_display(display: EGLDisplay) {
     EGL_FUNCTIONS.with(|egl| {
         let ok = egl.Terminate(display);
-        assert_ne!(ok, egl::FALSE);
+        if cfg!(debug_assertions) {
+            assert_ne!(ok, egl::FALSE);
+        }
     })
 }
 
