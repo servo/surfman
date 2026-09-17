@@ -1,34 +1,5 @@
 //! Demonstrates how to use `surfman` to draw to a window surface via the CPU.
 
-use euclid::default::{Point2D, Size2D};
-use rand::{self, Rng};
-use surfman::{SurfaceAccess, SurfaceType};
-use winit::dpi::PhysicalSize;
-use winit::event::WindowEvent::KeyboardInput;
-use winit::event::{DeviceEvent, ElementState, Event, KeyEvent, RawKeyEvent, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::keyboard::{Key, NamedKey, PhysicalKey};
-use winit::raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle, HasWindowHandle};
-use winit::window::WindowBuilder;
-
-#[cfg(target_os = "macos")]
-use surfman::SystemConnection;
-
-const WINDOW_WIDTH: i32 = 800;
-const WINDOW_HEIGHT: i32 = 600;
-
-const BYTES_PER_PIXEL: usize = 4;
-
-const FOREGROUND_COLOR: u32 = !0;
-
-const ITERATIONS_PER_FRAME: usize = 20;
-
-static TRIANGLE_POINTS: [(f32, f32); 3] = [
-    (400.0, 300.0 + 75.0 + 150.0),
-    (400.0 + 259.81, 300.0 + 75.0 - 300.0),
-    (400.0 - 259.81, 300.0 + 75.0 - 300.0),
-];
-
 #[cfg(not(all(target_os = "macos", feature = "sm-raw-window-handle")))]
 fn main() {
     println!("The `chaos_game` demo is not yet supported on this platform.");
@@ -36,6 +7,37 @@ fn main() {
 
 #[cfg(all(target_os = "macos", feature = "sm-raw-window-handle"))]
 fn main() {
+    use euclid::default::{Point2D, Size2D};
+    use rand::{self, Rng};
+    use surfman::SystemConnection;
+    use surfman::{SurfaceAccess, SurfaceType};
+    use winit::dpi::PhysicalSize;
+    use winit::event::WindowEvent::KeyboardInput;
+    use winit::event::{DeviceEvent, ElementState, Event, KeyEvent, RawKeyEvent, WindowEvent};
+    use winit::event_loop::{ControlFlow, EventLoop};
+    use winit::keyboard::{Key, NamedKey, PhysicalKey};
+    use winit::raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle, HasWindowHandle};
+    use winit::window::WindowBuilder;
+
+    const WINDOW_WIDTH: i32 = 800;
+    const WINDOW_HEIGHT: i32 = 600;
+    const BYTES_PER_PIXEL: usize = 4;
+    const FOREGROUND_COLOR: u32 = !0;
+    const ITERATIONS_PER_FRAME: usize = 20;
+    static TRIANGLE_POINTS: [(f32, f32); 3] = [
+        (400.0, 300.0 + 75.0 + 150.0),
+        (400.0 + 259.81, 300.0 + 75.0 - 300.0),
+        (400.0 - 259.81, 300.0 + 75.0 - 300.0),
+    ];
+
+    fn put_pixel(data: &mut [u8], point: &Point2D<f32>, color: u32) {
+        let (x, y) = (f32::round(point.x) as usize, f32::round(point.y) as usize);
+        let start = (y * WINDOW_WIDTH as usize + x) * BYTES_PER_PIXEL;
+        for index in 0..BYTES_PER_PIXEL {
+            data[index + start] = (color >> (index * 8)) as u8;
+        }
+    }
+
     let connection = SystemConnection::new().unwrap();
     let adapter = connection.create_adapter().unwrap();
     let mut device = connection.create_device(&adapter).unwrap();
@@ -101,12 +103,4 @@ fn main() {
             }
         };
     });
-}
-
-fn put_pixel(data: &mut [u8], point: &Point2D<f32>, color: u32) {
-    let (x, y) = (f32::round(point.x) as usize, f32::round(point.y) as usize);
-    let start = (y * WINDOW_WIDTH as usize + x) * BYTES_PER_PIXEL;
-    for index in 0..BYTES_PER_PIXEL {
-        data[index + start] = (color >> (index * 8)) as u8;
-    }
 }
