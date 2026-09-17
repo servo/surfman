@@ -33,8 +33,8 @@ pub(crate) struct NativeConnectionWrapper {
     pub(crate) egl_display: EGLDisplay,
     x11_display: *mut Display,
     /// Whether or not this [`NativeConnectionWrapper`] created its X11 [`Display`].
-    /// If true, the `Drop` handler is reponsible for cleaning up both the X11
-    /// and EGL [`Display`].
+    /// If true, the `Drop` handler is responsible for cleaning up both the X11
+    /// and [`EGLDisplay`].
     is_owned: bool,
 }
 
@@ -119,7 +119,7 @@ impl Connection {
         })
     }
 
-    fn from_x11_display(x11_display: *mut Display, is_owned: bool) -> Result<Connection, Error> {
+    fn from_x11_display(x11_display: *mut Display) -> Result<Connection, Error> {
         let xlib = Xlib::open().map_err(|_| Error::ConnectionFailed)?;
         unsafe {
             let egl_display = create_egl_display(x11_display);
@@ -128,7 +128,7 @@ impl Connection {
                     xlib,
                     egl_display,
                     x11_display,
-                    is_owned,
+                    is_owned: false,
                 }),
             })
         }
@@ -212,7 +212,7 @@ impl Connection {
             _ => return Err(Error::IncompatibleRawDisplayHandle),
         };
 
-        Connection::from_x11_display(display, false)
+        Connection::from_x11_display(display)
     }
 
     /// Create a native widget from a raw pointer
@@ -301,9 +301,7 @@ unsafe fn create_egl_display(display: *mut Display) -> EGLDisplay {
 unsafe fn terminate_egl_display(display: EGLDisplay) {
     EGL_FUNCTIONS.with(|egl| {
         let ok = egl.Terminate(display);
-        if cfg!(debug_assertions) {
-            assert_ne!(ok, egl::FALSE);
-        }
+        debug_assert_ne!(ok, egl::FALSE);
     })
 }
 
@@ -316,16 +314,14 @@ mod tests {
         use crate::{ContextAttributeFlags, ContextAttributes, GLVersion};
 
         let connection = Connection::new().unwrap();
-        let adapter = connection
-            .create_low_power_adapter()
-            .expect("Failed to create adapter!");
-        let mut device = match connection.create_device(&adapter) {
+        let adapter = connection.create_low_power_adapter().unwrap();
+        let device = match connection.create_device(&adapter) {
             Ok(device) => device,
             Err(Error::RequiredExtensionUnavailable) => {
                 // Can't run this test on this hardware.
                 return;
             }
-            Err(err) => panic!("Failed to create device: {:?}", err),
+            Err(error) => panic!("Failed to create device: {error:?}"),
         };
 
         let context_descriptor = device
@@ -340,7 +336,7 @@ mod tests {
 
         {
             let _second_connection =
-                Connection::from_x11_display(connection.native_connection().x11_display, false);
+                Connection::from_x11_display(connection.native_connection().x11_display).unwrap();
         }
 
         device.destroy_context(&mut context).unwrap();
