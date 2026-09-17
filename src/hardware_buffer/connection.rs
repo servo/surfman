@@ -99,15 +99,9 @@ impl Connection {
         })
     }
 
-    /// Opens the display connection corresponding to the given raw display handle.
-    #[cfg(feature = "sm-raw-window-handle-05")]
-    pub fn from_raw_display_handle(_: rwh_05::RawDisplayHandle) -> Result<Connection, Error> {
-        Ok(Connection)
-    }
-
     /// Opens the display connection corresponding to the given `DisplayHandle`.
-    #[cfg(feature = "sm-raw-window-handle-06")]
-    pub fn from_display_handle(_: rwh_06::DisplayHandle) -> Result<Connection, Error> {
+    #[cfg(feature = "sm-raw-window-handle")]
+    pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
         Ok(Connection)
     }
 
@@ -135,46 +129,12 @@ impl Connection {
         Self::create_native_widget_from_ptr_impl(raw)
     }
 
-    #[cfg(all(feature = "sm-raw-window-handle-05", android_platform))]
+    #[cfg(all(feature = "sm-raw-window-handle", android_platform))]
     #[inline]
-    fn create_native_widget_from_rwh_05_handle(
-        raw_handle: rwh_05::RawWindowHandle,
+    fn create_native_widget_from_raw_window_handle(
+        handle: raw_window_handle::WindowHandle,
     ) -> Result<NativeWidget, Error> {
-        use rwh_05::RawWindowHandle::AndroidNdk;
-
-        match raw_handle {
-            AndroidNdk(handle) => Ok(NativeWidget {
-                native_window: handle.a_native_window as *mut _,
-            }),
-            _ => Err(Error::IncompatibleNativeWidget),
-        }
-    }
-
-    #[cfg(all(feature = "sm-raw-window-handle-05", ohos_platform))]
-    #[inline]
-    fn create_native_widget_from_rwh_05_handle(
-        _raw_handle: rwh_05::RawWindowHandle,
-    ) -> Result<NativeWidget, Error> {
-        Err(Error::IncompatibleNativeWidget)
-    }
-
-    /// Create a native widget type from the given `RawWindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle-05")]
-    #[inline]
-    pub fn create_native_widget_from_raw_window_handle(
-        &self,
-        raw_handle: rwh_05::RawWindowHandle,
-        _size: Size2D<i32>,
-    ) -> Result<NativeWidget, Error> {
-        Self::create_native_widget_from_rwh_05_handle(raw_handle)
-    }
-
-    #[cfg(all(feature = "sm-raw-window-handle-06", android_platform))]
-    #[inline]
-    fn create_native_widget_from_rwh_06_handle(
-        handle: rwh_06::WindowHandle,
-    ) -> Result<NativeWidget, Error> {
-        use rwh_06::RawWindowHandle::AndroidNdk;
+        use raw_window_handle::RawWindowHandle::AndroidNdk;
 
         match handle.as_raw() {
             AndroidNdk(handle) => Ok(NativeWidget {
@@ -184,12 +144,12 @@ impl Connection {
         }
     }
 
-    #[cfg(all(feature = "sm-raw-window-handle-06", ohos_platform))]
+    #[cfg(all(feature = "sm-raw-window-handle", ohos_platform))]
     #[inline]
-    fn create_native_widget_from_rwh_06_handle(
-        handle: rwh_06::WindowHandle,
+    fn create_native_widget_from_raw_window_handle(
+        handle: raw_window_handle::WindowHandle,
     ) -> Result<NativeWidget, Error> {
-        use rwh_06::RawWindowHandle::OhosNdk;
+        use raw_window_handle::RawWindowHandle::OhosNdk;
 
         match handle.as_raw() {
             OhosNdk(handle) => Ok(NativeWidget {
@@ -200,14 +160,14 @@ impl Connection {
     }
 
     /// Create a native widget type from the given `WindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle-06")]
+    #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
     pub fn create_native_widget_from_window_handle(
         &self,
-        handle: rwh_06::WindowHandle,
+        handle: raw_window_handle::WindowHandle,
         _size: Size2D<i32>,
     ) -> Result<NativeWidget, Error> {
-        Self::create_native_widget_from_rwh_06_handle(handle)
+        Self::create_native_widget_from_raw_window_handle(handle)
     }
 }
 

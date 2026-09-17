@@ -15,8 +15,8 @@ panic = "abort"
 panic = "abort"
 
 [features]
-default = ["sm-raw-window-handle-06"]
-sm-raw-window-handle-06 = []
+default = ["sm-raw-window-handle"]
+sm-raw-window-handle = []
 
 
 [dependencies]
@@ -25,6 +25,6 @@ euclid = { version = "0.22" }
 gl = "0.14"
 jni = "0.21"
 log = "0.4"
-surfman = { path = "../../", features = [ "sm-test", "sm-raw-window-handle-06" ] }
+surfman = { path = "../../", features = [ "sm-test", "sm-raw-window-handle" ] }
 winit = { version = "0.29.10", features = [ "android-native-activity", "rwh_06" ] }
-rwh_06 = { package = "raw-window-handle", version = "0.6" }
+raw-window-handle = { version = "0.6" }

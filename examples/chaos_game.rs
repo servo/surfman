@@ -29,12 +29,12 @@ static TRIANGLE_POINTS: [(f32, f32); 3] = [
     (400.0 - 259.81, 300.0 + 75.0 - 300.0),
 ];
 
-#[cfg(not(all(target_os = "macos", feature = "sm-raw-window-handle-06")))]
+#[cfg(not(all(target_os = "macos", feature = "sm-raw-window-handle")))]
 fn main() {
     println!("The `chaos_game` demo is not yet supported on this platform.");
 }
 
-#[cfg(all(target_os = "macos", feature = "sm-raw-window-handle-06"))]
+#[cfg(all(target_os = "macos", feature = "sm-raw-window-handle"))]
 fn main() {
     let connection = SystemConnection::new().unwrap();
     let adapter = connection.create_adapter().unwrap();

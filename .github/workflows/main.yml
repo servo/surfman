@@ -32,11 +32,10 @@ jobs:
         features:
           [
             "",
-            "chains sm-raw-window-handle-06",
-            "chains sm-raw-window-handle-05",
+            "chains sm-raw-window-handle",
           ]
         include:
-          - features: "chains sm-raw-window-handle-06"
+          - features: "chains sm-raw-window-handle"
             platform:
               { target: aarch64-apple-darwin, os: macos-15, test: true }
           - features: "sm-x11"
@@ -95,8 +94,7 @@ jobs:
         features:
           [
             "",
-            "chains sm-raw-window-handle-06",
-            "chains sm-raw-window-handle-05",
+            "chains sm-raw-window-handle",
           ]
     steps:
       - uses: actions/checkout@v4
