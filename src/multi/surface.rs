@@ -105,7 +105,7 @@ where
         surface_type: SurfaceType<NativeWidget<Def, Alt>>,
     ) -> Result<Surface<Def, Alt>, Error> {
         match (self, context) {
-            (&Device::Default(ref device), Context::Default(context)) => {
+            (Device::Default(device), Context::Default(context)) => {
                 let surface_type = match surface_type {
                     SurfaceType::Generic { size } => SurfaceType::Generic { size },
                     SurfaceType::Widget {
@@ -119,7 +119,7 @@ where
                     .create_surface(context, surface_access, surface_type)
                     .map(Surface::Default)
             }
-            (&Device::Alternate(ref device), Context::Alternate(context)) => {
+            (Device::Alternate(device), Context::Alternate(context)) => {
                 let surface_type = match surface_type {
                     SurfaceType::Generic { size } => SurfaceType::Generic { size },
                     SurfaceType::Widget {

@@ -444,8 +444,8 @@ impl ContextDescriptor {
         egl_context: EGLContext,
     ) -> ContextDescriptor {
         let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
-        let gl_version = GLVersion::current(&gl);
-        let compatibility_profile = context::current_context_uses_compatibility_profile(&gl);
+        let gl_version = GLVersion::current(gl);
+        let compatibility_profile = context::current_context_uses_compatibility_profile(gl);
 
         ContextDescriptor {
             egl_config_id,

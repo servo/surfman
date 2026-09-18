@@ -47,7 +47,7 @@ impl Connection {
             CFMutableDictionary::set_value(
                 Some(&bundle_info_dictionary),
                 &*supports_automatic_graphics_switching_key as *const _ as *const c_void,
-                &*supports_automatic_graphics_switching_value as *const _ as *const c_void,
+                supports_automatic_graphics_switching_value as *const _ as *const c_void,
             );
         }
 

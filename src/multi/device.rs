@@ -254,7 +254,7 @@ where
         context: &mut Self::Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        Device::resize_bound_surface(&self, context, size)
+        Device::resize_bound_surface(self, context, size)
     }
 
     #[inline]
