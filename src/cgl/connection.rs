@@ -93,7 +93,6 @@ impl Connection {
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_display_handle(
         handle: raw_window_handle::DisplayHandle,
     ) -> Result<Connection, Error> {
@@ -110,7 +109,6 @@ impl Connection {
     }
 
     /// Create a native widget type from the given `WindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
     pub fn create_native_widget_from_window_handle(
         &self,

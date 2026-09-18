@@ -19,7 +19,6 @@ pub mod angle;
 pub(crate) mod base;
 #[cfg(macos_platform)]
 pub mod cgl;
-#[cfg(feature = "chains")]
 pub mod chains;
 pub mod connection;
 mod context;

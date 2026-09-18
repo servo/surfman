@@ -88,7 +88,6 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                #[cfg(feature = "sm-raw-window-handle")]
                 fn from_display_handle(
                     handle: raw_window_handle::DisplayHandle,
                 ) -> Result<Connection, Error> {
@@ -105,7 +104,6 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                #[cfg(feature = "sm-raw-window-handle")]
                 fn create_native_widget_from_window_handle(
                     &self,
                     window: raw_window_handle::WindowHandle,

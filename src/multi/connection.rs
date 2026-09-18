@@ -130,7 +130,6 @@ where
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_display_handle(
         handle: raw_window_handle::DisplayHandle,
     ) -> Result<Connection<Def, Alt>, Error> {
@@ -157,7 +156,6 @@ where
     }
 
     /// Create a native widget type from the given `WindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
     pub fn create_native_widget_from_window_handle(
         &self,
         handle: raw_window_handle::WindowHandle,
@@ -220,7 +218,6 @@ where
         Connection::create_device(self, adapter)
     }
 
-    #[cfg(feature = "sm-raw-window-handle")]
     fn from_display_handle(
         handle: raw_window_handle::DisplayHandle,
     ) -> Result<Connection<Def, Alt>, Error> {
@@ -236,7 +233,6 @@ where
         Connection::create_native_widget_from_ptr(self, raw, size)
     }
 
-    #[cfg(feature = "sm-raw-window-handle")]
     fn create_native_widget_from_window_handle(
         &self,
         handle: raw_window_handle::WindowHandle,

@@ -18,8 +18,6 @@ gl_generator = "0.14"
 cfg_aliases = "0.2.1"
 
 [features]
-chains = ["fnv"]
-default = ["sm-raw-window-handle"]
 sm-angle = []
 sm-angle-builtin = ["mozangle"]
 sm-angle-default = ["sm-angle"]
@@ -27,17 +25,16 @@ sm-no-wgl = ["sm-angle-default"]
 sm-test = []
 sm-wayland-default = []
 sm-x11 = ["x11-dl"]
-sm-raw-window-handle = ["dep:raw-window-handle"]
 
 [dependencies]
 bitflags = "2.6"
 euclid = "0.22"
-fnv = { version = "1.0", optional = true }
+fnv = { version = "1.0" }
 libc = "0.2"
 log = "0.4"
 glow = "0.17"
 osmesa-sys = { version = "0.1", optional = true }
-raw-window-handle = { version = "0.6.2", features = [ "std" ], optional = true }
+raw-window-handle = { version = "0.6.2", features = [ "std" ] }
 
 [dev-dependencies]
 clap = "2"

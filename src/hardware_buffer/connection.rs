@@ -100,7 +100,6 @@ impl Connection {
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
     pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
         Ok(Connection)
     }
@@ -129,7 +128,7 @@ impl Connection {
         Self::create_native_widget_from_ptr_impl(raw)
     }
 
-    #[cfg(all(feature = "sm-raw-window-handle", android_platform))]
+    #[cfg(android_platform)]
     #[inline]
     fn create_native_widget_from_raw_window_handle(
         handle: raw_window_handle::WindowHandle,
@@ -144,7 +143,7 @@ impl Connection {
         }
     }
 
-    #[cfg(all(feature = "sm-raw-window-handle", ohos_platform))]
+    #[cfg(ohos_platform)]
     #[inline]
     fn create_native_widget_from_raw_window_handle(
         handle: raw_window_handle::WindowHandle,
@@ -160,7 +159,6 @@ impl Connection {
     }
 
     /// Create a native widget type from the given `WindowHandle`.
-    #[cfg(feature = "sm-raw-window-handle")]
     #[inline]
     pub fn create_native_widget_from_window_handle(
         &self,
