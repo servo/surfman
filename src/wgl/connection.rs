@@ -132,6 +132,12 @@ impl Connection {
     }
 }
 
+impl Default for NativeConnection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NativeConnection {
     /// Creates a native connection.
     ///

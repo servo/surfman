@@ -233,7 +233,7 @@ impl Device {
 
         let opaque = native_widget.opaque;
         let layer = CALayer::new();
-        let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
+        let layer_size = CGSize::new(logical_size.width, logical_size.height);
         layer.setFrame(CGRect::new(CGPoint::ZERO, layer_size));
         layer.setContents(Some(front_surface.as_ref()));
         layer.setOpaque(opaque);
@@ -281,7 +281,7 @@ impl Device {
     ) -> Result<(), Error> {
         // The surface will not appear if its width is not a multiple of 4 (i.e. stride is a
         // multiple of 16 bytes). Enforce this.
-        let width = size.width as i32;
+        let width = size.width;
         if width % 4 != 0 {
             size.width = width + 4 - width % 4;
         }
@@ -307,7 +307,7 @@ impl Device {
             },
         });
         let logical_size = logical_rect.size;
-        let layer_size = CGSize::new(logical_size.width as f64, logical_size.height as f64);
+        let layer_size = CGSize::new(logical_size.width, logical_size.height);
 
         // Flip contents right-side-up.
         let sublayer_transform =

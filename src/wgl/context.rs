@@ -148,7 +148,7 @@ impl NativeContext {
     pub fn current() -> Result<NativeContext, Error> {
         unsafe {
             let glrc = wglGetCurrentContext();
-            if glrc != ptr::null_mut() {
+            if !glrc.is_null() {
                 Ok(NativeContext(glrc))
             } else {
                 Err(Error::NoCurrentContext)

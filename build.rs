@@ -42,7 +42,7 @@ fn main() {
     if target_os == "android"
         || (target_os == "windows" && cfg!(feature = "sm-angle"))
         || target_env == "ohos"
-        || target_family.as_ref().map_or(false, |f| f == "unix")
+        || target_family.as_ref().is_some_and(|f| f == "unix")
     {
         let mut file = File::create(dest.join("egl_bindings.rs")).unwrap();
         let registry = Registry::new(Api::Egl, (1, 5), Profile::Core, Fallbacks::All, []);

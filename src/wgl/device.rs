@@ -890,7 +890,7 @@ impl Device {
             // Create renderbuffers as appropriate, and attach them.
             let context_descriptor = self.context_descriptor(context);
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-            let renderbuffers = Renderbuffers::new(&context.gl, &size, &context_attributes);
+            let renderbuffers = Renderbuffers::new(&context.gl, size, &context_attributes);
             renderbuffers.bind_to_current_framebuffer(&context.gl);
 
             // FIXME(pcwalton): Do we need to acquire the keyed mutex, or does the GL driver do
@@ -1434,7 +1434,7 @@ pub(crate) fn set_dc_pixel_format(dc: HDC, pixel_format: c_int) {
             &mut pixel_format_descriptor,
         );
         assert_ne!(pixel_format_count, 0);
-        let ok = wingdi::SetPixelFormat(dc, pixel_format, &mut pixel_format_descriptor);
+        let ok = wingdi::SetPixelFormat(dc, pixel_format, &pixel_format_descriptor);
         assert_ne!(ok, FALSE);
     }
 }

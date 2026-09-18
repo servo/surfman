@@ -345,7 +345,7 @@ impl Device {
         };
 
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => return Ok(Some(surface)),
+            Framebuffer::Surface(surface) => Ok(Some(surface)),
             Framebuffer::External { .. } | Framebuffer::None => unreachable!(),
         }
     }

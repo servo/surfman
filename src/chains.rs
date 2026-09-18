@@ -458,7 +458,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
             .pending_surface
             .take()
             .into_iter()
-            .chain(self.back_buffer.take_surface(device, context).into_iter())
+            .chain(self.back_buffer.take_surface(device, context))
             .chain(self.recycled_surfaces.drain(..));
         for mut surface in surfaces {
             device.destroy_surface(context, &mut surface)?;
@@ -479,7 +479,7 @@ impl<Device: DeviceAPI> Clone for SwapChain<Device> {
 
 impl<Device: DeviceAPI> SwapChain<Device> {
     // Guarantee unique access to the swap chain data
-    fn lock(&self) -> MutexGuard<SwapChainData<Device>> {
+    fn lock(&self) -> MutexGuard<'_, SwapChainData<Device>> {
         self.0.lock().unwrap_or_else(|err| err.into_inner())
     }
 
@@ -674,17 +674,17 @@ where
     }
 
     // Lock the ids
-    fn ids(&self) -> MutexGuard<FnvHashMap<ContextID, FnvHashSet<SwapChainID>>> {
+    fn ids(&self) -> MutexGuard<'_, FnvHashMap<ContextID, FnvHashSet<SwapChainID>>> {
         self.ids.lock().unwrap_or_else(|err| err.into_inner())
     }
 
     // Lock the lookup table
-    fn table(&self) -> RwLockReadGuard<FnvHashMap<SwapChainID, SwapChain<Device>>> {
+    fn table(&self) -> RwLockReadGuard<'_, FnvHashMap<SwapChainID, SwapChain<Device>>> {
         self.table.read().unwrap_or_else(|err| err.into_inner())
     }
 
     // Lock the lookup table for writing
-    fn table_mut(&self) -> RwLockWriteGuard<FnvHashMap<SwapChainID, SwapChain<Device>>> {
+    fn table_mut(&self) -> RwLockWriteGuard<'_, FnvHashMap<SwapChainID, SwapChain<Device>>> {
         self.table.write().unwrap_or_else(|err| err.into_inner())
     }
 
@@ -705,7 +705,7 @@ where
         };
         self.ids()
             .entry(device.context_id(context))
-            .or_insert_with(Default::default)
+            .or_default()
             .insert(id);
         Ok(())
     }
@@ -731,7 +731,7 @@ where
         };
         self.ids()
             .entry(device.context_id(context))
-            .or_insert_with(Default::default)
+            .or_default()
             .insert(id);
         Ok(())
     }

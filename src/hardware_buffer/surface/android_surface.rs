@@ -183,7 +183,7 @@ impl Device {
     ) -> Result<SurfaceTexture, (Error, Surface)> {
         unsafe {
             match surface.objects {
-                SurfaceObjects::Window { .. } => return Err((Error::WidgetAttached, surface)),
+                SurfaceObjects::Window { .. } => Err((Error::WidgetAttached, surface)),
                 SurfaceObjects::HardwareBuffer {
                     hardware_buffer, ..
                 } => {

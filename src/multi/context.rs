@@ -83,7 +83,7 @@ where
         share_with: Option<&Context<Def, Alt>>,
     ) -> Result<Context<Def, Alt>, Error> {
         match (self, descriptor) {
-            (&Device::Default(ref device), ContextDescriptor::Default(descriptor)) => {
+            (Device::Default(device), ContextDescriptor::Default(descriptor)) => {
                 let shared = match share_with {
                     Some(Context::Default(other)) => Some(other),
                     Some(_) => {
@@ -95,7 +95,7 @@ where
                     .create_context(descriptor, shared)
                     .map(Context::Default)
             }
-            (&Device::Alternate(ref device), ContextDescriptor::Alternate(descriptor)) => {
+            (Device::Alternate(device), ContextDescriptor::Alternate(descriptor)) => {
                 let shared = match share_with {
                     Some(Context::Alternate(other)) => Some(other),
                     Some(_) => {
