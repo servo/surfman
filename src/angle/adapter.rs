@@ -21,9 +21,7 @@ thread_local! {
     static DXGI_FACTORY: RefCell<Option<ComPtr<IDXGIFactory1>>> = RefCell::new(None);
 }
 
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
+/// An implementation of [`crate::Adapter`] for ANGLE on Windows.
 #[derive(Debug, Clone)]
 pub struct AngleAdapter {
     pub(crate) dxgi_adapter: ComPtr<IDXGIAdapter>,

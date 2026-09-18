@@ -4,8 +4,6 @@
 
 //! A hardware display adapter on Android and OHOS systems.
 
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
+/// An implementation of [`crate::Adapter`] for Android and OHOS platforms.
 #[derive(Clone, Debug)]
 pub struct HardwareBufferAdapter;

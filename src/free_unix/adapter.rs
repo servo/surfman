@@ -9,9 +9,7 @@ use std::env;
 static MESA_SOFTWARE_RENDERING_ENV_VAR: &str = "LIBGL_ALWAYS_SOFTWARE";
 static MESA_DRI_PRIME_ENV_VAR: &str = "DRI_PRIME";
 
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
+/// An implementation of [`crate::Adapter`] for Wayland / X11 platforms.
 #[derive(Clone, Debug)]
 pub enum FreeUnixAdapter {
     #[doc(hidden)]

@@ -11,9 +11,7 @@ use winapi::um::libloaderapi;
 static NVIDIA_GPU_SELECT_SYMBOL: &CStr = c"NvOptimusEnablement";
 static AMD_GPU_SELECT_SYMBOL: &CStr = c"AmdPowerXpressRequestHighPerformance";
 
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
+/// An implementation of [`crate::Adapter`] for WGL (Windows) platforms.
 #[derive(Clone, Debug)]
 pub enum WglAdapter {
     #[doc(hidden)]
