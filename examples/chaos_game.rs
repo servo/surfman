@@ -1,11 +1,11 @@
 //! Demonstrates how to use `surfman` to draw to a window surface via the CPU.
 
-#[cfg(not(all(target_os = "macos", feature = "sm-raw-window-handle")))]
+#[cfg(not(target_os = "macos"))]
 fn main() {
     println!("The `chaos_game` demo is not yet supported on this platform.");
 }
 
-#[cfg(all(target_os = "macos", feature = "sm-raw-window-handle"))]
+#[cfg(target_os = "macos")]
 fn main() {
     use euclid::default::{Point2D, Size2D};
     use rand::{self, Rng};

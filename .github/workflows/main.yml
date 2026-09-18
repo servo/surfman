@@ -29,25 +29,19 @@ jobs:
               test: false,
             }
           - { target: arm-linux-androideabi, os: ubuntu-24.04, test: false }
-        features:
-          [
-            "",
-            "chains sm-raw-window-handle",
-          ]
+          - { target: aarch64-apple-darwin, os: macos-15, test: true }
+        features: [ "" ]
         include:
-          - features: "chains sm-raw-window-handle"
-            platform:
-              { target: aarch64-apple-darwin, os: macos-15, test: true }
           - features: "sm-x11"
             platform:
               { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
           - features: "sm-x11 sm-wayland-default"
             platform:
               { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
-          - features: "chains sm-angle-builtin"
+          - features: "sm-angle-builtin"
             platform:
               { target: x86_64-pc-windows-msvc, os: windows-latest, test: true }
-          - features: "chains sm-no-wgl sm-angle-builtin"
+          - features: "sm-no-wgl sm-angle-builtin"
             platform:
               { target: x86_64-pc-windows-msvc, os: windows-latest, test: true }
     steps:
@@ -90,12 +84,6 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
-      matrix:
-        features:
-          [
-            "",
-            "chains sm-raw-window-handle",
-          ]
     steps:
       - uses: actions/checkout@v4
       - name: Install rust
