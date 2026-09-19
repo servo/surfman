@@ -4,6 +4,7 @@
 
 //! A hardware display adapter for WGL on Windows systems.
 
+use crate::{AdapterPreferences, PowerPreference, RenderingPreference};
 use log::warn;
 use std::ffi::CStr;
 use winapi::um::libloaderapi;
@@ -13,14 +14,13 @@ static AMD_GPU_SELECT_SYMBOL: &CStr = c"AmdPowerXpressRequestHighPerformance";
 
 /// An implementation of [`crate::Adapter`] for WGL (Windows) platforms.
 #[derive(Clone, Debug)]
-pub enum WglAdapter {
-    #[doc(hidden)]
-    HighPerformance,
-    #[doc(hidden)]
-    LowPower,
-}
+pub struct WglAdapter(AdapterPreferences);
 
 impl WglAdapter {
+    pub(crate) fn new(preferences: AdapterPreferences) -> Self {
+        Self(preferences)
+    }
+
     pub(crate) fn set_exported_variables(&self) {
         unsafe {
             let current_module = libloaderapi::GetModuleHandleA(std::ptr::null());
@@ -48,10 +48,12 @@ impl WglAdapter {
                 );
                 return;
             }
-            let value = match *self {
-                Self::HighPerformance => 1,
-                Self::LowPower => 0,
+
+            let value = match (self.0.power, self.0.rendering) {
+                (PowerPreference::Low, _) | (_, RenderingPreference::Software) => 0,
+                (PowerPreference::High, _) => 1,
             };
+
             *nvidia_gpu_select_variable = value;
             *amd_gpu_select_variable = value;
         }

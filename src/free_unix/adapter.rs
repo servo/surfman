@@ -4,6 +4,7 @@
 
 //! A hardware display adapter on Wayland / X11 systems.
 
+use crate::{AdapterPreferences, PowerPreference, RenderingPreference};
 use std::env;
 
 static MESA_SOFTWARE_RENDERING_ENV_VAR: &str = "LIBGL_ALWAYS_SOFTWARE";
@@ -11,49 +12,23 @@ static MESA_DRI_PRIME_ENV_VAR: &str = "DRI_PRIME";
 
 /// An implementation of [`crate::Adapter`] for Wayland / X11 platforms.
 #[derive(Clone, Debug)]
-pub enum FreeUnixAdapter {
-    #[doc(hidden)]
-    Hardware,
-    #[doc(hidden)]
-    HardwarePrime,
-    #[doc(hidden)]
-    Software,
-}
+pub struct FreeUnixAdapter(AdapterPreferences);
 
 impl FreeUnixAdapter {
     #[inline]
-    pub(crate) fn hardware() -> Self {
-        Self::HardwarePrime
-    }
-
-    #[inline]
-    pub(crate) fn low_power() -> Self {
-        Self::Hardware
-    }
-
-    #[inline]
-    pub(crate) fn software() -> Self {
-        Self::Software
+    pub(crate) fn new(preferences: AdapterPreferences) -> Self {
+        Self(preferences)
     }
 
     pub(crate) fn set_environment_variables(&self) {
-        match *self {
-            Self::Hardware | Self::HardwarePrime => {
-                env::remove_var(MESA_SOFTWARE_RENDERING_ENV_VAR);
-            }
-            Self::Software => {
-                env::set_var(MESA_SOFTWARE_RENDERING_ENV_VAR, "1");
-            }
-        }
-
-        match *self {
-            Self::Software => {}
-            Self::Hardware => {
-                env::remove_var(MESA_DRI_PRIME_ENV_VAR);
-            }
-            Self::HardwarePrime => {
-                env::set_var(MESA_DRI_PRIME_ENV_VAR, "1");
-            }
+        env::remove_var(MESA_SOFTWARE_RENDERING_ENV_VAR);
+        env::remove_var(MESA_DRI_PRIME_ENV_VAR);
+        match self.0.rendering {
+            RenderingPreference::Hardware => match self.0.power {
+                PowerPreference::High => env::set_var(MESA_DRI_PRIME_ENV_VAR, "1"),
+                PowerPreference::Low => {}
+            },
+            RenderingPreference::Software => env::set_var(MESA_SOFTWARE_RENDERING_ENV_VAR, "1"),
         }
     }
 }

@@ -72,7 +72,6 @@ impl AngleAdapter {
                 let choose_this = match vendor_preference {
                     VendorPreference::Prefer(vendor_id) => vendor_id == adapter_desc.VendorId,
                     VendorPreference::Avoid(vendor_id) => vendor_id != adapter_desc.VendorId,
-                    VendorPreference::None => true,
                 };
                 if choose_this {
                     let mut dxgi_adapter: *mut IDXGIAdapter = ptr::null_mut();

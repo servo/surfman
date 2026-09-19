@@ -5,7 +5,7 @@
 use super::adapter::WglAdapter;
 use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
-use crate::{Adapter, Error, GLApi};
+use crate::{Adapter, AdapterPreferences, Error, GLApi};
 
 use euclid::default::Size2D;
 
@@ -50,30 +50,10 @@ impl Connection {
         GLApi::GL
     }
 
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
+    /// Returns an adapter on this system according to the provided preferences.
     #[inline]
-    pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        self.create_hardware_adapter()
-    }
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    #[inline]
-    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(WglAdapter::HighPerformance.into())
-    }
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    #[inline]
-    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(WglAdapter::LowPower.into())
-    }
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    #[inline]
-    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        self.create_low_power_adapter()
+    pub fn create_adapter(&self, preferences: AdapterPreferences) -> Result<Adapter, Error> {
+        Ok(WglAdapter::new(preferences).into())
     }
 
     /// Opens a device.

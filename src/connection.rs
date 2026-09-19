@@ -1,5 +1,6 @@
 //! The abstract interface that all connections conform to.
 
+use crate::adapter::AdapterPreferences;
 use crate::Adapter;
 use crate::Error;
 use crate::GLApi;
@@ -21,19 +22,8 @@ pub trait Connection: Sized {
     /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
     fn gl_api(&self) -> GLApi;
 
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
-    fn create_adapter(&self) -> Result<Adapter, Error>;
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    fn create_hardware_adapter(&self) -> Result<Adapter, Error>;
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    fn create_low_power_adapter(&self) -> Result<Adapter, Error>;
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    fn create_software_adapter(&self) -> Result<Adapter, Error>;
+    /// Returns an adapter on this system according to the provided preferences.
+    fn create_adapter(&self, preferences: AdapterPreferences) -> Result<Adapter, Error>;
 
     /// Opens a device.
     fn create_device(&self, adapter: &Adapter) -> Result<Self::Device, Error>;

@@ -14,7 +14,9 @@ use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, GLApi, Su
 use self::common::FilesystemResourceLoader;
 
 #[cfg(not(target_os = "android"))]
-use surfman::{ContextAttributeFlags, ContextAttributes, GLVersion};
+use surfman::{
+    AdapterPreferences, ContextAttributeFlags, ContextAttributes, GLVersion, PowerPreference,
+};
 #[cfg(not(target_os = "android"))]
 use winit::{
     dpi::PhysicalSize,
@@ -134,7 +136,12 @@ fn main() {
     let window_size = window.inner_size();
     let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
     let native_widget = make_native_widget(&window, &connection, window_size);
-    let adapter = connection.create_low_power_adapter().unwrap();
+    let adapter = connection
+        .create_adapter(AdapterPreferences {
+            power: PowerPreference::Low,
+            ..Default::default()
+        })
+        .unwrap();
     let device = connection.create_device(&adapter).unwrap();
 
     let context_attributes = ContextAttributes {

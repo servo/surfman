@@ -39,7 +39,7 @@ fn main() {
     }
 
     let connection = SystemConnection::new().unwrap();
-    let adapter = connection.create_adapter().unwrap();
+    let adapter = connection.create_adapter(Default::default()).unwrap();
     let mut device = connection.create_device(&adapter).unwrap();
 
     let event_loop = EventLoop::new().unwrap();
