@@ -6,40 +6,11 @@ use super::surface::{NativeWidget, Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
-use crate::{ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
+use crate::{Adapter, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
 use glow::Texture;
 
 use std::os::raw::c_void;
-
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
-pub enum Adapter<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    /// The default adapter type.
-    Default(<Def::Connection as ConnectionInterface>::Adapter),
-    /// The alternate adapter type.
-    Alternate(<Alt::Connection as ConnectionInterface>::Adapter),
-}
-
-impl<Def, Alt> Clone for Adapter<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-    <Def::Connection as ConnectionInterface>::Adapter: Clone,
-    <Alt::Connection as ConnectionInterface>::Adapter: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Adapter::Default(ref adapter) => Adapter::Default(adapter.clone()),
-            Adapter::Alternate(ref adapter) => Adapter::Alternate(adapter.clone()),
-        }
-    }
-}
 
 /// A thread-local handle to a device.
 ///
@@ -71,10 +42,10 @@ where
     }
 
     /// Returns the adapter that this device was created with.
-    pub fn adapter(&self) -> Adapter<Def, Alt> {
+    pub fn adapter(&self) -> Adapter {
         match *self {
-            Device::Default(ref device) => Adapter::Default(device.adapter()),
-            Device::Alternate(ref device) => Adapter::Alternate(device.adapter()),
+            Device::Default(ref device) => device.adapter(),
+            Device::Alternate(ref device) => device.adapter(),
         }
     }
 
@@ -108,7 +79,7 @@ where
     }
 
     #[inline]
-    fn adapter(&self) -> Adapter<Def, Alt> {
+    fn adapter(&self) -> Adapter {
         Device::adapter(self)
     }
 

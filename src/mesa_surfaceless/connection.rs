@@ -1,13 +1,14 @@
 //! Represents a connection to a display server.
 
-use super::device::{Adapter, Device, NativeDevice};
+use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_SURFACELESS_MESA;
-use crate::egl;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
+use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
 use crate::Error;
+use crate::{egl, Adapter};
 
 use euclid::default::Size2D;
 
@@ -98,7 +99,7 @@ impl Connection {
     /// On the OSMesa backend, this returns a software adapter.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::hardware())
+        Ok(FreeUnixAdapter::hardware().into())
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
@@ -106,13 +107,13 @@ impl Connection {
     /// On the OSMesa backend, this returns a software adapter.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::low_power())
+        Ok(FreeUnixAdapter::low_power().into())
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::software())
+        Ok(FreeUnixAdapter::software().into())
     }
 
     /// Opens the hardware device corresponding to the given adapter.

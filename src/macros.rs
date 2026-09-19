@@ -36,11 +36,12 @@ macro_rules! implement_interfaces {
         mod implementation {
             use super::connection::Connection;
             use super::context::{Context, ContextDescriptor};
-            use super::device::{Adapter, Device};
+            use super::device::Device;
             use super::surface::{NativeWidget, Surface, SurfaceTexture};
             use euclid::default::Size2D;
             use glow::Texture;
             use std::os::raw::c_void;
+            use $crate::adapter::Adapter;
             use $crate::connection::Connection as ConnectionInterface;
             use $crate::device::Device as DeviceInterface;
             use $crate::info::GLApi;
@@ -48,7 +49,6 @@ macro_rules! implement_interfaces {
             use $crate::{ContextAttributes, ContextID, SurfaceAccess, SurfaceInfo, SurfaceType};
 
             impl ConnectionInterface for Connection {
-                type Adapter = Adapter;
                 type Device = Device;
                 type NativeWidget = NativeWidget;
 
@@ -63,22 +63,22 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn create_adapter(&self) -> Result<Self::Adapter, Error> {
+                fn create_adapter(&self) -> Result<Adapter, Error> {
                     Connection::create_adapter(self)
                 }
 
                 #[inline]
-                fn create_hardware_adapter(&self) -> Result<Self::Adapter, Error> {
+                fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
                     Connection::create_hardware_adapter(self)
                 }
 
                 #[inline]
-                fn create_low_power_adapter(&self) -> Result<Self::Adapter, Error> {
+                fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
                     Connection::create_low_power_adapter(self)
                 }
 
                 #[inline]
-                fn create_software_adapter(&self) -> Result<Self::Adapter, Error> {
+                fn create_software_adapter(&self) -> Result<Adapter, Error> {
                     Connection::create_software_adapter(self)
                 }
 

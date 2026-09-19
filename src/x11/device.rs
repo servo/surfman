@@ -9,9 +9,10 @@ use crate::base::egl::{
 };
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
+use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::gl;
-pub use crate::mesa_surfaceless::device::Adapter;
 use crate::x11::surface::{NativeWidget, SurfaceDataGuard, SurfaceTexture};
+use crate::Adapter;
 use crate::{egl, ContextAttributes, Error, GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
 use glow::Texture;
@@ -27,7 +28,7 @@ const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 /// Devices contain most of the relevant surface management methods.
 pub struct Device {
     pub(crate) native_connection: Arc<NativeConnectionWrapper>,
-    pub(crate) adapter: Adapter,
+    pub(crate) adapter: FreeUnixAdapter,
 }
 
 /// Wraps an adapter.
@@ -36,15 +37,15 @@ pub struct Device {
 #[derive(Clone)]
 pub struct NativeDevice {
     /// The hardware adapter corresponding to this device.
-    pub adapter: Adapter,
+    pub adapter: FreeUnixAdapter,
 }
 
 impl Device {
     #[inline]
-    pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
+    pub(crate) fn new(connection: &Connection, adapter: &FreeUnixAdapter) -> Result<Device, Error> {
         Ok(Device {
             native_connection: connection.native_connection.clone(),
-            adapter: (*adapter).clone(),
+            adapter: adapter.clone(),
         })
     }
 
@@ -55,7 +56,7 @@ impl Device {
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
         NativeDevice {
-            adapter: self.adapter(),
+            adapter: self.adapter.clone(),
         }
     }
 
@@ -70,7 +71,7 @@ impl Device {
     /// Returns the adapter that this device was created with.
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        self.adapter.clone()
+        self.adapter.clone().into()
     }
 
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).

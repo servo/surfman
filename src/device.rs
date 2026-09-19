@@ -1,7 +1,9 @@
 //! The abstract interface that all devices conform to.
 
 use super::connection::Connection as ConnectionInterface;
-use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
+use crate::{
+    Adapter, ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType,
+};
 use euclid::default::Size2D;
 use glow::Texture;
 
@@ -31,7 +33,7 @@ where
     fn connection(&self) -> Self::Connection;
 
     /// Returns the adapter that this device was created with.
-    fn adapter(&self) -> <Self::Connection as ConnectionInterface>::Adapter;
+    fn adapter(&self) -> Adapter;
 
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
     fn gl_api(&self) -> GLApi;

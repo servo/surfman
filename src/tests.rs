@@ -8,9 +8,10 @@
 
 use super::connection::Connection;
 use super::context::{Context, ContextDescriptor, NativeContext};
-use super::device::{Adapter, Device};
+use super::device::Device;
 use super::surface::Surface;
 use crate::gl;
+use crate::Adapter;
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, Gl, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
 

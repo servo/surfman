@@ -1,7 +1,7 @@
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
 use super::connection::Connection;
-use crate::base::io_surface::device::{Adapter as SystemAdapter, Device as SystemDevice};
+use crate::base::io_surface::device::Device as SystemDevice;
 use crate::cgl::context::{CurrentContextGuard, NativeContext};
 use crate::cgl::error::ToWindowingApiError;
 use crate::cgl::ffi::{CGLReleaseContext, CGLRetainContext};
@@ -10,7 +10,7 @@ use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::renderbuffers::Renderbuffers;
 use crate::surface::Framebuffer;
 use crate::{
-    gl, gl_utils, Context, GLVersion, NativeWidget, Surface, SurfaceAccess, SurfaceInfo,
+    gl, gl_utils, Adapter, Context, GLVersion, NativeWidget, Surface, SurfaceAccess, SurfaceInfo,
     SurfaceTexture, SurfaceType, WindowingApiError,
 };
 use crate::{ContextAttributeFlags, ContextAttributes, ContextDescriptor, Error, GLApi, Gl};
@@ -25,7 +25,6 @@ use glow::HasContext;
 use glow::Texture;
 use objc2_core_foundation::{CFBundle, CFRetained, CFString};
 use objc2_io_surface::IOSurfaceRef;
-use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::rc::Rc;
@@ -58,12 +57,6 @@ thread_local! {
     };
 }
 
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
-#[derive(Clone, Debug)]
-pub struct Adapter(pub(crate) SystemAdapter);
-
 /// A thread-local handle to a device.
 ///
 /// Devices contain most of the relevant surface management methods.
@@ -86,7 +79,7 @@ impl Device {
     /// Returns the adapter that this device was created with.
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        Adapter(self.0.adapter())
+        self.0.adapter().into()
     }
 
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).
@@ -149,7 +142,7 @@ impl Device {
         // This means "opt into the integrated GPU".
         //
         // https://supermegaultragroovy.com/2016/12/10/auto-graphics-switching/
-        if self.adapter().0.is_low_power {
+        if self.0.adapter.is_low_power {
             cgl_pixel_format_attributes.push(kCGLPFAAllowOfflineRenderers);
         }
 

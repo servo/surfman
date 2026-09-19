@@ -3,7 +3,8 @@
 //! Connection types are zero-sized on macOS, because the system APIs automatically manage the
 //! global window server connection.
 
-use super::device::{Adapter, Device, NativeDevice};
+use super::adapter::AppleAdapter;
+use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 use crate::Error;
 
@@ -70,27 +71,27 @@ impl Connection {
     ///
     /// This is an alias for `Connection::create_hardware_adapter()`.
     #[inline]
-    pub fn create_adapter(&self) -> Result<Adapter, Error> {
+    pub fn create_adapter(&self) -> Result<AppleAdapter, Error> {
         self.create_hardware_adapter()
     }
 
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
-    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter {
+    pub fn create_hardware_adapter(&self) -> Result<AppleAdapter, Error> {
+        Ok(AppleAdapter {
             is_low_power: false,
         })
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
-    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter { is_low_power: true })
+    pub fn create_low_power_adapter(&self) -> Result<AppleAdapter, Error> {
+        Ok(AppleAdapter { is_low_power: true })
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
-    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
+    pub fn create_software_adapter(&self) -> Result<AppleAdapter, Error> {
         self.create_low_power_adapter()
     }
 
@@ -98,8 +99,8 @@ impl Connection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new((*adapter).clone())
+    pub fn create_device(&self, adapter: &AppleAdapter) -> Result<Device, Error> {
+        Device::new(adapter.clone())
     }
 
     /// An alias for `connection.create_device()` with the default adapter.

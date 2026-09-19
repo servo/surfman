@@ -2,10 +2,10 @@
 //!
 //! FIXME(pcwalton): Should this instead wrap `EGLDisplay`? Is that thread-safe on Android?
 
-use super::device::{Adapter, Device, NativeDevice};
+use super::adapter::HardwareBufferAdapter;
+use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
-use crate::Error;
-use crate::GLApi;
+use crate::{Adapter, Error, GLApi};
 
 #[cfg(android_platform)]
 use super::android_ffi::ANativeWindow;
@@ -60,19 +60,19 @@ impl Connection {
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter)
+        Ok(HardwareBufferAdapter.into())
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter)
+        Ok(HardwareBufferAdapter.into())
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter)
+        Ok(HardwareBufferAdapter.into())
     }
 
     /// Opens the hardware device corresponding to the given adapter.

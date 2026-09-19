@@ -1,13 +1,14 @@
 //! A wrapper for Wayland connections (displays).
 
-use super::device::{Adapter, Device, NativeDevice};
+use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_WAYLAND_KHR;
-use crate::egl;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
+use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
 use crate::Error;
+use crate::{egl, Adapter};
 
 use euclid::default::Size2D;
 use std::os::raw::c_void;
@@ -79,19 +80,19 @@ impl Connection {
     /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
     #[inline]
     pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::hardware())
+        Ok(FreeUnixAdapter::hardware().into())
     }
 
     /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
     #[inline]
     pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::low_power())
+        Ok(FreeUnixAdapter::low_power().into())
     }
 
     /// Returns the "best" adapter on this system, preferring software adapters.
     #[inline]
     pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Ok(Adapter::software())
+        Ok(FreeUnixAdapter::software().into())
     }
 
     /// Opens the hardware device corresponding to the given adapter.
@@ -99,7 +100,7 @@ impl Connection {
     /// Device handles are local to a single thread.
     #[inline]
     pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new(self, adapter)
+        Device::new(self, adapter.free_unix()?)
     }
 
     /// Opens the hardware device corresponding to the adapter wrapped in the given native

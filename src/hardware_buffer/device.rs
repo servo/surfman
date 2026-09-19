@@ -1,5 +1,6 @@
 //! A thread-local handle to the device.
 
+use super::adapter::HardwareBufferAdapter;
 use super::connection::Connection;
 use super::context::NativeContext;
 use crate::base::egl::context::{self, CurrentContextGuard};
@@ -10,18 +11,13 @@ use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::egl::types::{EGLConfig, EGLDisplay, EGLint};
 use crate::hardware_buffer::surface::SurfaceObjects;
 use crate::surface::Framebuffer;
+use crate::Adapter;
 use crate::{egl, ContextDescriptor, Surface};
 use crate::{Context, ContextAttributes, Error, GLApi, Gl, SurfaceInfo};
 use euclid::default::Size2D;
 use glow::HasContext;
 use std::mem;
 use std::os::raw::c_void;
-
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
-#[derive(Clone, Debug)]
-pub struct Adapter;
 
 /// A thread-local handle to a device.
 ///
@@ -93,7 +89,7 @@ impl Device {
     /// Returns the adapter that this device was created with.
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        Adapter
+        HardwareBufferAdapter.into()
     }
 
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).

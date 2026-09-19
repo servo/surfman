@@ -5,82 +5,28 @@ use super::surface::SurfaceDataGuard;
 use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
-use crate::egl;
 use crate::egl::types::EGLint;
+use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::gl;
 use crate::mesa_surfaceless::context::{Context, ContextDescriptor, NativeContext};
 use crate::mesa_surfaceless::surface::{NativeWidget, Surface, SurfaceTexture};
+use crate::{egl, Adapter};
 use crate::{ContextAttributes, Gl, SurfaceInfo};
 use crate::{Error, GLApi, SurfaceAccess, SurfaceType};
 use euclid::default::Size2D;
 use glow::Texture;
-use std::env;
 use std::os::raw::c_void;
 use std::sync::Arc;
 
-static MESA_SOFTWARE_RENDERING_ENV_VAR: &str = "LIBGL_ALWAYS_SOFTWARE";
-static MESA_DRI_PRIME_ENV_VAR: &str = "DRI_PRIME";
-
 // FIXME(pcwalton): Is this right, or should it be `TEXTURE_EXTERNAL_OES`?
 const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
-
-/// Represents a hardware display adapter that can be used for rendering (including the CPU).
-///
-/// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
-#[derive(Clone, Debug)]
-pub enum Adapter {
-    #[doc(hidden)]
-    Hardware,
-    #[doc(hidden)]
-    HardwarePrime,
-    #[doc(hidden)]
-    Software,
-}
-
-impl Adapter {
-    #[inline]
-    pub(crate) fn hardware() -> Adapter {
-        Adapter::HardwarePrime
-    }
-
-    #[inline]
-    pub(crate) fn low_power() -> Adapter {
-        Adapter::Hardware
-    }
-
-    #[inline]
-    pub(crate) fn software() -> Adapter {
-        Adapter::Software
-    }
-
-    pub(crate) fn set_environment_variables(&self) {
-        match *self {
-            Adapter::Hardware | Adapter::HardwarePrime => {
-                env::remove_var(MESA_SOFTWARE_RENDERING_ENV_VAR);
-            }
-            Adapter::Software => {
-                env::set_var(MESA_SOFTWARE_RENDERING_ENV_VAR, "1");
-            }
-        }
-
-        match *self {
-            Adapter::Software => {}
-            Adapter::Hardware => {
-                env::remove_var(MESA_DRI_PRIME_ENV_VAR);
-            }
-            Adapter::HardwarePrime => {
-                env::set_var(MESA_DRI_PRIME_ENV_VAR, "1");
-            }
-        }
-    }
-}
 
 /// A thread-local handle to a device.
 ///
 /// Devices contain most of the relevant surface management methods.
 pub struct Device {
     pub(crate) native_connection: Arc<NativeConnectionWrapper>,
-    pub(crate) adapter: Adapter,
+    pub(crate) adapter: FreeUnixAdapter,
 }
 
 /// Wraps an adapter.
@@ -89,7 +35,7 @@ pub struct Device {
 #[derive(Clone)]
 pub struct NativeDevice {
     /// The hardware adapter corresponding to this device.
-    pub adapter: Adapter,
+    pub adapter: FreeUnixAdapter,
 }
 
 impl Device {
@@ -97,7 +43,7 @@ impl Device {
     pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
         Ok(Device {
             native_connection: connection.native_connection.clone(),
-            adapter: (*adapter).clone(),
+            adapter: adapter.free_unix()?.clone(),
         })
     }
 
@@ -108,7 +54,7 @@ impl Device {
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
         NativeDevice {
-            adapter: self.adapter(),
+            adapter: self.adapter.clone(),
         }
     }
 
@@ -123,7 +69,7 @@ impl Device {
     /// Returns the adapter that this device was created with.
     #[inline]
     pub fn adapter(&self) -> Adapter {
-        self.adapter.clone()
+        self.adapter.clone().into()
     }
 
     /// Returns the OpenGL API flavor that this device supports (OpenGL or OpenGL ES).

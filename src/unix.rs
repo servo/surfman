@@ -53,18 +53,11 @@ pub mod context {
 /// Thread-local handles to devices.
 pub mod device {
     use crate::mesa_surfaceless::device::Device as SWDevice;
-    use crate::multi::device::Adapter as MultiAdapter;
     use crate::wayland::device::Device as WaylandDevice;
     use crate::x11::device::Device as X11Device;
 
     use crate::multi::device::Device as MultiDevice;
     type HWDevice = MultiDevice<WaylandDevice, X11Device>;
-
-    /// Represents a hardware display adapter that can be used for rendering (including the CPU).
-    ///
-    /// Adapters can be sent between threads. To render with an adapter, open a thread-local
-    /// `Device`.
-    pub type Adapter = MultiAdapter<HWDevice, SWDevice>;
 
     /// A thread-local handle to a device.
     ///
