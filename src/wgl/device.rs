@@ -13,8 +13,8 @@ use crate::wgl::context::{
     NativeContext, OPENGL_LIBRARY, WGL_EXTENSION_FUNCTIONS,
 };
 use crate::wgl::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture, Win32Objects};
-use crate::Adapter;
 use crate::{gl, gl_utils, GLApi, Gl, SurfaceAccess, SurfaceType};
+use crate::{Adapter, AdapterPreferences, PowerPreference};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -1238,11 +1238,16 @@ impl Adapter {
             let result = dxgi_adapter.GetDesc(&mut adapter_desc);
             assert_eq!(result, S_OK);
 
-            if adapter_desc.VendorId == INTEL_PCI_ID {
-                WglAdapter::LowPower
+            let power = if adapter_desc.VendorId == INTEL_PCI_ID {
+                PowerPreference::LowPower
             } else {
-                WglAdapter::HighPerformance
-            }
+                PowerPreference::HighPerformance
+            };
+
+            WglAdapter::new(AdapterPreferences {
+                power,
+                ..Default::default()
+            })
         }
     }
 }

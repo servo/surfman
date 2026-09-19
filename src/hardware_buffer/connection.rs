@@ -5,7 +5,7 @@
 use super::adapter::HardwareBufferAdapter;
 use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
-use crate::{Adapter, Error, GLApi};
+use crate::{Adapter, AdapterPreferences, Error, GLApi};
 
 #[cfg(android_platform)]
 use super::android_ffi::ANativeWindow;
@@ -49,29 +49,9 @@ impl Connection {
         GLApi::GLES
     }
 
-    /// Returns the "best" adapter on this system.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
+    /// Returns an adapter on this system according to the provided preferences.
     #[inline]
-    pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        self.create_hardware_adapter()
-    }
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    #[inline]
-    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(HardwareBufferAdapter.into())
-    }
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    #[inline]
-    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(HardwareBufferAdapter.into())
-    }
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    #[inline]
-    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
+    pub fn create_adapter(&self, _: AdapterPreferences) -> Result<Adapter, Error> {
         Ok(HardwareBufferAdapter.into())
     }
 

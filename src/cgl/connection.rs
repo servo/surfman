@@ -4,7 +4,7 @@
 //! global window server connection.
 
 use super::device::Device;
-use crate::adapter::Adapter;
+use crate::adapter::{Adapter, AdapterPreferences};
 use crate::base::io_surface::connection::Connection as SystemConnection;
 use crate::base::io_surface::device::NativeDevice;
 use crate::base::io_surface::surface::NativeWidget;
@@ -48,30 +48,10 @@ impl Connection {
         GLApi::GL
     }
 
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
+    /// Returns an adapter on this system according to the provided preferences.
     #[inline]
-    pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        self.0.create_adapter().map(Into::into)
-    }
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    #[inline]
-    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        self.0.create_hardware_adapter().map(Into::into)
-    }
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    #[inline]
-    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        self.0.create_low_power_adapter().map(Into::into)
-    }
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    #[inline]
-    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        self.0.create_software_adapter().map(Into::into)
+    pub fn create_adapter(&self, preferences: AdapterPreferences) -> Result<Adapter, Error> {
+        self.0.create_adapter(preferences).map(Into::into)
     }
 
     /// Opens the hardware device corresponding to the given adapter.

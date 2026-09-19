@@ -4,12 +4,11 @@ use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_X11_KHR;
-use crate::egl;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::error::Error;
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
-use crate::Adapter;
+use crate::{egl, Adapter, AdapterPreferences};
 
 use euclid::default::Size2D;
 
@@ -150,30 +149,10 @@ impl Connection {
         GLApi::GL
     }
 
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
+    /// Returns an adapter on this system according to the provided preferences.
     #[inline]
-    pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        self.create_hardware_adapter()
-    }
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    #[inline]
-    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(FreeUnixAdapter::hardware().into())
-    }
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    #[inline]
-    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(FreeUnixAdapter::low_power().into())
-    }
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    #[inline]
-    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Ok(FreeUnixAdapter::software().into())
+    pub fn create_adapter(&self, preferences: AdapterPreferences) -> Result<Adapter, Error> {
+        Ok(FreeUnixAdapter::new(preferences).into())
     }
 
     /// Opens the hardware device corresponding to the given adapter.
@@ -310,10 +289,15 @@ mod tests {
 
     #[cfg_attr(not(feature = "sm-test"), test)]
     pub fn test_from_x11_display() {
-        use crate::{ContextAttributeFlags, ContextAttributes, GLVersion};
+        use crate::{ContextAttributeFlags, ContextAttributes, GLVersion, PowerPreference};
 
         let connection = Connection::new().unwrap();
-        let adapter = connection.create_low_power_adapter().unwrap();
+        let adapter = connection
+            .create_adapter(AdapterPreferences {
+                power: PowerPreference::LowPower,
+                ..Default::default()
+            })
+            .unwrap();
         let device = match connection.create_device(&adapter) {
             Ok(device) => device,
             Err(Error::RequiredExtensionUnavailable) => {

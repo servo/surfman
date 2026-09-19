@@ -2,6 +2,7 @@
 
 use super::device::Device;
 use super::surface::NativeWidget;
+use crate::adapter::AdapterPreferences;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::GLApi;
@@ -64,37 +65,11 @@ where
         }
     }
 
-    /// Returns the "best" adapter on this system.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
-    pub fn create_adapter(&self) -> Result<Adapter, Error> {
+    /// Returns an adapter on this system according to the provided preferences.
+    pub fn create_adapter(&self, preferences: AdapterPreferences) -> Result<Adapter, Error> {
         match *self {
-            Self::Default(ref connection) => connection.create_adapter(),
-            Self::Alternate(ref connection) => connection.create_adapter(),
-        }
-    }
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        match *self {
-            Self::Default(ref connection) => connection.create_hardware_adapter(),
-            Self::Alternate(ref connection) => connection.create_hardware_adapter(),
-        }
-    }
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        match *self {
-            Self::Default(ref connection) => connection.create_low_power_adapter(),
-            Self::Alternate(ref connection) => connection.create_low_power_adapter(),
-        }
-    }
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        match *self {
-            Self::Default(ref connection) => connection.create_software_adapter(),
-            Self::Alternate(ref connection) => connection.create_software_adapter(),
+            Self::Default(ref connection) => connection.create_adapter(preferences),
+            Self::Alternate(ref connection) => connection.create_adapter(preferences),
         }
     }
 
@@ -172,23 +147,8 @@ where
     }
 
     #[inline]
-    fn create_adapter(&self) -> Result<Adapter, Error> {
-        Connection::create_adapter(self)
-    }
-
-    #[inline]
-    fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Connection::create_hardware_adapter(self)
-    }
-
-    #[inline]
-    fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Connection::create_low_power_adapter(self)
-    }
-
-    #[inline]
-    fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Connection::create_software_adapter(self)
+    fn create_adapter(&self, preferences: AdapterPreferences) -> Result<Adapter, Error> {
+        Connection::create_adapter(self, preferences)
     }
 
     #[inline]

@@ -54,7 +54,6 @@ pub struct Device {
 }
 
 pub(crate) enum VendorPreference {
-    None,
     Prefer(UINT),
     Avoid(UINT),
 }
