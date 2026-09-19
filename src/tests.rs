@@ -10,8 +10,8 @@ use super::connection::Connection;
 use super::context::{Context, ContextDescriptor, NativeContext};
 use super::device::Device;
 use super::surface::Surface;
-use crate::gl;
-use crate::Adapter;
+use crate::{gl, AdapterPreferences, PowerPreference};
+use crate::{Adapter, RenderingPreference};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, Gl, SurfaceAccess};
 use crate::{SurfaceType, WindowingApiError};
 
@@ -39,17 +39,31 @@ static GL_ES_VERSIONS: [GLVersion; 4] = [
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_adapter_creation() {
     let connection = Connection::new().unwrap();
-    connection.create_hardware_adapter().unwrap();
-    connection.create_low_power_adapter().unwrap();
-    connection.create_software_adapter().unwrap();
+    connection.create_adapter(Default::default()).unwrap();
+    connection
+        .create_adapter(AdapterPreferences {
+            power: PowerPreference::Low,
+            ..Default::default()
+        })
+        .unwrap();
+    connection
+        .create_adapter(AdapterPreferences {
+            rendering: RenderingPreference::Software,
+            ..Default::default()
+        })
+        .unwrap();
+    connection
+        .create_adapter(AdapterPreferences {
+            rendering: RenderingPreference::Software,
+            power: PowerPreference::Low,
+        })
+        .unwrap();
 }
 
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_device_creation() {
     let connection = Connection::new().unwrap();
-    let adapter = connection
-        .create_low_power_adapter()
-        .expect("Failed to create adapter!");
+    let adapter = low_power_adapter(&connection);
     match connection.create_device(&adapter) {
         Ok(_) => {}
         Err(Error::RequiredExtensionUnavailable) => {
@@ -62,7 +76,7 @@ pub fn test_device_creation() {
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_device_accessors() {
     let connection = Connection::new().unwrap();
-    let adapter = connection.create_low_power_adapter().unwrap();
+    let adapter = low_power_adapter(&connection);
     let device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
@@ -80,9 +94,7 @@ pub fn test_device_accessors() {
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_context_creation() {
     let connection = Connection::new().unwrap();
-    let adapter = connection
-        .create_low_power_adapter()
-        .expect("Failed to create adapter!");
+    let adapter = low_power_adapter(&connection);
     let device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
@@ -168,9 +180,7 @@ pub fn test_context_creation() {
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_newly_created_contexts_are_current() {
     let connection = Connection::new().unwrap();
-    let adapter = connection
-        .create_low_power_adapter()
-        .expect("Failed to create adapter!");
+    let adapter = low_power_adapter(&connection);
     let mut device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
@@ -234,9 +244,7 @@ pub fn test_newly_created_contexts_are_current() {
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_context_sharing() {
     let connection = Connection::new().unwrap();
-    let adapter = connection
-        .create_low_power_adapter()
-        .expect("Failed to create adapter!");
+    let adapter = low_power_adapter(&connection);
     let device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
@@ -274,9 +282,7 @@ pub fn test_context_sharing() {
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_generic_surface_creation() {
     let connection = Connection::new().unwrap();
-    let adapter = connection
-        .create_low_power_adapter()
-        .expect("Failed to create adapter!");
+    let adapter = low_power_adapter(&connection);
     let device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
@@ -748,9 +754,7 @@ pub fn test_depth_and_stencil() {
     use glow::PixelPackData;
 
     let connection = Connection::new().unwrap();
-    let adapter = connection
-        .create_low_power_adapter()
-        .expect("Failed to create adapter!");
+    let adapter = low_power_adapter(&connection);
     let mut device = match connection.create_device(&adapter) {
         Ok(device) => device,
         Err(Error::RequiredExtensionUnavailable) => {
@@ -970,6 +974,15 @@ fn make_fbo(gl: &Gl, texture_target: u32, texture: Option<Texture>) -> Framebuff
     }
 }
 
+fn low_power_adapter(connection: &Connection) -> Adapter {
+    connection
+        .create_adapter(AdapterPreferences {
+            power: PowerPreference::Low,
+            ..Default::default()
+        })
+        .expect("Could not create low power adapter")
+}
+
 struct BasicEnvironment {
     connection: Connection,
     adapter: Adapter,
@@ -983,8 +996,11 @@ impl BasicEnvironment {
     fn new() -> Option<BasicEnvironment> {
         let connection = Connection::new().unwrap();
         let adapter = connection
-            .create_low_power_adapter()
-            .expect("Failed to create adapter!");
+            .create_adapter(AdapterPreferences {
+                power: PowerPreference::Low,
+                ..Default::default()
+            })
+            .unwrap();
         let mut device = match connection.create_device(&adapter) {
             Ok(device) => device,
             Err(Error::RequiredExtensionUnavailable) => {

@@ -6,6 +6,7 @@
 use super::adapter::AppleAdapter;
 use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
+use crate::adapter::{AdapterPreferences, PowerPreference, RenderingPreference};
 use crate::Error;
 
 use objc2::rc::Retained;
@@ -67,32 +68,12 @@ impl Connection {
         NativeConnection
     }
 
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
+    /// Returns an adapter on this system according to the provided preferences.
     #[inline]
-    pub fn create_adapter(&self) -> Result<AppleAdapter, Error> {
-        self.create_hardware_adapter()
-    }
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    #[inline]
-    pub fn create_hardware_adapter(&self) -> Result<AppleAdapter, Error> {
-        Ok(AppleAdapter {
-            is_low_power: false,
-        })
-    }
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    #[inline]
-    pub fn create_low_power_adapter(&self) -> Result<AppleAdapter, Error> {
-        Ok(AppleAdapter { is_low_power: true })
-    }
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    #[inline]
-    pub fn create_software_adapter(&self) -> Result<AppleAdapter, Error> {
-        self.create_low_power_adapter()
+    pub fn create_adapter(&self, preferences: AdapterPreferences) -> Result<AppleAdapter, Error> {
+        let is_low_power = matches!(preferences.power, PowerPreference::Low)
+            || matches!(preferences.rendering, RenderingPreference::Software);
+        Ok(AppleAdapter { is_low_power })
     }
 
     /// Opens the hardware device corresponding to the given adapter.
@@ -109,7 +90,7 @@ impl Connection {
         &self,
         _: NativeDevice,
     ) -> Result<Device, Error> {
-        self.create_device(&self.create_adapter()?)
+        self.create_device(&self.create_adapter(Default::default())?)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.

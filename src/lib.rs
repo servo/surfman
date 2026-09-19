@@ -63,7 +63,7 @@ pub use crate::context::{ContextAttributeFlags, ContextAttributes, ContextID};
 pub use crate::error::{Error, WindowingApiError};
 pub use crate::info::{GLApi, GLVersion};
 pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
-pub use adapter::Adapter;
+pub use adapter::{Adapter, AdapterPreferences, PowerPreference, RenderingPreference};
 pub use default::connection::Connection;
 pub use default::context::{Context, ContextDescriptor};
 pub use default::device::Device;

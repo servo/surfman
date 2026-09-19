@@ -16,6 +16,36 @@ use crate::hardware_buffer::adapter::HardwareBufferAdapter;
 use crate::wgl::adapter::WglAdapter;
 use crate::Error;
 
+/// A power usage preference for selecting an adapter.
+#[derive(Copy, Clone, Debug, Default)]
+pub enum PowerPreference {
+    /// Prefer a high-power adapter.
+    #[default]
+    High,
+    /// Prefer a low-power adapter.
+    Low,
+}
+
+/// A hardware/software preference for selecting an adapter.
+#[derive(Copy, Clone, Debug, Default)]
+pub enum RenderingPreference {
+    /// Prefer a hardware adapter.
+    #[default]
+    Hardware,
+    /// Prefer a software adapter.
+    Software,
+}
+
+/// A set of options to use when choosing an adapter. The default preference is
+/// for a high-power hardware adapter.
+#[derive(Copy, Clone, Debug, Default)]
+pub struct AdapterPreferences {
+    /// The [`PowerPreference`] for choosing an adapter.
+    pub power: PowerPreference,
+    /// The [`RenderingPreference`] for choosing an adapter.
+    pub rendering: RenderingPreference,
+}
+
 /// Represents a hardware display adapter that can be used for rendering (including the CPU).
 ///
 /// Adapters can be sent between threads. To render with an adapter, open a thread-local `Device`.
