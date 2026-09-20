@@ -7,14 +7,7 @@ use super::device::{Device, NativeDevice};
 use super::surface::NativeWidget;
 use crate::{Adapter, AdapterPreferences, Error, GLApi};
 
-#[cfg(android_platform)]
-use super::android_ffi::ANativeWindow;
-#[cfg(ohos_platform)]
-use super::ohos_ffi::OHNativeWindow;
-
 use euclid::default::Size2D;
-
-use std::os::raw::c_void;
 
 /// A connection to the display server.
 #[derive(Clone)]
@@ -82,30 +75,6 @@ impl Connection {
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
         Ok(Connection)
-    }
-
-    #[cfg(android_platform)]
-    fn create_native_widget_from_ptr_impl(raw: *mut c_void) -> NativeWidget {
-        NativeWidget {
-            native_window: raw as *mut ANativeWindow,
-        }
-    }
-
-    #[cfg(ohos_platform)]
-    fn create_native_widget_from_ptr_impl(raw: *mut c_void) -> NativeWidget {
-        NativeWidget {
-            native_window: raw as *mut OHNativeWindow,
-        }
-    }
-
-    /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(
-        &self,
-        raw: *mut c_void,
-        _size: Size2D<i32>,
-    ) -> NativeWidget {
-        debug_assert!(!raw.is_null());
-        Self::create_native_widget_from_ptr_impl(raw)
     }
 
     #[cfg(android_platform)]
