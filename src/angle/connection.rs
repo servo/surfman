@@ -13,8 +13,6 @@ use crate::{Adapter, AdapterPreferences, Error, GLApi, PowerPreference, Renderin
 
 use euclid::default::Size2D;
 
-use std::os::raw::c_void;
-
 use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
 
@@ -111,17 +109,6 @@ impl Connection {
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
         Connection::new()
-    }
-
-    /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(
-        &self,
-        raw: *mut c_void,
-        _size: Size2D<i32>,
-    ) -> NativeWidget {
-        NativeWidget {
-            egl_native_window: raw as EGLNativeWindowType,
-        }
     }
 
     /// Create a native widget type from the given `WindowHandle`.

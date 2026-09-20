@@ -194,17 +194,6 @@ impl Connection {
         Connection::from_x11_display(display)
     }
 
-    /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(
-        &self,
-        raw: *mut c_void,
-        _size: Size2D<i32>,
-    ) -> NativeWidget {
-        NativeWidget {
-            window: std::mem::transmute(raw),
-        }
-    }
-
     /// Create a native widget type from the given `WindowHandle`.
     pub fn create_native_widget_from_window_handle(
         &self,

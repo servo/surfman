@@ -13,8 +13,6 @@ use crate::GLApi;
 
 use euclid::default::Size2D;
 
-use std::os::raw::c_void;
-
 pub use crate::base::io_surface::connection::NativeConnection;
 
 /// A connection to the display server.
@@ -78,15 +76,6 @@ impl Connection {
         handle: raw_window_handle::DisplayHandle,
     ) -> Result<Connection, Error> {
         SystemConnection::from_display_handle(handle).map(Connection)
-    }
-
-    /// Creates a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(
-        &self,
-        raw: *mut c_void,
-        size: Size2D<i32>,
-    ) -> NativeWidget {
-        self.0.create_native_widget_from_ptr(raw, size)
     }
 
     /// Create a native widget type from the given `WindowHandle`.

@@ -114,15 +114,6 @@ impl Connection {
         Err(Error::IncompatibleNativeWidget)
     }
 
-    /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(
-        &self,
-        _raw: *mut c_void,
-        _size: Size2D<i32>,
-    ) -> NativeWidget {
-        NativeWidget
-    }
-
     /// Create a native widget type from the given `WindowHandle`.
     #[inline]
     pub fn create_native_widget_from_window_handle(

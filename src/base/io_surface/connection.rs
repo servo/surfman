@@ -9,7 +9,6 @@ use super::surface::NativeWidget;
 use crate::adapter::{AdapterPreferences, PowerPreference, RenderingPreference};
 use crate::Error;
 
-use objc2::rc::Retained;
 use objc2_app_kit::NSView;
 use objc2_core_foundation::{CFBoolean, CFBundle, CFMutableDictionary, CFRetained, CFString};
 
@@ -96,22 +95,6 @@ impl Connection {
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
         Connection::new()
-    }
-
-    /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(
-        &self,
-        raw: *mut c_void,
-        _size: Size2D<i32>,
-    ) -> NativeWidget {
-        let view_ptr: *mut NSView = raw.cast();
-        NativeWidget {
-            // SAFETY: Validity of the NSView is upheld by caller.
-            // TODO(madsmtm): We should probably `retain` here, rather than
-            // take ownership of the pointer.
-            view: unsafe { Retained::from_raw(view_ptr).unwrap() },
-            opaque: true,
-        }
     }
 
     /// Create a native widget type from the given `WindowHandle`.

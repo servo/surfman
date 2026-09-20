@@ -10,8 +10,6 @@ use crate::{Adapter, Error};
 
 use euclid::default::Size2D;
 
-use std::os::raw::c_void;
-
 /// A connection to the display server.
 pub enum Connection<Def, Alt>
 where
@@ -93,22 +91,6 @@ where
         }
     }
 
-    /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(
-        &self,
-        raw: *mut c_void,
-        size: Size2D<i32>,
-    ) -> NativeWidget<Def, Alt> {
-        match *self {
-            Connection::Default(ref connection) => {
-                NativeWidget::Default(connection.create_native_widget_from_ptr(raw, size))
-            }
-            Connection::Alternate(ref connection) => {
-                NativeWidget::Alternate(connection.create_native_widget_from_ptr(raw, size))
-            }
-        }
-    }
-
     /// Create a native widget type from the given `WindowHandle`.
     pub fn create_native_widget_from_window_handle(
         &self,
@@ -160,15 +142,6 @@ where
         handle: raw_window_handle::DisplayHandle,
     ) -> Result<Connection<Def, Alt>, Error> {
         Connection::from_display_handle(handle)
-    }
-
-    #[inline]
-    unsafe fn create_native_widget_from_ptr(
-        &self,
-        raw: *mut c_void,
-        size: Size2D<i32>,
-    ) -> NativeWidget<Def, Alt> {
-        Connection::create_native_widget_from_ptr(self, raw, size)
     }
 
     fn create_native_widget_from_window_handle(

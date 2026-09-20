@@ -83,15 +83,6 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                unsafe fn create_native_widget_from_ptr(
-                    &self,
-                    raw: *mut c_void,
-                    size: Size2D<i32>,
-                ) -> Self::NativeWidget {
-                    Connection::create_native_widget_from_ptr(self, raw, size)
-                }
-
-                #[inline]
                 fn create_native_widget_from_window_handle(
                     &self,
                     window: raw_window_handle::WindowHandle,

@@ -157,18 +157,6 @@ impl Connection {
         }
     }
 
-    /// Create a native widget from a raw pointer
-    pub unsafe fn create_native_widget_from_ptr(
-        &self,
-        raw: *mut c_void,
-        size: Size2D<i32>,
-    ) -> NativeWidget {
-        NativeWidget {
-            wayland_surface: raw as *mut wl_proxy,
-            size,
-        }
-    }
-
     /// Creates a native widget type from the given `WindowHandle`
     pub fn create_native_widget_from_window_handle(
         &self,
