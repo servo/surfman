@@ -3,6 +3,7 @@
 use crate::context::ContextID;
 
 use euclid::default::Size2D;
+use raw_window_handle::WindowHandle;
 use std::fmt::{self, Display, Formatter};
 
 /// Various data about the surface.
@@ -91,7 +92,7 @@ pub enum SurfaceAccess {
 
 /// Information specific to the type of surface: generic or widget.
 #[derive(Clone)]
-pub enum SurfaceType<NativeWidget> {
+pub enum SurfaceType<'a> {
     /// An off-screen surface that has a pixel size. Generic surfaces can sometimes be shown on
     /// screen using platform-specific APIs, but `surfman` itself provides no way to draw their
     /// contents on screen. Only generic surfaces can be bound to textures.
@@ -106,10 +107,12 @@ pub enum SurfaceType<NativeWidget> {
     /// a window, the size of the surface will be the physical size of the window.) Widget surfaces
     /// cannot be bound to textures.
     Widget {
-        /// A native widget type specific to the backend.
+        /// A [`WindowHandle`] which identifies the widget to make this surface for.
+        window_handle: WindowHandle<'a>,
+        /// The size of the window to create this surface for.
         ///
-        /// For example, on Windows this wraps an `HWND`.
-        native_widget: NativeWidget,
+        /// Note: This is currently only used for Wayland.
+        size: Size2D<i32>,
     },
 }
 

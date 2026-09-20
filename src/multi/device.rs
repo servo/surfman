@@ -2,7 +2,7 @@
 
 use super::connection::Connection;
 use super::context::{Context, ContextDescriptor};
-use super::surface::{NativeWidget, Surface, SurfaceTexture};
+use super::surface::{Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
@@ -177,7 +177,7 @@ where
         &self,
         context: &Context<Def, Alt>,
         surface_access: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget<Def, Alt>>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface<Def, Alt>, Error> {
         Device::create_surface(self, context, surface_access, surface_type)
     }

@@ -37,10 +37,6 @@ pub struct Surface(pub(crate) EGLBackedSurface);
 #[derive(Debug)]
 pub struct SurfaceTexture(pub(crate) EGLSurfaceTexture);
 
-/// A placeholder wrapper for a native widget.
-#[derive(Clone)]
-pub struct NativeWidget;
-
 unsafe impl Send for Surface {}
 
 /// Represents the CPU view of the pixel data of this surface.

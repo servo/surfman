@@ -2,7 +2,6 @@
 
 use super::context::Context;
 use super::device::Device;
-use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::{Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
@@ -57,18 +56,6 @@ where
     Alternate(Alt::SurfaceTexture),
 }
 
-/// A native widget/window type that can dynamically switch between backends.
-pub enum NativeWidget<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    /// The default native widget type.
-    Default(<Def::Connection as ConnectionInterface>::NativeWidget),
-    /// The alternate native widget type.
-    Alternate(<Alt::Connection as ConnectionInterface>::NativeWidget),
-}
-
 impl<Def, Alt> Debug for Surface<Def, Alt>
 where
     Def: DeviceInterface,
@@ -102,37 +89,15 @@ where
         &self,
         context: &Context<Def, Alt>,
         surface_access: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget<Def, Alt>>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface<Def, Alt>, Error> {
         match (self, context) {
-            (Device::Default(device), Context::Default(context)) => {
-                let surface_type = match surface_type {
-                    SurfaceType::Generic { size } => SurfaceType::Generic { size },
-                    SurfaceType::Widget {
-                        native_widget: NativeWidget::Default(native_widget),
-                    } => SurfaceType::Widget { native_widget },
-                    SurfaceType::Widget { native_widget: _ } => {
-                        return Err(Error::IncompatibleNativeWidget)
-                    }
-                };
-                device
-                    .create_surface(context, surface_access, surface_type)
-                    .map(Surface::Default)
-            }
-            (Device::Alternate(device), Context::Alternate(context)) => {
-                let surface_type = match surface_type {
-                    SurfaceType::Generic { size } => SurfaceType::Generic { size },
-                    SurfaceType::Widget {
-                        native_widget: NativeWidget::Alternate(native_widget),
-                    } => SurfaceType::Widget { native_widget },
-                    SurfaceType::Widget { native_widget: _ } => {
-                        return Err(Error::IncompatibleNativeWidget)
-                    }
-                };
-                device
-                    .create_surface(context, surface_access, surface_type)
-                    .map(Surface::Alternate)
-            }
+            (Device::Default(device), Context::Default(context)) => device
+                .create_surface(context, surface_access, surface_type)
+                .map(Surface::Default),
+            (Device::Alternate(device), Context::Alternate(context)) => device
+                .create_surface(context, surface_access, surface_type)
+                .map(Surface::Alternate),
             _ => Err(Error::IncompatibleContext),
         }
     }

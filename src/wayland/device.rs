@@ -2,7 +2,7 @@
 
 use super::connection::{Connection, NativeConnectionWrapper};
 use super::context::{Context, ContextDescriptor, NativeContext};
-use super::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture};
+use super::surface::{Surface, SurfaceDataGuard, SurfaceTexture};
 use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
@@ -15,6 +15,7 @@ use crate::{ContextAttributes, Gl, SurfaceInfo};
 use crate::{Error, GLApi, SurfaceAccess, SurfaceType};
 use euclid::default::Size2D;
 use glow::Texture;
+use raw_window_handle::RawWindowHandle;
 use std::os::raw::c_void;
 use std::sync::Arc;
 use wayland_sys::client::wl_proxy;
@@ -318,17 +319,25 @@ impl Device {
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         match surface_type {
             SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { native_widget } => unsafe {
-                self.create_window_surface(
-                    context,
-                    native_widget.wayland_surface,
-                    &native_widget.size,
-                )
-            },
+            SurfaceType::Widget {
+                window_handle,
+                size,
+            } => {
+                let RawWindowHandle::Wayland(handle) = window_handle.as_raw() else {
+                    return Err(Error::IncompatibleSurfaceType);
+                };
+                unsafe {
+                    self.create_window_surface(
+                        context,
+                        handle.surface.as_ptr() as *mut wl_proxy,
+                        &size,
+                    )
+                }
+            }
         }
     }
 

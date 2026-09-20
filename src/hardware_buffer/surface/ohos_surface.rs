@@ -29,6 +29,7 @@ use super::super::ohos_ffi::{
     EGL_NATIVE_BUFFER_OHOS,
 };
 use super::{Surface, SurfaceTexture};
+use raw_window_handle::RawWindowHandle;
 
 const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 
@@ -45,11 +46,6 @@ pub(crate) enum SurfaceObjects {
     },
 }
 
-/// An OHOS native window.
-pub struct NativeWidget {
-    pub(crate) native_window: *mut OHNativeWindow,
-}
-
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
     ///
@@ -59,13 +55,16 @@ impl Device {
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         info!("Device create_surface with Context");
         match surface_type {
             SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { native_widget } => unsafe {
-                self.create_window_surface(context, native_widget)
+            SurfaceType::Widget { window_handle, .. } => unsafe {
+                let RawWindowHandle::OhosNdk(handle) = window_handle.as_raw() else {
+                    return Err(Error::IncompatibleSurfaceType);
+                };
+                self.create_window_surface(context, handle.native_window.as_ptr().cast())
             },
         }
     }
@@ -135,7 +134,7 @@ impl Device {
     unsafe fn create_window_surface(
         &self,
         context: &Context,
-        native_widget: NativeWidget,
+        native_window: *mut OHNativeWindow,
     ) -> Result<Surface, Error> {
         let mut height: i32 = 0;
         let mut width: i32 = 0;
@@ -143,7 +142,7 @@ impl Device {
         // variable arguments when called with `GET_BUFFER_GEOMETRY`.
         let result = unsafe {
             OH_NativeWindow_NativeWindowHandleOpt(
-                native_widget.native_window,
+                native_window,
                 NativeWindowOperation::GET_BUFFER_GEOMETRY,
                 &mut height as *mut i32,
                 &mut width as *mut i32,
@@ -154,7 +153,7 @@ impl Device {
             let egl_surface = egl.CreateWindowSurface(
                 self.egl_display,
                 self.context_to_egl_config(context),
-                native_widget.native_window as *const c_void,
+                native_window as *const c_void,
                 ptr::null(),
             );
             assert_ne!(egl_surface, egl::NO_SURFACE);
@@ -370,14 +369,6 @@ impl Device {
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.texture_object
-    }
-}
-
-impl NativeWidget {
-    /// Creates a native widget type from an `OHNativeWindow`.
-    #[inline]
-    pub unsafe fn from_native_window(native_window: *mut OHNativeWindow) -> NativeWidget {
-        NativeWidget { native_window }
     }
 }
 

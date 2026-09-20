@@ -29,6 +29,7 @@ use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, Windowing
 
 use euclid::default::Size2D;
 use glow::{HasContext, Texture};
+use raw_window_handle::RawWindowHandle;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
@@ -48,11 +49,6 @@ pub(crate) enum SurfaceObjects {
     },
 }
 
-/// An Android native window.
-pub struct NativeWidget {
-    pub(crate) native_window: *mut ANativeWindow,
-}
-
 impl Device {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
     ///
@@ -62,12 +58,15 @@ impl Device {
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         match surface_type {
             SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { native_widget } => unsafe {
-                self.create_window_surface(context, native_widget.native_window)
+            SurfaceType::Widget { window_handle, .. } => unsafe {
+                let RawWindowHandle::AndroidNdk(handle) = window_handle.as_raw() else {
+                    return Err(Error::IncompatibleSurfaceType);
+                };
+                self.create_window_surface(context, handle.a_native_window.as_ptr() as *mut _)
             },
         }
     }
@@ -373,14 +372,6 @@ impl Device {
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.texture_object
-    }
-}
-
-impl NativeWidget {
-    /// Creates a native widget type from an Android `NativeWindow`.
-    #[inline]
-    pub unsafe fn from_native_window(native_window: *mut ANativeWindow) -> NativeWidget {
-        NativeWidget { native_window }
     }
 }
 

@@ -7,11 +7,8 @@
 
 use super::adapter::AngleAdapter;
 use super::device::{Device, NativeDevice, VendorPreference};
-use super::surface::NativeWidget;
-use crate::egl::types::{EGLDisplay, EGLNativeWindowType};
+use crate::egl::types::EGLDisplay;
 use crate::{Adapter, AdapterPreferences, Error, GLApi, PowerPreference, RenderingPreference};
-
-use euclid::default::Size2D;
 
 use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
@@ -109,22 +106,6 @@ impl Connection {
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
         Connection::new()
-    }
-
-    /// Create a native widget type from the given `WindowHandle`.
-    #[inline]
-    pub fn create_native_widget_from_window_handle(
-        &self,
-        handle: raw_window_handle::WindowHandle,
-        _size: Size2D<i32>,
-    ) -> Result<NativeWidget, Error> {
-        if let raw_window_handle::RawWindowHandle::Win32(handle) = handle.as_raw() {
-            Ok(NativeWidget {
-                egl_native_window: handle.hwnd.get() as EGLNativeWindowType,
-            })
-        } else {
-            Err(Error::IncompatibleNativeWidget)
-        }
     }
 }
 

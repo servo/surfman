@@ -1,14 +1,11 @@
 //! A connection abstraction that allows the choice of backends dynamically.
 
 use super::device::Device;
-use super::surface::NativeWidget;
 use crate::adapter::AdapterPreferences;
 use crate::connection::Connection as ConnectionInterface;
 use crate::device::Device as DeviceInterface;
 use crate::GLApi;
 use crate::{Adapter, Error};
-
-use euclid::default::Size2D;
 
 /// A connection to the display server.
 pub enum Connection<Def, Alt>
@@ -90,22 +87,6 @@ where
             Err(_) => <Alt::Connection>::from_display_handle(handle).map(Connection::Alternate),
         }
     }
-
-    /// Create a native widget type from the given `WindowHandle`.
-    pub fn create_native_widget_from_window_handle(
-        &self,
-        handle: raw_window_handle::WindowHandle,
-        size: Size2D<i32>,
-    ) -> Result<NativeWidget<Def, Alt>, Error> {
-        match *self {
-            Connection::Default(ref connection) => connection
-                .create_native_widget_from_window_handle(handle, size)
-                .map(NativeWidget::Default),
-            Connection::Alternate(ref connection) => connection
-                .create_native_widget_from_window_handle(handle, size)
-                .map(NativeWidget::Alternate),
-        }
-    }
 }
 
 impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
@@ -116,7 +97,6 @@ where
     Alt::Connection: ConnectionInterface<Device = Alt>,
 {
     type Device = Device<Def, Alt>;
-    type NativeWidget = NativeWidget<Def, Alt>;
 
     #[inline]
     fn new() -> Result<Connection<Def, Alt>, Error> {
@@ -142,13 +122,5 @@ where
         handle: raw_window_handle::DisplayHandle,
     ) -> Result<Connection<Def, Alt>, Error> {
         Connection::from_display_handle(handle)
-    }
-
-    fn create_native_widget_from_window_handle(
-        &self,
-        handle: raw_window_handle::WindowHandle,
-        size: Size2D<i32>,
-    ) -> Result<Self::NativeWidget, Error> {
-        Connection::create_native_widget_from_window_handle(self, handle, size)
     }
 }

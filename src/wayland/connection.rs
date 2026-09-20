@@ -1,7 +1,6 @@
 //! A wrapper for Wayland connections (displays).
 
 use super::device::{Device, NativeDevice};
-use super::surface::NativeWidget;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_WAYLAND_KHR;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
@@ -10,11 +9,10 @@ use crate::info::GLApi;
 use crate::Error;
 use crate::{egl, Adapter, AdapterPreferences};
 
-use euclid::default::Size2D;
 use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Arc;
-use wayland_sys::client::{wayland_client_handle, wl_display, wl_proxy};
+use wayland_sys::client::{wayland_client_handle, wl_display};
 
 /// A connection to the Wayland server.
 #[derive(Clone)]
@@ -155,25 +153,6 @@ impl Connection {
 
             Connection::from_wayland_display(wayland_display, false)
         }
-    }
-
-    /// Creates a native widget type from the given `WindowHandle`
-    pub fn create_native_widget_from_window_handle(
-        &self,
-        handle: raw_window_handle::WindowHandle,
-        window_size: Size2D<i32>,
-    ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Wayland;
-
-        let wayland_surface = match handle.as_raw() {
-            Wayland(handle) => handle.surface.as_ptr() as *mut wl_proxy,
-            _ => return Err(Error::IncompatibleNativeWidget),
-        };
-
-        Ok(NativeWidget {
-            wayland_surface,
-            size: window_size,
-        })
     }
 }
 

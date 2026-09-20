@@ -94,14 +94,6 @@ impl Debug for SurfaceTexture {
     }
 }
 
-/// Wraps a Windows `HWND` window handle.
-pub struct NativeWidget {
-    /// A window handle.
-    ///
-    /// This can be a top-level window or a control.
-    pub window_handle: HWND,
-}
-
 impl Surface {
     pub(crate) fn id(&self) -> SurfaceID {
         match self.win32_objects {

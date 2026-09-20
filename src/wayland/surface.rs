@@ -6,7 +6,6 @@ use crate::Error;
 use euclid::default::Size2D;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
-use wayland_sys::client::wl_proxy;
 use wayland_sys::egl::{wayland_egl_handle, wl_egl_window};
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
@@ -39,13 +38,6 @@ pub struct Surface(pub(crate) EGLBackedSurface);
 /// `destroy_surface_texture()` method, or a panic will occur.
 #[derive(Debug)]
 pub struct SurfaceTexture(pub(crate) EGLSurfaceTexture);
-
-/// A wrapper for a Wayland surface, with associated size.
-#[derive(Clone)]
-pub struct NativeWidget {
-    pub(crate) wayland_surface: *mut wl_proxy,
-    pub(crate) size: Size2D<i32>,
-}
 
 unsafe impl Send for Surface {}
 

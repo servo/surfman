@@ -96,20 +96,6 @@ fn make_connection(window: &winit::window::Window) -> surfman::Connection {
     connection
 }
 
-fn make_native_widget(
-    window: &winit::window::Window,
-    connection: &surfman::Connection,
-    window_size: Size2D<i32>,
-) -> surfman::NativeWidget {
-    let raw_window_handle = window
-        .window_handle()
-        .expect("couldn't get window handle from window");
-    let native_widget = connection
-        .create_native_widget_from_window_handle(raw_window_handle, window_size)
-        .unwrap();
-    native_widget
-}
-
 #[cfg(target_os = "android")]
 fn main() {}
 
@@ -133,9 +119,6 @@ fn main() {
 
     let connection = make_connection(&window);
 
-    let window_size = window.inner_size();
-    let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-    let native_widget = make_native_widget(&window, &connection, window_size);
     let adapter = connection
         .create_adapter(AdapterPreferences {
             power: PowerPreference::LowPower,
@@ -152,7 +135,14 @@ fn main() {
         .create_context_descriptor(&context_attributes)
         .unwrap();
 
-    let surface_type = SurfaceType::Widget { native_widget };
+    let window_size = window.inner_size();
+    let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
+    let surface_type = SurfaceType::Widget {
+        window_handle: window
+            .window_handle()
+            .expect("Could not get RawWindowHandle"),
+        size: window_size,
+    };
     let mut context = device.create_context(&context_descriptor, None).unwrap();
     let surface = device
         .create_surface(&context, SurfaceAccess::GPUOnly, surface_type)

@@ -4,7 +4,6 @@ use super::context::ContextDescriptor;
 use super::device::Device;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::context::ContextID;
-use crate::egl::types::EGLNativeWindowType;
 use crate::egl::types::EGLSurface;
 use crate::egl::{self};
 use crate::{Error, SurfaceID};
@@ -95,15 +94,6 @@ pub(crate) enum Synchronization {
     KeyedMutex(ComPtr<IDXGIKeyedMutex>),
     GLFinish,
     None,
-}
-
-/// Wraps an `EGLNativeWindowType`
-#[repr(C)]
-pub struct NativeWidget {
-    /// A native window
-    ///
-    /// This can be a top-level window or a control.
-    pub egl_native_window: EGLNativeWindowType,
 }
 
 impl Surface {

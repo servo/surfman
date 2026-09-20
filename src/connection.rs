@@ -5,14 +5,10 @@ use crate::Adapter;
 use crate::Error;
 use crate::GLApi;
 
-use euclid::default::Size2D;
-
 /// Methods relating to display server connections.
 pub trait Connection: Sized {
     /// The device type associated with this connection.
     type Device;
-    /// The native widget type associated with this connection.
-    type NativeWidget;
 
     /// Connects to the default display.
     fn new() -> Result<Self, Error>;
@@ -28,11 +24,4 @@ pub trait Connection: Sized {
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     fn from_display_handle(handle: raw_window_handle::DisplayHandle) -> Result<Self, Error>;
-
-    /// Create a native widget type from the given `WindowHandle`.
-    fn create_native_widget_from_window_handle(
-        &self,
-        window: raw_window_handle::WindowHandle,
-        size: Size2D<i32>,
-    ) -> Result<Self::NativeWidget, Error>;
 }

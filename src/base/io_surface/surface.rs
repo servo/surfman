@@ -8,11 +8,13 @@ use euclid::default::Size2D;
 use libc::KERN_SUCCESS;
 use objc2::msg_send;
 use objc2::rc::Retained;
+use objc2::{MainThreadMarker, Message};
 use objc2_app_kit::NSView;
 use objc2_core_foundation::{
     kCFAllocatorDefault, kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks,
     CFDictionary, CFIndex, CFNumber, CFRetained, CFString, CGPoint, CGRect, CGSize,
 };
+use raw_window_handle::RawWindowHandle;
 // CVDisplayLink is deprecated, but the replaced APIs are only available
 // on newer OS versions.
 #[allow(deprecated)]
@@ -92,15 +94,6 @@ struct VblankCond {
     cond: Condvar,
 }
 
-/// A native widget on macOS (`NSView`).
-#[derive(Clone)]
-pub struct NativeWidget {
-    /// The `NSView` object.
-    pub view: Retained<NSView>,
-    /// A bool value that indicates whether widget's NSWindow is opaque.
-    pub opaque: bool,
-}
-
 /// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     surface: &'a mut Surface,
@@ -114,47 +107,35 @@ impl Device {
     pub fn create_surface(
         &self,
         access: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
-        unsafe {
-            let size = match surface_type {
-                SurfaceType::Generic { size } => size,
-                SurfaceType::Widget { ref native_widget } => {
-                    let window = native_widget
-                        .view
-                        .window()
-                        .expect("view must be installed in a window");
-                    let bounds = window.convertRectToBacking(native_widget.view.bounds());
+        let (view_info, size) = match surface_type {
+            SurfaceType::Generic { size } => (None, size),
+            SurfaceType::Widget { window_handle, .. } => {
+                let RawWindowHandle::AppKit(handle) = window_handle.as_raw() else {
+                    return Err(Error::IncompatibleSurfaceType);
+                };
 
-                    // The surface will not appear if its width is not a multiple of 4 (i.e. stride
-                    // is a multiple of 16 bytes). Enforce this.
-                    let mut width = bounds.size.width as i32;
-                    let height = bounds.size.height as i32;
-                    if width % 4 != 0 {
-                        width += 4 - width % 4;
-                    }
+                assert!(
+                    MainThreadMarker::new().is_some(),
+                    "NSView is only usable on the main thread"
+                );
 
-                    Size2D::new(width, height)
-                }
-            };
+                // SAFETY: The pointer is valid for as long as the handle is,
+                // and we just checked that we're on the main thread.
+                let view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
+                let (view_info, size) = unsafe { self.create_view_info(access, view) };
+                (Some(view_info), size)
+            }
+        };
 
-            let io_surface = self.create_io_surface(&size, access);
-
-            let view_info = match surface_type {
-                SurfaceType::Generic { .. } => None,
-                SurfaceType::Widget {
-                    ref native_widget, ..
-                } => Some(self.create_view_info(&size, access, native_widget)),
-            };
-
-            Ok(Surface {
-                io_surface,
-                size,
-                access,
-                destroyed: false,
-                view_info,
-            })
-        }
+        Ok(Surface {
+            io_surface: self.create_io_surface(&size, access),
+            size,
+            access,
+            destroyed: false,
+            view_info,
+        })
     }
 
     pub(crate) fn set_surface_flipped(&self, surface: &mut Surface, flipped: bool) {
@@ -176,16 +157,21 @@ impl Device {
     #[allow(deprecated)]
     unsafe fn create_view_info(
         &self,
-        size: &Size2D<i32>,
         surface_access: SurfaceAccess,
-        native_widget: &NativeWidget,
-    ) -> ViewInfo {
-        let front_surface = self.create_io_surface(size, surface_access);
+        view: &NSView,
+    ) -> (ViewInfo, Size2D<i32>) {
+        // The surface will not appear if its width is not a multiple of 4 (i.e. stride
+        // is a multiple of 16 bytes). Enforce this.
+        let window = view.window().expect("view must be installed in a window");
+        let bounds = window.convertRectToBacking(view.bounds());
+        let mut width = bounds.size.width as i32;
+        let height = bounds.size.height as i32;
+        if width % 4 != 0 {
+            width += 4 - width % 4;
+        }
+        let size = Size2D::new(width, height);
 
-        let window = native_widget
-            .view
-            .window()
-            .expect("view must be installed in a window");
+        let front_surface = self.create_io_surface(&size, surface_access);
         let device_description = window.screen().unwrap().deviceDescription();
         let display_id = device_description
             .objectForKey(ns_string!("NSScreenNumber"))
@@ -214,14 +200,11 @@ impl Device {
         CATransaction::setDisableActions(true);
 
         let superlayer = CALayer::new();
-        native_widget.view.setLayer(Some(&superlayer));
-        native_widget.view.setWantsLayer(true);
+        view.setLayer(Some(&superlayer));
+        view.setWantsLayer(true);
 
         // Compute logical size.
-        let window = native_widget
-            .view
-            .window()
-            .expect("view must be installed in a window");
+        let window = view.window().expect("view must be installed in a window");
         let logical_rect = window.convertRectFromBacking(NSRect {
             origin: NSPoint { x: 0.0, y: 0.0 },
             size: NSSize {
@@ -231,7 +214,7 @@ impl Device {
         });
         let logical_size = logical_rect.size;
 
-        let opaque = native_widget.opaque;
+        let opaque = window.isOpaque();
         let layer = CALayer::new();
         let layer_size = CGSize::new(logical_size.width, logical_size.height);
         layer.setFrame(CGRect::new(CGPoint::ZERO, layer_size));
@@ -241,19 +224,21 @@ impl Device {
         let _: () = unsafe { msg_send![&layer, setContentsOpaque: opaque] };
         superlayer.addSublayer(&layer);
 
-        let view = native_widget.view.clone();
         CATransaction::commit();
 
-        ViewInfo {
-            view,
-            layer,
-            superlayer,
-            front_surface,
-            logical_size,
-            display_link,
-            next_vblank,
-            opaque,
-        }
+        (
+            ViewInfo {
+                view: view.retain(),
+                layer,
+                superlayer,
+                front_surface,
+                logical_size,
+                display_link,
+                next_vblank,
+                opaque,
+            },
+            size,
+        )
     }
 
     /// Destroys a surface.

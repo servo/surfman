@@ -71,8 +71,8 @@ pub enum Error {
     NoWidgetAttached,
     /// The surface has a window attachment.
     WidgetAttached,
-    /// The native widget is invalid.
-    InvalidNativeWidget,
+    /// The window is invalid.
+    InvalidWindow,
     /// The surface was not created with the `CPU_READ_WRITE` flag, so it cannot be accessed from
     /// the CPU.
     SurfaceDataInaccessible,
@@ -84,8 +84,8 @@ pub enum Error {
     ConnectionRequired,
     /// The adapter type does not match the supplied connection.
     IncompatibleAdapter,
-    /// The native widget type does not match the supplied device.
-    IncompatibleNativeWidget,
+    /// The surface type does not match the supplied device.
+    IncompatibleSurfaceType,
     /// The `raw display handle` is incompatible with this backend.
     IncompatibleRawDisplayHandle,
     /// The native context does not match the supplied device.

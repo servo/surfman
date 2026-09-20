@@ -4,7 +4,6 @@
 
 use crate::base::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
 use std::marker::PhantomData;
-use x11_dl::xlib::Window;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
@@ -36,12 +35,6 @@ pub struct Surface(pub(crate) EGLBackedSurface);
 /// `destroy_surface_texture()` method, or a panic will occur.
 #[derive(Debug)]
 pub struct SurfaceTexture(pub(crate) EGLSurfaceTexture);
-
-/// A wrapper for a Wayland surface, with associated size.
-#[derive(Clone)]
-pub struct NativeWidget {
-    pub(crate) window: Window,
-}
 
 unsafe impl Send for Surface {}
 
