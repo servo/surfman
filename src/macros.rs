@@ -41,7 +41,7 @@ macro_rules! implement_interfaces {
             use euclid::default::Size2D;
             use glow::Texture;
             use std::os::raw::c_void;
-            use $crate::adapter::Adapter;
+            use $crate::adapter::{Adapter, AdapterPreferences};
             use $crate::connection::Connection as ConnectionInterface;
             use $crate::device::Device as DeviceInterface;
             use $crate::info::GLApi;
@@ -63,23 +63,11 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn create_adapter(&self) -> Result<Adapter, Error> {
-                    Connection::create_adapter(self)
-                }
-
-                #[inline]
-                fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-                    Connection::create_hardware_adapter(self)
-                }
-
-                #[inline]
-                fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-                    Connection::create_low_power_adapter(self)
-                }
-
-                #[inline]
-                fn create_software_adapter(&self) -> Result<Adapter, Error> {
-                    Connection::create_software_adapter(self)
+                fn create_adapter(
+                    &self,
+                    preferences: AdapterPreferences,
+                ) -> Result<Adapter, Error> {
+                    Connection::create_adapter(self, preferences)
                 }
 
                 #[inline]

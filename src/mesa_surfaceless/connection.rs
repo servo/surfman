@@ -8,7 +8,7 @@ use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
 use crate::Error;
-use crate::{egl, Adapter};
+use crate::{egl, Adapter, AdapterPreferences};
 
 use euclid::default::Size2D;
 
@@ -86,34 +86,10 @@ impl Connection {
         GLApi::GL
     }
 
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
+    /// Returns an adapter on this system according to the provided preferences.
     #[inline]
-    pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        self.create_hardware_adapter()
-    }
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    ///
-    /// On the OSMesa backend, this returns a software adapter.
-    #[inline]
-    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        Ok(FreeUnixAdapter::hardware().into())
-    }
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    ///
-    /// On the OSMesa backend, this returns a software adapter.
-    #[inline]
-    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        Ok(FreeUnixAdapter::low_power().into())
-    }
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    #[inline]
-    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        Ok(FreeUnixAdapter::software().into())
+    pub fn create_adapter(&self, preferences: AdapterPreferences) -> Result<Adapter, Error> {
+        Ok(FreeUnixAdapter::new(preferences).into())
     }
 
     /// Opens the hardware device corresponding to the given adapter.
@@ -130,7 +106,7 @@ impl Connection {
         &self,
         _: NativeDevice,
     ) -> Result<Device, Error> {
-        Device::new(self, &self.create_adapter()?)
+        Device::new(self, &self.create_adapter(Default::default())?)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.

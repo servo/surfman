@@ -12,7 +12,10 @@ use std::fs::File;
 use std::mem;
 use std::path::Path;
 use std::slice;
-use surfman::{Connection, ContextAttributeFlags, ContextAttributes, GLApi, GLVersion};
+use surfman::{
+    AdapterPreferences, Connection, ContextAttributeFlags, ContextAttributes, GLApi, GLVersion,
+    RenderingPreference,
+};
 use surfman::{SurfaceAccess, SurfaceType};
 
 mod common;
@@ -85,13 +88,17 @@ fn main() {
 
     let connection = Connection::new().unwrap();
 
-    let adapter = if matches.is_present("software") {
-        connection.create_software_adapter().unwrap()
-    } else if matches.is_present("hardware") {
-        connection.create_hardware_adapter().unwrap()
+    let rendering = if matches.is_present("software") {
+        RenderingPreference::Software
     } else {
-        connection.create_adapter().unwrap()
+        RenderingPreference::Hardware
     };
+    let adapter = connection
+        .create_adapter(AdapterPreferences {
+            rendering,
+            ..Default::default()
+        })
+        .unwrap();
 
     let output_path = Path::new(matches.value_of("OUTPUT").unwrap()).to_owned();
     let output_file = File::create(output_path).unwrap();

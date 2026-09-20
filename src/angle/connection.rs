@@ -9,7 +9,7 @@ use super::adapter::AngleAdapter;
 use super::device::{Device, NativeDevice, VendorPreference};
 use super::surface::NativeWidget;
 use crate::egl::types::{EGLDisplay, EGLNativeWindowType};
-use crate::{Adapter, Error, GLApi};
+use crate::{Adapter, AdapterPreferences, Error, GLApi, PowerPreference, RenderingPreference};
 
 use euclid::default::Size2D;
 
@@ -63,38 +63,18 @@ impl Connection {
         GLApi::GLES
     }
 
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    ///
-    /// This is an alias for `Connection::create_hardware_adapter()`.
+    /// Returns an adapter on this system according to the provided preferences.
     #[inline]
-    pub fn create_adapter(&self) -> Result<Adapter, Error> {
-        self.create_hardware_adapter()
-    }
-
-    /// Returns the "best" adapter on this system, preferring high-performance hardware adapters.
-    #[inline]
-    pub fn create_hardware_adapter(&self) -> Result<Adapter, Error> {
-        AngleAdapter::new(
-            D3D_DRIVER_TYPE_UNKNOWN,
-            VendorPreference::Avoid(INTEL_PCI_ID),
-        )
-        .map(Into::into)
-    }
-
-    /// Returns the "best" adapter on this system, preferring low-power hardware adapters.
-    #[inline]
-    pub fn create_low_power_adapter(&self) -> Result<Adapter, Error> {
-        AngleAdapter::new(
-            D3D_DRIVER_TYPE_UNKNOWN,
-            VendorPreference::Prefer(INTEL_PCI_ID),
-        )
-        .map(Into::into)
-    }
-
-    /// Returns the "best" adapter on this system, preferring software adapters.
-    #[inline]
-    pub fn create_software_adapter(&self) -> Result<Adapter, Error> {
-        AngleAdapter::new(D3D_DRIVER_TYPE_WARP, VendorPreference::None).map(Into::into)
+    pub fn create_adapter(&self, preferences: AdapterPreferences) -> Result<Adapter, Error> {
+        let driver_type = match preferences.rendering {
+            RenderingPreference::Hardware => D3D_DRIVER_TYPE_UNKNOWN,
+            RenderingPreference::Software => D3D_DRIVER_TYPE_WARP,
+        };
+        let vendor_preference = match preferences.power {
+            PowerPreference::HighPerformance => VendorPreference::Avoid(INTEL_PCI_ID),
+            PowerPreference::LowPower => VendorPreference::Prefer(INTEL_PCI_ID),
+        };
+        AngleAdapter::new(driver_type, vendor_preference).map(Into::into)
     }
 
     /// Opens the hardware device corresponding to the given adapter.
