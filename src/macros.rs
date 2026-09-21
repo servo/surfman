@@ -37,7 +37,7 @@ macro_rules! implement_interfaces {
             use super::connection::Connection;
             use super::context::{Context, ContextDescriptor};
             use super::device::Device;
-            use super::surface::{NativeWidget, Surface, SurfaceTexture};
+            use super::surface::{Surface, SurfaceTexture};
             use euclid::default::Size2D;
             use glow::Texture;
             use std::os::raw::c_void;
@@ -50,7 +50,6 @@ macro_rules! implement_interfaces {
 
             impl ConnectionInterface for Connection {
                 type Device = Device;
-                type NativeWidget = NativeWidget;
 
                 #[inline]
                 fn new() -> Result<Connection, Error> {
@@ -80,15 +79,6 @@ macro_rules! implement_interfaces {
                     handle: raw_window_handle::DisplayHandle,
                 ) -> Result<Connection, Error> {
                     Connection::from_display_handle(handle)
-                }
-
-                #[inline]
-                fn create_native_widget_from_window_handle(
-                    &self,
-                    window: raw_window_handle::WindowHandle,
-                    size: Size2D<i32>,
-                ) -> Result<Self::NativeWidget, Error> {
-                    Connection::create_native_widget_from_window_handle(self, window, size)
                 }
             }
 
@@ -209,7 +199,7 @@ macro_rules! implement_interfaces {
                     &self,
                     context: &Self::Context,
                     surface_access: SurfaceAccess,
-                    surface_type: SurfaceType<NativeWidget>,
+                    surface_type: SurfaceType<'_>,
                 ) -> Result<Self::Surface, Error> {
                     Device::create_surface(self, context, surface_access, surface_type)
                 }

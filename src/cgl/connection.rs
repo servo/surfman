@@ -7,11 +7,8 @@ use super::device::Device;
 use crate::adapter::{Adapter, AdapterPreferences};
 use crate::base::io_surface::connection::Connection as SystemConnection;
 use crate::base::io_surface::device::NativeDevice;
-use crate::base::io_surface::surface::NativeWidget;
 use crate::Error;
 use crate::GLApi;
-
-use euclid::default::Size2D;
 
 pub use crate::base::io_surface::connection::NativeConnection;
 
@@ -76,38 +73,5 @@ impl Connection {
         handle: raw_window_handle::DisplayHandle,
     ) -> Result<Connection, Error> {
         SystemConnection::from_display_handle(handle).map(Connection)
-    }
-
-    /// Create a native widget type from the given `WindowHandle`.
-    #[inline]
-    pub fn create_native_widget_from_window_handle(
-        &self,
-        handle: raw_window_handle::WindowHandle,
-        _size: Size2D<i32>,
-    ) -> Result<NativeWidget, Error> {
-        use objc2::{MainThreadMarker, Message};
-        use objc2_app_kit::NSView;
-        use raw_window_handle::RawWindowHandle::AppKit;
-
-        match handle.as_raw() {
-            AppKit(handle) => {
-                assert!(
-                    MainThreadMarker::new().is_some(),
-                    "NSView is only usable on the main thread"
-                );
-                // SAFETY: The pointer is valid for as long as the handle is,
-                // and we just checked that we're on the main thread.
-                let ns_view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
-                let ns_window = ns_view
-                    .window()
-                    .expect("view must be installed in a window");
-                Ok(NativeWidget {
-                    // Extend the lifetime of the view.
-                    view: ns_view.retain(),
-                    opaque: ns_window.isOpaque(),
-                })
-            }
-            _ => Err(Error::IncompatibleNativeWidget),
-        }
     }
 }

@@ -14,7 +14,7 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-pub use crate::base::io_surface::surface::{NativeSurface, NativeWidget};
+pub use crate::base::io_surface::surface::NativeSurface;
 
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.

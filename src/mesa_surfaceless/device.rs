@@ -9,7 +9,7 @@ use crate::egl::types::EGLint;
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::gl;
 use crate::mesa_surfaceless::context::{Context, ContextDescriptor, NativeContext};
-use crate::mesa_surfaceless::surface::{NativeWidget, Surface, SurfaceTexture};
+use crate::mesa_surfaceless::surface::{Surface, SurfaceTexture};
 use crate::{egl, Adapter};
 use crate::{ContextAttributes, Gl, SurfaceInfo};
 use crate::{Error, GLApi, SurfaceAccess, SurfaceType};
@@ -311,7 +311,7 @@ impl Device {
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         match surface_type {
             SurfaceType::Generic { size } => self.create_generic_surface(context, &size),

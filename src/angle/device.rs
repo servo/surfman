@@ -4,7 +4,7 @@ use super::adapter::AngleAdapter;
 use crate::angle::connection::Connection;
 use crate::angle::context::{Context, ContextDescriptor, NativeContext};
 use crate::angle::surface::{
-    NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture, Synchronization, Win32Objects,
+    Surface, SurfaceDataGuard, SurfaceTexture, Synchronization, Win32Objects,
 };
 use crate::base::egl::context::{self, CurrentContextGuard};
 use crate::base::egl::device::EGL_FUNCTIONS;
@@ -16,13 +16,16 @@ use crate::base::egl::ffi::{
 };
 use crate::base::egl::surface::ExternalEGLSurfaces;
 use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
-use crate::egl::types::{EGLAttrib, EGLConfig, EGLDeviceEXT, EGLDisplay, EGLSurface, EGLint};
+use crate::egl::types::{
+    EGLAttrib, EGLConfig, EGLDeviceEXT, EGLDisplay, EGLNativeWindowType, EGLSurface, EGLint,
+};
 use crate::surface::Framebuffer;
 use crate::{
     egl, gl, Adapter, ContextAttributes, Error, GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
+use raw_window_handle::RawWindowHandle;
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
@@ -606,12 +609,15 @@ impl Device {
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         match surface_type {
             SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size, None),
-            SurfaceType::Widget { ref native_widget } => {
-                self.create_window_surface(context, native_widget)
+            SurfaceType::Widget { window_handle, .. } => {
+                let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
+                    return Err(Error::IncompatibleSurfaceType);
+                };
+                self.create_window_surface(context, handle.hwnd.get() as EGLNativeWindowType)
             }
         }
     }
@@ -724,7 +730,7 @@ impl Device {
     fn create_window_surface(
         &self,
         context: &Context,
-        native_widget: &NativeWidget,
+        egl_native_window: EGLNativeWindowType,
     ) -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -735,7 +741,7 @@ impl Device {
                 let egl_surface = egl.CreateWindowSurface(
                     self.egl_display,
                     egl_config,
-                    native_widget.egl_native_window,
+                    egl_native_window,
                     attributes.as_ptr(),
                 );
                 assert_ne!(egl_surface, egl::NO_SURFACE);

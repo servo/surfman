@@ -4,12 +4,7 @@
 
 use super::adapter::WglAdapter;
 use super::device::{Device, NativeDevice};
-use super::surface::NativeWidget;
 use crate::{Adapter, AdapterPreferences, Error, GLApi};
-
-use euclid::default::Size2D;
-
-use winapi::shared::windef::HWND;
 
 /// Represents a connection to the display server.
 ///
@@ -78,22 +73,6 @@ impl Connection {
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
         Connection::new()
-    }
-
-    /// Create a native widget type from the given `WindowHandle`.
-    pub fn create_native_widget_from_window_handle(
-        &self,
-        handle: raw_window_handle::WindowHandle,
-        _size: Size2D<i32>,
-    ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Win32;
-
-        match handle.as_raw() {
-            Win32(handle) => Ok(NativeWidget {
-                window_handle: handle.hwnd.get() as HWND,
-            }),
-            _ => Err(Error::IncompatibleNativeWidget),
-        }
     }
 }
 

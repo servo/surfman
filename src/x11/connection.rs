@@ -1,7 +1,6 @@
 //! A wrapper for X11 server connections (`DISPLAY` variables).
 
 use super::device::{Device, NativeDevice};
-use super::surface::NativeWidget;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_X11_KHR;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
@@ -9,8 +8,6 @@ use crate::error::Error;
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
 use crate::{egl, Adapter, AdapterPreferences};
-
-use euclid::default::Size2D;
 
 use std::marker::PhantomData;
 use std::os::raw::c_void;
@@ -192,22 +189,6 @@ impl Connection {
         };
 
         Connection::from_x11_display(display)
-    }
-
-    /// Create a native widget type from the given `WindowHandle`.
-    pub fn create_native_widget_from_window_handle(
-        &self,
-        handle: raw_window_handle::WindowHandle,
-        _size: Size2D<i32>,
-    ) -> Result<NativeWidget, Error> {
-        use raw_window_handle::RawWindowHandle::Xlib;
-
-        match handle.as_raw() {
-            Xlib(handle) => Ok(NativeWidget {
-                window: handle.window,
-            }),
-            _ => Err(Error::IncompatibleNativeWidget),
-        }
     }
 }
 

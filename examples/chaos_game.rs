@@ -52,16 +52,17 @@ fn main() {
 
     window.set_visible(true);
 
-    let window_size = window.inner_size();
-    let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-    let handle = window.window_handle().unwrap();
-    let native_widget = connection
-        .create_native_widget_from_window_handle(handle, window_size)
-        .unwrap();
-
-    let surface_type = SurfaceType::Widget { native_widget };
+    let size = window.inner_size();
+    let size = Size2D::new(size.width as i32, size.height as i32);
+    let window_handle = window.window_handle().unwrap();
     let mut surface = device
-        .create_surface(SurfaceAccess::GPUCPU, surface_type)
+        .create_surface(
+            SurfaceAccess::GPUCPU,
+            SurfaceType::Widget {
+                window_handle,
+                size,
+            },
+        )
         .unwrap();
 
     let mut rng = rand::thread_rng();

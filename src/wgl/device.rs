@@ -12,13 +12,14 @@ use crate::wgl::context::{
     Context, ContextDescriptor, ContextStatus, CurrentContextGuard, FramebufferGuard,
     NativeContext, OPENGL_LIBRARY, WGL_EXTENSION_FUNCTIONS,
 };
-use crate::wgl::surface::{NativeWidget, Surface, SurfaceDataGuard, SurfaceTexture, Win32Objects};
+use crate::wgl::surface::{Surface, SurfaceDataGuard, SurfaceTexture, Win32Objects};
 use crate::{gl, gl_utils, GLApi, Gl, SurfaceAccess, SurfaceType};
 use crate::{Adapter, AdapterPreferences, PowerPreference};
 use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
 use euclid::default::Size2D;
 use glow::HasContext;
 use libc::c_uint;
+use raw_window_handle::RawWindowHandle;
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::mem;
@@ -727,12 +728,15 @@ impl Device {
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         match surface_type {
             SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { native_widget } => {
-                self.create_widget_surface(context, native_widget)
+            SurfaceType::Widget { window_handle, .. } => {
+                let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
+                    return Err(Error::IncompatibleSurfaceType);
+                };
+                self.create_widget_surface(context, handle.hwnd.get() as HWND)
             }
         }
     }
@@ -864,21 +868,21 @@ impl Device {
     fn create_widget_surface(
         &self,
         context: &Context,
-        native_widget: NativeWidget,
+        window_handle: HWND,
     ) -> Result<Surface, Error> {
         unsafe {
             // Get the bounds of the native HWND.
             let mut widget_rect = mem::zeroed();
-            let ok = winuser::GetWindowRect(native_widget.window_handle, &mut widget_rect);
+            let ok = winuser::GetWindowRect(window_handle, &mut widget_rect);
             if ok == FALSE {
-                return Err(Error::InvalidNativeWidget);
+                return Err(Error::InvalidWindow);
             }
 
             // Set its pixel format.
             {
                 let context_dc_guard = self.get_context_dc(context);
                 let pixel_format = wingdi::GetPixelFormat(context_dc_guard.dc);
-                let window_dc = winuser::GetDC(native_widget.window_handle);
+                let window_dc = winuser::GetDC(window_handle);
                 set_dc_pixel_format(window_dc, pixel_format);
             }
 
@@ -888,9 +892,7 @@ impl Device {
                     widget_rect.bottom - widget_rect.top,
                 ),
                 context_id: context.id,
-                win32_objects: Win32Objects::Widget {
-                    window_handle: native_widget.window_handle,
-                },
+                win32_objects: Win32Objects::Widget { window_handle },
                 destroyed: false,
             })
         }

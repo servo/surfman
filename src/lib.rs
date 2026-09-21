@@ -67,7 +67,7 @@ pub use adapter::{Adapter, AdapterPreferences, PowerPreference, RenderingPrefere
 pub use default::connection::Connection;
 pub use default::context::{Context, ContextDescriptor};
 pub use default::device::Device;
-pub use default::surface::{NativeWidget, Surface, SurfaceTexture};
+pub use default::surface::{Surface, SurfaceTexture};
 pub(crate) use glow::{self as gl, Context as Gl};
 pub(crate) use macros::implement_interfaces;
 

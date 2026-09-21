@@ -1,7 +1,6 @@
 //! Represents a connection to a display server.
 
 use super::device::{Device, NativeDevice};
-use super::surface::NativeWidget;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_SURFACELESS_MESA;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
@@ -9,8 +8,6 @@ use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
 use crate::Error;
 use crate::{egl, Adapter, AdapterPreferences};
-
-use euclid::default::Size2D;
 
 use std::os::raw::c_void;
 use std::sync::Arc;
@@ -111,16 +108,6 @@ impl Connection {
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
-        Err(Error::IncompatibleNativeWidget)
-    }
-
-    /// Create a native widget type from the given `WindowHandle`.
-    #[inline]
-    pub fn create_native_widget_from_window_handle(
-        &self,
-        _: raw_window_handle::WindowHandle,
-        _size: Size2D<i32>,
-    ) -> Result<NativeWidget, Error> {
-        Err(Error::IncompatibleNativeWidget)
+        Err(Error::IncompatibleRawDisplayHandle)
     }
 }

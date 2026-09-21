@@ -69,15 +69,11 @@ pub mod device {
 pub mod surface {
     use crate::mesa_surfaceless::device::Device as SWDevice;
     use crate::multi::device::Device as MultiDevice;
-    use crate::multi::surface::NativeWidget as MultiNativeWidget;
     use crate::multi::surface::Surface as MultiSurface;
     use crate::multi::surface::SurfaceTexture as MultiSurfaceTexture;
     use crate::wayland::device::Device as WaylandDevice;
     use crate::x11::device::Device as X11Device;
     type HWDevice = MultiDevice<WaylandDevice, X11Device>;
-
-    /// A wrapper for a Wayland surface or an X11 `Window`, as appropriate.
-    pub type NativeWidget = MultiNativeWidget<HWDevice, SWDevice>;
 
     /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and
     /// either displayed in a native widget or bound to a texture for reading.

@@ -138,7 +138,7 @@ where
         &self,
         context: &Self::Context,
         surface_access: SurfaceAccess,
-        surface_type: SurfaceType<<Self::Connection as ConnectionInterface>::NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Self::Surface, Error>;
 
     /// Creates a surface texture from an existing generic surface for use with the given context.

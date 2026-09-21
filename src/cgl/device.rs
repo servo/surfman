@@ -10,8 +10,8 @@ use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::renderbuffers::Renderbuffers;
 use crate::surface::Framebuffer;
 use crate::{
-    gl, gl_utils, Adapter, Context, GLVersion, NativeWidget, Surface, SurfaceAccess, SurfaceInfo,
-    SurfaceTexture, SurfaceType, WindowingApiError,
+    gl, gl_utils, Adapter, Context, GLVersion, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
+    SurfaceType, WindowingApiError,
 };
 use crate::{ContextAttributeFlags, ContextAttributes, ContextDescriptor, Error, GLApi, Gl};
 use cgl::{
@@ -487,7 +487,7 @@ impl Device {
         &self,
         context: &Context,
         access: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         let mut system_surface = self.0.create_surface(access, surface_type)?;
         self.0.set_surface_flipped(&mut system_surface, true);

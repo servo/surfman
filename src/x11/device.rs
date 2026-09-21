@@ -11,11 +11,12 @@ use crate::context::ContextID;
 use crate::egl::types::EGLint;
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::gl;
-use crate::x11::surface::{NativeWidget, SurfaceDataGuard, SurfaceTexture};
+use crate::x11::surface::{SurfaceDataGuard, SurfaceTexture};
 use crate::Adapter;
 use crate::{egl, ContextAttributes, Error, GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
 use glow::Texture;
+use raw_window_handle::RawWindowHandle;
 use std::os::raw::c_void;
 use std::sync::Arc;
 use x11_dl::xlib::Window;
@@ -311,13 +312,16 @@ impl Device {
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<NativeWidget>,
+        surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         match surface_type {
             SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { native_widget } => unsafe {
-                self.create_window_surface(context, native_widget.window)
-            },
+            SurfaceType::Widget { window_handle, .. } => {
+                let RawWindowHandle::Xlib(handle) = window_handle.as_raw() else {
+                    return Err(Error::IncompatibleSurfaceType);
+                };
+                unsafe { self.create_window_surface(context, handle.window) }
+            }
         }
     }
 
