@@ -1,12 +1,11 @@
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
-use super::context::ContextDescriptor;
 use super::device::Device;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::context::ContextID;
 use crate::egl::types::EGLSurface;
 use crate::egl::{self};
-use crate::{Error, SurfaceID};
+use crate::{EglContextDescriptor, Error, SurfaceID};
 
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
@@ -37,7 +36,7 @@ pub struct Surface {
     pub(crate) egl_surface: EGLSurface,
     pub(crate) size: Size2D<i32>,
     pub(crate) context_id: ContextID,
-    pub(crate) context_descriptor: ContextDescriptor,
+    pub(crate) context_descriptor: EglContextDescriptor,
     pub(crate) win32_objects: Win32Objects,
 }
 

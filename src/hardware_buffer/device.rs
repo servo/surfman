@@ -12,7 +12,7 @@ use crate::egl::types::{EGLConfig, EGLDisplay, EGLint};
 use crate::hardware_buffer::surface::SurfaceObjects;
 use crate::surface::Framebuffer;
 use crate::Adapter;
-use crate::{egl, ContextDescriptor, Surface};
+use crate::{egl, ContextDescriptor, EglContextDescriptor, Surface};
 use crate::{Context, ContextAttributes, Error, GLApi, Gl, SurfaceInfo};
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -107,7 +107,7 @@ impl Device {
         attributes: &ContextAttributes,
     ) -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(
+            EglContextDescriptor::new(
                 self.egl_display,
                 attributes,
                 &[
@@ -119,6 +119,7 @@ impl Device {
                     egl::OPENGL_ES2_BIT as EGLint,
                 ],
             )
+            .map(Into::into)
         }
     }
 
@@ -140,7 +141,7 @@ impl Device {
             let gl_api = self.gl_api();
             let egl_context = context::create_context(
                 egl_display,
-                descriptor,
+                descriptor.egl()?,
                 share_with.map_or(egl::NO_CONTEXT, |ctx| ctx.egl_context),
                 gl_api,
             )?;
@@ -244,7 +245,12 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            ContextDescriptor::from_egl_context(&context.gl, self.egl_display, context.egl_context)
+            EglContextDescriptor::from_egl_context(
+                &context.gl,
+                self.egl_display,
+                context.egl_context,
+            )
+            .into()
         }
     }
 
@@ -375,6 +381,9 @@ impl Device {
         &self,
         context_descriptor: &ContextDescriptor,
     ) -> ContextAttributes {
+        let context_descriptor = context_descriptor
+            .egl()
+            .expect("Passed incompatible context descriptor");
         unsafe { context_descriptor.attributes(self.egl_display) }
     }
 

@@ -9,13 +9,15 @@ use crate::surface::Framebuffer;
 use crate::wgl::adapter::WglAdapter;
 use crate::wgl::connection::Connection;
 use crate::wgl::context::{
-    Context, ContextDescriptor, ContextStatus, CurrentContextGuard, FramebufferGuard,
-    NativeContext, OPENGL_LIBRARY, WGL_EXTENSION_FUNCTIONS,
+    Context, ContextStatus, CurrentContextGuard, FramebufferGuard, NativeContext,
+    WglContextDescriptor, OPENGL_LIBRARY, WGL_EXTENSION_FUNCTIONS,
 };
 use crate::wgl::surface::{Surface, SurfaceDataGuard, SurfaceTexture, Win32Objects};
-use crate::{gl, gl_utils, GLApi, Gl, SurfaceAccess, SurfaceType};
-use crate::{Adapter, AdapterPreferences, PowerPreference};
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion, SurfaceInfo};
+use crate::{
+    gl, gl_utils, Adapter, AdapterPreferences, ContextAttributeFlags, ContextAttributes,
+    ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, SurfaceAccess, SurfaceInfo,
+    SurfaceType,
+};
 use euclid::default::Size2D;
 use glow::HasContext;
 use libc::c_uint;
@@ -308,11 +310,12 @@ impl Device {
                 return Err(Error::NoPixelFormatFound);
             }
 
-            Ok(ContextDescriptor {
+            Ok(WglContextDescriptor {
                 pixel_format,
                 gl_version: attributes.version,
                 compatibility_profile,
-            })
+            }
+            .into())
         }
     }
 
@@ -332,6 +335,7 @@ impl Device {
         };
 
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
+        let descriptor = descriptor.wgl()?;
         unsafe {
             let (glrc, gl);
 
@@ -463,11 +467,12 @@ impl Device {
             let gl_version = GLVersion::current(&context.gl);
             let compatibility_profile = current_context_uses_compatibility_profile(&context.gl);
 
-            ContextDescriptor {
+            WglContextDescriptor {
                 pixel_format,
                 gl_version,
                 compatibility_profile,
             }
+            .into()
         }
     }
 
@@ -487,6 +492,9 @@ impl Device {
             .GetPixelFormatAttribivARB;
 
         let dc_guard = self.hidden_window.get_dc();
+        let context_descriptor = context_descriptor
+            .wgl()
+            .expect("Passed incompatible context descriptor");
 
         unsafe {
             let attrib_name_i_list = [

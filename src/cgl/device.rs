@@ -1,6 +1,7 @@
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
 use super::connection::Connection;
+use super::context::CglContextDescriptor;
 use crate::base::io_surface::device::Device as SystemDevice;
 use crate::cgl::context::{CurrentContextGuard, NativeContext};
 use crate::cgl::error::ToWindowingApiError;
@@ -164,7 +165,7 @@ impl Device {
                 return Err(Error::NoPixelFormatFound);
             }
 
-            Ok(ContextDescriptor { cgl_pixel_format })
+            Ok(CglContextDescriptor { cgl_pixel_format }.into())
         }
     }
 
@@ -186,7 +187,7 @@ impl Device {
             // Create the CGL context.
             let mut cgl_context = ptr::null_mut();
             let err = CGLCreateContext(
-                descriptor.cgl_pixel_format,
+                descriptor.cgl()?.cgl_pixel_format,
                 share_with.map_or(ptr::null_mut(), |ctx| ctx.cgl_context),
                 &mut cgl_context,
             );
@@ -257,7 +258,7 @@ impl Device {
         unsafe {
             let mut cgl_pixel_format = CGLGetPixelFormat(context.cgl_context);
             cgl_pixel_format = CGLRetainPixelFormat(cgl_pixel_format);
-            ContextDescriptor { cgl_pixel_format }
+            CglContextDescriptor { cgl_pixel_format }.into()
         }
     }
 
@@ -395,6 +396,9 @@ impl Device {
         &self,
         context_descriptor: &ContextDescriptor,
     ) -> ContextAttributes {
+        let context_descriptor = context_descriptor
+            .cgl()
+            .expect("Passed incompatible context descriptor");
         unsafe {
             let alpha_size = get_pixel_format_attribute(context_descriptor, kCGLPFAAlphaSize);
             let depth_size = get_pixel_format_attribute(context_descriptor, kCGLPFADepthSize);
@@ -423,7 +427,7 @@ impl Device {
         }
 
         unsafe fn get_pixel_format_attribute(
-            context_descriptor: &ContextDescriptor,
+            context_descriptor: &CglContextDescriptor,
             attribute: CGLPixelFormatAttribute,
         ) -> i32 {
             let mut value = 0;

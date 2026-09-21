@@ -35,7 +35,7 @@ macro_rules! implement_interfaces {
     () => {
         mod implementation {
             use super::connection::Connection;
-            use super::context::{Context, ContextDescriptor};
+            use super::context::Context;
             use super::device::Device;
             use super::surface::{Surface, SurfaceTexture};
             use euclid::default::Size2D;
@@ -46,7 +46,10 @@ macro_rules! implement_interfaces {
             use $crate::device::Device as DeviceInterface;
             use $crate::info::GLApi;
             use $crate::Error;
-            use $crate::{ContextAttributes, ContextID, SurfaceAccess, SurfaceInfo, SurfaceType};
+            use $crate::{
+                ContextAttributes, ContextDescriptor, ContextID, SurfaceAccess, SurfaceInfo,
+                SurfaceType,
+            };
 
             impl ConnectionInterface for Connection {
                 type Device = Device;
@@ -85,7 +88,6 @@ macro_rules! implement_interfaces {
             impl DeviceInterface for Device {
                 type Connection = Connection;
                 type Context = Context;
-                type ContextDescriptor = ContextDescriptor;
                 type Surface = Surface;
                 type SurfaceTexture = SurfaceTexture;
 
@@ -112,14 +114,14 @@ macro_rules! implement_interfaces {
                 fn create_context_descriptor(
                     &self,
                     attributes: &ContextAttributes,
-                ) -> Result<Self::ContextDescriptor, Error> {
+                ) -> Result<ContextDescriptor, Error> {
                     Device::create_context_descriptor(self, attributes)
                 }
 
                 #[inline]
                 fn create_context(
                     &self,
-                    descriptor: &Self::ContextDescriptor,
+                    descriptor: &ContextDescriptor,
                     share_with: Option<&Self::Context>,
                 ) -> Result<Self::Context, Error> {
                     Device::create_context(self, descriptor, share_with)
@@ -131,7 +133,7 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn context_descriptor(&self, context: &Self::Context) -> Self::ContextDescriptor {
+                fn context_descriptor(&self, context: &Self::Context) -> ContextDescriptor {
                     Device::context_descriptor(self, context)
                 }
 
@@ -148,7 +150,7 @@ macro_rules! implement_interfaces {
                 #[inline]
                 fn context_descriptor_attributes(
                     &self,
-                    context_descriptor: &Self::ContextDescriptor,
+                    context_descriptor: &ContextDescriptor,
                 ) -> ContextAttributes {
                     Device::context_descriptor_attributes(self, context_descriptor)
                 }
@@ -289,7 +291,7 @@ macro_rules! implement_interfaces {
 /// A macro that takes care of producing the boilerplate for conversion to and
 /// from an inner type within an enum.
 macro_rules! enum_conversion {
-    ($enum:ty, $variant:ident, $type:ty, $name:ident) => {
+    ($enum:ty, $variant:ident, $type:ty, $name:ident, $error:ident) => {
         impl From<$type> for $enum {
             fn from(connection: $type) -> Self {
                 Self::$variant(connection)
@@ -298,11 +300,11 @@ macro_rules! enum_conversion {
 
         impl $enum {
             #[doc = concat!("Try to convert this generic [`", stringify!($enum), "`] into a [`", stringify!($type), "`].")]
-            pub fn $name(&self) -> Result<&$type, Error> {
+            pub fn $name(&self) -> Result<&$type, crate::Error> {
                 #[allow(unreachable_patterns)]
                 match self {
                     Self::$variant(ref connection) => Ok(connection),
-                    _ => Err(Error::Failed),
+                    _ => Err(crate::Error::$error),
                 }
             }
         }

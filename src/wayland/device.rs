@@ -1,18 +1,18 @@
 //! A wrapper around Wayland `EGLDisplay`s.
 
 use super::connection::{Connection, NativeConnectionWrapper};
-use super::context::{Context, ContextDescriptor, NativeContext};
+use super::context::{Context, NativeContext};
 use super::surface::{Surface, SurfaceDataGuard, SurfaceTexture};
 use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
 use crate::free_unix::adapter::FreeUnixAdapter;
-use crate::gl;
 use crate::surface::Framebuffer;
-use crate::{egl, Adapter};
-use crate::{ContextAttributes, Gl, SurfaceInfo};
-use crate::{Error, GLApi, SurfaceAccess, SurfaceType};
+use crate::{
+    egl, gl, Adapter, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error, GLApi, Gl,
+    SurfaceAccess, SurfaceInfo, SurfaceType,
+};
 use euclid::default::Size2D;
 use glow::Texture;
 use raw_window_handle::RawWindowHandle;
@@ -97,7 +97,7 @@ impl Device {
         self.adapter.set_environment_variables();
 
         unsafe {
-            ContextDescriptor::new(
+            EglContextDescriptor::new(
                 self.native_connection.egl_display,
                 attributes,
                 &[
@@ -107,6 +107,7 @@ impl Device {
                     egl::OPENGL_BIT as EGLint,
                 ],
             )
+            .map(Into::into)
         }
     }
 
@@ -123,7 +124,7 @@ impl Device {
         unsafe {
             let context = EGLBackedContext::new(
                 self.native_connection.egl_display,
-                descriptor,
+                descriptor.egl()?,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
             )?;
@@ -175,11 +176,12 @@ impl Device {
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            ContextDescriptor::from_egl_context(
+            EglContextDescriptor::from_egl_context(
                 &context.1,
                 self.native_connection.egl_display,
                 context.0.egl_context,
             )
+            .into()
         }
     }
 
@@ -216,6 +218,9 @@ impl Device {
         &self,
         context_descriptor: &ContextDescriptor,
     ) -> ContextAttributes {
+        let context_descriptor = context_descriptor
+            .egl()
+            .expect("Passed incompatible context descriptor");
         unsafe { context_descriptor.attributes(self.native_connection.egl_display) }
     }
 
@@ -371,6 +376,9 @@ impl Device {
         assert!(!egl_window.is_null());
 
         let context_descriptor = self.context_descriptor(context);
+        let context_descriptor = context_descriptor
+            .egl()
+            .expect("Passed incompatible context descriptor");
         let egl_config = context::egl_config_from_id(
             self.native_connection.egl_display,
             context_descriptor.egl_config_id,

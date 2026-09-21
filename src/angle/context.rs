@@ -1,7 +1,7 @@
 //! Wrapper for EGL contexts managed by ANGLE using Direct3D 11 as a backend on Windows.
 
 use super::surface::Surface;
-pub use crate::base::egl::context::{ContextDescriptor, NativeContext};
+pub use crate::base::egl::context::NativeContext;
 use crate::base::egl::surface::ExternalEGLSurfaces;
 use crate::context::ContextID;
 use crate::egl;

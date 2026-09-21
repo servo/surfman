@@ -51,11 +51,11 @@ impl Drop for Context {
 /// Options that control OpenGL rendering.
 ///
 /// This corresponds to a "pixel format" object in many APIs. These are thread-safe.
-pub struct ContextDescriptor {
+pub struct CglContextDescriptor {
     pub(crate) cgl_pixel_format: CGLPixelFormatObj,
 }
 
-impl Drop for ContextDescriptor {
+impl Drop for CglContextDescriptor {
     // These have been verified to be thread-safe.
     #[inline]
     fn drop(&mut self) {
@@ -65,18 +65,18 @@ impl Drop for ContextDescriptor {
     }
 }
 
-impl Clone for ContextDescriptor {
+impl Clone for CglContextDescriptor {
     #[inline]
-    fn clone(&self) -> ContextDescriptor {
+    fn clone(&self) -> CglContextDescriptor {
         unsafe {
-            ContextDescriptor {
+            CglContextDescriptor {
                 cgl_pixel_format: CGLRetainPixelFormat(self.cgl_pixel_format),
             }
         }
     }
 }
 
-unsafe impl Send for ContextDescriptor {}
+unsafe impl Send for CglContextDescriptor {}
 
 #[must_use]
 pub(crate) struct CurrentContextGuard {

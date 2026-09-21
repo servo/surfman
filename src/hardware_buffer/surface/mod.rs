@@ -11,8 +11,6 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::thread;
 
-pub use crate::base::egl::context::ContextDescriptor;
-
 #[cfg(android_platform)]
 mod android_surface;
 

@@ -1,12 +1,14 @@
 //! A device abstraction that allows the choice of backends dynamically.
 
 use super::connection::Connection;
-use super::context::{Context, ContextDescriptor};
+use super::context::Context;
 use super::surface::{Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
-use crate::{Adapter, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
+use crate::{
+    Adapter, ContextDescriptor, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType,
+};
 use euclid::default::Size2D;
 use glow::Texture;
 
@@ -67,7 +69,6 @@ where
 {
     type Connection = Connection<Def, Alt>;
     type Context = Context<Def, Alt>;
-    type ContextDescriptor = ContextDescriptor<Def, Alt>;
     type Surface = Surface<Def, Alt>;
     type SurfaceTexture = SurfaceTexture<Def, Alt>;
 
@@ -94,14 +95,14 @@ where
     fn create_context_descriptor(
         &self,
         attributes: &ContextAttributes,
-    ) -> Result<Self::ContextDescriptor, Error> {
+    ) -> Result<ContextDescriptor, Error> {
         Device::create_context_descriptor(self, attributes)
     }
 
     #[inline]
     fn create_context(
         &self,
-        descriptor: &ContextDescriptor<Def, Alt>,
+        descriptor: &ContextDescriptor,
         share_with: Option<&Context<Def, Alt>>,
     ) -> Result<Context<Def, Alt>, Error> {
         Device::create_context(self, descriptor, share_with)
@@ -113,7 +114,7 @@ where
     }
 
     #[inline]
-    fn context_descriptor(&self, context: &Context<Def, Alt>) -> Self::ContextDescriptor {
+    fn context_descriptor(&self, context: &Context<Def, Alt>) -> ContextDescriptor {
         Device::context_descriptor(self, context)
     }
 
@@ -130,7 +131,7 @@ where
     #[inline]
     fn context_descriptor_attributes(
         &self,
-        context_descriptor: &ContextDescriptor<Def, Alt>,
+        context_descriptor: &ContextDescriptor,
     ) -> ContextAttributes {
         Device::context_descriptor_attributes(self, context_descriptor)
     }

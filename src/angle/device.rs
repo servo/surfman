@@ -2,7 +2,7 @@
 
 use super::adapter::AngleAdapter;
 use crate::angle::connection::Connection;
-use crate::angle::context::{Context, ContextDescriptor, NativeContext};
+use crate::angle::context::{Context, NativeContext};
 use crate::angle::surface::{
     Surface, SurfaceDataGuard, SurfaceTexture, Synchronization, Win32Objects,
 };
@@ -20,8 +20,10 @@ use crate::egl::types::{
     EGLAttrib, EGLConfig, EGLDeviceEXT, EGLDisplay, EGLNativeWindowType, EGLSurface, EGLint,
 };
 use crate::surface::Framebuffer;
+use crate::EglContextDescriptor;
 use crate::{
-    egl, gl, Adapter, ContextAttributes, Error, GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType,
+    egl, gl, Adapter, ContextAttributes, ContextDescriptor, Error, GLApi, Gl, SurfaceAccess,
+    SurfaceInfo, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -244,7 +246,7 @@ impl Device {
         attributes: &ContextAttributes,
     ) -> Result<ContextDescriptor, Error> {
         unsafe {
-            ContextDescriptor::new(
+            EglContextDescriptor::new(
                 self.egl_display,
                 attributes,
                 &[
@@ -256,6 +258,7 @@ impl Device {
                     egl::OPENGL_ES2_BIT as EGLint,
                 ],
             )
+            .map(Into::into)
         }
     }
 
@@ -273,7 +276,7 @@ impl Device {
             let egl_context = unsafe {
                 context::create_context(
                     self.egl_display,
-                    descriptor,
+                    descriptor.egl()?,
                     share_with.map_or(egl::NO_CONTEXT, |ctx| ctx.egl_context),
                     self.gl_api(),
                 )?
@@ -370,7 +373,12 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            ContextDescriptor::from_egl_context(&context.gl, self.egl_display, context.egl_context)
+            EglContextDescriptor::from_egl_context(
+                &context.gl,
+                self.egl_display,
+                context.egl_context,
+            )
+            .into()
         }
     }
 
@@ -428,6 +436,9 @@ impl Device {
         &self,
         context_descriptor: &ContextDescriptor,
     ) -> ContextAttributes {
+        let context_descriptor = context_descriptor
+            .egl()
+            .expect("Passed incompatible context descriptor");
         unsafe { context_descriptor.attributes(self.egl_display) }
     }
 
@@ -446,7 +457,7 @@ impl Device {
     #[inline]
     pub(crate) fn context_descriptor_to_egl_config(
         &self,
-        context_descriptor: &ContextDescriptor,
+        context_descriptor: &EglContextDescriptor,
     ) -> EGLConfig {
         unsafe { context::egl_config_from_id(self.egl_display, context_descriptor.egl_config_id) }
     }
@@ -630,6 +641,7 @@ impl Device {
         texture: Option<ComPtr<d3d11::ID3D11Texture2D>>,
     ) -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context);
+        let context_descriptor = context_descriptor.egl()?.clone();
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
         unsafe {
@@ -732,7 +744,7 @@ impl Device {
         context: &Context,
         egl_native_window: EGLNativeWindowType,
     ) -> Result<Surface, Error> {
-        let context_descriptor = self.context_descriptor(context);
+        let context_descriptor = self.context_descriptor(context).egl()?.clone();
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
 
         unsafe {
