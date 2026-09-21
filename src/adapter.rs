@@ -12,9 +12,9 @@ use crate::base::io_surface::adapter::AppleAdapter;
 use crate::free_unix::adapter::FreeUnixAdapter;
 #[cfg(any(android_platform, ohos_platform))]
 use crate::hardware_buffer::adapter::HardwareBufferAdapter;
+use crate::macros::enum_conversion;
 #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
 use crate::wgl::adapter::WglAdapter;
-use crate::{macros::enum_conversion, Error};
 
 /// A power usage preference for selecting an adapter.
 #[derive(Copy, Clone, Debug, Default)]
@@ -69,17 +69,24 @@ pub enum Adapter {
 }
 
 #[cfg(all(windows_platform, feature = "sm-angle"))]
-enum_conversion!(Adapter, Angle, AngleAdapter, angle);
+enum_conversion!(Adapter, Angle, AngleAdapter, angle, IncompatibleAdapter);
 #[cfg(macos_platform)]
-enum_conversion!(Adapter, Apple, AppleAdapter, apple);
+enum_conversion!(Adapter, Apple, AppleAdapter, apple, IncompatibleAdapter);
 #[cfg(free_unix)]
-enum_conversion!(Adapter, FreeUnix, FreeUnixAdapter, free_unix);
+enum_conversion!(
+    Adapter,
+    FreeUnix,
+    FreeUnixAdapter,
+    free_unix,
+    IncompatibleAdapter
+);
 #[cfg(any(android_platform, ohos_platform))]
 enum_conversion!(
     Adapter,
     HardwareBuffer,
     HardwareBufferAdapter,
-    hardware_buffer
+    hardware_buffer,
+    IncompatibleAdapter
 );
 #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
-enum_conversion!(Adapter, Wgl, WglAdapter, wgl);
+enum_conversion!(Adapter, Wgl, WglAdapter, wgl, IncompatibleAdapter);

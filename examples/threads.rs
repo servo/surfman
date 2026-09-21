@@ -7,8 +7,8 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLenum, GLint, GLuint};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{declare_surfman, SurfaceAccess, SurfaceTexture, SurfaceType};
-use surfman::{Adapter, Connection, Context, ContextDescriptor, Device, GLApi, Surface};
+use surfman::{declare_surfman, ContextDescriptor, SurfaceAccess, SurfaceTexture, SurfaceType};
+use surfman::{Adapter, Connection, Context, Device, GLApi, Surface};
 
 #[cfg(not(target_os = "android"))]
 use self::common::FilesystemResourceLoader;

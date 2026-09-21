@@ -47,7 +47,7 @@ pub struct NativeContext {
 ///
 /// These are local to a device.
 #[derive(Clone)]
-pub struct ContextDescriptor {
+pub struct EglContextDescriptor {
     pub(crate) egl_config_id: EGLint,
     pub(crate) gl_version: GLVersion,
     pub(crate) compatibility_profile: bool,
@@ -112,7 +112,7 @@ impl Drop for EGLBackedContext {
 impl EGLBackedContext {
     pub(crate) unsafe fn new(
         egl_display: EGLDisplay,
-        descriptor: &ContextDescriptor,
+        descriptor: &EglContextDescriptor,
         share_with: Option<&EGLBackedContext>,
         gl_api: GLApi,
     ) -> Result<EGLBackedContext, Error> {
@@ -316,12 +316,12 @@ impl NativeContext {
     }
 }
 
-impl ContextDescriptor {
+impl EglContextDescriptor {
     pub(crate) unsafe fn new(
         egl_display: EGLDisplay,
         attributes: &ContextAttributes,
         extra_config_attributes: &[EGLint],
-    ) -> Result<ContextDescriptor, Error> {
+    ) -> Result<EglContextDescriptor, Error> {
         let flags = attributes.flags;
 
         let alpha_size = if flags.contains(ContextAttributeFlags::ALPHA) {
@@ -430,7 +430,7 @@ impl ContextDescriptor {
             let egl_config_id = get_config_attr(egl_display, egl_config, egl::CONFIG_ID as EGLint);
             let gl_version = attributes.version;
 
-            Ok(ContextDescriptor {
+            Ok(EglContextDescriptor {
                 egl_config_id,
                 gl_version,
                 compatibility_profile,
@@ -442,12 +442,12 @@ impl ContextDescriptor {
         gl: &Gl,
         egl_display: EGLDisplay,
         egl_context: EGLContext,
-    ) -> ContextDescriptor {
+    ) -> EglContextDescriptor {
         let egl_config_id = get_context_attr(egl_display, egl_context, egl::CONFIG_ID as EGLint);
         let gl_version = GLVersion::current(gl);
         let compatibility_profile = context::current_context_uses_compatibility_profile(gl);
 
-        ContextDescriptor {
+        EglContextDescriptor {
             egl_config_id,
             gl_version,
             compatibility_profile,
@@ -508,7 +508,7 @@ impl ContextDescriptor {
 
 pub(crate) unsafe fn create_context(
     egl_display: EGLDisplay,
-    descriptor: &ContextDescriptor,
+    descriptor: &EglContextDescriptor,
     share_with: EGLContext,
     gl_api: GLApi,
 ) -> Result<EGLContext, Error> {

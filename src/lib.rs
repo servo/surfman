@@ -23,6 +23,7 @@ pub mod cgl;
 pub mod chains;
 pub mod connection;
 mod context;
+mod context_descriptor;
 pub mod device;
 pub mod error;
 #[cfg(free_unix)]
@@ -60,12 +61,13 @@ pub use wayland as default;
 pub use wgl as default;
 
 pub use crate::context::{ContextAttributeFlags, ContextAttributes, ContextID};
+pub use crate::context_descriptor::ContextDescriptor;
 pub use crate::error::{Error, WindowingApiError};
 pub use crate::info::{GLApi, GLVersion};
 pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
 pub use adapter::{Adapter, AdapterPreferences, PowerPreference, RenderingPreference};
 pub use default::connection::Connection;
-pub use default::context::{Context, ContextDescriptor};
+pub use default::context::Context;
 pub use default::device::Device;
 pub use default::surface::{Surface, SurfaceTexture};
 pub(crate) use glow::{self as gl, Context as Gl};
@@ -80,6 +82,9 @@ pub use base::io_surface::connection::Connection as SystemConnection;
 pub use base::io_surface::device::Device as SystemDevice;
 #[cfg(target_os = "macos")]
 pub use base::io_surface::surface::Surface as SystemSurface;
+
+#[cfg(any(android_platform, angle, free_unix, ohos_platform))]
+pub use crate::base::egl::context::EglContextDescriptor;
 
 #[cfg(any(
     target_os = "android",

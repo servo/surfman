@@ -7,13 +7,14 @@
 #![allow(missing_docs)]
 
 use super::connection::Connection;
-use super::context::{Context, ContextDescriptor, NativeContext};
+use super::context::{Context, NativeContext};
 use super::device::Device;
 use super::surface::Surface;
-use crate::{gl, AdapterPreferences, PowerPreference};
-use crate::{Adapter, RenderingPreference};
-use crate::{ContextAttributeFlags, ContextAttributes, Error, GLApi, GLVersion, Gl, SurfaceAccess};
-use crate::{SurfaceType, WindowingApiError};
+use crate::{
+    gl, Adapter, AdapterPreferences, ContextAttributeFlags, ContextAttributes, ContextDescriptor,
+    Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference, SurfaceAccess, SurfaceType,
+    WindowingApiError,
+};
 
 use euclid::default::Size2D;
 use glow::{Framebuffer, HasContext, PixelPackData, Texture};

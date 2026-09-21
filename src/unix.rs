@@ -19,7 +19,6 @@ pub mod connection {
 pub mod context {
     use crate::mesa_surfaceless::device::Device as SWDevice;
     use crate::multi::context::Context as MultiContext;
-    use crate::multi::context::ContextDescriptor as MultiContextDescriptor;
     use crate::multi::device::Device as MultiDevice;
     use crate::wayland::device::Device as WaylandDevice;
     use crate::x11::device::Device as X11Device;
@@ -43,11 +42,6 @@ pub mod context {
     ///
     /// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
     pub type Context = MultiContext<HWDevice, SWDevice>;
-
-    /// Information needed to create a context. Some APIs call this a "config" or a "pixel format".
-    ///
-    /// These are local to a device.
-    pub type ContextDescriptor = MultiContextDescriptor<HWDevice, SWDevice>;
 }
 
 /// Thread-local handles to devices.

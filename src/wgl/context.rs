@@ -87,7 +87,7 @@ pub(crate) struct WGLDXInteropExtensionFunctions {
 ///
 /// These are local to a device.
 #[derive(Clone)]
-pub struct ContextDescriptor {
+pub struct WglContextDescriptor {
     pub(crate) pixel_format: c_int,
     pub(crate) gl_version: GLVersion,
     pub(crate) compatibility_profile: bool,

@@ -2,7 +2,8 @@
 
 use super::connection::Connection as ConnectionInterface;
 use crate::{
-    Adapter, ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType,
+    Adapter, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi, SurfaceAccess,
+    SurfaceInfo, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -20,8 +21,6 @@ where
     type Connection;
     /// The context type associated with this device.
     type Context;
-    /// The context descriptor type associated with this device.
-    type ContextDescriptor;
     /// The surface type associated with this device.
     type Surface;
     /// The surface texture type associated with this device.
@@ -46,7 +45,7 @@ where
     fn create_context_descriptor(
         &self,
         attributes: &ContextAttributes,
-    ) -> Result<Self::ContextDescriptor, Error>;
+    ) -> Result<ContextDescriptor, Error>;
 
     /// Creates a new OpenGL context and makes it current.
     ///
@@ -54,7 +53,7 @@ where
     /// commands will fail or have no effect.
     fn create_context(
         &self,
-        descriptor: &Self::ContextDescriptor,
+        descriptor: &ContextDescriptor,
         share_with: Option<&Self::Context>,
     ) -> Result<Self::Context, Error>;
 
@@ -64,7 +63,7 @@ where
     fn destroy_context(&self, context: &mut Self::Context) -> Result<(), Error>;
 
     /// Returns the descriptor that this context was created with.
-    fn context_descriptor(&self, context: &Self::Context) -> Self::ContextDescriptor;
+    fn context_descriptor(&self, context: &Self::Context) -> ContextDescriptor;
 
     /// Makes the context the current OpenGL context for this thread.
     ///
@@ -80,7 +79,7 @@ where
     /// Returns the attributes that the context descriptor was created with.
     fn context_descriptor_attributes(
         &self,
-        context_descriptor: &Self::ContextDescriptor,
+        context_descriptor: &ContextDescriptor,
     ) -> ContextAttributes;
 
     /// Fetches the address of an OpenGL function associated with this context.

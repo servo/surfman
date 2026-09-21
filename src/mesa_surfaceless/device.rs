@@ -7,10 +7,10 @@ use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
 use crate::free_unix::adapter::FreeUnixAdapter;
-use crate::gl;
-use crate::mesa_surfaceless::context::{Context, ContextDescriptor, NativeContext};
+use crate::mesa_surfaceless::context::{Context, NativeContext};
 use crate::mesa_surfaceless::surface::{Surface, SurfaceTexture};
-use crate::{egl, Adapter};
+use crate::{egl, Adapter, EglContextDescriptor};
+use crate::{gl, ContextDescriptor};
 use crate::{ContextAttributes, Gl, SurfaceInfo};
 use crate::{Error, GLApi, SurfaceAccess, SurfaceType};
 use euclid::default::Size2D;
@@ -90,7 +90,7 @@ impl Device {
         self.adapter.set_environment_variables();
 
         unsafe {
-            ContextDescriptor::new(
+            EglContextDescriptor::new(
                 self.native_connection.egl_display,
                 attributes,
                 &[
@@ -102,6 +102,7 @@ impl Device {
                     egl::RGB_BUFFER as EGLint,
                 ],
             )
+            .map(Into::into)
         }
     }
 
@@ -118,7 +119,7 @@ impl Device {
         unsafe {
             let context = EGLBackedContext::new(
                 self.native_connection.egl_display,
-                descriptor,
+                descriptor.egl()?,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
             )?;
@@ -170,11 +171,12 @@ impl Device {
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         unsafe {
-            ContextDescriptor::from_egl_context(
+            EglContextDescriptor::from_egl_context(
                 &context.1,
                 self.native_connection.egl_display,
                 context.0.egl_context,
             )
+            .into()
         }
     }
 
@@ -211,6 +213,9 @@ impl Device {
         &self,
         context_descriptor: &ContextDescriptor,
     ) -> ContextAttributes {
+        let context_descriptor = context_descriptor
+            .egl()
+            .expect("Passed incompatible context descriptor");
         unsafe { context_descriptor.attributes(self.native_connection.egl_display) }
     }
 

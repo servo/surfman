@@ -1,7 +1,7 @@
 //! OpenGL rendering contexts on Wayland.
 
 use crate::base::egl::context::EGLBackedContext;
-pub use crate::base::egl::context::{ContextDescriptor, NativeContext};
+pub use crate::base::egl::context::NativeContext;
 use crate::Gl;
 
 /// Represents an OpenGL rendering context.

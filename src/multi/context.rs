@@ -5,7 +5,7 @@ use euclid::default::Size2D;
 use super::device::Device;
 use super::surface::Surface;
 use crate::device::Device as DeviceInterface;
-use crate::{ContextAttributes, ContextID, Error, SurfaceInfo};
+use crate::{ContextAttributes, ContextDescriptor, ContextID, Error, SurfaceInfo};
 
 use std::os::raw::c_void;
 
@@ -36,21 +36,6 @@ where
     Alternate(Alt::Context),
 }
 
-/// Information needed to create a context. Some APIs call this a "config" or a "pixel format".
-///
-/// These are local to a device.
-#[derive(Clone)]
-pub enum ContextDescriptor<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    /// The default context descriptor type.
-    Default(Def::ContextDescriptor),
-    /// The alternate context descriptor type.
-    Alternate(Alt::ContextDescriptor),
-}
-
 impl<Def, Alt> Device<Def, Alt>
 where
     Def: DeviceInterface,
@@ -62,14 +47,10 @@ where
     pub fn create_context_descriptor(
         &self,
         attributes: &ContextAttributes,
-    ) -> Result<ContextDescriptor<Def, Alt>, Error> {
+    ) -> Result<ContextDescriptor, Error> {
         match *self {
-            Device::Default(ref device) => device
-                .create_context_descriptor(attributes)
-                .map(ContextDescriptor::Default),
-            Device::Alternate(ref device) => device
-                .create_context_descriptor(attributes)
-                .map(ContextDescriptor::Alternate),
+            Device::Default(ref device) => device.create_context_descriptor(attributes),
+            Device::Alternate(ref device) => device.create_context_descriptor(attributes),
         }
     }
 
@@ -79,11 +60,11 @@ where
     /// commands will fail or have no effect.
     pub fn create_context(
         &self,
-        descriptor: &ContextDescriptor<Def, Alt>,
+        descriptor: &ContextDescriptor,
         share_with: Option<&Context<Def, Alt>>,
     ) -> Result<Context<Def, Alt>, Error> {
-        match (self, descriptor) {
-            (Device::Default(device), ContextDescriptor::Default(descriptor)) => {
+        match self {
+            Device::Default(device) => {
                 let shared = match share_with {
                     Some(Context::Default(other)) => Some(other),
                     Some(_) => {
@@ -95,7 +76,7 @@ where
                     .create_context(descriptor, shared)
                     .map(Context::Default)
             }
-            (Device::Alternate(device), ContextDescriptor::Alternate(descriptor)) => {
+            Device::Alternate(device) => {
                 let shared = match share_with {
                     Some(Context::Alternate(other)) => Some(other),
                     Some(_) => {
@@ -107,7 +88,6 @@ where
                     .create_context(descriptor, shared)
                     .map(Context::Alternate)
             }
-            _ => Err(Error::IncompatibleContextDescriptor),
         }
     }
 
@@ -127,13 +107,13 @@ where
     }
 
     /// Returns the descriptor that this context was created with.
-    pub fn context_descriptor(&self, context: &Context<Def, Alt>) -> ContextDescriptor<Def, Alt> {
+    pub fn context_descriptor(&self, context: &Context<Def, Alt>) -> ContextDescriptor {
         match (self, context) {
             (Device::Default(device), Context::Default(context)) => {
-                ContextDescriptor::Default(device.context_descriptor(context))
+                device.context_descriptor(context)
             }
             (Device::Alternate(device), Context::Alternate(context)) => {
-                ContextDescriptor::Alternate(device.context_descriptor(context))
+                device.context_descriptor(context)
             }
             _ => panic!("Incompatible context!"),
         }
@@ -255,16 +235,11 @@ where
     /// Returns the attributes that the context descriptor was created with.
     pub fn context_descriptor_attributes(
         &self,
-        context_descriptor: &ContextDescriptor<Def, Alt>,
+        context_descriptor: &ContextDescriptor,
     ) -> ContextAttributes {
-        match (self, context_descriptor) {
-            (Device::Default(device), ContextDescriptor::Default(context_descriptor)) => {
-                device.context_descriptor_attributes(context_descriptor)
-            }
-            (Device::Alternate(device), ContextDescriptor::Alternate(context_descriptor)) => {
-                device.context_descriptor_attributes(context_descriptor)
-            }
-            _ => panic!("Incompatible context!"),
+        match self {
+            Device::Default(device) => device.context_descriptor_attributes(context_descriptor),
+            Device::Alternate(device) => device.context_descriptor_attributes(context_descriptor),
         }
     }
 

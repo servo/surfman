@@ -9,7 +9,7 @@ use crate::surface::Framebuffer;
 use crate::Gl;
 use std::thread;
 
-pub use crate::base::egl::context::{ContextDescriptor, NativeContext};
+pub use crate::base::egl::context::NativeContext;
 
 /// Represents an OpenGL rendering context.
 ///
