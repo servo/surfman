@@ -296,4 +296,28 @@ macro_rules! implement_interfaces {
     };
 }
 
+/// A macro that takes care of producing the boilerplate for conversion to and
+/// from an inner type within an enum.
+macro_rules! enum_conversion {
+    ($enum:ty, $variant:ident, $type:ty, $name:ident) => {
+        impl From<$type> for $enum {
+            fn from(connection: $type) -> Self {
+                Self::$variant(connection)
+            }
+        }
+
+        impl $enum {
+            #[doc = concat!("Try to convert this generic [`", stringify!($enum), "`] into a [`", stringify!($type), "`].")]
+            pub fn $name(&self) -> Result<&$type, Error> {
+                #[allow(unreachable_patterns)]
+                match self {
+                    Self::$variant(ref connection) => Ok(connection),
+                    _ => Err(Error::Failed),
+                }
+            }
+        }
+    };
+}
+
+pub(crate) use enum_conversion;
 pub(crate) use implement_interfaces;

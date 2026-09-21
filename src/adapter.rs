@@ -14,7 +14,7 @@ use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::hardware_buffer::adapter::HardwareBufferAdapter;
 #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
 use crate::wgl::adapter::WglAdapter;
-use crate::Error;
+use crate::{macros::enum_conversion, Error};
 
 /// A power usage preference for selecting an adapter.
 #[derive(Copy, Clone, Debug, Default)]
@@ -68,89 +68,18 @@ pub enum Adapter {
     Wgl(WglAdapter),
 }
 
-impl Adapter {
-    /// Try to convert this generic [`Adapter`] into an [`AngleAdapter`].
-    #[cfg(all(windows_platform, feature = "sm-angle"))]
-    pub fn angle(&self) -> Result<&AngleAdapter, Error> {
-        #[allow(unreachable_patterns)]
-        match self {
-            Adapter::Angle(ref adapter) => Ok(adapter),
-            _ => Err(Error::IncompatibleAdapter),
-        }
-    }
-
-    /// Try to convert this generic [`Adapter`] into an [`IoSurfaceAdapter`].
-    #[cfg(macos_platform)]
-    pub fn apple(&self) -> Result<&AppleAdapter, Error> {
-        #[allow(unreachable_patterns)]
-        match self {
-            Adapter::Apple(ref adapter) => Ok(adapter),
-            _ => Err(Error::IncompatibleAdapter),
-        }
-    }
-
-    /// Try to convert this generic [`Adapter`] into a [`FreeUnixAdapter`].
-    #[cfg(free_unix)]
-    pub fn free_unix(&self) -> Result<&FreeUnixAdapter, Error> {
-        #[allow(unreachable_patterns)]
-        match self {
-            Adapter::FreeUnix(ref adapter) => Ok(adapter),
-            _ => Err(Error::IncompatibleAdapter),
-        }
-    }
-
-    /// Try to convert this generic [`Adapter`] into a [`HardwareBufferAdapter`].
-    #[cfg(any(android_platform, ohos_platform))]
-    pub fn hardware_buffer(&self) -> Result<&HardwareBufferAdapter, Error> {
-        #[allow(unreachable_patterns)]
-        match self {
-            Adapter::HardwareBuffer(ref adapter) => Ok(adapter),
-            _ => Err(Error::IncompatibleAdapter),
-        }
-    }
-
-    /// Try to convert this generic [`Adapter`] into a [`WglAdapter`].
-    #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
-    pub fn wgl(&self) -> Result<&WglAdapter, Error> {
-        #[allow(unreachable_patterns)]
-        match self {
-            Adapter::Wgl(ref adapter) => Ok(adapter),
-            _ => Err(Error::IncompatibleAdapter),
-        }
-    }
-}
-
 #[cfg(all(windows_platform, feature = "sm-angle"))]
-impl From<AngleAdapter> for Adapter {
-    fn from(adapter: AngleAdapter) -> Self {
-        Self::Angle(adapter)
-    }
-}
-
+enum_conversion!(Adapter, Angle, AngleAdapter, angle);
 #[cfg(macos_platform)]
-impl From<AppleAdapter> for Adapter {
-    fn from(adapter: AppleAdapter) -> Self {
-        Self::Apple(adapter)
-    }
-}
-
-#[cfg(any(android_platform, ohos_platform))]
-impl From<HardwareBufferAdapter> for Adapter {
-    fn from(adapter: HardwareBufferAdapter) -> Self {
-        Self::HardwareBuffer(adapter)
-    }
-}
-
+enum_conversion!(Adapter, Apple, AppleAdapter, apple);
 #[cfg(free_unix)]
-impl From<FreeUnixAdapter> for Adapter {
-    fn from(adapter: FreeUnixAdapter) -> Self {
-        Self::FreeUnix(adapter)
-    }
-}
-
+enum_conversion!(Adapter, FreeUnix, FreeUnixAdapter, free_unix);
+#[cfg(any(android_platform, ohos_platform))]
+enum_conversion!(
+    Adapter,
+    HardwareBuffer,
+    HardwareBufferAdapter,
+    hardware_buffer
+);
 #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
-impl From<WglAdapter> for Adapter {
-    fn from(adapter: WglAdapter) -> Self {
-        Self::Wgl(adapter)
-    }
-}
+enum_conversion!(Adapter, Wgl, WglAdapter, wgl);
