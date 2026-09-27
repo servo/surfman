@@ -178,10 +178,7 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
-        let share_with = match share_with {
-            Some(share_with) => Some(share_with.cgl()?),
-            None => None,
-        };
+        let share_with = share_with.map(Context::cgl).transpose()?;
 
         // Take a lock so that we're only creating one context at a time. `CGLChoosePixelFormat`
         // will fail, returning `kCGLBadConnection`, if multiple threads try to open a display

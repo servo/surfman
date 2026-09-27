@@ -270,11 +270,7 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
-        let share_with = match share_with {
-            Some(share_with) => Some(share_with.angle()?),
-            None => None,
-        };
-
+        let share_with = share_with.map(Context::angle).transpose()?;
         let (egl_context, id) = {
             let mut next_context_id_lock = CREATE_CONTEXT_MUTEX.lock().unwrap();
             let egl_context = unsafe {
@@ -347,15 +343,15 @@ impl Device {
     ///
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
+        if context.angle()?.egl_context == egl::NO_CONTEXT {
+            return Ok(());
+        }
+
         if let Ok(Some(mut surface)) = self.unbind_surface_from_context(context) {
             self.destroy_surface(context, &mut surface)?;
         }
 
         let context: &mut AngleContext = context.try_into()?;
-        if context.egl_context == egl::NO_CONTEXT {
-            return Ok(());
-        }
-
         EGL_FUNCTIONS.with(|egl| unsafe {
             egl.MakeCurrent(
                 self.egl_display,

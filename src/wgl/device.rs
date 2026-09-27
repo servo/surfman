@@ -329,11 +329,7 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
-        let share_with = match share_with {
-            Some(share_with) => Some(share_with.wgl()?),
-            None => None,
-        };
-
+        let share_with = share_with.map(Context::wgl).transpose()?;
         let wglCreateContextAttribsARB = match WGL_EXTENSION_FUNCTIONS.CreateContextAttribsARB {
             None => return Err(Error::RequiredExtensionUnavailable),
             Some(wglCreateContextAttribsARB) => wglCreateContextAttribsARB,

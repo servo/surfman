@@ -132,11 +132,7 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
-        let share_with = match share_with {
-            Some(share_with) => Some(share_with.hardware_buffer()?),
-            None => None,
-        };
-
+        let share_with = share_with.map(Context::hardware_buffer).transpose()?;
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
         let egl_display = self.egl_display;
         unsafe {
