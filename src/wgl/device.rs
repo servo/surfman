@@ -9,12 +9,12 @@ use crate::surface::Framebuffer;
 use crate::wgl::adapter::WglAdapter;
 use crate::wgl::connection::Connection;
 use crate::wgl::context::{
-    Context, ContextStatus, CurrentContextGuard, FramebufferGuard, NativeContext,
+    ContextStatus, CurrentContextGuard, FramebufferGuard, NativeContext, WglContext,
     WglContextDescriptor, OPENGL_LIBRARY, WGL_EXTENSION_FUNCTIONS,
 };
 use crate::wgl::surface::{Surface, SurfaceDataGuard, SurfaceTexture, Win32Objects};
 use crate::{
-    gl, gl_utils, Adapter, AdapterPreferences, ContextAttributeFlags, ContextAttributes,
+    gl, gl_utils, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
     ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, SurfaceAccess, SurfaceInfo,
     SurfaceType,
 };
@@ -329,6 +329,11 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
+        let share_with = match share_with {
+            Some(share_with) => Some(share_with.wgl()?),
+            None => None,
+        };
+
         let wglCreateContextAttribsARB = match WGL_EXTENSION_FUNCTIONS.CreateContextAttribsARB {
             None => return Err(Error::RequiredExtensionUnavailable),
             Some(wglCreateContextAttribsARB) => wglCreateContextAttribsARB,
@@ -382,7 +387,7 @@ impl Device {
             }
 
             // Create the initial context.
-            let context = Context {
+            let context = WglContext {
                 glrc,
                 id: *next_context_id,
                 gl,
@@ -391,7 +396,7 @@ impl Device {
                 status: ContextStatus::Owned,
             };
             next_context_id.0 += 1;
-            Ok(context)
+            Ok(context.into())
         }
     }
 
@@ -417,7 +422,7 @@ impl Device {
             Gl::from_loader_function(get_proc_address)
         };
 
-        let context = Context {
+        let context = WglContext {
             glrc: native_context.0,
             id: *next_context_id,
             gl,
@@ -426,19 +431,20 @@ impl Device {
             status: ContextStatus::Referenced,
         };
         next_context_id.0 += 1;
-        Ok(context)
+        Ok(context.into())
     }
 
     /// Destroys a context.
     ///
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.status == ContextStatus::Destroyed {
-            return Ok(());
-        }
-
         if let Ok(Some(mut surface)) = self.unbind_surface_from_context(context) {
             self.destroy_surface(context, &mut surface)?;
+        }
+
+        let context: &mut WglContext = context.try_into()?;
+        if context.status == ContextStatus::Destroyed {
+            return Ok(());
         }
 
         unsafe {
@@ -458,14 +464,15 @@ impl Device {
 
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        let concrete_context = context.wgl().expect("Passed incorrect context type");
         unsafe {
-            let dc_guard = self.get_context_dc(context);
+            let dc_guard = self.get_context_dc(concrete_context);
             let pixel_format = wingdi::GetPixelFormat(dc_guard.dc);
 
             let _guard = self.temporarily_make_context_current(context);
-
-            let gl_version = GLVersion::current(&context.gl);
-            let compatibility_profile = current_context_uses_compatibility_profile(&context.gl);
+            let gl_version = GLVersion::current(&concrete_context.gl);
+            let compatibility_profile =
+                current_context_uses_compatibility_profile(&concrete_context.gl);
 
             WglContextDescriptor {
                 pixel_format,
@@ -538,7 +545,7 @@ impl Device {
 
     pub(crate) fn temporarily_bind_framebuffer<'a>(
         &self,
-        context: &'a Context,
+        context: &'a WglContext,
         framebuffer: Option<glow::Framebuffer>,
     ) -> FramebufferGuard<'a> {
         unsafe {
@@ -557,10 +564,7 @@ impl Device {
         Ok(guard)
     }
 
-    /// Makes the context the current OpenGL context for this thread.
-    ///
-    /// After calling this function, it is valid to use OpenGL rendering commands.
-    pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+    fn make_context_current_inner(&self, context: &WglContext) -> Result<(), Error> {
         unsafe {
             let dc_guard = self.get_context_dc(context);
             let ok = wglMakeCurrent(dc_guard.dc, context.glrc);
@@ -570,6 +574,14 @@ impl Device {
                 Err(Error::MakeCurrentFailed(WindowingApiError::Failed))
             }
         }
+    }
+
+    /// Makes the context the current OpenGL context for this thread.
+    ///
+    /// After calling this function, it is valid to use OpenGL rendering commands.
+    pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+        let context = context.wgl()?;
+        self.make_context_current_inner(context)
     }
 
     /// Removes the current OpenGL context from this thread.
@@ -601,7 +613,7 @@ impl Device {
     }
 
     #[inline]
-    fn context_is_current(&self, context: &Context) -> bool {
+    fn context_is_current(&self, context: &WglContext) -> bool {
         unsafe { wglGetCurrentContext() == context.glrc }
     }
 
@@ -620,6 +632,11 @@ impl Device {
         context: &mut Context,
         surface: Surface,
     ) -> Result<(), (Error, Surface)> {
+        let context: &mut WglContext = match context.try_into() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface)),
+        };
+
         if context.id != surface.context_id {
             return Err((Error::IncompatibleSurface, surface));
         }
@@ -637,7 +654,7 @@ impl Device {
 
         if is_current {
             // We need to make ourselves current again, because the surface changed.
-            drop(self.make_context_current(context));
+            drop(self.make_context_current_inner(context));
         }
 
         Ok(())
@@ -651,6 +668,7 @@ impl Device {
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
+        let context: &mut WglContext = context.try_into()?;
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
             Framebuffer::Surface(surface) => {
                 self.unlock_surface(&surface);
@@ -667,6 +685,7 @@ impl Device {
     /// Widget surfaces are internally double-buffered, so changes to them don't
     /// show up in their associated widgets until this method is called.
     pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        let context: &mut WglContext = context.try_into()?;
         match &context.framebuffer {
             Framebuffer::Surface(surface) => surface.present(),
             _ => Ok(()),
@@ -679,13 +698,14 @@ impl Device {
         context: &mut Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
+        let context: &mut WglContext = context.try_into()?;
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
             surface.resize(size);
         }
         Ok(())
     }
 
-    pub(crate) fn get_context_dc<'a>(&self, context: &'a Context) -> DCGuard<'a> {
+    pub(crate) fn get_context_dc<'a>(&self, context: &'a WglContext) -> DCGuard<'a> {
         unsafe {
             match context.framebuffer {
                 Framebuffer::Surface(Surface {
@@ -708,6 +728,7 @@ impl Device {
     /// a new one, the new context might have the same ID as the destroyed one.
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
+        let context = context.wgl().expect("Passed incorrect context type");
         context.id
     }
 
@@ -715,6 +736,7 @@ impl Device {
     ///
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        let context = context.wgl()?;
         match context.framebuffer {
             Framebuffer::None => Ok(None),
             Framebuffer::External(()) => Err(Error::ExternalRenderTarget),
@@ -725,6 +747,7 @@ impl Device {
     /// Given a context, returns its underlying `HGLRC`.
     #[inline]
     pub fn native_context(&self, context: &Context) -> NativeContext {
+        let context = context.wgl().expect("Passed incorrect context type");
         NativeContext(context.glrc)
     }
 
@@ -815,7 +838,8 @@ impl Device {
             assert_ne!(ok, FALSE);
 
             // Make our texture object on the GL side.
-            let gl_texture = context.gl.create_texture().unwrap();
+            let concrete_context = context.wgl()?;
+            let gl_texture = concrete_context.gl.create_texture().unwrap();
 
             // Bind the GL texture to the D3D11 texture.
             let gl_dx_interop_object = (dx_interop_functions.DXRegisterObjectNV)(
@@ -836,11 +860,11 @@ impl Device {
             }
 
             // Build our FBO.
-            let gl_framebuffer = context.gl.create_framebuffer().unwrap();
-            let _guard = self.temporarily_bind_framebuffer(context, Some(gl_framebuffer));
+            let gl_framebuffer = concrete_context.gl.create_framebuffer().unwrap();
+            let _guard = self.temporarily_bind_framebuffer(concrete_context, Some(gl_framebuffer));
 
             // Attach the reflected D3D11 texture to that FBO.
-            context.gl.framebuffer_texture_2d(
+            concrete_context.gl.framebuffer_texture_2d(
                 gl::FRAMEBUFFER,
                 gl::COLOR_ATTACHMENT0,
                 SURFACE_GL_TEXTURE_TARGET,
@@ -851,15 +875,15 @@ impl Device {
             // Create renderbuffers as appropriate, and attach them.
             let context_descriptor = self.context_descriptor(context);
             let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-            let renderbuffers = Renderbuffers::new(&context.gl, size, &context_attributes);
-            renderbuffers.bind_to_current_framebuffer(&context.gl);
+            let renderbuffers = Renderbuffers::new(&concrete_context.gl, size, &context_attributes);
+            renderbuffers.bind_to_current_framebuffer(&concrete_context.gl);
 
             // FIXME(pcwalton): Do we need to acquire the keyed mutex, or does the GL driver do
             // that?
 
             Ok(Surface {
                 size: *size,
-                context_id: context.id,
+                context_id: concrete_context.id,
                 win32_objects: Win32Objects::Texture {
                     d3d11_texture,
                     dxgi_share_handle,
@@ -878,6 +902,7 @@ impl Device {
         context: &Context,
         window_handle: HWND,
     ) -> Result<Surface, Error> {
+        let context = context.wgl()?;
         unsafe {
             // Get the bounds of the native HWND.
             let mut widget_rect = mem::zeroed();
@@ -923,11 +948,12 @@ impl Device {
             .as_ref()
             .expect("How did you make a surface without DX interop?");
 
-        if context.id != surface.context_id {
+        if context.wgl()?.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
 
         let _guard = self.temporarily_make_context_current(context)?;
+        let context = context.wgl()?;
 
         unsafe {
             match surface.win32_objects {
@@ -995,6 +1021,10 @@ impl Device {
         let _guard = match self.temporarily_make_context_current(context) {
             Ok(guard) => guard,
             Err(err) => return Err((err, surface)),
+        };
+        let context = match context.wgl() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface)),
         };
 
         unsafe {
@@ -1095,6 +1125,10 @@ impl Device {
         let _guard = match self.temporarily_make_context_current(context) {
             Ok(guard) => guard,
             Err(err) => return Err((err, surface_texture)),
+        };
+        let context = match context.wgl() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface_texture)),
         };
 
         unsafe {

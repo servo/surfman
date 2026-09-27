@@ -60,14 +60,13 @@ pub use wayland as default;
 #[cfg(all(windows_platform, not(angle_default)))]
 pub use wgl as default;
 
-pub use crate::context::{ContextAttributeFlags, ContextAttributes, ContextID};
+pub use crate::context::{Context, ContextAttributeFlags, ContextAttributes, ContextID};
 pub use crate::context_descriptor::ContextDescriptor;
 pub use crate::error::{Error, WindowingApiError};
 pub use crate::info::{GLApi, GLVersion};
 pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
 pub use adapter::{Adapter, AdapterPreferences, PowerPreference, RenderingPreference};
 pub use default::connection::Connection;
-pub use default::context::Context;
 pub use default::device::Device;
 pub use default::surface::{Surface, SurfaceTexture};
 pub(crate) use glow::{self as gl, Context as Gl};

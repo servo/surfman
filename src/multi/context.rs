@@ -5,36 +5,9 @@ use euclid::default::Size2D;
 use super::device::Device;
 use super::surface::Surface;
 use crate::device::Device as DeviceInterface;
-use crate::{ContextAttributes, ContextDescriptor, ContextID, Error, SurfaceInfo};
+use crate::{Context, ContextAttributes, ContextDescriptor, ContextID, Error, SurfaceInfo};
 
 use std::os::raw::c_void;
-
-/// Represents an OpenGL rendering context.
-///
-/// A context allows you to issue rendering commands to a surface. When initially created, a
-/// context has no attached surface, so rendering commands will fail or be ignored. Typically, you
-/// attach a surface to the context before rendering.
-///
-/// Contexts take ownership of the surfaces attached to them. In order to mutate a surface in any
-/// way other than rendering to it (e.g. presenting it to a window, which causes a buffer swap), it
-/// must first be detached from its context. Each surface is associated with a single context upon
-/// creation and may not be rendered to from any other context. However, you can wrap a surface in
-/// a surface texture, which allows the surface to be read from another context.
-///
-/// OpenGL objects may not be shared across contexts directly, but surface textures effectively
-/// allow for sharing of texture data. Contexts are local to a single thread and device.
-///
-/// A context must be explicitly destroyed with `destroy_context()`, or a panic will occur.
-pub enum Context<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    /// The default rendering context type.
-    Default(Def::Context),
-    /// The alternate rendering context type.
-    Alternate(Alt::Context),
-}
 
 impl<Def, Alt> Device<Def, Alt>
 where
@@ -61,76 +34,39 @@ where
     pub fn create_context(
         &self,
         descriptor: &ContextDescriptor,
-        share_with: Option<&Context<Def, Alt>>,
-    ) -> Result<Context<Def, Alt>, Error> {
+        share_with: Option<&Context>,
+    ) -> Result<Context, Error> {
         match self {
-            Device::Default(device) => {
-                let shared = match share_with {
-                    Some(Context::Default(other)) => Some(other),
-                    Some(_) => {
-                        return Err(Error::IncompatibleSharedContext);
-                    }
-                    None => None,
-                };
-                device
-                    .create_context(descriptor, shared)
-                    .map(Context::Default)
-            }
-            Device::Alternate(device) => {
-                let shared = match share_with {
-                    Some(Context::Alternate(other)) => Some(other),
-                    Some(_) => {
-                        return Err(Error::IncompatibleSharedContext);
-                    }
-                    None => None,
-                };
-                device
-                    .create_context(descriptor, shared)
-                    .map(Context::Alternate)
-            }
+            Device::Default(device) => device.create_context(descriptor, share_with),
+            Device::Alternate(device) => device.create_context(descriptor, share_with),
         }
     }
 
     /// Destroys a context.
     ///
     /// The context must have been created on this device.
-    pub fn destroy_context(&self, context: &mut Context<Def, Alt>) -> Result<(), Error> {
-        match (self, &mut *context) {
-            (Device::Default(device), &mut Context::Default(ref mut context)) => {
-                device.destroy_context(context)
-            }
-            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => {
-                device.destroy_context(context)
-            }
-            _ => Err(Error::IncompatibleContext),
+    pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
+        match self {
+            Device::Default(device) => device.destroy_context(context),
+            Device::Alternate(device) => device.destroy_context(context),
         }
     }
 
     /// Returns the descriptor that this context was created with.
-    pub fn context_descriptor(&self, context: &Context<Def, Alt>) -> ContextDescriptor {
-        match (self, context) {
-            (Device::Default(device), Context::Default(context)) => {
-                device.context_descriptor(context)
-            }
-            (Device::Alternate(device), Context::Alternate(context)) => {
-                device.context_descriptor(context)
-            }
-            _ => panic!("Incompatible context!"),
+    pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        match self {
+            Device::Default(device) => device.context_descriptor(context),
+            Device::Alternate(device) => device.context_descriptor(context),
         }
     }
 
     /// Makes the context the current OpenGL context for this thread.
     ///
     /// After calling this function, it is valid to use OpenGL rendering commands.
-    pub fn make_context_current(&self, context: &Context<Def, Alt>) -> Result<(), Error> {
-        match (self, context) {
-            (Device::Default(device), Context::Default(context)) => {
-                device.make_context_current(context)
-            }
-            (Device::Alternate(device), Context::Alternate(context)) => {
-                device.make_context_current(context)
-            }
-            _ => Err(Error::IncompatibleContext),
+    pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+        match self {
+            Device::Default(device) => device.make_context_current(context),
+            Device::Alternate(device) => device.make_context_current(context),
         }
     }
 
@@ -157,25 +93,22 @@ where
     /// If an error is returned, the surface is returned alongside it.
     pub fn bind_surface_to_context(
         &self,
-        context: &mut Context<Def, Alt>,
+        context: &mut Context,
         surface: Surface<Def, Alt>,
     ) -> Result<(), (Error, Surface<Def, Alt>)> {
-        match (self, &mut *context) {
-            (Device::Default(device), &mut Context::Default(ref mut context)) => match surface {
+        match self {
+            Device::Default(device) => match surface {
                 Surface::Default(surface) => device
                     .bind_surface_to_context(context, surface)
                     .map_err(|(err, surface)| (err, Surface::Default(surface))),
                 _ => Err((Error::IncompatibleSurface, surface)),
             },
-            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => {
-                match surface {
-                    Surface::Alternate(surface) => device
-                        .bind_surface_to_context(context, surface)
-                        .map_err(|(err, surface)| (err, Surface::Alternate(surface))),
-                    _ => Err((Error::IncompatibleSurface, surface)),
-                }
-            }
-            _ => Err((Error::IncompatibleContext, surface)),
+            Device::Alternate(device) => match surface {
+                Surface::Alternate(surface) => device
+                    .bind_surface_to_context(context, surface)
+                    .map_err(|(err, surface)| (err, Surface::Alternate(surface))),
+                _ => Err((Error::IncompatibleSurface, surface)),
+            },
         }
     }
 
@@ -185,16 +118,15 @@ where
     /// surface is safe to read from immediately when this function returns.
     pub fn unbind_surface_from_context(
         &self,
-        context: &mut Context<Def, Alt>,
+        context: &mut Context,
     ) -> Result<Option<Surface<Def, Alt>>, Error> {
-        match (self, &mut *context) {
-            (Device::Default(device), &mut Context::Default(ref mut context)) => device
+        match self {
+            Device::Default(device) => device
                 .unbind_surface_from_context(context)
                 .map(|surface| surface.map(Surface::Default)),
-            (Device::Alternate(device), &mut Context::Alternate(ref mut context)) => device
+            Device::Alternate(device) => device
                 .unbind_surface_from_context(context)
                 .map(|surface| surface.map(Surface::Alternate)),
-            _ => Err(Error::IncompatibleContext),
         }
     }
 
@@ -203,32 +135,22 @@ where
     ///
     /// Widget surfaces are internally double-buffered, so changes to them don't
     /// show up in their associated widgets until this method is called.
-    pub fn present_bound_surface(&self, context: &mut Context<Def, Alt>) -> Result<(), Error> {
-        match (self, context) {
-            (Device::Default(device), Context::Default(context)) => {
-                device.present_bound_surface(context)
-            }
-            (Device::Alternate(device), Context::Alternate(context)) => {
-                device.present_bound_surface(context)
-            }
-            _ => Err(Error::IncompatibleContext),
+    pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        match self {
+            Device::Default(device) => device.present_bound_surface(context),
+            Device::Alternate(device) => device.present_bound_surface(context),
         }
     }
 
     /// Resizes the currently bound surface.
     pub fn resize_bound_surface(
         &self,
-        context: &mut Context<Def, Alt>,
+        context: &mut Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        match (self, context) {
-            (Device::Default(device), Context::Default(context)) => {
-                device.resize_bound_surface(context, size)
-            }
-            (Device::Alternate(device), Context::Alternate(context)) => {
-                device.resize_bound_surface(context, size)
-            }
-            _ => Err(Error::IncompatibleContext),
+        match self {
+            Device::Default(device) => device.resize_bound_surface(context, size),
+            Device::Alternate(device) => device.resize_bound_surface(context, size),
         }
     }
 
@@ -250,19 +172,10 @@ where
     ///
     /// This method is typically used with a function like `gl::load_with()` from the `gl` crate to
     /// load OpenGL function pointers.
-    pub fn get_proc_address(
-        &self,
-        context: &Context<Def, Alt>,
-        symbol_name: &str,
-    ) -> *const c_void {
-        match (self, context) {
-            (Device::Default(device), Context::Default(context)) => {
-                device.get_proc_address(context, symbol_name)
-            }
-            (Device::Alternate(device), Context::Alternate(context)) => {
-                device.get_proc_address(context, symbol_name)
-            }
-            _ => panic!("Incompatible context!"),
+    pub fn get_proc_address(&self, context: &Context, symbol_name: &str) -> *const c_void {
+        match self {
+            Device::Default(device) => device.get_proc_address(context, symbol_name),
+            Device::Alternate(device) => device.get_proc_address(context, symbol_name),
         }
     }
 
@@ -270,29 +183,20 @@ where
     ///
     /// This ID is unique to all currently-allocated contexts. If you destroy a context and create
     /// a new one, the new context might have the same ID as the destroyed one.
-    pub fn context_id(&self, context: &Context<Def, Alt>) -> ContextID {
-        match (self, context) {
-            (Device::Default(device), Context::Default(context)) => device.context_id(context),
-            (Device::Alternate(device), Context::Alternate(context)) => device.context_id(context),
-            _ => panic!("Incompatible context!"),
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        match self {
+            Device::Default(device) => device.context_id(context),
+            Device::Alternate(device) => device.context_id(context),
         }
     }
 
     /// Returns various information about the surface attached to a context.
     ///
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
-    pub fn context_surface_info(
-        &self,
-        context: &Context<Def, Alt>,
-    ) -> Result<Option<SurfaceInfo>, Error> {
-        match (self, context) {
-            (Device::Default(device), Context::Default(context)) => {
-                device.context_surface_info(context)
-            }
-            (Device::Alternate(device), Context::Alternate(context)) => {
-                device.context_surface_info(context)
-            }
-            _ => Err(Error::IncompatibleContext),
+    pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        match self {
+            Device::Default(device) => device.context_surface_info(context),
+            Device::Alternate(device) => device.context_surface_info(context),
         }
     }
 }

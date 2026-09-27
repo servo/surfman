@@ -2,7 +2,7 @@
 
 use super::connection::Connection as ConnectionInterface;
 use crate::{
-    Adapter, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi, SurfaceAccess,
+    Adapter, Context, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi, SurfaceAccess,
     SurfaceInfo, SurfaceType,
 };
 use euclid::default::Size2D;
@@ -19,8 +19,6 @@ where
 {
     /// The connection type associated with this device.
     type Connection;
-    /// The context type associated with this device.
-    type Context;
     /// The surface type associated with this device.
     type Surface;
     /// The surface texture type associated with this device.
@@ -54,21 +52,21 @@ where
     fn create_context(
         &self,
         descriptor: &ContextDescriptor,
-        share_with: Option<&Self::Context>,
-    ) -> Result<Self::Context, Error>;
+        share_with: Option<&Context>,
+    ) -> Result<Context, Error>;
 
     /// Destroys a context.
     ///
     /// The context must have been created on this device.
-    fn destroy_context(&self, context: &mut Self::Context) -> Result<(), Error>;
+    fn destroy_context(&self, context: &mut Context) -> Result<(), Error>;
 
     /// Returns the descriptor that this context was created with.
-    fn context_descriptor(&self, context: &Self::Context) -> ContextDescriptor;
+    fn context_descriptor(&self, context: &Context) -> ContextDescriptor;
 
     /// Makes the context the current OpenGL context for this thread.
     ///
     /// After calling this function, it is valid to use OpenGL rendering commands.
-    fn make_context_current(&self, context: &Self::Context) -> Result<(), Error>;
+    fn make_context_current(&self, context: &Context) -> Result<(), Error>;
 
     /// Removes the current OpenGL context from this thread.
     ///
@@ -89,7 +87,7 @@ where
     ///
     /// This method is typically used with a function like `gl::load_with()` from the `gl` crate to
     /// load OpenGL function pointers.
-    fn get_proc_address(&self, context: &Self::Context, symbol_name: &str) -> *const c_void;
+    fn get_proc_address(&self, context: &Context, symbol_name: &str) -> *const c_void;
 
     /// Attaches a surface to a context for rendering.
     ///
@@ -103,7 +101,7 @@ where
     /// If an error is returned, the surface is returned alongside it.
     fn bind_surface_to_context(
         &self,
-        context: &mut Self::Context,
+        context: &mut Context,
         surface: Self::Surface,
     ) -> Result<(), (Error, Self::Surface)>;
 
@@ -113,19 +111,19 @@ where
     /// surface is safe to read from immediately when this function returns.
     fn unbind_surface_from_context(
         &self,
-        context: &mut Self::Context,
+        context: &mut Context,
     ) -> Result<Option<Self::Surface>, Error>;
 
     /// Returns a unique ID representing a context.
     ///
     /// This ID is unique to all currently-allocated contexts. If you destroy a context and create
     /// a new one, the new context might have the same ID as the destroyed one.
-    fn context_id(&self, context: &Self::Context) -> ContextID;
+    fn context_id(&self, context: &Context) -> ContextID;
 
     /// Returns various information about the surface attached to a context.
     ///
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
-    fn context_surface_info(&self, context: &Self::Context) -> Result<Option<SurfaceInfo>, Error>;
+    fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error>;
 
     // surface.rs
 
@@ -135,7 +133,7 @@ where
     /// up in a `SurfaceTexture` for reading by other contexts.
     fn create_surface(
         &self,
-        context: &Self::Context,
+        context: &Context,
         surface_access: SurfaceAccess,
         surface_type: SurfaceType<'_>,
     ) -> Result<Self::Surface, Error>;
@@ -152,7 +150,7 @@ where
     /// Calling this method on a widget surface returns a `WidgetAttached` error.
     fn create_surface_texture(
         &self,
-        context: &mut Self::Context,
+        context: &mut Context,
         surface: Self::Surface,
     ) -> Result<Self::SurfaceTexture, (Error, Self::Surface)>;
 
@@ -165,7 +163,7 @@ where
     /// the `drop` method.
     fn destroy_surface(
         &self,
-        context: &mut Self::Context,
+        context: &mut Context,
         surface: &mut Self::Surface,
     ) -> Result<(), Error>;
 
@@ -178,7 +176,7 @@ where
     /// occur.
     fn destroy_surface_texture(
         &self,
-        context: &mut Self::Context,
+        context: &mut Context,
         surface_texture: Self::SurfaceTexture,
     ) -> Result<Self::Surface, (Error, Self::SurfaceTexture)>;
 
@@ -192,7 +190,7 @@ where
     ///
     /// Widget surfaces are internally double-buffered, so changes to them don't
     /// show up in their associated widgets until this method is called.
-    fn present_bound_surface(&self, context: &mut Self::Context) -> Result<(), Error>;
+    fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error>;
 
     /// Displays the contents of a widget surface on screen.
     ///
@@ -201,23 +199,15 @@ where
     ///
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    fn present_surface(
-        &self,
-        context: &Self::Context,
-        surface: &mut Self::Surface,
-    ) -> Result<(), Error>;
+    fn present_surface(&self, context: &Context, surface: &mut Self::Surface) -> Result<(), Error>;
 
     /// If the currently bound surface is a widget surface, resize it,
-    fn resize_bound_surface(
-        &self,
-        context: &mut Self::Context,
-        size: Size2D<i32>,
-    ) -> Result<(), Error>;
+    fn resize_bound_surface(&self, context: &mut Context, size: Size2D<i32>) -> Result<(), Error>;
 
     /// Resizes a widget surface.
     fn resize_surface(
         &self,
-        context: &Self::Context,
+        context: &Context,
         surface: &mut Self::Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error>;

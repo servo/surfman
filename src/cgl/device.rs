@@ -1,7 +1,7 @@
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
 use super::connection::Connection;
-use super::context::CglContextDescriptor;
+use super::context::{CglContext, CglContextDescriptor};
 use crate::base::io_surface::device::Device as SystemDevice;
 use crate::cgl::context::{CurrentContextGuard, NativeContext};
 use crate::cgl::error::ToWindowingApiError;
@@ -178,6 +178,11 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
+        let share_with = match share_with {
+            Some(share_with) => Some(share_with.cgl()?),
+            None => None,
+        };
+
         // Take a lock so that we're only creating one context at a time. `CGLChoosePixelFormat`
         // will fail, returning `kCGLBadConnection`, if multiple threads try to open a display
         // connection simultaneously.
@@ -198,14 +203,14 @@ impl Device {
 
             make_cgl_context_current(cgl_context)?;
             // Wrap and return the context.
-            let context = Context {
+            let context = CglContext {
                 cgl_context,
                 id: *next_context_id,
                 framebuffer: Framebuffer::None,
                 gl: Rc::new(Gl::from_loader_function(get_proc_address)),
             };
             next_context_id.0 += 1;
-            Ok(context)
+            Ok(context.into())
         }
     }
 
@@ -218,7 +223,7 @@ impl Device {
         native_context: NativeContext,
     ) -> Result<Context, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-        let context = Context {
+        let context = CglContext {
             cgl_context: native_context.0,
             id: *next_context_id,
             framebuffer: Framebuffer::None,
@@ -226,13 +231,14 @@ impl Device {
         };
         next_context_id.0 += 1;
         mem::forget(native_context);
-        Ok(context)
+        Ok(context.into())
     }
 
     /// Destroys a context.
     ///
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
+        let context: &mut CglContext = context.try_into()?;
         if context.cgl_context.is_null() {
             return Ok(());
         }
@@ -240,7 +246,7 @@ impl Device {
         if let Framebuffer::Surface(mut surface) =
             mem::replace(&mut context.framebuffer, Framebuffer::None)
         {
-            self.destroy_surface(context, &mut surface)?;
+            self.destroy_surface_inner(context, &mut surface)?;
         }
 
         unsafe {
@@ -255,6 +261,7 @@ impl Device {
     /// Returns the descriptor that this context was created with.
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        let context = context.cgl().expect("Passed incorrect context type");
         unsafe {
             let mut cgl_pixel_format = CGLGetPixelFormat(context.cgl_context);
             cgl_pixel_format = CGLRetainPixelFormat(cgl_pixel_format);
@@ -266,6 +273,7 @@ impl Device {
     ///
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+        let context = context.cgl()?;
         make_cgl_context_current(context.cgl_context)
     }
 
@@ -307,6 +315,11 @@ impl Device {
         context: &mut Context,
         new_surface: Surface,
     ) -> Result<(), (Error, Surface)> {
+        let context: &mut CglContext = match context.try_into() {
+            Ok(context) => context,
+            Err(error) => return Err((error, new_surface)),
+        };
+
         match context.framebuffer {
             Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, new_surface)),
             Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, new_surface)),
@@ -329,12 +342,16 @@ impl Device {
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
-        match context.framebuffer {
-            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
-            Framebuffer::None | Framebuffer::Surface(_) => {}
-        }
+        let framebuffer = {
+            let context: &mut CglContext = context.try_into()?;
+            match context.framebuffer {
+                Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
+                Framebuffer::None | Framebuffer::Surface(_) => {}
+            };
+            mem::replace(&mut context.framebuffer, Framebuffer::None)
+        };
 
-        match mem::replace(&mut context.framebuffer, Framebuffer::None) {
+        match framebuffer {
             Framebuffer::External(_) => unreachable!(),
             Framebuffer::None => Ok(None),
             Framebuffer::Surface(surface) => {
@@ -344,6 +361,7 @@ impl Device {
                 // server.
 
                 let _guard = self.temporarily_make_context_current(context)?;
+                let context = context.cgl()?;
                 let gl = &context.gl;
                 unsafe {
                     gl.flush();
@@ -363,6 +381,7 @@ impl Device {
     /// Widget surfaces are internally double-buffered, so changes to them don't
     /// show up in their associated widgets until this method is called.
     pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        let context: &mut CglContext = context.try_into()?;
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
             // Presenting the surface is not a GL operation on macOS, it's just
             // CoreAnimation and IOSurface management. This means that it will
@@ -385,6 +404,8 @@ impl Device {
         let _guard = self.temporarily_make_context_current(context);
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+
+        let context: &mut CglContext = context.try_into()?;
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
             return self.resize_inner(surface, size, &context.gl, context_attributes);
         }
@@ -458,6 +479,7 @@ impl Device {
     ///
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        let context = context.cgl()?;
         match context.framebuffer {
             Framebuffer::None => Ok(None),
             Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
@@ -471,6 +493,7 @@ impl Device {
     /// a new one, the new context might have the same ID as the destroyed one.
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
+        let context = context.cgl().expect("Passed incorrect context type");
         context.id
     }
 
@@ -480,6 +503,7 @@ impl Device {
     /// returning.
     #[inline]
     pub fn native_context(&self, context: &Context) -> NativeContext {
+        let context = context.cgl().expect("Passed incorrect context type");
         unsafe { NativeContext(CGLRetainContext(context.cgl_context)) }
     }
 
@@ -497,6 +521,10 @@ impl Device {
         self.0.set_surface_flipped(&mut system_surface, true);
 
         let _guard = self.temporarily_make_context_current(context);
+        let context_descriptor = self.context_descriptor(context);
+        let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+
+        let context = context.cgl()?;
         let gl = &context.gl;
         unsafe {
             let texture_object =
@@ -513,9 +541,6 @@ impl Device {
                 Some(texture_object),
                 0,
             );
-
-            let context_descriptor = self.context_descriptor(context);
-            let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
             let mut renderbuffers =
                 Renderbuffers::new(gl, &system_surface.size, &context_attributes);
@@ -565,6 +590,11 @@ impl Device {
         }
 
         let _guard = self.temporarily_make_context_current(context).unwrap();
+
+        let context = match context.cgl() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface)),
+        };
 
         let texture_object = self.bind_to_gl_texture(
             &context.gl,
@@ -619,16 +649,9 @@ impl Device {
         }
     }
 
-    /// Destroys a surface.
-    ///
-    /// The supplied context must be the context the surface is associated with, or this returns
-    /// an `IncompatibleSurface` error.
-    ///
-    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
-    /// the `drop` method.
-    pub fn destroy_surface(
+    fn destroy_surface_inner(
         &self,
-        context: &mut Context,
+        context: &mut CglContext,
         surface: &mut Surface,
     ) -> Result<(), Error> {
         let gl = &context.gl;
@@ -650,6 +673,22 @@ impl Device {
         self.0.destroy_surface(&mut surface.system_surface)
     }
 
+    /// Destroys a surface.
+    ///
+    /// The supplied context must be the context the surface is associated with, or this returns
+    /// an `IncompatibleSurface` error.
+    ///
+    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
+    /// the `drop` method.
+    pub fn destroy_surface(
+        &self,
+        context: &mut Context,
+        surface: &mut Surface,
+    ) -> Result<(), Error> {
+        let context: &mut CglContext = context.try_into()?;
+        self.destroy_surface_inner(context, surface)
+    }
+
     /// Destroys a surface texture and returns the underlying surface.
     ///
     /// The supplied context must be the same context the surface texture was created with, or an
@@ -662,7 +701,11 @@ impl Device {
         context: &mut Context,
         mut surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
-        let gl = &context.gl;
+        let concrete_context = match context.cgl() {
+            Ok(concrete_context) => concrete_context,
+            Err(error) => return Err((error, surface_texture)),
+        };
+        let gl = &concrete_context.gl;
         if let Some(texture) = surface_texture.texture_object.take() {
             unsafe {
                 gl.delete_texture(texture);
@@ -696,6 +739,7 @@ impl Device {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
+        let context = context.cgl()?;
         self.0.present_surface(&mut surface.system_surface)?;
         surface.bind_to_texture(&context.gl);
         Ok(())
@@ -708,14 +752,15 @@ impl Device {
         surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        if context.id != surface.context_id {
+        let concrete_context = context.cgl()?;
+        if concrete_context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
 
         let _guard = self.temporarily_make_context_current(context);
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-        self.resize_inner(surface, size, &context.gl, context_attributes)
+        self.resize_inner(surface, size, &concrete_context.gl, context_attributes)
     }
 
     pub(crate) fn resize_inner(

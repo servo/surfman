@@ -17,10 +17,11 @@ use crate::egl;
 use crate::egl::types::{EGLSurface, EGLint};
 use crate::gl;
 use crate::gl_utils;
+use crate::hardware_buffer::context::HardwareBufferContext;
 use crate::renderbuffers::Renderbuffers;
+use crate::Context;
 use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
 
-use super::super::context::Context;
 use super::super::device::Device;
 use super::super::ohos_ffi::{
     eglGetNativeClientBufferANDROID, NativeWindowOperation, OHNativeWindow, OH_NativeBuffer,
@@ -86,13 +87,14 @@ impl Device {
             stride: 10, // used same magic number as android. I have no idea
         };
 
-        let gl = &context.gl;
+        let concrete_context = context.hardware_buffer()?;
+        let gl = &concrete_context.gl;
         unsafe {
             let hardware_buffer = OH_NativeBuffer_Alloc(&config as *const _);
             assert!(!hardware_buffer.is_null(), "Failed to create native buffer");
 
             // Create an EGL image, and bind it to a texture.
-            let egl_image = self.create_egl_image(context, hardware_buffer);
+            let egl_image = self.create_egl_image(concrete_context, hardware_buffer);
 
             // Initialize and bind the image to the texture.
             let texture_object =
@@ -118,7 +120,7 @@ impl Device {
 
             Ok(Surface {
                 size: *size,
-                context_id: context.id,
+                context_id: concrete_context.id,
                 objects: SurfaceObjects::HardwareBuffer {
                     hardware_buffer,
                     egl_image,
@@ -148,6 +150,8 @@ impl Device {
                 &mut width as *mut i32,
             )
         };
+
+        let context = context.hardware_buffer()?;
         assert_eq!(result, 0, "Failed to determine size of native window");
         EGL_FUNCTIONS.with(|egl| {
             let egl_surface = egl.CreateWindowSurface(
@@ -192,6 +196,11 @@ impl Device {
                         Ok(guard) => guard,
                         Err(err) => return Err((err, surface)),
                     };
+
+                    let context: &mut HardwareBufferContext = match context.try_into() {
+                        Ok(context) => context,
+                        Err(error) => return Err((error, surface)),
+                    };
                     let gl = &context.gl;
 
                     let local_egl_image = self.create_egl_image(context, hardware_buffer);
@@ -213,7 +222,7 @@ impl Device {
     #[allow(non_snake_case)]
     unsafe fn create_egl_image(
         &self,
-        _: &Context,
+        _: &HardwareBufferContext,
         hardware_buffer: *mut OH_NativeBuffer,
     ) -> EGLImageKHR {
         let client_buffer = eglGetNativeClientBufferANDROID(hardware_buffer as *const _);
@@ -250,6 +259,7 @@ impl Device {
         context: &mut Context,
         surface: &mut Surface,
     ) -> Result<(), Error> {
+        let context: &mut HardwareBufferContext = context.try_into()?;
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
@@ -310,6 +320,11 @@ impl Device {
         mut surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         let _guard = self.temporarily_make_context_current(context);
+
+        let context: &mut HardwareBufferContext = match context.try_into() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface_texture)),
+        };
         let gl = &context.gl;
         unsafe {
             if let Some(texture) = surface_texture.texture_object.take() {

@@ -23,7 +23,7 @@
 #![allow(missing_docs)]
 
 use crate::device::Device as DeviceAPI;
-use crate::{ContextID, Error, SurfaceAccess, SurfaceInfo, SurfaceType};
+use crate::{Context, ContextID, Error, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
 use fnv::{FnvHashMap, FnvHashSet};
 use glow as gl;
@@ -68,7 +68,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
     fn take_surface(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
     ) -> Result<Device::Surface, Error> {
         let new_back_buffer = match self {
             BackBuffer::Attached => BackBuffer::TakenAttached,
@@ -85,7 +85,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
     fn take_surface_texture(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
     ) -> Result<Device::SurfaceTexture, Error> {
         let surface = self.take_surface(device, context)?;
         device
@@ -98,7 +98,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
     fn replace_surface(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         surface: Device::Surface,
     ) -> Result<(), Error> {
         let new_back_buffer = match self {
@@ -119,7 +119,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
     fn replace_surface_texture(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         surface_texture: Device::SurfaceTexture,
     ) -> Result<(), Error> {
         let surface = device
@@ -131,7 +131,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
 
 impl<Device: DeviceAPI> SwapChainData<Device> {
     // Returns `Ok` if `context` is the producer context for this swap chain.
-    fn validate_context(&self, device: &Device, context: &Device::Context) -> Result<(), Error> {
+    fn validate_context(&self, device: &Device, context: &Context) -> Result<(), Error> {
         if self.context_id == device.context_id(context) {
             Ok(())
         } else {
@@ -145,7 +145,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     fn swap_buffers(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         preserve_buffer: PreserveBuffer<'_>,
     ) -> Result<(), Error> {
         debug!("Swap buffers on context {:?}", self.context_id);
@@ -231,7 +231,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     fn take_attachment_from(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         other: &mut SwapChainData<Device>,
     ) -> Result<(), Error> {
         self.validate_context(device, context)?;
@@ -256,7 +256,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     fn resize(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
         debug!(
@@ -292,7 +292,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     fn take_surface_texture(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
     ) -> Result<Device::SurfaceTexture, Error> {
         self.validate_context(device, context)?;
         self.back_buffer.take_surface_texture(device, context)
@@ -303,7 +303,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     fn recycle_surface_texture(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         surface_texture: Device::SurfaceTexture,
     ) -> Result<(), Error> {
         self.validate_context(device, context)?;
@@ -339,7 +339,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     fn clear_surface(
         &mut self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         gl: &Gl,
         color: [f32; 4],
     ) -> Result<(), Error> {
@@ -452,7 +452,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     // Destroy the swap chain.
     // Called by the producer.
     // Returns an error if `context` is not the producer context for this swap chain.
-    fn destroy(&mut self, device: &Device, context: &mut Device::Context) -> Result<(), Error> {
+    fn destroy(&mut self, device: &Device, context: &mut Context) -> Result<(), Error> {
         self.validate_context(device, context)?;
         let surfaces = self
             .pending_surface
@@ -489,7 +489,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     pub fn swap_buffers(
         &self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         preserve_buffer: PreserveBuffer<'_>,
     ) -> Result<(), Error> {
         self.lock().swap_buffers(device, context, preserve_buffer)
@@ -502,7 +502,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     pub fn take_attachment_from(
         &self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         other: &SwapChain<Device>,
     ) -> Result<(), Error> {
         self.lock()
@@ -517,7 +517,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     pub fn resize(
         &self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
         self.lock().resize(device, context, size)
@@ -534,7 +534,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     pub fn take_surface_texture(
         &self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
     ) -> Result<Device::SurfaceTexture, Error> {
         self.lock().take_surface_texture(device, context)
     }
@@ -544,7 +544,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     pub fn recycle_surface_texture(
         &self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         surface_texture: Device::SurfaceTexture,
     ) -> Result<(), Error> {
         self.lock()
@@ -564,7 +564,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     pub fn clear_surface(
         &self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         gl: &Gl,
         color: [f32; 4],
     ) -> Result<(), Error> {
@@ -579,14 +579,14 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     /// Destroy the swap chain.
     /// Called by the producer.
     /// Returns an error if `context` is not the producer context for this swap chain.
-    pub fn destroy(&self, device: &Device, context: &mut Device::Context) -> Result<(), Error> {
+    pub fn destroy(&self, device: &Device, context: &mut Context) -> Result<(), Error> {
         self.lock().destroy(device, context)
     }
 
     /// Create a new attached swap chain
     pub fn create_attached(
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         surface_access: SurfaceAccess,
     ) -> Result<SwapChain<Device>, Error> {
         let size = device.context_surface_info(context).unwrap().unwrap().size;
@@ -603,7 +603,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     /// Create a new detached swap chain
     pub fn create_detached(
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         surface_access: SurfaceAccess,
         size: Size2D<i32>,
     ) -> Result<SwapChain<Device>, Error> {
@@ -694,7 +694,7 @@ where
         &self,
         id: SwapChainID,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         surface_access: SurfaceAccess,
     ) -> Result<(), Error> {
         match self.table_mut().entry(id.clone()) {
@@ -717,7 +717,7 @@ where
         id: SwapChainID,
         size: Size2D<i32>,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
         surface_access: SurfaceAccess,
     ) -> Result<(), Error> {
         match self.table_mut().entry(id.clone()) {
@@ -743,7 +743,7 @@ where
         &self,
         id: SwapChainID,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
     ) -> Result<(), Error> {
         if let Some(swap_chain) = self.table_mut().remove(&id) {
             swap_chain.destroy(device, context)?;
@@ -759,7 +759,7 @@ where
     pub fn iter(
         &self,
         device: &Device,
-        context: &mut Device::Context,
+        context: &mut Context,
     ) -> impl Iterator<Item = (SwapChainID, SwapChain<Device>)> {
         self.ids()
             .get(&device.context_id(context))

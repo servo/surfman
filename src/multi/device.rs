@@ -1,13 +1,13 @@
 //! A device abstraction that allows the choice of backends dynamically.
 
 use super::connection::Connection;
-use super::context::Context;
 use super::surface::{Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
 use crate::{
-    Adapter, ContextDescriptor, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType,
+    Adapter, Context, ContextDescriptor, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo,
+    SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -68,7 +68,6 @@ where
     Alt::Connection: ConnectionInterface<Device = Alt>,
 {
     type Connection = Connection<Def, Alt>;
-    type Context = Context<Def, Alt>;
     type Surface = Surface<Def, Alt>;
     type SurfaceTexture = SurfaceTexture<Def, Alt>;
 
@@ -103,23 +102,23 @@ where
     fn create_context(
         &self,
         descriptor: &ContextDescriptor,
-        share_with: Option<&Context<Def, Alt>>,
-    ) -> Result<Context<Def, Alt>, Error> {
+        share_with: Option<&Context>,
+    ) -> Result<Context, Error> {
         Device::create_context(self, descriptor, share_with)
     }
 
     #[inline]
-    fn destroy_context(&self, context: &mut Context<Def, Alt>) -> Result<(), Error> {
+    fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
         Device::destroy_context(self, context)
     }
 
     #[inline]
-    fn context_descriptor(&self, context: &Context<Def, Alt>) -> ContextDescriptor {
+    fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
         Device::context_descriptor(self, context)
     }
 
     #[inline]
-    fn make_context_current(&self, context: &Context<Def, Alt>) -> Result<(), Error> {
+    fn make_context_current(&self, context: &Context) -> Result<(), Error> {
         Device::make_context_current(self, context)
     }
 
@@ -137,14 +136,14 @@ where
     }
 
     #[inline]
-    fn get_proc_address(&self, context: &Context<Def, Alt>, symbol_name: &str) -> *const c_void {
+    fn get_proc_address(&self, context: &Context, symbol_name: &str) -> *const c_void {
         Device::get_proc_address(self, context, symbol_name)
     }
 
     #[inline]
     fn bind_surface_to_context(
         &self,
-        context: &mut Context<Def, Alt>,
+        context: &mut Context,
         surface: Surface<Def, Alt>,
     ) -> Result<(), (Error, Surface<Def, Alt>)> {
         Device::bind_surface_to_context(self, context, surface)
@@ -153,21 +152,18 @@ where
     #[inline]
     fn unbind_surface_from_context(
         &self,
-        context: &mut Context<Def, Alt>,
+        context: &mut Context,
     ) -> Result<Option<Surface<Def, Alt>>, Error> {
         Device::unbind_surface_from_context(self, context)
     }
 
     #[inline]
-    fn context_id(&self, context: &Context<Def, Alt>) -> ContextID {
+    fn context_id(&self, context: &Context) -> ContextID {
         Device::context_id(self, context)
     }
 
     #[inline]
-    fn context_surface_info(
-        &self,
-        context: &Context<Def, Alt>,
-    ) -> Result<Option<SurfaceInfo>, Error> {
+    fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         Device::context_surface_info(self, context)
     }
 
@@ -176,7 +172,7 @@ where
     #[inline]
     fn create_surface(
         &self,
-        context: &Context<Def, Alt>,
+        context: &Context,
         surface_access: SurfaceAccess,
         surface_type: SurfaceType<'_>,
     ) -> Result<Surface<Def, Alt>, Error> {
@@ -186,7 +182,7 @@ where
     #[inline]
     fn create_surface_texture(
         &self,
-        context: &mut Context<Def, Alt>,
+        context: &mut Context,
         surface: Surface<Def, Alt>,
     ) -> Result<SurfaceTexture<Def, Alt>, (Error, Surface<Def, Alt>)> {
         Device::create_surface_texture(self, context, surface)
@@ -195,7 +191,7 @@ where
     #[inline]
     fn destroy_surface(
         &self,
-        context: &mut Context<Def, Alt>,
+        context: &mut Context,
         surface: &mut Surface<Def, Alt>,
     ) -> Result<(), Error> {
         Device::destroy_surface(self, context, surface)
@@ -204,7 +200,7 @@ where
     #[inline]
     fn destroy_surface_texture(
         &self,
-        context: &mut Context<Def, Alt>,
+        context: &mut Context,
         surface_texture: SurfaceTexture<Def, Alt>,
     ) -> Result<Surface<Def, Alt>, (Error, SurfaceTexture<Def, Alt>)> {
         Device::destroy_surface_texture(self, context, surface_texture)
@@ -216,23 +212,19 @@ where
     }
 
     #[inline]
-    fn present_bound_surface(&self, context: &mut Context<Def, Alt>) -> Result<(), Error> {
+    fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
         Device::present_bound_surface(self, context)
     }
 
     #[inline]
-    fn resize_bound_surface(
-        &self,
-        context: &mut Self::Context,
-        size: Size2D<i32>,
-    ) -> Result<(), Error> {
+    fn resize_bound_surface(&self, context: &mut Context, size: Size2D<i32>) -> Result<(), Error> {
         Device::resize_bound_surface(self, context, size)
     }
 
     #[inline]
     fn present_surface(
         &self,
-        context: &Context<Def, Alt>,
+        context: &Context,
         surface: &mut Surface<Def, Alt>,
     ) -> Result<(), Error> {
         Device::present_surface(self, context, surface)
@@ -241,7 +233,7 @@ where
     #[inline]
     fn resize_surface(
         &self,
-        context: &Context<Def, Alt>,
+        context: &Context,
         surface: &mut Surface<Def, Alt>,
         size: Size2D<i32>,
     ) -> Result<(), Error> {

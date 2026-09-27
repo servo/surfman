@@ -2,7 +2,7 @@
 
 use super::adapter::AngleAdapter;
 use crate::angle::connection::Connection;
-use crate::angle::context::{Context, NativeContext};
+use crate::angle::context::{AngleContext, NativeContext};
 use crate::angle::surface::{
     Surface, SurfaceDataGuard, SurfaceTexture, Synchronization, Win32Objects,
 };
@@ -20,10 +20,9 @@ use crate::egl::types::{
     EGLAttrib, EGLConfig, EGLDeviceEXT, EGLDisplay, EGLNativeWindowType, EGLSurface, EGLint,
 };
 use crate::surface::Framebuffer;
-use crate::EglContextDescriptor;
 use crate::{
-    egl, gl, Adapter, ContextAttributes, ContextDescriptor, Error, GLApi, Gl, SurfaceAccess,
-    SurfaceInfo, SurfaceType,
+    egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
+    GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -271,6 +270,11 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
+        let share_with = match share_with {
+            Some(share_with) => Some(share_with.angle()?),
+            None => None,
+        };
+
         let (egl_context, id) = {
             let mut next_context_id_lock = CREATE_CONTEXT_MUTEX.lock().unwrap();
             let egl_context = unsafe {
@@ -302,14 +306,14 @@ impl Device {
             })?;
         }
 
-        let context = Context {
+        Ok(AngleContext {
             egl_context,
             id,
             framebuffer: Framebuffer::None,
             context_is_owned: true,
             gl: unsafe { Gl::from_loader_function(context::get_proc_address) },
-        };
-        Ok(context)
+        }
+        .into())
     }
 
     /// Wraps a native `EGLContext` in a context object.
@@ -324,7 +328,7 @@ impl Device {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
         // Create the context.
-        let context = Context {
+        let context = AngleContext {
             egl_context: native_context.egl_context,
             id: *next_context_id,
             framebuffer: Framebuffer::External(ExternalEGLSurfaces {
@@ -336,19 +340,20 @@ impl Device {
         };
         next_context_id.0 += 1;
 
-        Ok(context)
+        Ok(context.into())
     }
 
     /// Destroys a context.
     ///
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.egl_context == egl::NO_CONTEXT {
-            return Ok(());
-        }
-
         if let Ok(Some(mut surface)) = self.unbind_surface_from_context(context) {
             self.destroy_surface(context, &mut surface)?;
+        }
+
+        let context: &mut AngleContext = context.try_into()?;
+        if context.egl_context == egl::NO_CONTEXT {
+            return Ok(());
         }
 
         EGL_FUNCTIONS.with(|egl| unsafe {
@@ -372,6 +377,7 @@ impl Device {
 
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        let context = context.angle().expect("Passed incorrect context type");
         unsafe {
             EglContextDescriptor::from_egl_context(
                 &context.gl,
@@ -382,31 +388,35 @@ impl Device {
         }
     }
 
-    /// Makes the context the current OpenGL context for this thread.
-    ///
-    /// After calling this function, it is valid to use OpenGL rendering commands.
-    pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
-        unsafe {
-            let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
-                Framebuffer::Surface(ref surface) => (surface.egl_surface, surface.egl_surface),
-                Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
-                Framebuffer::External(ref surfaces) => (surfaces.draw, surfaces.read),
-            };
+    fn make_context_current_inner(&self, context: &AngleContext) -> Result<(), Error> {
+        let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
+            Framebuffer::Surface(ref surface) => (surface.egl_surface, surface.egl_surface),
+            Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
+            Framebuffer::External(ref surfaces) => (surfaces.draw, surfaces.read),
+        };
 
-            EGL_FUNCTIONS.with(|egl| {
-                let result = egl.MakeCurrent(
+        EGL_FUNCTIONS.with(|egl| {
+            let result = unsafe {
+                egl.MakeCurrent(
                     self.egl_display,
                     egl_draw_surface,
                     egl_read_surface,
                     context.egl_context,
-                );
-                if result == egl::FALSE {
-                    let err = egl.GetError().to_windowing_api_error();
-                    return Err(Error::MakeCurrentFailed(err));
-                }
-                Ok(())
-            })
-        }
+                )
+            };
+            if result == egl::FALSE {
+                let err = unsafe { egl.GetError() }.to_windowing_api_error();
+                return Err(Error::MakeCurrentFailed(err));
+            }
+            Ok(())
+        })
+    }
+
+    /// Makes the context the current OpenGL context for this thread.
+    ///
+    /// After calling this function, it is valid to use OpenGL rendering commands.
+    pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+        self.make_context_current_inner(context.angle()?)
     }
 
     /// Removes the current OpenGL context from this thread.
@@ -419,14 +429,14 @@ impl Device {
 
     pub(crate) fn temporarily_make_context_current(
         &self,
-        context: &Context,
+        context: &AngleContext,
     ) -> Result<CurrentContextGuard, Error> {
         let guard = CurrentContextGuard::new();
-        self.make_context_current(context)?;
+        self.make_context_current_inner(context)?;
         Ok(guard)
     }
 
-    pub(crate) fn context_is_current(&self, context: &Context) -> bool {
+    pub(crate) fn context_is_current(&self, context: &AngleContext) -> bool {
         EGL_FUNCTIONS.with(|egl| unsafe { egl.GetCurrentContext() == context.egl_context })
     }
 
@@ -477,6 +487,10 @@ impl Device {
         context: &mut Context,
         surface: Surface,
     ) -> Result<(), (Error, Surface)> {
+        let context: &mut AngleContext = match context.try_into() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface)),
+        };
         if context.id != surface.context_id {
             return Err((Error::IncompatibleSurface, surface));
         }
@@ -514,7 +528,7 @@ impl Device {
 
         if is_current {
             // We need to make ourselves current again, because the surface changed.
-            drop(self.make_context_current(context));
+            drop(self.make_context_current_inner(context));
         }
 
         Ok(())
@@ -528,6 +542,7 @@ impl Device {
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
+        let context: &mut AngleContext = context.try_into()?;
         match context.framebuffer {
             Framebuffer::None => return Ok(None),
             Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
@@ -559,6 +574,7 @@ impl Device {
     /// Widget surfaces are internally double-buffered, so changes to them don't
     /// show up in their associated widgets until this method is called.
     pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        let context: &mut AngleContext = context.try_into()?;
         match &context.framebuffer {
             Framebuffer::Surface(surface) => surface.present(self),
             _ => Ok(()),
@@ -571,6 +587,7 @@ impl Device {
         context: &mut Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
+        let context: &mut AngleContext = context.try_into()?;
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
             surface.resize(size);
         }
@@ -583,6 +600,7 @@ impl Device {
     /// a new one, the new context might have the same ID as the destroyed one.
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
+        let context = context.angle().expect("Passed incorrect context type");
         context.id
     }
 
@@ -590,6 +608,7 @@ impl Device {
     ///
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        let context = context.angle()?;
         match context.framebuffer {
             Framebuffer::None => Ok(None),
             Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
@@ -599,6 +618,7 @@ impl Device {
 
     /// Given a context, returns its underlying EGL context and attached surfaces.
     pub fn native_context(&self, context: &Context) -> NativeContext {
+        let context = context.angle().expect("Passed incorrect context type");
         let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
             Framebuffer::Surface(Surface { egl_surface, .. }) => (egl_surface, egl_surface),
             Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
@@ -643,6 +663,7 @@ impl Device {
         let context_descriptor = self.context_descriptor(context);
         let context_descriptor = context_descriptor.egl()?.clone();
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
+        let context = context.angle()?;
 
         unsafe {
             let attributes = [
@@ -746,6 +767,7 @@ impl Device {
     ) -> Result<Surface, Error> {
         let context_descriptor = self.context_descriptor(context).egl()?.clone();
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
+        let context = context.angle()?;
 
         unsafe {
             EGL_FUNCTIONS.with(|egl| {
@@ -875,6 +897,11 @@ impl Device {
         local_egl_surface: EGLSurface,
         local_keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
+        let context = match context.angle() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface)),
+        };
+
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
                 let _guard = self.temporarily_make_context_current(context);
@@ -944,6 +971,7 @@ impl Device {
         context: &mut Context,
         surface: &mut Surface,
     ) -> Result<(), Error> {
+        let context = context.angle()?;
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
@@ -982,6 +1010,11 @@ impl Device {
         context: &mut Context,
         mut surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
+        let context = match context.angle() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface_texture)),
+        };
+
         unsafe {
             if let Some(texture) = surface_texture.gl_texture.take() {
                 context.gl.delete_texture(texture);

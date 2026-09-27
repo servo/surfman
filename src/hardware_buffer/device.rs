@@ -2,7 +2,7 @@
 
 use super::adapter::HardwareBufferAdapter;
 use super::connection::Connection;
-use super::context::NativeContext;
+use super::context::{HardwareBufferContext, NativeContext};
 use crate::base::egl::context::{self, CurrentContextGuard};
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::error::ToWindowingApiError;
@@ -132,10 +132,13 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
+        let share_with = match share_with {
+            Some(share_with) => Some(share_with.hardware_buffer()?),
+            None => None,
+        };
+
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
-
         let egl_display = self.egl_display;
-
         unsafe {
             // Create the EGL context.
             let gl_api = self.gl_api();
@@ -158,7 +161,7 @@ impl Device {
             })?;
 
             // Wrap up the EGL context.
-            let context = Context {
+            let context = HardwareBufferContext {
                 egl_context,
                 id: *next_context_id,
                 pbuffer,
@@ -167,7 +170,7 @@ impl Device {
                 gl: Gl::from_loader_function(context::get_proc_address),
             };
             next_context_id.0 += 1;
-            Ok(context)
+            Ok(context.into())
         }
     }
 
@@ -187,7 +190,7 @@ impl Device {
             context::create_dummy_pbuffer(self.egl_display, native_context.egl_context).unwrap();
 
         // Create the context.
-        let context = Context {
+        let context = HardwareBufferContext {
             egl_context: native_context.egl_context,
             id: *next_context_id,
             pbuffer,
@@ -200,24 +203,29 @@ impl Device {
         };
         next_context_id.0 += 1;
 
-        Ok(context)
+        Ok(context.into())
     }
 
     /// Destroys a context.
     ///
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-        if context.egl_context == egl::NO_CONTEXT {
-            return Ok(());
-        }
-
-        unsafe {
-            if let Framebuffer::Surface(mut target) =
+        {
+            let framebuffer = {
+                let context: &mut HardwareBufferContext = context.try_into()?;
+                if context.egl_context == egl::NO_CONTEXT {
+                    return Ok(());
+                }
                 mem::replace(&mut context.framebuffer, Framebuffer::None)
-            {
+            };
+
+            if let Framebuffer::Surface(mut target) = framebuffer {
                 self.destroy_surface(context, &mut target)?;
             }
+        };
 
+        unsafe {
+            let context: &mut HardwareBufferContext = context.try_into()?;
             EGL_FUNCTIONS.with(|egl| {
                 let result = egl.DestroySurface(self.egl_display, context.pbuffer);
                 assert_ne!(result, egl::FALSE);
@@ -244,6 +252,9 @@ impl Device {
 
     /// Returns the descriptor that this context was created with.
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        let context = context
+            .hardware_buffer()
+            .expect("Passed incorrect context type");
         unsafe {
             EglContextDescriptor::from_egl_context(
                 &context.gl,
@@ -258,6 +269,7 @@ impl Device {
     ///
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+        let context = context.hardware_buffer()?;
         unsafe {
             let egl_display = self.egl_display;
             let egl_context = context.egl_context;
@@ -310,6 +322,11 @@ impl Device {
         context: &mut Context,
         new_surface: Surface,
     ) -> Result<(), (Error, Surface)> {
+        let context: &mut HardwareBufferContext = match context.try_into() {
+            Ok(context) => context,
+            Err(error) => return Err((error, new_surface)),
+        };
+
         if context.id != new_surface.context_id {
             return Err((Error::IncompatibleSurface, new_surface));
         }
@@ -332,7 +349,7 @@ impl Device {
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
-        match context.framebuffer {
+        match context.hardware_buffer()?.framebuffer {
             Framebuffer::External { .. } => return Err(Error::ExternalRenderTarget),
             Framebuffer::None => return Ok(None),
             Framebuffer::Surface(_) => {}
@@ -342,6 +359,7 @@ impl Device {
         //
         // FIXME(pcwalton): Is this necessary?
         let _guard = self.temporarily_make_context_current(context)?;
+        let context: &mut HardwareBufferContext = context.try_into()?;
         unsafe {
             context.gl.flush();
         };
@@ -358,6 +376,7 @@ impl Device {
     /// Widget surfaces are internally double-buffered, so changes to them don't
     /// show up in their associated widgets until this method is called.
     pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        let context = context.hardware_buffer()?;
         match &context.framebuffer {
             Framebuffer::Surface(surface) => self.present_surface_inner(context, surface),
             _ => Ok(()),
@@ -370,6 +389,7 @@ impl Device {
         context: &mut Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
+        let context: &mut HardwareBufferContext = context.try_into()?;
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
             surface.resize(size);
         }
@@ -399,7 +419,7 @@ impl Device {
         context::get_proc_address(symbol_name)
     }
 
-    pub(crate) fn context_to_egl_config(&self, context: &Context) -> EGLConfig {
+    pub(crate) fn context_to_egl_config(&self, context: &HardwareBufferContext) -> EGLConfig {
         unsafe {
             context::egl_config_from_id(
                 self.egl_display,
@@ -427,6 +447,9 @@ impl Device {
     /// a new one, the new context might have the same ID as the destroyed one.
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
+        let context = context
+            .hardware_buffer()
+            .expect("Passed incorrect context type");
         context.id
     }
 
@@ -434,6 +457,7 @@ impl Device {
     ///
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        let context = context.hardware_buffer()?;
         match context.framebuffer {
             Framebuffer::None => Ok(None),
             Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
@@ -443,6 +467,9 @@ impl Device {
 
     /// Given a context, returns its underlying EGL context and attached surfaces.
     pub fn native_context(&self, context: &Context) -> NativeContext {
+        let context = context
+            .hardware_buffer()
+            .expect("Passed incorrect context type");
         let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
             Framebuffer::Surface(Surface {
                 objects: SurfaceObjects::Window { egl_surface },

@@ -7,13 +7,13 @@
 #![allow(missing_docs)]
 
 use super::connection::Connection;
-use super::context::{Context, NativeContext};
+use super::context::NativeContext;
 use super::device::Device;
 use super::surface::Surface;
 use crate::{
-    gl, Adapter, AdapterPreferences, ContextAttributeFlags, ContextAttributes, ContextDescriptor,
-    Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference, SurfaceAccess, SurfaceType,
-    WindowingApiError,
+    gl, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
+    ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference,
+    SurfaceAccess, SurfaceType, WindowingApiError,
 };
 
 use euclid::default::Size2D;

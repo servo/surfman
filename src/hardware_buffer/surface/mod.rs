@@ -2,6 +2,7 @@
 
 use crate::base::egl::ffi::EGLImageKHR;
 use crate::context::ContextID;
+use crate::hardware_buffer::context::HardwareBufferContext;
 use crate::{Context, Device, Error};
 
 use crate::base::egl::device::EGL_FUNCTIONS;
@@ -99,12 +100,12 @@ impl Device {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
-        self.present_surface_inner(context, surface)
+        self.present_surface_inner(context.hardware_buffer()?, surface)
     }
 
     pub(crate) fn present_surface_inner(
         &self,
-        context: &Context,
+        context: &HardwareBufferContext,
         surface: &Surface,
     ) -> Result<(), Error> {
         if context.id != surface.context_id {
