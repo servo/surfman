@@ -1,7 +1,7 @@
 //! A wrapper around X11 `EGLDisplay`s.
 
 use super::connection::{Connection, NativeConnectionWrapper};
-use super::context::{Context, NativeContext};
+use super::context::NativeContext;
 use super::surface::Surface;
 use crate::base::egl::{
     context::{self, CurrentContextGuard, EGLBackedContext},
@@ -10,10 +10,11 @@ use crate::base::egl::{
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
 use crate::free_unix::adapter::FreeUnixAdapter;
+use crate::x11::context::X11Context;
 use crate::x11::surface::{SurfaceDataGuard, SurfaceTexture};
 use crate::{
-    egl, gl, Adapter, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error, GLApi, Gl,
-    SurfaceAccess, SurfaceInfo, SurfaceType,
+    egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
+    GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -118,6 +119,7 @@ impl Device {
         descriptor: &ContextDescriptor,
         share_with: Option<&Context>,
     ) -> Result<Context, Error> {
+        let share_with = share_with.map(Context::x11).transpose()?;
         unsafe {
             let context = EGLBackedContext::new(
                 self.native_connection.egl_display,
@@ -126,10 +128,7 @@ impl Device {
                 self.gl_api(),
             )?;
             context.make_current(self.native_connection.egl_display)?;
-            Ok(Context(
-                context,
-                Gl::from_loader_function(context::get_proc_address),
-            ))
+            Ok(X11Context(context, Gl::from_loader_function(context::get_proc_address)).into())
         }
     }
 
@@ -143,10 +142,11 @@ impl Device {
         &self,
         native_context: NativeContext,
     ) -> Result<Context, Error> {
-        Ok(Context(
+        Ok(X11Context(
             EGLBackedContext::from_native_context(native_context),
             Gl::from_loader_function(context::get_proc_address),
-        ))
+        )
+        .into())
     }
 
     /// Destroys a context.
@@ -157,6 +157,7 @@ impl Device {
             self.destroy_surface(context, &mut surface)?;
         }
 
+        let context: &mut X11Context = context.try_into()?;
         unsafe {
             context.0.destroy(self.native_connection.egl_display);
             Ok(())
@@ -166,12 +167,14 @@ impl Device {
     /// Given a context, returns its underlying EGL context and attached surfaces.
     #[inline]
     pub fn native_context(&self, context: &Context) -> NativeContext {
+        let context = context.x11().expect("Passed incorrect context type");
         context.0.native_context()
     }
 
     /// Returns the descriptor that this context was created with.
     #[inline]
     pub fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
+        let context = context.x11().expect("Passed incorrect context type");
         unsafe {
             EglContextDescriptor::from_egl_context(
                 &context.1,
@@ -187,6 +190,7 @@ impl Device {
     /// After calling this function, it is valid to use OpenGL rendering commands.
     #[inline]
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
+        let context = context.x11()?;
         unsafe { context.0.make_current(self.native_connection.egl_display) }
     }
 
@@ -249,6 +253,11 @@ impl Device {
         context: &mut Context,
         surface: Surface,
     ) -> Result<(), (Error, Surface)> {
+        let context: &mut X11Context = match context.try_into() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface)),
+        };
+
         unsafe {
             context
                 .0
@@ -265,6 +274,7 @@ impl Device {
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
+        let context: &mut X11Context = context.try_into()?;
         unsafe {
             context
                 .0
@@ -279,6 +289,7 @@ impl Device {
     /// Widget surfaces are internally double-buffered, so changes to them don't
     /// show up in their associated widgets until this method is called.
     pub fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
+        let context: &mut X11Context = context.try_into()?;
         context
             .0
             .present_bound_surface(self.native_connection.egl_display)
@@ -290,6 +301,7 @@ impl Device {
         context: &mut Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
+        let context: &mut X11Context = context.try_into()?;
         context.0.resize_bound_surface(size)
     }
 
@@ -299,6 +311,7 @@ impl Device {
     /// a new one, the new context might have the same ID as the destroyed one.
     #[inline]
     pub fn context_id(&self, context: &Context) -> ContextID {
+        let context = context.x11().expect("Passed incorrect context type");
         context.0.id
     }
 
@@ -307,6 +320,7 @@ impl Device {
     /// This includes, most notably, the OpenGL framebuffer object needed to render to the surface.
     #[inline]
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        let context = context.x11()?;
         context.0.surface_info()
     }
 
@@ -339,6 +353,7 @@ impl Device {
         let _guard = self.temporarily_make_context_current(context)?;
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
+        let context = context.x11()?;
 
         Ok(Surface(EGLBackedSurface::new_generic(
             &context.1,
@@ -355,6 +370,7 @@ impl Device {
         context: &Context,
         mut x11_window: Window,
     ) -> Result<Surface, Error> {
+        let context = context.x11()?;
         let egl_config_id = context::get_context_attr(
             self.native_connection.egl_display,
             context.0.egl_context,
@@ -408,6 +424,11 @@ impl Device {
             Err(err) => return Err((err, surface)),
         };
 
+        let context = match context.x11() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface)),
+        };
+
         match surface.0.to_surface_texture(&context.1) {
             Ok(surface_texture) => Ok(SurfaceTexture(surface_texture)),
             Err((err, surface)) => Err((err, Surface(surface))),
@@ -427,6 +448,7 @@ impl Device {
         surface: &mut Surface,
     ) -> Result<(), Error> {
         let egl_display = self.native_connection.egl_display;
+        let context = context.x11()?;
         surface.0.destroy(&context.1, egl_display, context.0.id)?;
         Ok(())
     }
@@ -443,8 +465,12 @@ impl Device {
         context: &mut Context,
         surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
+        let concrete_context = match context.x11() {
+            Ok(concrete_context) => concrete_context,
+            Err(error) => return Err((error, surface_texture)),
+        };
         match self.temporarily_make_context_current(context) {
-            Ok(_guard) => Ok(Surface(surface_texture.0.destroy(&context.1))),
+            Ok(_guard) => Ok(Surface(surface_texture.0.destroy(&concrete_context.1))),
             Err(err) => Err((err, surface_texture)),
         }
     }
@@ -457,6 +483,7 @@ impl Device {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
+        let context = context.x11()?;
         surface
             .0
             .present(self.native_connection.egl_display, context.0.egl_context)

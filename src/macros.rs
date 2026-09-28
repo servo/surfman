@@ -35,7 +35,6 @@ macro_rules! implement_interfaces {
     () => {
         mod implementation {
             use super::connection::Connection;
-            use super::context::Context;
             use super::device::Device;
             use super::surface::{Surface, SurfaceTexture};
             use euclid::default::Size2D;
@@ -47,8 +46,8 @@ macro_rules! implement_interfaces {
             use $crate::info::GLApi;
             use $crate::Error;
             use $crate::{
-                ContextAttributes, ContextDescriptor, ContextID, SurfaceAccess, SurfaceInfo,
-                SurfaceType,
+                Context, ContextAttributes, ContextDescriptor, ContextID, SurfaceAccess,
+                SurfaceInfo, SurfaceType,
             };
 
             impl ConnectionInterface for Connection {
@@ -87,7 +86,6 @@ macro_rules! implement_interfaces {
 
             impl DeviceInterface for Device {
                 type Connection = Connection;
-                type Context = Context;
                 type Surface = Surface;
                 type SurfaceTexture = SurfaceTexture;
 
@@ -122,23 +120,23 @@ macro_rules! implement_interfaces {
                 fn create_context(
                     &self,
                     descriptor: &ContextDescriptor,
-                    share_with: Option<&Self::Context>,
-                ) -> Result<Self::Context, Error> {
+                    share_with: Option<&Context>,
+                ) -> Result<Context, Error> {
                     Device::create_context(self, descriptor, share_with)
                 }
 
                 #[inline]
-                fn destroy_context(&self, context: &mut Self::Context) -> Result<(), Error> {
+                fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
                     Device::destroy_context(self, context)
                 }
 
                 #[inline]
-                fn context_descriptor(&self, context: &Self::Context) -> ContextDescriptor {
+                fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
                     Device::context_descriptor(self, context)
                 }
 
                 #[inline]
-                fn make_context_current(&self, context: &Self::Context) -> Result<(), Error> {
+                fn make_context_current(&self, context: &Context) -> Result<(), Error> {
                     Device::make_context_current(self, context)
                 }
 
@@ -156,18 +154,14 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn get_proc_address(
-                    &self,
-                    context: &Self::Context,
-                    symbol_name: &str,
-                ) -> *const c_void {
+                fn get_proc_address(&self, context: &Context, symbol_name: &str) -> *const c_void {
                     Device::get_proc_address(self, context, symbol_name)
                 }
 
                 #[inline]
                 fn bind_surface_to_context(
                     &self,
-                    context: &mut Self::Context,
+                    context: &mut Context,
                     surface: Self::Surface,
                 ) -> Result<(), (Error, Self::Surface)> {
                     Device::bind_surface_to_context(self, context, surface)
@@ -176,20 +170,20 @@ macro_rules! implement_interfaces {
                 #[inline]
                 fn unbind_surface_from_context(
                     &self,
-                    context: &mut Self::Context,
+                    context: &mut Context,
                 ) -> Result<Option<Self::Surface>, Error> {
                     Device::unbind_surface_from_context(self, context)
                 }
 
                 #[inline]
-                fn context_id(&self, context: &Self::Context) -> ContextID {
+                fn context_id(&self, context: &Context) -> ContextID {
                     Device::context_id(self, context)
                 }
 
                 #[inline]
                 fn context_surface_info(
                     &self,
-                    context: &Self::Context,
+                    context: &Context,
                 ) -> Result<Option<SurfaceInfo>, Error> {
                     Device::context_surface_info(self, context)
                 }
@@ -199,7 +193,7 @@ macro_rules! implement_interfaces {
                 #[inline]
                 fn create_surface(
                     &self,
-                    context: &Self::Context,
+                    context: &Context,
                     surface_access: SurfaceAccess,
                     surface_type: SurfaceType<'_>,
                 ) -> Result<Self::Surface, Error> {
@@ -209,7 +203,7 @@ macro_rules! implement_interfaces {
                 #[inline]
                 fn create_surface_texture(
                     &self,
-                    context: &mut Self::Context,
+                    context: &mut Context,
                     surface: Self::Surface,
                 ) -> Result<Self::SurfaceTexture, (Error, Self::Surface)> {
                     Device::create_surface_texture(self, context, surface)
@@ -218,7 +212,7 @@ macro_rules! implement_interfaces {
                 #[inline]
                 fn destroy_surface(
                     &self,
-                    context: &mut Self::Context,
+                    context: &mut Context,
                     surface: &mut Self::Surface,
                 ) -> Result<(), Error> {
                     Device::destroy_surface(self, context, surface)
@@ -227,7 +221,7 @@ macro_rules! implement_interfaces {
                 #[inline]
                 fn destroy_surface_texture(
                     &self,
-                    context: &mut Self::Context,
+                    context: &mut Context,
                     surface_texture: Self::SurfaceTexture,
                 ) -> Result<Self::Surface, (Error, Self::SurfaceTexture)> {
                     Device::destroy_surface_texture(self, context, surface_texture)
@@ -239,14 +233,14 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn present_bound_surface(&self, context: &mut Self::Context) -> Result<(), Error> {
+                fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
                     Device::present_bound_surface(self, context)
                 }
 
                 #[inline]
                 fn present_surface(
                     &self,
-                    context: &Self::Context,
+                    context: &Context,
                     surface: &mut Self::Surface,
                 ) -> Result<(), Error> {
                     Device::present_surface(self, context, surface)
@@ -291,10 +285,21 @@ macro_rules! implement_interfaces {
 /// A macro that takes care of producing the boilerplate for conversion to and
 /// from an inner type within an enum.
 macro_rules! enum_conversion {
-    ($enum:ty, $variant:ident, $type:ty, $name:ident, $error:ident) => {
+    ($enum:ident, $variant:ident, $type:ty, $name:ident, $error:ident) => {
         impl From<$type> for $enum {
             fn from(connection: $type) -> Self {
                 Self::$variant(connection)
+            }
+        }
+
+        impl<'a> TryFrom<&'a mut $enum> for &'a mut $type {
+            type Error = crate::Error;
+            fn try_from(value: &'a mut $enum) -> Result<&'a mut $type, Self::Error> {
+                #[allow(unreachable_patterns)]
+                match value {
+                    $enum::$variant(inner) => Ok(inner),
+                    _ => Err(crate::Error::$error),
+                }
             }
         }
 
