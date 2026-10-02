@@ -3,7 +3,7 @@
 use crate::base::egl::ffi::EGLImageKHR;
 use crate::context::ContextID;
 use crate::hardware_buffer::context::HardwareBufferContext;
-use crate::{Context, Device, Error};
+use crate::{Context, Device, Error, Surface, SurfaceID, SurfaceInfo};
 
 use crate::base::egl::device::EGL_FUNCTIONS;
 use euclid::default::Size2D;
@@ -24,54 +24,31 @@ mod ohos_surface;
 #[cfg(ohos_platform)]
 pub use ohos_surface::*;
 
-/// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
-/// displayed in a native widget or bound to a texture for reading.
-///
-/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
-/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
-/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
-/// widget but not bound to a texture.
-///
-/// Surfaces are specific to a given context and cannot be rendered to from any context other than
-/// the one they were created with. However, they can be *read* from any context on any thread (as
-/// long as that context shares the same adapter and connection), by wrapping them in a
-/// `SurfaceTexture`.
-///
-/// Depending on the platform, each surface may be internally double-buffered.
-///
-/// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
-pub struct Surface {
+/// An implementation of [`crate::Surface`] for Android and OHOS platforms.
+pub struct HardwareBufferSurface {
     pub(crate) context_id: ContextID,
     pub(crate) size: Size2D<i32>,
     pub(crate) objects: SurfaceObjects,
     pub(crate) destroyed: bool,
 }
 
-/// Represents an OpenGL texture that wraps a surface.
-///
-/// Reading from the associated OpenGL texture reads from the surface. It is undefined behavior to
-/// write to such a texture (e.g. by binding it to a framebuffer and rendering to that
-/// framebuffer).
-///
-/// Surface textures are local to a context, but that context does not have to be the same context
-/// as that associated with the underlying surface. The texture must be destroyed with the
-/// `destroy_surface_texture()` method, or a panic will occur.
-pub struct SurfaceTexture {
-    pub(crate) surface: Surface,
+/// An implementation of [`crate::SurfaceTexture`] for Android and OHOS platforms.
+pub struct HardwareBufferSurfaceTexture {
+    pub(crate) surface: HardwareBufferSurface,
     pub(crate) local_egl_image: EGLImageKHR,
     pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
-unsafe impl Send for Surface {}
+unsafe impl Send for HardwareBufferSurface {}
 
-impl Debug for Surface {
+impl Debug for HardwareBufferSurface {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         write!(formatter, "Surface({:x})", self.id().0)
     }
 }
 
-impl Drop for Surface {
+impl Drop for HardwareBufferSurface {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
@@ -79,13 +56,34 @@ impl Drop for Surface {
     }
 }
 
-impl Surface {
+impl HardwareBufferSurface {
     pub(crate) fn resize(&mut self, size: Size2D<i32>) {
         self.size = size;
     }
+
+    pub(crate) fn info(&self) -> SurfaceInfo {
+        SurfaceInfo {
+            size: self.size,
+            id: self.id(),
+            context_id: self.context_id,
+            framebuffer_object: match self.objects {
+                SurfaceObjects::HardwareBuffer {
+                    framebuffer_object, ..
+                } => framebuffer_object,
+                SurfaceObjects::Window { .. } => None,
+            },
+        }
+    }
+
+    pub(crate) fn id(&self) -> SurfaceID {
+        match self.objects {
+            SurfaceObjects::HardwareBuffer { egl_image, .. } => SurfaceID(egl_image as usize),
+            SurfaceObjects::Window { egl_surface } => SurfaceID(egl_surface as usize),
+        }
+    }
 }
 
-impl Debug for SurfaceTexture {
+impl Debug for HardwareBufferSurfaceTexture {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         write!(f, "SurfaceTexture({:?})", self.surface)
     }
@@ -100,13 +98,13 @@ impl Device {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
-        self.present_surface_inner(context.hardware_buffer()?, surface)
+        self.present_surface_inner(context.hardware_buffer()?, surface.hardware_buffer()?)
     }
 
     pub(crate) fn present_surface_inner(
         &self,
         context: &HardwareBufferContext,
-        surface: &Surface,
+        surface: &HardwareBufferSurface,
     ) -> Result<(), Error> {
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
@@ -130,6 +128,7 @@ impl Device {
         surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
+        let surface: &mut HardwareBufferSurface = surface.try_into()?;
         surface.resize(size);
         Ok(())
     }

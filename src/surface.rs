@@ -1,18 +1,25 @@
 //! Information related to hardware surfaces.
 
 use crate::context::ContextID;
-
+use crate::macros::enum_conversion;
 use euclid::default::Size2D;
 use raw_window_handle::WindowHandle;
 use std::fmt::{self, Display, Formatter};
 
-/// Various data about the surface.
-pub struct SystemSurfaceInfo {
-    /// The surface's size, in device pixels.
-    pub size: Size2D<i32>,
-    /// The ID of the surface. This should be globally unique for each currently-allocated surface.
-    pub id: SurfaceID,
-}
+#[cfg(all(windows_platform, feature = "sm-angle"))]
+use crate::angle::surface::AngleSurface;
+#[cfg(macos_platform)]
+use crate::cgl::surface::CglSurface;
+#[cfg(any(android_platform, ohos_platform))]
+use crate::hardware_buffer::surface::HardwareBufferSurface;
+#[cfg(free_unix)]
+use crate::mesa_surfaceless::surface::SurfacelessMesaSurface;
+#[cfg(wayland_platform)]
+use crate::wayland::surface::WaylandSurface;
+#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+use crate::wgl::surface::WglSurface;
+#[cfg(x11_platform)]
+use crate::x11::surface::X11Surface;
 
 /// Various data about the surface.
 pub struct SurfaceInfo {
@@ -126,3 +133,77 @@ impl SurfaceAccess {
         }
     }
 }
+
+/// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
+/// displayed in a native widget or bound to a texture for reading.
+///
+/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
+/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
+/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
+/// widget but not bound to a texture.
+///
+/// Surfaces are specific to a given context and cannot be rendered to from any context other than
+/// the one they were created with. However, they can be *read* from any context on any thread (as
+/// long as that context shares the same adapter and connection), by wrapping them in a
+/// `SurfaceTexture`.
+///
+/// Depending on the platform, each surface may be internally double-buffered.
+///
+/// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
+#[derive(Debug)]
+pub enum Surface {
+    /// An ANGLE surface for Windows systems.
+    #[cfg(all(windows_platform, feature = "sm-angle"))]
+    Angle(AngleSurface),
+    /// A surface for Apple systems.
+    #[cfg(macos_platform)]
+    Cgl(CglSurface),
+    /// A hardware buffer surface for OHOS and Android systems.
+    #[cfg(any(android_platform, ohos_platform))]
+    HardwareBuffer(HardwareBufferSurface),
+    /// A surfaceless Mesa surface for X11 / Wayland systems.
+    #[cfg(free_unix)]
+    SurfacelessMesa(SurfacelessMesaSurface),
+    /// A surface for Wayland systems.
+    #[cfg(wayland_platform)]
+    Wayland(WaylandSurface),
+    /// A WGL surface for Windows systems.
+    #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+    Wgl(WglSurface),
+    /// A surface for X11 systems.
+    #[cfg(x11_platform)]
+    X11(X11Surface),
+}
+
+#[cfg(all(windows_platform, feature = "sm-angle"))]
+enum_conversion!(Surface, Angle, AngleSurface, angle, IncompatibleSurface);
+#[cfg(macos_platform)]
+enum_conversion!(Surface, Cgl, CglSurface, cgl, IncompatibleSurface);
+#[cfg(any(android_platform, ohos_platform))]
+enum_conversion!(
+    Surface,
+    HardwareBuffer,
+    HardwareBufferSurface,
+    hardware_buffer,
+    IncompatibleSurface
+);
+#[cfg(free_unix)]
+enum_conversion!(
+    Surface,
+    SurfacelessMesa,
+    SurfacelessMesaSurface,
+    surfaceless_mesa,
+    IncompatibleSurface
+);
+#[cfg(wayland_platform)]
+enum_conversion!(
+    Surface,
+    Wayland,
+    WaylandSurface,
+    wayland,
+    IncompatibleSurface
+);
+#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+enum_conversion!(Surface, Wgl, WglSurface, wgl, IncompatibleSurface);
+#[cfg(x11_platform)]
+enum_conversion!(Surface, X11, X11Surface, x11, IncompatibleSurface);

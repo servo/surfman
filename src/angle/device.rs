@@ -4,7 +4,7 @@ use super::adapter::AngleAdapter;
 use crate::angle::connection::Connection;
 use crate::angle::context::{AngleContext, NativeContext};
 use crate::angle::surface::{
-    Surface, SurfaceDataGuard, SurfaceTexture, Synchronization, Win32Objects,
+    AngleSurface, AngleSurfaceTexture, SurfaceDataGuard, Synchronization, Win32Objects,
 };
 use crate::base::egl::context::{self, CurrentContextGuard};
 use crate::base::egl::device::EGL_FUNCTIONS;
@@ -22,7 +22,7 @@ use crate::egl::types::{
 use crate::surface::Framebuffer;
 use crate::{
     egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
-    GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType,
+    GLApi, Gl, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -487,14 +487,15 @@ impl Device {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
+        let surface: AngleSurface = surface.try_into()?;
         if context.id != surface.context_id {
-            return Err((Error::IncompatibleSurface, surface));
+            return Err((Error::IncompatibleSurface, surface.into()));
         }
 
         match context.framebuffer {
             Framebuffer::None => {}
-            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
-            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
+            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface.into())),
+            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface.into())),
         }
 
         // If the surface is synchronized with GLFinish, then finish.
@@ -561,7 +562,7 @@ impl Device {
             _ => {}
         }
 
-        Ok(Some(surface))
+        Ok(Some(surface.into()))
     }
 
     /// Displays the contents of the currently bound surface to the screen, if
@@ -608,7 +609,7 @@ impl Device {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
             Framebuffer::External(_) => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface.info())),
         }
     }
 
@@ -616,7 +617,7 @@ impl Device {
     pub fn native_context(&self, context: &Context) -> NativeContext {
         let context = context.angle().expect("Passed incorrect context type");
         let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
-            Framebuffer::Surface(Surface { egl_surface, .. }) => (egl_surface, egl_surface),
+            Framebuffer::Surface(AngleSurface { egl_surface, .. }) => (egl_surface, egl_surface),
             Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
             Framebuffer::None => (egl::NO_SURFACE, egl::NO_SURFACE),
         };
@@ -639,7 +640,9 @@ impl Device {
         surface_type: SurfaceType<'_>,
     ) -> Result<Surface, Error> {
         match surface_type {
-            SurfaceType::Generic { ref size } => self.create_pbuffer_surface(context, size, None),
+            SurfaceType::Generic { ref size } => self
+                .create_pbuffer_surface(context, size, None)
+                .map(Into::into),
             SurfaceType::Widget { window_handle, .. } => {
                 let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
                     return Err(Error::IncompatibleSurfaceType);
@@ -655,7 +658,7 @@ impl Device {
         context: &Context,
         size: &Size2D<i32>,
         texture: Option<ComPtr<d3d11::ID3D11Texture2D>>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<AngleSurface, Error> {
         let context_descriptor = self.context_descriptor(context);
         let context_descriptor = context_descriptor.egl()?.clone();
         let egl_config = self.context_descriptor_to_egl_config(&context_descriptor);
@@ -730,7 +733,7 @@ impl Device {
                     Synchronization::None
                 };
 
-                Ok(Surface {
+                Ok(AngleSurface {
                     egl_surface,
                     size: *size,
                     context_id: context.id,
@@ -754,6 +757,7 @@ impl Device {
         texture: ComPtr<d3d11::ID3D11Texture2D>,
     ) -> Result<Surface, Error> {
         self.create_pbuffer_surface(context, size, Some(texture))
+            .map(Into::into)
     }
 
     fn create_window_surface(
@@ -793,13 +797,14 @@ impl Device {
                 assert_ne!(width, 0);
                 assert_ne!(height, 0);
 
-                Ok(Surface {
+                Ok(AngleSurface {
                     egl_surface,
                     size: Size2D::new(width, height),
                     context_id: context.id,
                     context_descriptor,
                     win32_objects: Win32Objects::Window,
-                })
+                }
+                .into())
             })
         }
     }
@@ -820,8 +825,9 @@ impl Device {
         context: &mut Context,
         surface: Surface,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
+        let surface: AngleSurface = surface.try_into()?;
         let share_handle = match surface.win32_objects {
-            Win32Objects::Window => return Err((Error::WidgetAttached, surface)),
+            Win32Objects::Window => return Err((Error::WidgetAttached, surface.into())),
             Win32Objects::Pbuffer { share_handle, .. } => share_handle,
         };
 
@@ -853,7 +859,10 @@ impl Device {
                 );
                 if local_egl_surface == egl::NO_SURFACE {
                     let windowing_api_error = egl.GetError().to_windowing_api_error();
-                    return Err((Error::SurfaceImportFailed(windowing_api_error), surface));
+                    return Err((
+                        Error::SurfaceImportFailed(windowing_api_error),
+                        surface.into(),
+                    ));
                 }
 
                 let mut local_keyed_mutex: *mut IDXGIKeyedMutex = ptr::null_mut();
@@ -889,13 +898,13 @@ impl Device {
     fn create_surface_texture_from_local_surface(
         &self,
         context: &Context,
-        surface: Surface,
+        surface: AngleSurface,
         local_egl_surface: EGLSurface,
         local_keyed_mutex: Option<ComPtr<IDXGIKeyedMutex>>,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
         let context = match context.angle() {
             Ok(context) => context,
-            Err(error) => return Err((error, surface)),
+            Err(error) => return Err((error, surface.into())),
         };
 
         EGL_FUNCTIONS.with(|egl| {
@@ -913,7 +922,7 @@ impl Device {
                     let windowing_api_error = egl.GetError().to_windowing_api_error();
                     return Err((
                         Error::SurfaceTextureCreationFailed(windowing_api_error),
-                        surface,
+                        surface.into(),
                     ));
                 }
 
@@ -926,13 +935,14 @@ impl Device {
                 gl.bind_texture(gl::TEXTURE_2D, None);
                 debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
 
-                Ok(SurfaceTexture {
+                Ok(AngleSurfaceTexture {
                     surface,
                     local_egl_surface,
                     local_keyed_mutex,
                     gl_texture: Some(texture),
                     phantom: PhantomData,
-                })
+                }
+                .into())
             }
         })
     }
@@ -968,6 +978,7 @@ impl Device {
         surface: &mut Surface,
     ) -> Result<(), Error> {
         let context = context.angle()?;
+        let surface: &mut AngleSurface = surface.try_into()?;
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
@@ -1004,12 +1015,13 @@ impl Device {
     pub fn destroy_surface_texture(
         &self,
         context: &mut Context,
-        mut surface_texture: SurfaceTexture,
+        surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         let context = match context.angle() {
             Ok(context) => context,
             Err(error) => return Err((error, surface_texture)),
         };
+        let mut surface_texture: AngleSurfaceTexture = surface_texture.try_into()?;
 
         unsafe {
             if let Some(texture) = surface_texture.gl_texture.take() {
@@ -1031,7 +1043,7 @@ impl Device {
             })
         }
 
-        Ok(surface_texture.surface)
+        Ok(surface_texture.surface.into())
     }
 
     /// Returns the OpenGL texture target needed to read from this surface texture.
@@ -1059,7 +1071,7 @@ impl Device {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        surface.present(self)
+        surface.angle()?.present(self)
     }
 
     /// Resizes a widget surface.
@@ -1069,6 +1081,7 @@ impl Device {
         surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
+        let surface: &mut AngleSurface = surface.try_into()?;
         surface.resize(size);
         Ok(())
     }
@@ -1081,12 +1094,7 @@ impl Device {
     /// 0, the default framebuffer, depending on platform.
     #[inline]
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        SurfaceInfo {
-            size: surface.size,
-            id: surface.id(),
-            context_id: surface.context_id,
-            framebuffer_object: None,
-        }
+        surface.angle().expect("Incompatible surface type").info()
     }
 
     /// Returns the OpenGL texture object containing the contents of this surface.
@@ -1097,7 +1105,7 @@ impl Device {
         &self,
         surface_texture: &SurfaceTexture,
     ) -> Option<glow::Texture> {
-        surface_texture.gl_texture
+        surface_texture.angle().ok()?.gl_texture
     }
 }
 

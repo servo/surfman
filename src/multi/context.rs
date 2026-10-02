@@ -3,9 +3,10 @@
 use euclid::default::Size2D;
 
 use super::device::Device;
-use super::surface::Surface;
 use crate::device::Device as DeviceInterface;
-use crate::{Context, ContextAttributes, ContextDescriptor, ContextID, Error, SurfaceInfo};
+use crate::{
+    Context, ContextAttributes, ContextDescriptor, ContextID, Error, Surface, SurfaceInfo,
+};
 
 use std::os::raw::c_void;
 
@@ -94,21 +95,11 @@ where
     pub fn bind_surface_to_context(
         &self,
         context: &mut Context,
-        surface: Surface<Def, Alt>,
-    ) -> Result<(), (Error, Surface<Def, Alt>)> {
+        surface: Surface,
+    ) -> Result<(), (Error, Surface)> {
         match self {
-            Device::Default(device) => match surface {
-                Surface::Default(surface) => device
-                    .bind_surface_to_context(context, surface)
-                    .map_err(|(err, surface)| (err, Surface::Default(surface))),
-                _ => Err((Error::IncompatibleSurface, surface)),
-            },
-            Device::Alternate(device) => match surface {
-                Surface::Alternate(surface) => device
-                    .bind_surface_to_context(context, surface)
-                    .map_err(|(err, surface)| (err, Surface::Alternate(surface))),
-                _ => Err((Error::IncompatibleSurface, surface)),
-            },
+            Device::Default(device) => device.bind_surface_to_context(context, surface),
+            Device::Alternate(device) => device.bind_surface_to_context(context, surface),
         }
     }
 
@@ -119,14 +110,10 @@ where
     pub fn unbind_surface_from_context(
         &self,
         context: &mut Context,
-    ) -> Result<Option<Surface<Def, Alt>>, Error> {
+    ) -> Result<Option<Surface>, Error> {
         match self {
-            Device::Default(device) => device
-                .unbind_surface_from_context(context)
-                .map(|surface| surface.map(Surface::Default)),
-            Device::Alternate(device) => device
-                .unbind_surface_from_context(context)
-                .map(|surface| surface.map(Surface::Alternate)),
+            Device::Default(device) => device.unbind_surface_from_context(context),
+            Device::Alternate(device) => device.unbind_surface_from_context(context),
         }
     }
 

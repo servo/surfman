@@ -9,7 +9,7 @@ use crate::base::egl::error::ToWindowingApiError;
 use crate::base::egl::surface::ExternalEGLSurfaces;
 use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::egl::types::{EGLConfig, EGLDisplay, EGLint};
-use crate::hardware_buffer::surface::SurfaceObjects;
+use crate::hardware_buffer::surface::{HardwareBufferSurface, SurfaceObjects};
 use crate::surface::Framebuffer;
 use crate::Adapter;
 use crate::{egl, ContextDescriptor, EglContextDescriptor, Surface};
@@ -207,16 +207,14 @@ impl Device {
     /// The context must have been created on this device.
     pub fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
         {
-            let framebuffer = {
-                let context: &mut HardwareBufferContext = context.try_into()?;
-                if context.egl_context == egl::NO_CONTEXT {
-                    return Ok(());
-                }
-                mem::replace(&mut context.framebuffer, Framebuffer::None)
-            };
+            let context: &mut HardwareBufferContext = context.try_into()?;
+            if context.egl_context == egl::NO_CONTEXT {
+                return Ok(());
+            }
+            let framebuffer = mem::replace(&mut context.framebuffer, Framebuffer::None);
 
             if let Framebuffer::Surface(mut target) = framebuffer {
-                self.destroy_surface(context, &mut target)?;
+                self.destroy_surface_inner(context, &mut target)?;
             }
         };
 
@@ -271,12 +269,12 @@ impl Device {
             let egl_context = context.egl_context;
 
             let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
-                Framebuffer::Surface(Surface {
+                Framebuffer::Surface(HardwareBufferSurface {
                     objects: SurfaceObjects::Window { egl_surface },
                     ..
                 }) => (egl_surface, egl_surface),
                 Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
-                Framebuffer::Surface(Surface {
+                Framebuffer::Surface(HardwareBufferSurface {
                     objects: SurfaceObjects::HardwareBuffer { .. },
                     ..
                 }) => (context.pbuffer, context.pbuffer),
@@ -322,14 +320,19 @@ impl Device {
             Ok(context) => context,
             Err(error) => return Err((error, new_surface)),
         };
+        let new_surface: HardwareBufferSurface = new_surface.try_into()?;
 
         if context.id != new_surface.context_id {
-            return Err((Error::IncompatibleSurface, new_surface));
+            return Err((Error::IncompatibleSurface, new_surface.into()));
         }
 
         match context.framebuffer {
-            Framebuffer::External { .. } => return Err((Error::ExternalRenderTarget, new_surface)),
-            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, new_surface)),
+            Framebuffer::External { .. } => {
+                return Err((Error::ExternalRenderTarget, new_surface.into()))
+            }
+            Framebuffer::Surface(_) => {
+                return Err((Error::SurfaceAlreadyBound, new_surface.into()))
+            }
             Framebuffer::None => {}
         }
 
@@ -361,7 +364,7 @@ impl Device {
         };
 
         match mem::replace(&mut context.framebuffer, Framebuffer::None) {
-            Framebuffer::Surface(surface) => Ok(Some(surface)),
+            Framebuffer::Surface(surface) => Ok(Some(surface.into())),
             Framebuffer::External { .. } | Framebuffer::None => unreachable!(),
         }
     }
@@ -390,6 +393,36 @@ impl Device {
             surface.resize(size);
         }
         Ok(())
+    }
+
+    /// Destroys a surface.
+    ///
+    /// The supplied context must be the context the surface is associated with, or this returns
+    /// an `IncompatibleSurface` error.
+    ///
+    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
+    /// the `drop` method.
+    pub fn destroy_surface(
+        &self,
+        context: &mut Context,
+        surface: &mut Surface,
+    ) -> Result<(), Error> {
+        let context: &mut HardwareBufferContext = context.try_into()?;
+        let surface: &mut HardwareBufferSurface = surface.try_into()?;
+        self.destroy_surface_inner(context, surface)
+    }
+
+    /// Returns various information about the surface, including the framebuffer object needed to
+    /// render to this surface.
+    ///
+    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
+    /// on the framebuffer object returned by this function. This framebuffer object may or not be
+    /// 0, the default framebuffer, depending on platform.
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        surface
+            .hardware_buffer()
+            .expect("Incompatible surface type")
+            .info()
     }
 
     /// Returns the attributes that the context descriptor was created with.
@@ -457,7 +490,7 @@ impl Device {
         match context.framebuffer {
             Framebuffer::None => Ok(None),
             Framebuffer::External { .. } => Err(Error::ExternalRenderTarget),
-            Framebuffer::Surface(ref surface) => Ok(Some(self.surface_info(surface))),
+            Framebuffer::Surface(ref surface) => Ok(Some(surface.info())),
         }
     }
 
@@ -467,12 +500,12 @@ impl Device {
             .hardware_buffer()
             .expect("Passed incorrect context type");
         let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
-            Framebuffer::Surface(Surface {
+            Framebuffer::Surface(HardwareBufferSurface {
                 objects: SurfaceObjects::Window { egl_surface },
                 ..
             }) => (egl_surface, egl_surface),
             Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
-            Framebuffer::Surface(Surface {
+            Framebuffer::Surface(HardwareBufferSurface {
                 objects: SurfaceObjects::HardwareBuffer { .. },
                 ..
             }) => (context.pbuffer, context.pbuffer),

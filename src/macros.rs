@@ -36,7 +36,6 @@ macro_rules! implement_interfaces {
         mod implementation {
             use super::connection::Connection;
             use super::device::Device;
-            use super::surface::{Surface, SurfaceTexture};
             use euclid::default::Size2D;
             use glow::Texture;
             use std::os::raw::c_void;
@@ -46,8 +45,8 @@ macro_rules! implement_interfaces {
             use $crate::info::GLApi;
             use $crate::Error;
             use $crate::{
-                Context, ContextAttributes, ContextDescriptor, ContextID, SurfaceAccess,
-                SurfaceInfo, SurfaceType,
+                Context, ContextAttributes, ContextDescriptor, ContextID, Surface, SurfaceAccess,
+                SurfaceInfo, SurfaceTexture, SurfaceType,
             };
 
             impl ConnectionInterface for Connection {
@@ -86,8 +85,6 @@ macro_rules! implement_interfaces {
 
             impl DeviceInterface for Device {
                 type Connection = Connection;
-                type Surface = Surface;
-                type SurfaceTexture = SurfaceTexture;
 
                 // device.rs
 
@@ -162,8 +159,8 @@ macro_rules! implement_interfaces {
                 fn bind_surface_to_context(
                     &self,
                     context: &mut Context,
-                    surface: Self::Surface,
-                ) -> Result<(), (Error, Self::Surface)> {
+                    surface: Surface,
+                ) -> Result<(), (Error, Surface)> {
                     Device::bind_surface_to_context(self, context, surface)
                 }
 
@@ -171,7 +168,7 @@ macro_rules! implement_interfaces {
                 fn unbind_surface_from_context(
                     &self,
                     context: &mut Context,
-                ) -> Result<Option<Self::Surface>, Error> {
+                ) -> Result<Option<Surface>, Error> {
                     Device::unbind_surface_from_context(self, context)
                 }
 
@@ -196,7 +193,7 @@ macro_rules! implement_interfaces {
                     context: &Context,
                     surface_access: SurfaceAccess,
                     surface_type: SurfaceType<'_>,
-                ) -> Result<Self::Surface, Error> {
+                ) -> Result<Surface, Error> {
                     Device::create_surface(self, context, surface_access, surface_type)
                 }
 
@@ -204,8 +201,8 @@ macro_rules! implement_interfaces {
                 fn create_surface_texture(
                     &self,
                     context: &mut Context,
-                    surface: Self::Surface,
-                ) -> Result<Self::SurfaceTexture, (Error, Self::Surface)> {
+                    surface: Surface,
+                ) -> Result<SurfaceTexture, (Error, Surface)> {
                     Device::create_surface_texture(self, context, surface)
                 }
 
@@ -213,7 +210,7 @@ macro_rules! implement_interfaces {
                 fn destroy_surface(
                     &self,
                     context: &mut Context,
-                    surface: &mut Self::Surface,
+                    surface: &mut Surface,
                 ) -> Result<(), Error> {
                     Device::destroy_surface(self, context, surface)
                 }
@@ -222,8 +219,8 @@ macro_rules! implement_interfaces {
                 fn destroy_surface_texture(
                     &self,
                     context: &mut Context,
-                    surface_texture: Self::SurfaceTexture,
-                ) -> Result<Self::Surface, (Error, Self::SurfaceTexture)> {
+                    surface_texture: SurfaceTexture,
+                ) -> Result<Surface, (Error, SurfaceTexture)> {
                     Device::destroy_surface_texture(self, context, surface_texture)
                 }
 
@@ -241,7 +238,7 @@ macro_rules! implement_interfaces {
                 fn present_surface(
                     &self,
                     context: &Context,
-                    surface: &mut Self::Surface,
+                    surface: &mut Surface,
                 ) -> Result<(), Error> {
                     Device::present_surface(self, context, surface)
                 }
@@ -266,14 +263,14 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn surface_info(&self, surface: &Self::Surface) -> SurfaceInfo {
+                fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
                     Device::surface_info(self, surface)
                 }
 
                 #[inline]
                 fn surface_texture_object(
                     &self,
-                    surface_texture: &Self::SurfaceTexture,
+                    surface_texture: &SurfaceTexture,
                 ) -> Option<Texture> {
                     Device::surface_texture_object(self, surface_texture)
                 }
@@ -299,6 +296,17 @@ macro_rules! enum_conversion {
                 match value {
                     $enum::$variant(inner) => Ok(inner),
                     _ => Err(crate::Error::$error),
+                }
+            }
+        }
+
+        impl TryFrom<$enum> for $type {
+            type Error = (crate::Error, $enum);
+            fn try_from(value: $enum) -> Result<$type, Self::Error> {
+                #[allow(unreachable_patterns)]
+                match value {
+                    $enum::$variant(inner) => Ok(inner),
+                    _ => Err((crate::Error::$error, value)),
                 }
             }
         }

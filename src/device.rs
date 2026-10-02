@@ -2,8 +2,8 @@
 
 use super::connection::Connection as ConnectionInterface;
 use crate::{
-    Adapter, Context, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi, SurfaceAccess,
-    SurfaceInfo, SurfaceType,
+    Adapter, Context, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi, Surface,
+    SurfaceAccess, SurfaceInfo, SurfaceTexture, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -19,10 +19,6 @@ where
 {
     /// The connection type associated with this device.
     type Connection;
-    /// The surface type associated with this device.
-    type Surface;
-    /// The surface texture type associated with this device.
-    type SurfaceTexture;
 
     // device.rs
 
@@ -102,17 +98,14 @@ where
     fn bind_surface_to_context(
         &self,
         context: &mut Context,
-        surface: Self::Surface,
-    ) -> Result<(), (Error, Self::Surface)>;
+        surface: Surface,
+    ) -> Result<(), (Error, Surface)>;
 
     /// Removes and returns any attached surface from this context.
     ///
     /// Any pending OpenGL commands targeting this surface will be automatically flushed, so the
     /// surface is safe to read from immediately when this function returns.
-    fn unbind_surface_from_context(
-        &self,
-        context: &mut Context,
-    ) -> Result<Option<Self::Surface>, Error>;
+    fn unbind_surface_from_context(&self, context: &mut Context) -> Result<Option<Surface>, Error>;
 
     /// Returns a unique ID representing a context.
     ///
@@ -136,7 +129,7 @@ where
         context: &Context,
         surface_access: SurfaceAccess,
         surface_type: SurfaceType<'_>,
-    ) -> Result<Self::Surface, Error>;
+    ) -> Result<Surface, Error>;
 
     /// Creates a surface texture from an existing generic surface for use with the given context.
     ///
@@ -151,8 +144,8 @@ where
     fn create_surface_texture(
         &self,
         context: &mut Context,
-        surface: Self::Surface,
-    ) -> Result<Self::SurfaceTexture, (Error, Self::Surface)>;
+        surface: Surface,
+    ) -> Result<SurfaceTexture, (Error, Surface)>;
 
     /// Destroys a surface.
     ///
@@ -161,11 +154,7 @@ where
     ///
     /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
     /// the `drop` method.
-    fn destroy_surface(
-        &self,
-        context: &mut Context,
-        surface: &mut Self::Surface,
-    ) -> Result<(), Error>;
+    fn destroy_surface(&self, context: &mut Context, surface: &mut Surface) -> Result<(), Error>;
 
     /// Destroys a surface texture and returns the underlying surface.
     ///
@@ -177,8 +166,8 @@ where
     fn destroy_surface_texture(
         &self,
         context: &mut Context,
-        surface_texture: Self::SurfaceTexture,
-    ) -> Result<Self::Surface, (Error, Self::SurfaceTexture)>;
+        surface_texture: SurfaceTexture,
+    ) -> Result<Surface, (Error, SurfaceTexture)>;
 
     /// Returns the OpenGL texture target needed to read from this surface texture.
     ///
@@ -199,7 +188,7 @@ where
     ///
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    fn present_surface(&self, context: &Context, surface: &mut Self::Surface) -> Result<(), Error>;
+    fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error>;
 
     /// If the currently bound surface is a widget surface, resize it,
     fn resize_bound_surface(&self, context: &mut Context, size: Size2D<i32>) -> Result<(), Error>;
@@ -208,7 +197,7 @@ where
     fn resize_surface(
         &self,
         context: &Context,
-        surface: &mut Self::Surface,
+        surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error>;
 
@@ -218,10 +207,10 @@ where
     /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
     /// on the framebuffer object returned by this function. This framebuffer object may or not be
     /// 0, the default framebuffer, depending on platform.
-    fn surface_info(&self, surface: &Self::Surface) -> SurfaceInfo;
+    fn surface_info(&self, surface: &Surface) -> SurfaceInfo;
 
     /// Returns the OpenGL texture object containing the contents of this surface.
     ///
     /// It is only legal to read from, not write to, this texture object.
-    fn surface_texture_object(&self, surface_texture: &Self::SurfaceTexture) -> Option<Texture>;
+    fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture>;
 }

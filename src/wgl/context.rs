@@ -3,9 +3,9 @@
 //! Wrapper for WGL contexts on Windows.
 
 use super::device::HiddenWindow;
-use super::surface::Surface;
 use crate::gl;
 use crate::surface::Framebuffer;
+use crate::wgl::surface::WglSurface;
 use crate::Gl;
 use crate::{ContextID, Error, GLVersion};
 use glow::HasContext;
@@ -99,7 +99,7 @@ pub struct WglContext {
     pub(crate) id: ContextID,
     pub(crate) gl: Gl,
     pub(crate) hidden_window: Option<HiddenWindow>,
-    pub(crate) framebuffer: Framebuffer<Surface, ()>,
+    pub(crate) framebuffer: Framebuffer<WglSurface, ()>,
     pub(crate) status: ContextStatus,
 }
 

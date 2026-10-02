@@ -9,10 +9,9 @@
 use super::connection::Connection;
 use super::context::NativeContext;
 use super::device::Device;
-use super::surface::Surface;
 use crate::{
     gl, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
-    ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference,
+    ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference, Surface,
     SurfaceAccess, SurfaceType, WindowingApiError,
 };
 
