@@ -1,13 +1,12 @@
 //! A device abstraction that allows the choice of backends dynamically.
 
 use super::connection::Connection;
-use super::surface::{Surface, SurfaceTexture};
 use crate::connection::Connection as ConnectionInterface;
 use crate::context::ContextAttributes;
 use crate::device::Device as DeviceInterface;
 use crate::{
-    Adapter, Context, ContextDescriptor, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo,
-    SurfaceType,
+    Adapter, Context, ContextDescriptor, ContextID, Error, GLApi, Surface, SurfaceAccess,
+    SurfaceInfo, SurfaceTexture, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -68,8 +67,6 @@ where
     Alt::Connection: ConnectionInterface<Device = Alt>,
 {
     type Connection = Connection<Def, Alt>;
-    type Surface = Surface<Def, Alt>;
-    type SurfaceTexture = SurfaceTexture<Def, Alt>;
 
     // device.rs
 
@@ -144,16 +141,13 @@ where
     fn bind_surface_to_context(
         &self,
         context: &mut Context,
-        surface: Surface<Def, Alt>,
-    ) -> Result<(), (Error, Surface<Def, Alt>)> {
+        surface: Surface,
+    ) -> Result<(), (Error, Surface)> {
         Device::bind_surface_to_context(self, context, surface)
     }
 
     #[inline]
-    fn unbind_surface_from_context(
-        &self,
-        context: &mut Context,
-    ) -> Result<Option<Surface<Def, Alt>>, Error> {
+    fn unbind_surface_from_context(&self, context: &mut Context) -> Result<Option<Surface>, Error> {
         Device::unbind_surface_from_context(self, context)
     }
 
@@ -175,7 +169,7 @@ where
         context: &Context,
         surface_access: SurfaceAccess,
         surface_type: SurfaceType<'_>,
-    ) -> Result<Surface<Def, Alt>, Error> {
+    ) -> Result<Surface, Error> {
         Device::create_surface(self, context, surface_access, surface_type)
     }
 
@@ -183,17 +177,13 @@ where
     fn create_surface_texture(
         &self,
         context: &mut Context,
-        surface: Surface<Def, Alt>,
-    ) -> Result<SurfaceTexture<Def, Alt>, (Error, Surface<Def, Alt>)> {
+        surface: Surface,
+    ) -> Result<SurfaceTexture, (Error, Surface)> {
         Device::create_surface_texture(self, context, surface)
     }
 
     #[inline]
-    fn destroy_surface(
-        &self,
-        context: &mut Context,
-        surface: &mut Surface<Def, Alt>,
-    ) -> Result<(), Error> {
+    fn destroy_surface(&self, context: &mut Context, surface: &mut Surface) -> Result<(), Error> {
         Device::destroy_surface(self, context, surface)
     }
 
@@ -201,8 +191,8 @@ where
     fn destroy_surface_texture(
         &self,
         context: &mut Context,
-        surface_texture: SurfaceTexture<Def, Alt>,
-    ) -> Result<Surface<Def, Alt>, (Error, SurfaceTexture<Def, Alt>)> {
+        surface_texture: SurfaceTexture,
+    ) -> Result<Surface, (Error, SurfaceTexture)> {
         Device::destroy_surface_texture(self, context, surface_texture)
     }
 
@@ -222,11 +212,7 @@ where
     }
 
     #[inline]
-    fn present_surface(
-        &self,
-        context: &Context,
-        surface: &mut Surface<Def, Alt>,
-    ) -> Result<(), Error> {
+    fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         Device::present_surface(self, context, surface)
     }
 
@@ -234,22 +220,19 @@ where
     fn resize_surface(
         &self,
         context: &Context,
-        surface: &mut Surface<Def, Alt>,
+        surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
         Device::resize_surface(self, context, surface, size)
     }
 
     #[inline]
-    fn surface_info(&self, surface: &Surface<Def, Alt>) -> SurfaceInfo {
+    fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
         Device::surface_info(self, surface)
     }
 
     #[inline]
-    fn surface_texture_object(
-        &self,
-        surface_texture: &SurfaceTexture<Def, Alt>,
-    ) -> Option<Texture> {
+    fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         Device::surface_texture_object(self, surface_texture)
     }
 }

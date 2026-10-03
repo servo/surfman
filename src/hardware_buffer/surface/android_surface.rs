@@ -12,7 +12,6 @@ use super::super::android_ffi::{
     AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER, AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER,
 };
 use super::super::device::Device;
-use super::{Surface, SurfaceTexture};
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGLImageKHR;
 use crate::base::egl::ffi::EGL_EXTENSION_FUNCTIONS;
@@ -23,9 +22,11 @@ use crate::egl::types::{EGLSurface, EGLint};
 use crate::gl;
 use crate::gl_utils;
 use crate::hardware_buffer::context::HardwareBufferContext;
+use crate::hardware_buffer::surface::{HardwareBufferSurface, HardwareBufferSurfaceTexture};
 use crate::renderbuffers::Renderbuffers;
 use crate::{egl, Context};
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, WindowingApiError};
+use crate::{Error, SurfaceAccess, SurfaceType, WindowingApiError};
+use crate::{Surface, SurfaceTexture};
 
 use euclid::default::Size2D;
 use glow::{HasContext, Texture};
@@ -125,7 +126,7 @@ impl Device {
                 gl::FRAMEBUFFER_COMPLETE
             );
 
-            Ok(Surface {
+            Ok(HardwareBufferSurface {
                 size: *size,
                 context_id: concrete_context.id,
                 objects: SurfaceObjects::HardwareBuffer {
@@ -136,7 +137,8 @@ impl Device {
                     renderbuffers,
                 },
                 destroyed: false,
-            })
+            }
+            .into())
         }
     }
 
@@ -158,12 +160,13 @@ impl Device {
             );
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
-            Ok(Surface {
+            Ok(HardwareBufferSurface {
                 context_id: context.id,
                 size: Size2D::new(width, height),
                 objects: SurfaceObjects::Window { egl_surface },
                 destroyed: false,
-            })
+            }
+            .into())
         })
     }
 
@@ -182,19 +185,20 @@ impl Device {
         context: &mut Context,
         surface: Surface,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
+        let surface: HardwareBufferSurface = surface.try_into()?;
         unsafe {
             match surface.objects {
-                SurfaceObjects::Window { .. } => Err((Error::WidgetAttached, surface)),
+                SurfaceObjects::Window { .. } => Err((Error::WidgetAttached, surface.into())),
                 SurfaceObjects::HardwareBuffer {
                     hardware_buffer, ..
                 } => {
                     let _guard = match self.temporarily_make_context_current(context) {
                         Ok(guard) => guard,
-                        Err(err) => return Err((err, surface)),
+                        Err(err) => return Err((err, surface.into())),
                     };
                     let context: &mut HardwareBufferContext = match context.try_into() {
                         Ok(context) => context,
-                        Err(error) => return Err((error, surface)),
+                        Err(error) => return Err((error, surface.into())),
                     };
 
                     let gl = &context.gl;
@@ -204,12 +208,13 @@ impl Device {
                         gl,
                         local_egl_image,
                     );
-                    Ok(SurfaceTexture {
+                    Ok(HardwareBufferSurfaceTexture {
                         surface,
                         local_egl_image,
                         texture_object: Some(texture_object),
                         phantom: PhantomData,
-                    })
+                    }
+                    .into())
                 }
             }
         }
@@ -249,19 +254,11 @@ impl Device {
         egl_image
     }
 
-    /// Destroys a surface.
-    ///
-    /// The supplied context must be the context the surface is associated with, or this returns
-    /// an `IncompatibleSurface` error.
-    ///
-    /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
-    /// the `drop` method.
-    pub fn destroy_surface(
+    pub(crate) fn destroy_surface_inner(
         &self,
-        context: &mut Context,
-        surface: &mut Surface,
+        context: &mut HardwareBufferContext,
+        surface: &mut HardwareBufferSurface,
     ) -> Result<(), Error> {
-        let context: &mut HardwareBufferContext = context.try_into()?;
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
@@ -318,14 +315,16 @@ impl Device {
     pub fn destroy_surface_texture(
         &self,
         context: &mut Context,
-        mut surface_texture: SurfaceTexture,
+        surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
         let _guard = self.temporarily_make_context_current(context);
         let context: &mut HardwareBufferContext = match context.try_into() {
             Ok(context) => context,
             Err(error) => return Err((error, surface_texture)),
         };
+        let mut surface_texture: HardwareBufferSurfaceTexture = surface_texture.try_into()?;
         let gl = &context.gl;
+
         unsafe {
             if let Some(texture) = surface_texture.texture_object.take() {
                 gl.delete_texture(texture);
@@ -340,7 +339,7 @@ impl Device {
             surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
         }
 
-        Ok(surface_texture.surface)
+        Ok(surface_texture.surface.into())
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
@@ -358,41 +357,12 @@ impl Device {
         SURFACE_GL_TEXTURE_TARGET
     }
 
-    /// Returns various information about the surface, including the framebuffer object needed to
-    /// render to this surface.
-    ///
-    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
-    /// on the framebuffer object returned by this function. This framebuffer object may or not be
-    /// 0, the default framebuffer, depending on platform.
-    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        SurfaceInfo {
-            size: surface.size,
-            id: surface.id(),
-            context_id: surface.context_id,
-            framebuffer_object: match surface.objects {
-                SurfaceObjects::HardwareBuffer {
-                    framebuffer_object, ..
-                } => framebuffer_object,
-                SurfaceObjects::Window { .. } => None,
-            },
-        }
-    }
-
     /// Returns the OpenGL texture object containing the contents of this surface.
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
-        surface_texture.texture_object
-    }
-}
-
-impl Surface {
-    pub(super) fn id(&self) -> SurfaceID {
-        match self.objects {
-            SurfaceObjects::HardwareBuffer { egl_image, .. } => SurfaceID(egl_image as usize),
-            SurfaceObjects::Window { egl_surface } => SurfaceID(egl_surface as usize),
-        }
+        surface_texture.hardware_buffer().ok()?.texture_object
     }
 }
 

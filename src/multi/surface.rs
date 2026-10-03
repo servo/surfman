@@ -2,78 +2,9 @@
 
 use super::device::Device;
 use crate::device::Device as DeviceInterface;
-use crate::{Context, Error, SurfaceAccess, SurfaceInfo, SurfaceType};
+use crate::{Context, Error, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture, SurfaceType};
 use euclid::default::Size2D;
 use glow::Texture;
-
-use std::fmt::{self, Debug, Formatter};
-
-/// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
-/// displayed in a native widget or bound to a texture for reading.
-///
-/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
-/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
-/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
-/// widget but not bound to a texture.
-///
-/// Surfaces are specific to a given context and cannot be rendered to from any context other than
-/// the one they were created with. However, they can be *read* from any context on any thread (as
-/// long as that context shares the same adapter and connection), by wrapping them in a
-/// `SurfaceTexture`.
-///
-/// Depending on the platform, each surface may be internally double-buffered.
-///
-/// Surfaces must be destroyed with the `destroy_surface()` method, or a panic will occur.
-pub enum Surface<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    /// The default surface type.
-    Default(Def::Surface),
-    /// The alternate surface type.
-    Alternate(Alt::Surface),
-}
-
-/// Represents an OpenGL texture that wraps a surface.
-///
-/// Reading from the associated OpenGL texture reads from the surface. It is undefined behavior to
-/// write to such a texture (e.g. by binding it to a framebuffer and rendering to that
-/// framebuffer).
-///
-/// Surface textures are local to a context, but that context does not have to be the same context
-/// as that associated with the underlying surface. The texture must be destroyed with the
-/// `destroy_surface_texture()` method, or a panic will occur.
-pub enum SurfaceTexture<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    /// The default surface texture type.
-    Default(Def::SurfaceTexture),
-    /// The alternate surface texture type.
-    Alternate(Alt::SurfaceTexture),
-}
-
-impl<Def, Alt> Debug for Surface<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface")
-    }
-}
-
-impl<Def, Alt> Debug for SurfaceTexture<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-{
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "SurfaceTexture")
-    }
-}
 
 impl<Def, Alt> Device<Def, Alt>
 where
@@ -89,14 +20,12 @@ where
         context: &Context,
         surface_access: SurfaceAccess,
         surface_type: SurfaceType<'_>,
-    ) -> Result<Surface<Def, Alt>, Error> {
+    ) -> Result<Surface, Error> {
         match self {
-            Device::Default(device) => device
-                .create_surface(context, surface_access, surface_type)
-                .map(Surface::Default),
-            Device::Alternate(device) => device
-                .create_surface(context, surface_access, surface_type)
-                .map(Surface::Alternate),
+            Device::Default(device) => device.create_surface(context, surface_access, surface_type),
+            Device::Alternate(device) => {
+                device.create_surface(context, surface_access, surface_type)
+            }
         }
     }
 
@@ -113,27 +42,11 @@ where
     pub fn create_surface_texture(
         &self,
         context: &mut Context,
-        surface: Surface<Def, Alt>,
-    ) -> Result<SurfaceTexture<Def, Alt>, (Error, Surface<Def, Alt>)> {
+        surface: Surface,
+    ) -> Result<SurfaceTexture, (Error, Surface)> {
         match self {
-            Device::Default(device) => match surface {
-                Surface::Default(surface) => {
-                    match device.create_surface_texture(context, surface) {
-                        Ok(surface_texture) => Ok(SurfaceTexture::Default(surface_texture)),
-                        Err((err, surface)) => Err((err, Surface::Default(surface))),
-                    }
-                }
-                _ => Err((Error::IncompatibleSurface, surface)),
-            },
-            Device::Alternate(device) => match surface {
-                Surface::Alternate(surface) => {
-                    match device.create_surface_texture(context, surface) {
-                        Ok(surface_texture) => Ok(SurfaceTexture::Alternate(surface_texture)),
-                        Err((err, surface)) => Err((err, Surface::Alternate(surface))),
-                    }
-                }
-                _ => Err((Error::IncompatibleSurface, surface)),
-            },
+            Device::Default(device) => device.create_surface_texture(context, surface),
+            Device::Alternate(device) => device.create_surface_texture(context, surface),
         }
     }
 
@@ -147,17 +60,11 @@ where
     pub fn destroy_surface(
         &self,
         context: &mut Context,
-        surface: &mut Surface<Def, Alt>,
+        surface: &mut Surface,
     ) -> Result<(), Error> {
         match self {
-            Device::Default(device) => match *surface {
-                Surface::Default(ref mut surface) => device.destroy_surface(context, surface),
-                _ => Err(Error::IncompatibleSurface),
-            },
-            Device::Alternate(device) => match *surface {
-                Surface::Alternate(ref mut surface) => device.destroy_surface(context, surface),
-                _ => Err(Error::IncompatibleSurface),
-            },
+            Device::Default(device) => device.destroy_surface(context, surface),
+            Device::Alternate(device) => device.destroy_surface(context, surface),
         }
     }
 
@@ -171,31 +78,11 @@ where
     pub fn destroy_surface_texture(
         &self,
         context: &mut Context,
-        surface_texture: SurfaceTexture<Def, Alt>,
-    ) -> Result<Surface<Def, Alt>, (Error, SurfaceTexture<Def, Alt>)> {
+        surface_texture: SurfaceTexture,
+    ) -> Result<Surface, (Error, SurfaceTexture)> {
         match self {
-            Device::Default(device) => match surface_texture {
-                SurfaceTexture::Default(surface_texture) => {
-                    match device.destroy_surface_texture(context, surface_texture) {
-                        Ok(surface) => Ok(Surface::Default(surface)),
-                        Err((err, surface_texture)) => {
-                            Err((err, SurfaceTexture::Default(surface_texture)))
-                        }
-                    }
-                }
-                _ => Err((Error::IncompatibleSurfaceTexture, surface_texture)),
-            },
-            Device::Alternate(device) => match surface_texture {
-                SurfaceTexture::Alternate(surface_texture) => {
-                    match device.destroy_surface_texture(context, surface_texture) {
-                        Ok(surface) => Ok(Surface::Alternate(surface)),
-                        Err((err, surface_texture)) => {
-                            Err((err, SurfaceTexture::Alternate(surface_texture)))
-                        }
-                    }
-                }
-                _ => Err((Error::IncompatibleSurfaceTexture, surface_texture)),
-            },
+            Device::Default(device) => device.destroy_surface_texture(context, surface_texture),
+            Device::Alternate(device) => device.destroy_surface_texture(context, surface_texture),
         }
     }
 
@@ -206,20 +93,10 @@ where
     ///
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(
-        &self,
-        context: &Context,
-        surface: &mut Surface<Def, Alt>,
-    ) -> Result<(), Error> {
+    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         match self {
-            Device::Default(device) => match *surface {
-                Surface::Default(ref mut surface) => device.present_surface(context, surface),
-                _ => Err(Error::IncompatibleSurface),
-            },
-            Device::Alternate(device) => match *surface {
-                Surface::Alternate(ref mut surface) => device.present_surface(context, surface),
-                _ => Err(Error::IncompatibleSurface),
-            },
+            Device::Default(device) => device.present_surface(context, surface),
+            Device::Alternate(device) => device.present_surface(context, surface),
         }
     }
 
@@ -227,20 +104,12 @@ where
     pub fn resize_surface(
         &self,
         context: &Context,
-        surface: &mut Surface<Def, Alt>,
+        surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
         match self {
-            Device::Default(device) => match *surface {
-                Surface::Default(ref mut surface) => device.resize_surface(context, surface, size),
-                _ => Err(Error::IncompatibleSurface),
-            },
-            Device::Alternate(device) => match *surface {
-                Surface::Alternate(ref mut surface) => {
-                    device.resize_surface(context, surface, size)
-                }
-                _ => Err(Error::IncompatibleSurface),
-            },
+            Device::Default(device) => device.resize_surface(context, surface, size),
+            Device::Alternate(device) => device.resize_surface(context, surface, size),
         }
     }
 
@@ -261,33 +130,20 @@ where
     /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
     /// on the framebuffer object returned by this function. This framebuffer object may or not be
     /// 0, the default framebuffer, depending on platform.
-    pub fn surface_info(&self, surface: &Surface<Def, Alt>) -> SurfaceInfo {
-        match (self, surface) {
-            (Device::Default(device), Surface::Default(ref surface)) => {
-                device.surface_info(surface)
-            }
-            (Device::Alternate(device), Surface::Alternate(ref surface)) => {
-                device.surface_info(surface)
-            }
-            _ => panic!("Incompatible context!"),
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        match self {
+            Device::Default(device) => device.surface_info(surface),
+            Device::Alternate(device) => device.surface_info(surface),
         }
     }
 
     /// Returns the OpenGL texture object containing the contents of this surface.
     ///
     /// It is only legal to read from, not write to, this texture object.
-    pub fn surface_texture_object(
-        &self,
-        surface_texture: &SurfaceTexture<Def, Alt>,
-    ) -> Option<Texture> {
-        match (self, surface_texture) {
-            (Device::Default(device), SurfaceTexture::Default(ref surface_texture)) => {
-                device.surface_texture_object(surface_texture)
-            }
-            (Device::Alternate(device), SurfaceTexture::Alternate(ref surface_texture)) => {
-                device.surface_texture_object(surface_texture)
-            }
-            _ => panic!("Incompatible context!"),
+    pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
+        match self {
+            Device::Default(device) => device.surface_texture_object(surface_texture),
+            Device::Alternate(device) => device.surface_texture_object(surface_texture),
         }
     }
 }

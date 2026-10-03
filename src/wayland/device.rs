@@ -2,16 +2,17 @@
 
 use super::connection::{Connection, NativeConnectionWrapper};
 use super::context::{NativeContext, WaylandContext};
-use super::surface::{Surface, SurfaceDataGuard, SurfaceTexture};
+use super::surface::SurfaceDataGuard;
 use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::surface::Framebuffer;
+use crate::wayland::surface::{WaylandSurface, WaylandSurfaceTexture};
 use crate::{
     egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
-    GLApi, Gl, SurfaceAccess, SurfaceInfo, SurfaceType,
+    GLApi, Gl, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture, SurfaceType,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -259,12 +260,13 @@ impl Device {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
+        let surface: WaylandSurface = surface.try_into()?;
 
         unsafe {
             context
                 .0
                 .bind_surface(self.native_connection.egl_display, surface.0)
-                .map_err(|(err, surface)| (err, Surface(surface)))
+                .map_err(|(err, surface)| (err, WaylandSurface(surface).into()))
         }
     }
 
@@ -281,7 +283,7 @@ impl Device {
             context
                 .0
                 .unbind_surface(&context.1, self.native_connection.egl_display)
-                .map(|maybe_surface| maybe_surface.map(Surface))
+                .map(|maybe_surface| maybe_surface.map(WaylandSurface).map(Into::into))
         }
     }
 
@@ -369,14 +371,15 @@ impl Device {
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
         let context = context.wayland()?;
 
-        Ok(Surface(EGLBackedSurface::new_generic(
+        Ok(WaylandSurface(EGLBackedSurface::new_generic(
             &context.1,
             self.native_connection.egl_display,
             context.0.egl_context,
             context.0.id,
             &context_attributes,
             size,
-        )))
+        ))
+        .into())
     }
 
     unsafe fn create_window_surface(
@@ -397,13 +400,14 @@ impl Device {
         );
         let context = context.wayland()?;
 
-        Ok(Surface(EGLBackedSurface::new_window(
+        Ok(WaylandSurface(EGLBackedSurface::new_window(
             self.native_connection.egl_display,
             egl_config,
             egl_window as *mut c_void,
             context.0.id,
             size,
-        )))
+        ))
+        .into())
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.
@@ -430,10 +434,11 @@ impl Device {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
+        let surface: WaylandSurface = surface.try_into()?;
 
         match surface.0.to_surface_texture(&context.1) {
-            Ok(surface_texture) => Ok(SurfaceTexture(surface_texture)),
-            Err((err, surface)) => Err((err, Surface(surface))),
+            Ok(surface_texture) => Ok(WaylandSurfaceTexture(surface_texture).into()),
+            Err((err, surface)) => Err((err, WaylandSurface(surface).into())),
         }
     }
 
@@ -451,6 +456,7 @@ impl Device {
     ) -> Result<(), Error> {
         let egl_display = self.native_connection.egl_display;
         let context = context.wayland()?;
+        let surface: &mut WaylandSurface = surface.try_into()?;
         if let Some(wayland_egl_window) =
             surface.0.destroy(&context.1, egl_display, context.0.id)?
         {
@@ -478,10 +484,11 @@ impl Device {
             Ok(concrete_context) => concrete_context,
             Err(error) => return Err((error, surface_texture)),
         };
+        let surface_texture: WaylandSurfaceTexture = surface_texture.try_into()?;
 
         match self.temporarily_make_context_current(context) {
-            Ok(_guard) => Ok(Surface(surface_texture.0.destroy(&concrete_context.1))),
-            Err(err) => Err((err, surface_texture)),
+            Ok(_guard) => Ok(WaylandSurface(surface_texture.0.destroy(&concrete_context.1)).into()),
+            Err(err) => Err((err, surface_texture.into())),
         }
     }
 
@@ -494,6 +501,7 @@ impl Device {
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         let context = context.wayland()?;
+        let surface: &mut WaylandSurface = surface.try_into()?;
         surface
             .0
             .present(self.native_connection.egl_display, context.0.egl_context)
@@ -506,6 +514,7 @@ impl Device {
         surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
+        let surface: &mut WaylandSurface = surface.try_into()?;
         surface.0.resize_for_wayland(size)
     }
 
@@ -530,6 +539,7 @@ impl Device {
     /// on the framebuffer object returned by this function. This framebuffer object may or not be
     /// 0, the default framebuffer, depending on platform.
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        let surface = surface.wayland().expect("Incompatible surface type");
         surface.0.info()
     }
 
@@ -538,6 +548,6 @@ impl Device {
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
-        surface_texture.0.texture_object
+        surface_texture.wayland().ok()?.0.texture_object
     }
 }

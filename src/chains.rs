@@ -22,8 +22,10 @@
 
 #![allow(missing_docs)]
 
-use crate::device::Device as DeviceAPI;
-use crate::{Context, ContextID, Error, SurfaceAccess, SurfaceInfo, SurfaceType};
+use crate::{
+    Context, ContextID, Device, Error, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
+    SurfaceType,
+};
 use euclid::default::Size2D;
 use fnv::{FnvHashMap, FnvHashSet};
 use glow as gl;
@@ -37,7 +39,7 @@ use std::mem;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 // The data stored for each swap chain.
-struct SwapChainData<Device: DeviceAPI> {
+struct SwapChainData {
     // The size of the back buffer
     size: Size2D<i32>,
     // The id of the producer context
@@ -45,11 +47,11 @@ struct SwapChainData<Device: DeviceAPI> {
     // The surface access mode for the context.
     surface_access: SurfaceAccess,
     // The back buffer of the swap chain.
-    back_buffer: BackBuffer<Device>,
+    back_buffer: BackBuffer,
     // Some if the producing context has finished drawing a new front buffer, ready to be displayed.
-    pending_surface: Option<Device::Surface>,
+    pending_surface: Option<Surface>,
     // All of the surfaces that have already been displayed, ready to be recycled.
-    recycled_surfaces: Vec<Device::Surface>,
+    recycled_surfaces: Vec<Surface>,
 }
 
 pub enum PreserveBuffer<'a> {
@@ -57,19 +59,15 @@ pub enum PreserveBuffer<'a> {
     No,
 }
 
-enum BackBuffer<Device: DeviceAPI> {
+enum BackBuffer {
     Attached,
-    Detached(Device::Surface),
+    Detached(Surface),
     TakenAttached,
     TakenDetached,
 }
 
-impl<Device: DeviceAPI> BackBuffer<Device> {
-    fn take_surface(
-        &mut self,
-        device: &Device,
-        context: &mut Context,
-    ) -> Result<Device::Surface, Error> {
+impl BackBuffer {
+    fn take_surface(&mut self, device: &Device, context: &mut Context) -> Result<Surface, Error> {
         let new_back_buffer = match self {
             BackBuffer::Attached => BackBuffer::TakenAttached,
             BackBuffer::Detached(_) => BackBuffer::TakenDetached,
@@ -86,7 +84,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
         &mut self,
         device: &Device,
         context: &mut Context,
-    ) -> Result<Device::SurfaceTexture, Error> {
+    ) -> Result<SurfaceTexture, Error> {
         let surface = self.take_surface(device, context)?;
         device
             .create_surface_texture(context, surface)
@@ -99,7 +97,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
         &mut self,
         device: &Device,
         context: &mut Context,
-        surface: Device::Surface,
+        surface: Surface,
     ) -> Result<(), Error> {
         let new_back_buffer = match self {
             BackBuffer::TakenAttached => {
@@ -120,7 +118,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
         &mut self,
         device: &Device,
         context: &mut Context,
-        surface_texture: Device::SurfaceTexture,
+        surface_texture: SurfaceTexture,
     ) -> Result<(), Error> {
         let surface = device
             .destroy_surface_texture(context, surface_texture)
@@ -129,7 +127,7 @@ impl<Device: DeviceAPI> BackBuffer<Device> {
     }
 }
 
-impl<Device: DeviceAPI> SwapChainData<Device> {
+impl SwapChainData {
     // Returns `Ok` if `context` is the producer context for this swap chain.
     fn validate_context(&self, device: &Device, context: &Context) -> Result<(), Error> {
         if self.context_id == device.context_id(context) {
@@ -232,7 +230,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
         &mut self,
         device: &Device,
         context: &mut Context,
-        other: &mut SwapChainData<Device>,
+        other: &mut SwapChainData,
     ) -> Result<(), Error> {
         self.validate_context(device, context)?;
         other.validate_context(device, context)?;
@@ -293,7 +291,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
         &mut self,
         device: &Device,
         context: &mut Context,
-    ) -> Result<Device::SurfaceTexture, Error> {
+    ) -> Result<SurfaceTexture, Error> {
         self.validate_context(device, context)?;
         self.back_buffer.take_surface_texture(device, context)
     }
@@ -304,7 +302,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
         &mut self,
         device: &Device,
         context: &mut Context,
-        surface_texture: Device::SurfaceTexture,
+        surface_texture: SurfaceTexture,
     ) -> Result<(), Error> {
         self.validate_context(device, context)?;
         self.back_buffer
@@ -314,7 +312,7 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     // Take the current front buffer.
     // Returns the most recent recycled surface if there is no current front buffer.
     // Called by a consumer.
-    fn take_surface(&mut self) -> Option<Device::Surface> {
+    fn take_surface(&mut self) -> Option<Surface> {
         self.pending_surface
             .take()
             .or_else(|| self.recycled_surfaces.pop())
@@ -323,13 +321,13 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
     // Take the current front buffer.
     // Returns `None` if there is no current front buffer.
     // Called by a consumer.
-    fn take_pending_surface(&mut self) -> Option<Device::Surface> {
+    fn take_pending_surface(&mut self) -> Option<Surface> {
         self.pending_surface.take()
     }
 
     // Recycle the current front buffer.
     // Called by a consumer.
-    fn recycle_surface(&mut self, surface: Device::Surface) {
+    fn recycle_surface(&mut self, surface: Surface) {
         self.recycled_surfaces.push(surface)
     }
 
@@ -468,18 +466,18 @@ impl<Device: DeviceAPI> SwapChainData<Device> {
 }
 
 /// A thread-safe swap chain.
-pub struct SwapChain<Device: DeviceAPI>(Arc<Mutex<SwapChainData<Device>>>);
+pub struct SwapChain(Arc<Mutex<SwapChainData>>);
 
 // We can't derive Clone unfortunately
-impl<Device: DeviceAPI> Clone for SwapChain<Device> {
+impl Clone for SwapChain {
     fn clone(&self) -> Self {
         SwapChain(self.0.clone())
     }
 }
 
-impl<Device: DeviceAPI> SwapChain<Device> {
+impl SwapChain {
     // Guarantee unique access to the swap chain data
-    fn lock(&self) -> MutexGuard<'_, SwapChainData<Device>> {
+    fn lock(&self) -> MutexGuard<'_, SwapChainData> {
         self.0.lock().unwrap_or_else(|err| err.into_inner())
     }
 
@@ -503,7 +501,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
         &self,
         device: &Device,
         context: &mut Context,
-        other: &SwapChain<Device>,
+        other: &SwapChain,
     ) -> Result<(), Error> {
         self.lock()
             .take_attachment_from(device, context, &mut *other.lock())
@@ -535,7 +533,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
         &self,
         device: &Device,
         context: &mut Context,
-    ) -> Result<Device::SurfaceTexture, Error> {
+    ) -> Result<SurfaceTexture, Error> {
         self.lock().take_surface_texture(device, context)
     }
 
@@ -545,7 +543,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
         &self,
         device: &Device,
         context: &mut Context,
-        surface_texture: Device::SurfaceTexture,
+        surface_texture: SurfaceTexture,
     ) -> Result<(), Error> {
         self.lock()
             .recycle_surface_texture(device, context, surface_texture)
@@ -554,7 +552,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     /// Take the current front buffer.
     /// Returns `None` if there is no current front buffer.
     /// Called by a consumer.
-    pub fn take_pending_surface(&self) -> Option<Device::Surface> {
+    pub fn take_pending_surface(&self) -> Option<Surface> {
         self.lock().take_pending_surface()
     }
 
@@ -588,7 +586,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
         device: &Device,
         context: &mut Context,
         surface_access: SurfaceAccess,
-    ) -> Result<SwapChain<Device>, Error> {
+    ) -> Result<SwapChain, Error> {
         let size = device.context_surface_info(context).unwrap().unwrap().size;
         Ok(SwapChain(Arc::new(Mutex::new(SwapChainData {
             size,
@@ -606,7 +604,7 @@ impl<Device: DeviceAPI> SwapChain<Device> {
         context: &mut Context,
         surface_access: SurfaceAccess,
         size: Size2D<i32>,
-    ) -> Result<SwapChain<Device>, Error> {
+    ) -> Result<SwapChain, Error> {
         let surface_type = SurfaceType::Generic { size };
         let surface = device.create_surface(context, surface_access, surface_type)?;
         Ok(SwapChain(Arc::new(Mutex::new(SwapChainData {
@@ -620,38 +618,32 @@ impl<Device: DeviceAPI> SwapChain<Device> {
     }
 }
 
-impl<Device> SwapChainAPI for SwapChain<Device>
-where
-    Device: 'static + DeviceAPI,
-    Device::Surface: Send,
-{
-    type Surface = Device::Surface;
-
+impl SwapChainAPI for SwapChain {
     /// Take the current front buffer.
     /// Returns the most recent recycled surface if there is no current front buffer.
     /// Called by a consumer.
-    fn take_surface(&self) -> Option<Device::Surface> {
+    fn take_surface(&self) -> Option<Surface> {
         self.lock().take_surface()
     }
 
     /// Recycle the current front buffer.
     /// Called by a consumer.
-    fn recycle_surface(&self, surface: Device::Surface) {
+    fn recycle_surface(&self, surface: Surface) {
         self.lock().recycle_surface(surface)
     }
 }
 
 /// A thread-safe collection of swap chains.
 #[derive(Default)]
-pub struct SwapChains<SwapChainID: Eq + Hash, Device: DeviceAPI> {
+pub struct SwapChains<SwapChainID: Eq + Hash> {
     // The swap chain ids, indexed by context id
     ids: Arc<Mutex<FnvHashMap<ContextID, FnvHashSet<SwapChainID>>>>,
     // The swap chains, indexed by swap chain id
-    table: Arc<RwLock<FnvHashMap<SwapChainID, SwapChain<Device>>>>,
+    table: Arc<RwLock<FnvHashMap<SwapChainID, SwapChain>>>,
 }
 
 // We can't derive Clone unfortunately
-impl<SwapChainID: Eq + Hash, Device: DeviceAPI> Clone for SwapChains<SwapChainID, Device> {
+impl<SwapChainID: Eq + Hash> Clone for SwapChains<SwapChainID> {
     fn clone(&self) -> Self {
         SwapChains {
             ids: self.ids.clone(),
@@ -660,13 +652,12 @@ impl<SwapChainID: Eq + Hash, Device: DeviceAPI> Clone for SwapChains<SwapChainID
     }
 }
 
-impl<SwapChainID, Device> SwapChains<SwapChainID, Device>
+impl<SwapChainID> SwapChains<SwapChainID>
 where
     SwapChainID: Clone + Eq + Hash + Debug,
-    Device: DeviceAPI,
 {
     /// Create a new collection.
-    pub fn new() -> SwapChains<SwapChainID, Device> {
+    pub fn new() -> SwapChains<SwapChainID> {
         SwapChains {
             ids: Arc::new(Mutex::new(FnvHashMap::default())),
             table: Arc::new(RwLock::new(FnvHashMap::default())),
@@ -679,12 +670,12 @@ where
     }
 
     // Lock the lookup table
-    fn table(&self) -> RwLockReadGuard<'_, FnvHashMap<SwapChainID, SwapChain<Device>>> {
+    fn table(&self) -> RwLockReadGuard<'_, FnvHashMap<SwapChainID, SwapChain>> {
         self.table.read().unwrap_or_else(|err| err.into_inner())
     }
 
     // Lock the lookup table for writing
-    fn table_mut(&self) -> RwLockWriteGuard<'_, FnvHashMap<SwapChainID, SwapChain<Device>>> {
+    fn table_mut(&self) -> RwLockWriteGuard<'_, FnvHashMap<SwapChainID, SwapChain>> {
         self.table.write().unwrap_or_else(|err| err.into_inner())
     }
 
@@ -760,7 +751,7 @@ where
         &self,
         device: &Device,
         context: &mut Context,
-    ) -> impl Iterator<Item = (SwapChainID, SwapChain<Device>)> {
+    ) -> impl Iterator<Item = (SwapChainID, SwapChain)> {
         self.ids()
             .get(&device.context_id(context))
             .iter()
@@ -771,17 +762,12 @@ where
     }
 }
 
-impl<SwapChainID, Device> SwapChainsAPI<SwapChainID> for SwapChains<SwapChainID, Device>
+impl<SwapChainID> SwapChainsAPI<SwapChainID> for SwapChains<SwapChainID>
 where
     SwapChainID: 'static + Clone + Eq + Hash + Debug + Sync + Send,
-    Device: 'static + DeviceAPI,
-    Device::Surface: Send,
 {
-    type Surface = Device::Surface;
-    type SwapChain = SwapChain<Device>;
-
     /// Get a swap chain
-    fn get(&self, id: SwapChainID) -> Option<SwapChain<Device>> {
+    fn get(&self, id: SwapChainID) -> Option<SwapChain> {
         debug!("Getting swap chain {:?}", id);
         self.table().get(&id).cloned()
     }
@@ -789,20 +775,15 @@ where
 
 /// The consumer's view of a swap chain
 pub trait SwapChainAPI: 'static + Clone + Send {
-    type Surface;
-
     /// Take the current front buffer.
-    fn take_surface(&self) -> Option<Self::Surface>;
+    fn take_surface(&self) -> Option<Surface>;
 
     /// Recycle the current front buffer.
-    fn recycle_surface(&self, surface: Self::Surface);
+    fn recycle_surface(&self, surface: Surface);
 }
 
 /// The consumer's view of a collection of swap chains
 pub trait SwapChainsAPI<SwapChainID>: 'static + Clone + Send {
-    type Surface;
-    type SwapChain: SwapChainAPI<Surface = Self::Surface>;
-
     /// Get a swap chain
-    fn get(&self, id: SwapChainID) -> Option<Self::SwapChain>;
+    fn get(&self, id: SwapChainID) -> Option<SwapChain>;
 }

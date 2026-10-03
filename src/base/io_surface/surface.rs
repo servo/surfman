@@ -2,7 +2,7 @@
 
 use super::device::Device;
 use super::ffi::{kIOMapDefaultCache, kIOMapWriteCombineCache};
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType, SystemSurfaceInfo};
+use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType};
 
 use euclid::default::Size2D;
 use libc::KERN_SUCCESS;
@@ -377,15 +377,6 @@ impl Device {
             .unwrap();
 
             IOSurfaceRef::new(&properties).unwrap()
-        }
-    }
-
-    /// Returns various information about the surface.
-    #[inline]
-    pub fn surface_info(&self, surface: &Surface) -> SystemSurfaceInfo {
-        SystemSurfaceInfo {
-            size: surface.size,
-            id: surface.id(),
         }
     }
 

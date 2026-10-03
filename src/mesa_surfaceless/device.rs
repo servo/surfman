@@ -8,8 +8,8 @@ use crate::context::ContextID;
 use crate::egl::types::EGLint;
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::mesa_surfaceless::context::{NativeContext, SurfacelessMesaContext};
-use crate::mesa_surfaceless::surface::{Surface, SurfaceTexture};
-use crate::{egl, Adapter, Context, EglContextDescriptor};
+use crate::mesa_surfaceless::surface::{SurfacelessMesaSurface, SurfacelessMesaSurfaceTexture};
+use crate::{egl, Adapter, Context, EglContextDescriptor, Surface, SurfaceTexture};
 use crate::{gl, ContextDescriptor};
 use crate::{ContextAttributes, Gl, SurfaceInfo};
 use crate::{Error, GLApi, SurfaceAccess, SurfaceType};
@@ -264,11 +264,12 @@ impl Device {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
+        let surface: SurfacelessMesaSurface = surface.try_into()?;
         unsafe {
             context
                 .0
                 .bind_surface(self.native_connection.egl_display, surface.0)
-                .map_err(|(err, surface)| (err, Surface(surface)))
+                .map_err(|(err, surface)| (err, SurfacelessMesaSurface(surface).into()))
         }
     }
 
@@ -285,7 +286,7 @@ impl Device {
             context
                 .0
                 .unbind_surface(&context.1, self.native_connection.egl_display)
-                .map(|maybe_surface| maybe_surface.map(Surface))
+                .map(|maybe_surface| maybe_surface.map(SurfacelessMesaSurface).map(Into::into))
         }
     }
 
@@ -358,14 +359,15 @@ impl Device {
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
         let context = context.surfaceless_mesa()?;
 
-        Ok(Surface(EGLBackedSurface::new_generic(
+        Ok(SurfacelessMesaSurface(EGLBackedSurface::new_generic(
             &context.1,
             self.native_connection.egl_display,
             context.0.egl_context,
             context.0.id,
             &context_attributes,
             size,
-        )))
+        ))
+        .into())
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.
@@ -392,10 +394,11 @@ impl Device {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
+        let surface: SurfacelessMesaSurface = surface.try_into()?;
 
         match surface.0.to_surface_texture(&context.1) {
-            Ok(surface_texture) => Ok(SurfaceTexture(surface_texture)),
-            Err((err, surface)) => Err((err, Surface(surface))),
+            Ok(surface_texture) => Ok(SurfacelessMesaSurfaceTexture(surface_texture).into()),
+            Err((err, surface)) => Err((err, SurfacelessMesaSurface(surface).into())),
         }
     }
 
@@ -413,6 +416,7 @@ impl Device {
     ) -> Result<(), Error> {
         let egl_display = self.native_connection.egl_display;
         let context: &mut SurfacelessMesaContext = context.try_into()?;
+        let surface: &mut SurfacelessMesaSurface = surface.try_into()?;
         let window = surface.0.destroy(&context.1, egl_display, context.0.id)?;
         debug_assert!(window.is_none());
         Ok(())
@@ -434,9 +438,12 @@ impl Device {
             Ok(concrete_context) => concrete_context,
             Err(error) => return Err((error, surface_texture)),
         };
+        let surface_texture: SurfacelessMesaSurfaceTexture = surface_texture.try_into()?;
         match self.temporarily_make_context_current(context) {
-            Ok(_guard) => Ok(Surface(surface_texture.0.destroy(&concrete_context.1))),
-            Err(err) => Err((err, surface_texture)),
+            Ok(_guard) => {
+                Ok(SurfacelessMesaSurface(surface_texture.0.destroy(&concrete_context.1)).into())
+            }
+            Err(err) => Err((err, surface_texture.into())),
         }
     }
 
@@ -449,6 +456,7 @@ impl Device {
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         let context = context.surfaceless_mesa()?;
+        let surface: &mut SurfacelessMesaSurface = surface.try_into()?;
         surface
             .0
             .present(self.native_connection.egl_display, context.0.egl_context)
@@ -461,6 +469,7 @@ impl Device {
         surface: &mut Surface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
+        let surface: &mut SurfacelessMesaSurface = surface.try_into()?;
         surface.0.size = size;
         Ok(())
     }
@@ -486,6 +495,9 @@ impl Device {
     /// on the framebuffer object returned by this function. This framebuffer object may or not be
     /// 0, the default framebuffer, depending on platform.
     pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        let surface = surface
+            .surfaceless_mesa()
+            .expect("Incompatible surface type");
         surface.0.info()
     }
 
@@ -494,6 +506,6 @@ impl Device {
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
-        surface_texture.0.texture_object
+        surface_texture.surfaceless_mesa().ok()?.0.texture_object
     }
 }

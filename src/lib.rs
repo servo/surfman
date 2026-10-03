@@ -38,6 +38,7 @@ pub mod mesa_surfaceless;
 pub mod multi;
 mod renderbuffers;
 mod surface;
+mod surface_texture;
 #[cfg(all(x11_platform, not(wayland_default)))]
 pub mod unix;
 #[cfg(wayland_platform)]
@@ -64,11 +65,11 @@ pub use crate::context::{Context, ContextAttributeFlags, ContextAttributes, Cont
 pub use crate::context_descriptor::ContextDescriptor;
 pub use crate::error::{Error, WindowingApiError};
 pub use crate::info::{GLApi, GLVersion};
-pub use crate::surface::{SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType, SystemSurfaceInfo};
+pub use crate::surface::{Surface, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
+pub use crate::surface_texture::SurfaceTexture;
 pub use adapter::{Adapter, AdapterPreferences, PowerPreference, RenderingPreference};
 pub use default::connection::Connection;
 pub use default::device::Device;
-pub use default::surface::{Surface, SurfaceTexture};
 pub(crate) use glow::{self as gl, Context as Gl};
 pub(crate) use macros::implement_interfaces;
 
