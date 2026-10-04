@@ -2,7 +2,7 @@
 
 use super::connection::{NativeConnectionWrapper, SurfacelessMesaConnection};
 use super::surface::SurfaceDataGuard;
-use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
+use crate::base::egl::context::{self, CurrentContextGuard, DefaultFramebuffer, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
@@ -118,6 +118,8 @@ impl SurfacelessMesaDevice {
                 descriptor.egl()?,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
+                // Some Mesa software drivers crash creating a pbuffer on this platform.
+                DefaultFramebuffer::None,
             )?;
             context.make_current(self.native_connection.egl_display)?;
             Ok(

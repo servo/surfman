@@ -32,6 +32,13 @@ pub(crate) struct EGLBackedContext {
     context_is_owned: bool,
 }
 
+/// Default framebuffer of a context while no surface is bound to it.
+pub(crate) enum DefaultFramebuffer {
+    DummyPbuffer,
+    /// No surface; the display must support surfaceless contexts.
+    None,
+}
+
 /// Wrapper for a native `EGLContext`.
 #[derive(Clone, Copy)]
 pub struct NativeContext {
@@ -115,6 +122,7 @@ impl EGLBackedContext {
         descriptor: &EglContextDescriptor,
         share_with: Option<&EGLBackedContext>,
         gl_api: GLApi,
+        default_framebuffer: DefaultFramebuffer,
     ) -> Result<EGLBackedContext, Error> {
         let mut next_context_id = CREATE_CONTEXT_MUTEX.lock().unwrap();
 
@@ -126,8 +134,13 @@ impl EGLBackedContext {
             gl_api,
         )?;
 
-        // Create a dummy pbuffer.
-        let pbuffer = create_dummy_pbuffer(egl_display, egl_context).unwrap_or(egl::NO_SURFACE);
+        let pbuffer = match default_framebuffer {
+            // Create a dummy pbuffer.
+            DefaultFramebuffer::DummyPbuffer => {
+                create_dummy_pbuffer(egl_display, egl_context).unwrap_or(egl::NO_SURFACE)
+            }
+            DefaultFramebuffer::None => egl::NO_SURFACE,
+        };
 
         // Wrap and return it.
         let context = EGLBackedContext {
