@@ -22,9 +22,6 @@ where
 
     // device.rs
 
-    /// Returns the display server connection that this device was created with.
-    fn connection(&self) -> Self::Connection;
-
     /// Returns the adapter that this device was created with.
     fn adapter(&self) -> Adapter;
 

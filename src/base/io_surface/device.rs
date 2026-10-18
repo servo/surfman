@@ -1,7 +1,6 @@
 //! A handle to the device. (This is a no-op, because handles are implicit in `IOSurface`.)
 
 use super::adapter::AppleAdapter;
-use super::connection::Connection;
 use crate::Error;
 
 use objc2::{rc::Retained, runtime::ProtocolObject};
@@ -38,12 +37,6 @@ impl Device {
                 .find(|device| device.isLowPower() == self.adapter.is_low_power)
                 .expect("No Metal device found!"),
         )
-    }
-
-    /// Returns the display server connection that this device was created with.
-    #[inline]
-    pub fn connection(&self) -> Connection {
-        Connection
     }
 
     /// Returns the adapter that this device was created with.

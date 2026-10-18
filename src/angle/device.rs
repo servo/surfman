@@ -1,7 +1,6 @@
 //! A thread-local handle to the device.
 
 use super::adapter::AngleAdapter;
-use crate::angle::connection::Connection;
 use crate::angle::context::{AngleContext, NativeContext};
 use crate::angle::surface::{
     AngleSurface, AngleSurfaceTexture, SurfaceDataGuard, Synchronization, Win32Objects,
@@ -186,12 +185,6 @@ impl Device {
                 display_is_owned: false,
             })
         }
-    }
-
-    /// Returns the display server connection that this device was created with.
-    #[inline]
-    pub fn connection(&self) -> Connection {
-        Connection
     }
 
     /// Returns the adapter that this device was created with.

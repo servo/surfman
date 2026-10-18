@@ -1,6 +1,5 @@
 //! A handle to the device. (This is a no-op, because handles are implicit in Apple's Core OpenGL.)
 
-use super::connection::Connection;
 use super::context::{CglContext, CglContextDescriptor};
 use crate::base::io_surface::device::Device as SystemDevice;
 use crate::cgl::context::{CurrentContextGuard, NativeContext};
@@ -71,12 +70,6 @@ impl Device {
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
         self.0.native_device()
-    }
-
-    /// Returns the display server connection that this device was created with.
-    #[inline]
-    pub fn connection(&self) -> Connection {
-        Connection(self.0.connection())
     }
 
     /// Returns the adapter that this device was created with.

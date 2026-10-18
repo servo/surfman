@@ -34,14 +34,6 @@ where
     Def::Connection: ConnectionInterface,
     Alt::Connection: ConnectionInterface,
 {
-    /// Returns the display server connection that this device was created with.
-    pub fn connection(&self) -> Connection<Def, Alt> {
-        match *self {
-            Device::Default(ref device) => Connection::Default(device.connection()),
-            Device::Alternate(ref device) => Connection::Alternate(device.connection()),
-        }
-    }
-
     /// Returns the adapter that this device was created with.
     pub fn adapter(&self) -> Adapter {
         match *self {
@@ -69,11 +61,6 @@ where
     type Connection = Connection<Def, Alt>;
 
     // device.rs
-
-    #[inline]
-    fn connection(&self) -> Connection<Def, Alt> {
-        Device::connection(self)
-    }
 
     #[inline]
     fn adapter(&self) -> Adapter {

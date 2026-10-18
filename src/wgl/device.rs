@@ -7,7 +7,6 @@ use crate::error::WindowingApiError;
 use crate::renderbuffers::Renderbuffers;
 use crate::surface::Framebuffer;
 use crate::wgl::adapter::WglAdapter;
-use crate::wgl::connection::Connection;
 use crate::wgl::context::{
     ContextStatus, CurrentContextGuard, FramebufferGuard, NativeContext, WglContext,
     WglContextDescriptor, OPENGL_LIBRARY, WGL_EXTENSION_FUNCTIONS,
@@ -219,12 +218,6 @@ impl Device {
                 gl_dx_interop_device: self.gl_dx_interop_device,
             }
         }
-    }
-
-    /// Returns the display server connection that this device was created with.
-    #[inline]
-    pub fn connection(&self) -> Connection {
-        Connection
     }
 
     /// Returns the adapter that this device was created with.

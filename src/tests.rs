@@ -85,7 +85,6 @@ pub fn test_device_accessors() {
         }
         Err(err) => panic!("Failed to create device: {:?}", err),
     };
-    drop(device.connection());
     drop(device.adapter());
 }
 
