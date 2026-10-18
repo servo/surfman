@@ -62,14 +62,6 @@ impl Device {
         }
     }
 
-    /// Returns the display server connection that this device was created with.
-    #[inline]
-    pub fn connection(&self) -> Connection {
-        Connection {
-            native_connection: self.native_connection.clone(),
-        }
-    }
-
     /// Returns the adapter that this device was created with.
     #[inline]
     pub fn adapter(&self) -> Adapter {

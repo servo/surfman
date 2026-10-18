@@ -1,7 +1,6 @@
 //! A thread-local handle to the device.
 
 use super::adapter::HardwareBufferAdapter;
-use super::connection::Connection;
 use super::context::{HardwareBufferContext, NativeContext};
 use crate::base::egl::context::{self, CurrentContextGuard};
 use crate::base::egl::device::EGL_FUNCTIONS;
@@ -78,12 +77,6 @@ impl Device {
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
         NativeDevice(self.egl_display)
-    }
-
-    /// Returns the display server connection that this device was created with.
-    #[inline]
-    pub fn connection(&self) -> Connection {
-        Connection
     }
 
     /// Returns the adapter that this device was created with.

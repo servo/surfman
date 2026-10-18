@@ -89,11 +89,6 @@ macro_rules! implement_interfaces {
                 // device.rs
 
                 #[inline]
-                fn connection(&self) -> Connection {
-                    Device::connection(self)
-                }
-
-                #[inline]
                 fn adapter(&self) -> Adapter {
                     Device::adapter(self)
                 }
