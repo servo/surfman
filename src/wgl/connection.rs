@@ -3,14 +3,14 @@
 //! Window server connections are implicit in the Win32 API, so this is a zero-sized type.
 
 use super::adapter::WglAdapter;
-use super::device::{Device, NativeDevice};
+use super::device::{NativeDevice, WglDevice};
 use crate::{Adapter, AdapterPreferences, Error, GLApi};
 
 /// Represents a connection to the display server.
 ///
 /// Window server connections are implicit in the Win32 API, so this is a zero-sized type.
 #[derive(Clone)]
-pub struct Connection;
+pub struct WglConnection;
 
 /// An empty placeholder for native connections.
 ///
@@ -18,17 +18,17 @@ pub struct Connection;
 #[derive(Clone)]
 pub struct NativeConnection;
 
-impl Connection {
+impl WglConnection {
     /// Connects to the default display.
     #[inline]
-    pub fn new() -> Result<Connection, Error> {
-        Ok(Connection)
+    pub fn new() -> Result<WglConnection, Error> {
+        Ok(WglConnection)
     }
 
     /// An alias for `Connection::new()`, present for consistency with other backends.
     #[inline]
-    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
-        Connection::new()
+    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<WglConnection, Error> {
+        WglConnection::new()
     }
 
     /// Returns the underlying native connection.
@@ -51,8 +51,8 @@ impl Connection {
 
     /// Opens a device.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new(adapter.wgl()?)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<WglDevice, Error> {
+        WglDevice::new(adapter.wgl()?)
     }
 
     /// Creates a `Device` from a Direct3D 11 device and associated GL/DX interop handle.
@@ -66,13 +66,15 @@ impl Connection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<Device, Error> {
-        Device::from_native_device(native_device)
+    ) -> Result<WglDevice, Error> {
+        WglDevice::from_native_device(native_device)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
-    pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
-        Connection::new()
+    pub fn from_display_handle(
+        _: raw_window_handle::DisplayHandle,
+    ) -> Result<WglConnection, Error> {
+        WglConnection::new()
     }
 }
 

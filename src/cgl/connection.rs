@@ -3,7 +3,7 @@
 //! Connection types are zero-sized on macOS, because the system APIs automatically manage the
 //! global window server connection.
 
-use super::device::Device;
+use super::device::CglDevice;
 use crate::adapter::{Adapter, AdapterPreferences};
 use crate::base::io_surface::connection::Connection as SystemConnection;
 use crate::base::io_surface::device::NativeDevice;
@@ -14,21 +14,21 @@ pub use crate::base::io_surface::connection::NativeConnection;
 
 /// A connection to the display server.
 #[derive(Clone)]
-pub struct Connection(pub SystemConnection);
+pub struct CglConnection(pub SystemConnection);
 
-impl Connection {
+impl CglConnection {
     /// Connects to the default display.
     #[inline]
-    pub fn new() -> Result<Connection, Error> {
-        SystemConnection::new().map(Connection)
+    pub fn new() -> Result<CglConnection, Error> {
+        SystemConnection::new().map(CglConnection)
     }
 
     /// An alias for `Connection::new()`, present for consistency with other backends.
     #[inline]
     pub unsafe fn from_native_connection(
         native_connection: NativeConnection,
-    ) -> Result<Connection, Error> {
-        SystemConnection::from_native_connection(native_connection).map(Connection)
+    ) -> Result<CglConnection, Error> {
+        SystemConnection::from_native_connection(native_connection).map(CglConnection)
     }
 
     /// Returns the underlying native connection.
@@ -53,8 +53,8 @@ impl Connection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        self.0.create_device(adapter.apple()?).map(Device)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<CglDevice, Error> {
+        self.0.create_device(adapter.apple()?).map(CglDevice)
     }
 
     /// An alias for `connection.create_device()` with the default adapter.
@@ -62,16 +62,16 @@ impl Connection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<Device, Error> {
+    ) -> Result<CglDevice, Error> {
         self.0
             .create_device_from_native_device(native_device)
-            .map(Device)
+            .map(CglDevice)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(
         handle: raw_window_handle::DisplayHandle,
-    ) -> Result<Connection, Error> {
-        SystemConnection::from_display_handle(handle).map(Connection)
+    ) -> Result<CglConnection, Error> {
+        SystemConnection::from_display_handle(handle).map(CglConnection)
     }
 }

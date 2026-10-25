@@ -1,6 +1,6 @@
 //! A wrapper for X11 server connections (`DISPLAY` variables).
 
-use super::device::{Device, NativeDevice};
+use super::device::{NativeDevice, X11Device};
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_X11_KHR;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
@@ -19,11 +19,11 @@ static X_THREADS_INIT: Once = Once::new();
 
 /// A connection to the X11 display server.
 #[derive(Clone)]
-pub struct Connection {
+pub struct X11Connection {
     pub(crate) native_connection: Arc<NativeConnectionWrapper>,
 }
 
-unsafe impl Send for Connection {}
+unsafe impl Send for X11Connection {}
 
 pub(crate) struct NativeConnectionWrapper {
     pub(crate) xlib: Xlib,
@@ -61,10 +61,10 @@ impl Drop for NativeConnectionWrapper {
     }
 }
 
-impl Connection {
+impl X11Connection {
     /// Connects to the default display.
     #[inline]
-    pub fn new() -> Result<Connection, Error> {
+    pub fn new() -> Result<X11Connection, Error> {
         unsafe {
             let xlib = Xlib::open().map_err(|_| Error::ConnectionFailed)?;
 
@@ -79,7 +79,7 @@ impl Connection {
 
             let egl_display = create_egl_display(x11_display);
 
-            Ok(Connection {
+            Ok(X11Connection {
                 native_connection: Arc::new(NativeConnectionWrapper {
                     xlib,
                     egl_display,
@@ -104,9 +104,9 @@ impl Connection {
     #[inline]
     pub unsafe fn from_native_connection(
         native_connection: NativeConnection,
-    ) -> Result<Connection, Error> {
+    ) -> Result<X11Connection, Error> {
         let xlib = Xlib::open().map_err(|_| Error::ConnectionFailed)?;
-        Ok(Connection {
+        Ok(X11Connection {
             native_connection: Arc::new(NativeConnectionWrapper {
                 xlib,
                 egl_display: native_connection.egl_display,
@@ -116,11 +116,11 @@ impl Connection {
         })
     }
 
-    fn from_x11_display(x11_display: *mut Display) -> Result<Connection, Error> {
+    fn from_x11_display(x11_display: *mut Display) -> Result<X11Connection, Error> {
         let xlib = Xlib::open().map_err(|_| Error::ConnectionFailed)?;
         unsafe {
             let egl_display = create_egl_display(x11_display);
-            Ok(Connection {
+            Ok(X11Connection {
                 native_connection: Arc::new(NativeConnectionWrapper {
                     xlib,
                     egl_display,
@@ -156,8 +156,8 @@ impl Connection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new(self, adapter.free_unix()?)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<X11Device, Error> {
+        X11Device::new(self, adapter.free_unix()?)
     }
 
     /// Opens the hardware device corresponding to the adapter wrapped in the given native
@@ -168,14 +168,14 @@ impl Connection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<Device, Error> {
-        Device::new(self, &native_device.adapter)
+    ) -> Result<X11Device, Error> {
+        X11Device::new(self, &native_device.adapter)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(
         handle: raw_window_handle::DisplayHandle,
-    ) -> Result<Connection, Error> {
+    ) -> Result<X11Connection, Error> {
         use raw_window_handle::RawDisplayHandle::Xcb;
         use raw_window_handle::RawDisplayHandle::Xlib;
         use raw_window_handle::XlibDisplayHandle;
@@ -188,7 +188,7 @@ impl Connection {
             _ => return Err(Error::IncompatibleRawDisplayHandle),
         };
 
-        Connection::from_x11_display(display)
+        X11Connection::from_x11_display(display)
     }
 }
 
@@ -261,7 +261,7 @@ mod tests {
     pub fn test_from_x11_display() {
         use crate::{ContextAttributeFlags, ContextAttributes, GLVersion, PowerPreference};
 
-        let connection = Connection::new().unwrap();
+        let connection = X11Connection::new().unwrap();
         let adapter = connection
             .create_adapter(AdapterPreferences {
                 power: PowerPreference::LowPower,
@@ -289,7 +289,8 @@ mod tests {
 
         {
             let _second_connection =
-                Connection::from_x11_display(connection.native_connection().x11_display).unwrap();
+                X11Connection::from_x11_display(connection.native_connection().x11_display)
+                    .unwrap();
         }
 
         device.destroy_context(&mut context).unwrap();

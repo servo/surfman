@@ -49,7 +49,7 @@ const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 /// A thread-local handle to a device.
 ///
 /// Devices contain most of the relevant surface management methods.
-pub struct Device {
+pub struct AngleDevice {
     pub(crate) egl_display: EGLDisplay,
     pub(crate) d3d11_device: ComPtr<ID3D11Device>,
     pub(crate) d3d_driver_type: D3D_DRIVER_TYPE,
@@ -72,9 +72,9 @@ pub struct NativeDevice {
     pub d3d_driver_type: D3D_DRIVER_TYPE,
 }
 
-impl Device {
+impl AngleDevice {
     #[allow(non_snake_case)]
-    pub(crate) fn new(adapter: &AngleAdapter) -> Result<Device, Error> {
+    pub(crate) fn new(adapter: &AngleAdapter) -> Result<AngleDevice, Error> {
         let d3d_driver_type = adapter.d3d_driver_type;
         unsafe {
             let mut d3d11_device = ptr::null_mut();
@@ -126,7 +126,7 @@ impl Device {
                 let result = egl.Initialize(egl_display, &mut major_version, &mut minor_version);
                 assert_ne!(result, egl::FALSE);
 
-                Ok(Device {
+                Ok(AngleDevice {
                     egl_display,
                     d3d11_device,
                     d3d_driver_type,
@@ -136,10 +136,10 @@ impl Device {
         }
     }
 
-    pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
+    pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<AngleDevice, Error> {
         unsafe {
             (*native_device.d3d11_device).AddRef();
-            Ok(Device {
+            Ok(AngleDevice {
                 egl_display: native_device.egl_display,
                 d3d11_device: ComPtr::from_raw(native_device.d3d11_device),
                 d3d_driver_type: native_device.d3d_driver_type,
@@ -149,7 +149,7 @@ impl Device {
     }
 
     #[allow(non_snake_case)]
-    pub(crate) fn from_egl_display(egl_display: EGLDisplay) -> Result<Device, Error> {
+    pub(crate) fn from_egl_display(egl_display: EGLDisplay) -> Result<AngleDevice, Error> {
         let eglQueryDisplayAttribEXT = EGL_EXTENSION_FUNCTIONS
             .QueryDisplayAttribEXT
             .expect("Where's the `EGL_EXT_device_query` extension?");
@@ -178,7 +178,7 @@ impl Device {
 
         unsafe {
             (*d3d11_device).AddRef();
-            Ok(Device {
+            Ok(AngleDevice {
                 egl_display: egl_display,
                 d3d11_device: ComPtr::from_raw(d3d11_device),
                 d3d_driver_type: D3D_DRIVER_TYPE_UNKNOWN,
@@ -1102,7 +1102,7 @@ impl Device {
     }
 }
 
-impl Drop for Device {
+impl Drop for AngleDevice {
     fn drop(&mut self) {
         unsafe {
             if self.display_is_owned {

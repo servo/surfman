@@ -3,28 +3,30 @@
 //! FIXME(pcwalton): Should this instead wrap `EGLDisplay`? Is that thread-safe on Android?
 
 use super::adapter::HardwareBufferAdapter;
-use super::device::{Device, NativeDevice};
+use super::device::{HardwareBufferDevice, NativeDevice};
 use crate::{Adapter, AdapterPreferences, Error, GLApi};
 
 /// A connection to the display server.
 #[derive(Clone)]
-pub struct Connection;
+pub struct HardwareBufferConnection;
 
 /// An empty placeholder for native connections.
 #[derive(Clone)]
 pub struct NativeConnection;
 
-impl Connection {
+impl HardwareBufferConnection {
     /// Connects to the default display.
     #[inline]
-    pub fn new() -> Result<Connection, Error> {
-        Ok(Connection)
+    pub fn new() -> Result<HardwareBufferConnection, Error> {
+        Ok(HardwareBufferConnection)
     }
 
     /// An alias for `Connection::new()`, present for consistency with other backends.
     #[inline]
-    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
-        Connection::new()
+    pub unsafe fn from_native_connection(
+        _: NativeConnection,
+    ) -> Result<HardwareBufferConnection, Error> {
+        HardwareBufferConnection::new()
     }
 
     /// Returns the underlying native connection.
@@ -49,8 +51,8 @@ impl Connection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
-        Device::new()
+    pub fn create_device(&self, _: &Adapter) -> Result<HardwareBufferDevice, Error> {
+        HardwareBufferDevice::new()
     }
 
     /// Wraps an Android `EGLDisplay` in a device and returns it.
@@ -62,16 +64,18 @@ impl Connection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<Device, Error> {
-        Ok(Device {
+    ) -> Result<HardwareBufferDevice, Error> {
+        Ok(HardwareBufferDevice {
             egl_display: native_device.0,
             display_is_owned: false,
         })
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
-    pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
-        Ok(Connection)
+    pub fn from_display_handle(
+        _: raw_window_handle::DisplayHandle,
+    ) -> Result<HardwareBufferConnection, Error> {
+        Ok(HardwareBufferConnection)
     }
 }
 

@@ -1,6 +1,6 @@
 //! A wrapper for Wayland connections (displays).
 
-use super::device::{Device, NativeDevice};
+use super::device::{NativeDevice, WaylandDevice};
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_WAYLAND_KHR;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
@@ -16,7 +16,7 @@ use wayland_sys::client::{wayland_client_handle, wl_display};
 
 /// A connection to the Wayland server.
 #[derive(Clone)]
-pub struct Connection {
+pub struct WaylandConnection {
     pub(crate) native_connection: Arc<NativeConnectionWrapper>,
 }
 
@@ -28,15 +28,15 @@ pub(crate) struct NativeConnectionWrapper {
 /// An EGL display wrapping a Wayland display.
 pub struct NativeConnection(pub EGLDisplay);
 
-unsafe impl Send for Connection {}
+unsafe impl Send for WaylandConnection {}
 
-impl Connection {
+impl WaylandConnection {
     /// Connects to the default Wayland server.
     #[inline]
-    pub fn new() -> Result<Connection, Error> {
+    pub fn new() -> Result<WaylandConnection, Error> {
         unsafe {
             let wayland_display = (wayland_client_handle().wl_display_connect)(ptr::null());
-            Connection::from_wayland_display(wayland_display, true)
+            WaylandConnection::from_wayland_display(wayland_display, true)
         }
     }
 
@@ -47,8 +47,8 @@ impl Connection {
     /// connection is.
     pub unsafe fn from_native_connection(
         native_connection: NativeConnection,
-    ) -> Result<Connection, Error> {
-        Connection::from_egl_display(native_connection.0, None)
+    ) -> Result<WaylandConnection, Error> {
+        WaylandConnection::from_egl_display(native_connection.0, None)
     }
 
     /// Returns the underlying native connection.
@@ -77,8 +77,8 @@ impl Connection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new(self, adapter.free_unix()?)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<WaylandDevice, Error> {
+        WaylandDevice::new(self, adapter.free_unix()?)
     }
 
     /// Opens the hardware device corresponding to the adapter wrapped in the given native
@@ -89,14 +89,14 @@ impl Connection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<Device, Error> {
-        Device::new(self, &native_device.adapter)
+    ) -> Result<WaylandDevice, Error> {
+        WaylandDevice::new(self, &native_device.adapter)
     }
 
     unsafe fn from_wayland_display(
         wayland_display: *mut wl_display,
         is_owned: bool,
-    ) -> Result<Connection, Error> {
+    ) -> Result<WaylandConnection, Error> {
         if wayland_display.is_null() {
             return Err(Error::ConnectionFailed);
         }
@@ -121,15 +121,15 @@ impl Connection {
             } else {
                 None
             };
-            Connection::from_egl_display(egl_display, owned_display)
+            WaylandConnection::from_egl_display(egl_display, owned_display)
         })
     }
 
     fn from_egl_display(
         egl_display: EGLDisplay,
         wayland_display: Option<*mut wl_display>,
-    ) -> Result<Connection, Error> {
-        Ok(Connection {
+    ) -> Result<WaylandConnection, Error> {
+        Ok(WaylandConnection {
             native_connection: Arc::new(NativeConnectionWrapper {
                 egl_display,
                 wayland_display,
@@ -140,7 +140,7 @@ impl Connection {
     /// Opens the display connection corresponding to the given `DisplayHandle`.
     pub fn from_display_handle(
         handle: raw_window_handle::DisplayHandle,
-    ) -> Result<Connection, Error> {
+    ) -> Result<WaylandConnection, Error> {
         use raw_window_handle::RawDisplayHandle::Wayland;
         use raw_window_handle::WaylandDisplayHandle;
         unsafe {
@@ -151,7 +151,7 @@ impl Connection {
                 _ => return Err(Error::IncompatibleRawDisplayHandle),
             };
 
-            Connection::from_wayland_display(wayland_display, false)
+            WaylandConnection::from_wayland_display(wayland_display, false)
         }
     }
 }

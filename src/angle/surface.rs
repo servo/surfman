@@ -1,6 +1,6 @@
 //! Surface management for Direct3D 11 on Windows using the ANGLE library as a frontend.
 
-use super::device::Device;
+use super::device::AngleDevice;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::context::ContextID;
 use crate::egl::types::EGLSurface;
@@ -98,7 +98,7 @@ impl AngleSurface {
         }
     }
 
-    pub(crate) fn present(&self, device: &Device) -> Result<(), Error> {
+    pub(crate) fn present(&self, device: &AngleDevice) -> Result<(), Error> {
         match self.win32_objects {
             Win32Objects::Window { .. } => {}
             _ => return Err(Error::NoWidgetAttached),

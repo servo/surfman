@@ -21,7 +21,7 @@ use std::os::raw::c_void;
 /// A thread-local handle to a device.
 ///
 /// Devices contain most of the relevant surface management methods.
-pub struct Device {
+pub struct HardwareBufferDevice {
     pub(crate) egl_display: EGLDisplay,
     pub(crate) display_is_owned: bool,
 }
@@ -30,7 +30,7 @@ pub struct Device {
 #[derive(Clone, Copy)]
 pub struct NativeDevice(pub EGLDisplay);
 
-impl Drop for Device {
+impl Drop for HardwareBufferDevice {
     fn drop(&mut self) {
         EGL_FUNCTIONS.with(|egl| unsafe {
             if !self.display_is_owned {
@@ -52,9 +52,9 @@ impl NativeDevice {
     }
 }
 
-impl Device {
+impl HardwareBufferDevice {
     #[inline]
-    pub(crate) fn new() -> Result<Device, Error> {
+    pub(crate) fn new() -> Result<HardwareBufferDevice, Error> {
         EGL_FUNCTIONS.with(|egl| {
             unsafe {
                 let egl_display = egl.GetDisplay(egl::DEFAULT_DISPLAY);
@@ -65,7 +65,7 @@ impl Device {
                 let result = egl.Initialize(egl_display, &mut major_version, &mut minor_version);
                 assert_ne!(result, egl::FALSE);
 
-                Ok(Device {
+                Ok(HardwareBufferDevice {
                     egl_display,
                     display_is_owned: true,
                 })

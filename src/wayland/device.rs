@@ -1,6 +1,6 @@
 //! A wrapper around Wayland `EGLDisplay`s.
 
-use super::connection::{Connection, NativeConnectionWrapper};
+use super::connection::{NativeConnectionWrapper, WaylandConnection};
 use super::context::{NativeContext, WaylandContext};
 use super::surface::SurfaceDataGuard;
 use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
@@ -28,7 +28,7 @@ const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 /// A thread-local handle to a device.
 ///
 /// Devices contain most of the relevant surface management methods.
-pub struct Device {
+pub struct WaylandDevice {
     pub(crate) native_connection: Arc<NativeConnectionWrapper>,
     pub(crate) adapter: FreeUnixAdapter,
 }
@@ -42,10 +42,13 @@ pub struct NativeDevice {
     pub adapter: FreeUnixAdapter,
 }
 
-impl Device {
+impl WaylandDevice {
     #[inline]
-    pub(crate) fn new(connection: &Connection, adapter: &FreeUnixAdapter) -> Result<Device, Error> {
-        Ok(Device {
+    pub(crate) fn new(
+        connection: &WaylandConnection,
+        adapter: &FreeUnixAdapter,
+    ) -> Result<WaylandDevice, Error> {
+        Ok(WaylandDevice {
             native_connection: connection.native_connection.clone(),
             adapter: adapter.clone(),
         })

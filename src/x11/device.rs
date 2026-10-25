@@ -1,6 +1,6 @@
 //! A wrapper around X11 `EGLDisplay`s.
 
-use super::connection::{Connection, NativeConnectionWrapper};
+use super::connection::{NativeConnectionWrapper, X11Connection};
 use super::context::NativeContext;
 use crate::base::egl::{
     context::{self, CurrentContextGuard, EGLBackedContext},
@@ -28,7 +28,7 @@ const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 /// A thread-local handle to a device.
 ///
 /// Devices contain most of the relevant surface management methods.
-pub struct Device {
+pub struct X11Device {
     pub(crate) native_connection: Arc<NativeConnectionWrapper>,
     pub(crate) adapter: FreeUnixAdapter,
 }
@@ -42,10 +42,13 @@ pub struct NativeDevice {
     pub adapter: FreeUnixAdapter,
 }
 
-impl Device {
+impl X11Device {
     #[inline]
-    pub(crate) fn new(connection: &Connection, adapter: &FreeUnixAdapter) -> Result<Device, Error> {
-        Ok(Device {
+    pub(crate) fn new(
+        connection: &X11Connection,
+        adapter: &FreeUnixAdapter,
+    ) -> Result<X11Device, Error> {
+        Ok(X11Device {
             native_connection: connection.native_connection.clone(),
             adapter: adapter.clone(),
         })

@@ -63,9 +63,9 @@ thread_local! {
 ///
 /// Devices contain most of the relevant surface management methods.
 #[derive(Clone)]
-pub struct Device(pub(crate) SystemDevice);
+pub struct CglDevice(pub(crate) SystemDevice);
 
-impl Device {
+impl CglDevice {
     /// Returns the native device corresponding to this device.
     #[inline]
     pub fn native_device(&self) -> NativeDevice {
