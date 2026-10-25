@@ -3,7 +3,8 @@
 use crate::base::egl::ffi::EGLImageKHR;
 use crate::context::ContextID;
 use crate::hardware_buffer::context::HardwareBufferContext;
-use crate::{Context, Device, Error, Surface, SurfaceID, SurfaceInfo};
+use crate::hardware_buffer::device::HardwareBufferDevice;
+use crate::{Context, Error, Surface, SurfaceID, SurfaceInfo};
 
 use crate::base::egl::device::EGL_FUNCTIONS;
 use euclid::default::Size2D;
@@ -89,7 +90,7 @@ impl Debug for HardwareBufferSurfaceTexture {
     }
 }
 
-impl Device {
+impl HardwareBufferDevice {
     /// Displays the contents of a widget surface on screen.
     ///
     /// Widget surfaces are internally double-buffered, so changes to them don't show up in their

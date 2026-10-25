@@ -90,7 +90,7 @@ unsafe impl Send for SendableHWND {}
 ///
 /// Devices contain most of the relevant surface management methods.
 #[allow(dead_code)]
-pub struct Device {
+pub struct WglDevice {
     pub(crate) adapter: WglAdapter,
     pub(crate) d3d11_device: ComPtr<ID3D11Device>,
     pub(crate) d3d11_device_context: ComPtr<ID3D11DeviceContext>,
@@ -111,7 +111,7 @@ pub struct NativeDevice {
     pub gl_dx_interop_device: HANDLE,
 }
 
-impl Drop for Device {
+impl Drop for WglDevice {
     fn drop(&mut self) {
         let dx_interop_functions = WGL_EXTENSION_FUNCTIONS
             .dx_interop_functions
@@ -123,8 +123,8 @@ impl Drop for Device {
     }
 }
 
-impl Device {
-    pub(crate) fn new(adapter: &WglAdapter) -> Result<Device, Error> {
+impl WglDevice {
+    pub(crate) fn new(adapter: &WglAdapter) -> Result<WglDevice, Error> {
         adapter.set_exported_variables();
 
         let dx_interop_functions = match WGL_EXTENSION_FUNCTIONS.dx_interop_functions {
@@ -160,7 +160,7 @@ impl Device {
 
             let hidden_window = HiddenWindow::new();
 
-            Ok(Device {
+            Ok(WglDevice {
                 adapter: adapter.clone(),
                 d3d11_device,
                 d3d11_device_context,
@@ -170,7 +170,7 @@ impl Device {
         }
     }
 
-    pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<Device, Error> {
+    pub(crate) fn from_native_device(native_device: NativeDevice) -> Result<WglDevice, Error> {
         unsafe {
             (*native_device.d3d11_device).AddRef();
             let d3d11_device = ComPtr::from_raw(native_device.d3d11_device);
@@ -195,7 +195,7 @@ impl Device {
             let gl_dx_interop_device = native_device.gl_dx_interop_device;
             let hidden_window = HiddenWindow::new();
 
-            Ok(Device {
+            Ok(WglDevice {
                 adapter,
                 d3d11_device,
                 d3d11_device_context,

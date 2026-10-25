@@ -15,6 +15,7 @@ use crate::base::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
 use crate::base::egl::ffi::EGL_NO_IMAGE_KHR;
 use crate::egl::types::{EGLSurface, EGLint};
 use crate::hardware_buffer::context::HardwareBufferContext;
+use crate::hardware_buffer::device::HardwareBufferDevice;
 use crate::hardware_buffer::surface::HardwareBufferSurface;
 use crate::hardware_buffer::surface::HardwareBufferSurfaceTexture;
 use crate::renderbuffers::Renderbuffers;
@@ -22,7 +23,6 @@ use crate::{
     egl, gl, gl_utils, Context, Error, Surface, SurfaceAccess, SurfaceTexture, SurfaceType,
 };
 
-use super::super::device::Device;
 use super::super::ohos_ffi::{
     eglGetNativeClientBufferANDROID, NativeWindowOperation, OHNativeWindow, OH_NativeBuffer,
     OH_NativeBuffer_Alloc, OH_NativeBuffer_Config, OH_NativeBuffer_Format,
@@ -46,7 +46,7 @@ pub(crate) enum SurfaceObjects {
     },
 }
 
-impl Device {
+impl HardwareBufferDevice {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
     ///
     /// Only the given context may ever render to the surface, but generic surfaces can be wrapped

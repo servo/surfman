@@ -1,6 +1,6 @@
 //! A wrapper around surfaceless Mesa `EGLDisplay`s.
 
-use super::connection::{Connection, NativeConnectionWrapper};
+use super::connection::{NativeConnectionWrapper, SurfacelessMesaConnection};
 use super::surface::SurfaceDataGuard;
 use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
@@ -24,7 +24,7 @@ const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 /// A thread-local handle to a device.
 ///
 /// Devices contain most of the relevant surface management methods.
-pub struct Device {
+pub struct SurfacelessMesaDevice {
     pub(crate) native_connection: Arc<NativeConnectionWrapper>,
     pub(crate) adapter: FreeUnixAdapter,
 }
@@ -38,10 +38,13 @@ pub struct NativeDevice {
     pub adapter: FreeUnixAdapter,
 }
 
-impl Device {
+impl SurfacelessMesaDevice {
     #[inline]
-    pub(crate) fn new(connection: &Connection, adapter: &Adapter) -> Result<Device, Error> {
-        Ok(Device {
+    pub(crate) fn new(
+        connection: &SurfacelessMesaConnection,
+        adapter: &Adapter,
+    ) -> Result<SurfacelessMesaDevice, Error> {
+        Ok(SurfacelessMesaDevice {
             native_connection: connection.native_connection.clone(),
             adapter: adapter.free_unix()?.clone(),
         })

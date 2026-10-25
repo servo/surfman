@@ -6,9 +6,8 @@
 
 #![allow(missing_docs)]
 
-use super::connection::Connection;
 use super::context::NativeContext;
-use super::device::Device;
+use super::{Connection, Device};
 use crate::{
     gl, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
     ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference, Surface,

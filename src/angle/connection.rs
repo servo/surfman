@@ -6,7 +6,7 @@
 //! implicit in the Win32 API, and as such this type is a no-op.
 
 use super::adapter::AngleAdapter;
-use super::device::{Device, NativeDevice, VendorPreference};
+use super::device::{AngleDevice, NativeDevice, VendorPreference};
 use crate::egl::types::EGLDisplay;
 use crate::{Adapter, AdapterPreferences, Error, GLApi, PowerPreference, RenderingPreference};
 
@@ -22,7 +22,7 @@ const INTEL_PCI_ID: UINT = 0x8086;
 /// thread-safe. So we need to use the DXGI/Direct3D concept of a connection instead. These are
 /// implicit in the Win32 API, and as such this type is a no-op.
 #[derive(Clone)]
-pub struct Connection;
+pub struct AngleConnection;
 
 /// An empty placeholder for native connections.
 ///
@@ -33,17 +33,17 @@ pub struct Connection;
 #[derive(Clone)]
 pub struct NativeConnection;
 
-impl Connection {
+impl AngleConnection {
     /// Connects to the default display.
     #[inline]
-    pub fn new() -> Result<Connection, Error> {
-        Ok(Connection)
+    pub fn new() -> Result<AngleConnection, Error> {
+        Ok(AngleConnection)
     }
 
     /// An alias for `Connection::new()`, present for consistency with other backends.
     #[inline]
-    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<Connection, Error> {
-        Connection::new()
+    pub unsafe fn from_native_connection(_: NativeConnection) -> Result<AngleConnection, Error> {
+        AngleConnection::new()
     }
 
     /// Returns the underlying native connection.
@@ -76,8 +76,8 @@ impl Connection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new(adapter.angle()?)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<AngleDevice, Error> {
+        AngleDevice::new(adapter.angle()?)
     }
 
     /// Wraps a `NativeDevice` in a `Device` and returns it.
@@ -85,8 +85,8 @@ impl Connection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<Device, Error> {
-        Device::from_native_device(native_device)
+    ) -> Result<AngleDevice, Error> {
+        AngleDevice::from_native_device(native_device)
     }
 
     /// Wraps an ANGLE `EGLDisplay`, along with the associated Direct3D device, in a `Device` and
@@ -99,13 +99,15 @@ impl Connection {
     pub unsafe fn create_device_from_egl_display(
         &self,
         egl_display: EGLDisplay,
-    ) -> Result<Device, Error> {
-        Device::from_egl_display(egl_display)
+    ) -> Result<AngleDevice, Error> {
+        AngleDevice::from_egl_display(egl_display)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
-    pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
-        Connection::new()
+    pub fn from_display_handle(
+        _: raw_window_handle::DisplayHandle,
+    ) -> Result<AngleConnection, Error> {
+        AngleConnection::new()
     }
 }
 

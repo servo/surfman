@@ -32,10 +32,10 @@ macro_rules! declare_surfman {
 
 /// Internal macro used for generating implementations of the `Connection` and `Device` traits.
 macro_rules! implement_interfaces {
-    () => {
+    ($connection:ident, $device:ident) => {
         mod implementation {
-            use super::connection::Connection;
-            use super::device::Device;
+            use super::connection::$connection as Connection;
+            use super::device::$device as Device;
             use euclid::default::Size2D;
             use glow::Texture;
             use std::os::raw::c_void;

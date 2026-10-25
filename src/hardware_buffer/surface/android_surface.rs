@@ -11,7 +11,7 @@ use super::super::android_ffi::{
 use super::super::android_ffi::{
     AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER, AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER,
 };
-use super::super::device::Device;
+use super::super::device::HardwareBufferDevice;
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGLImageKHR;
 use crate::base::egl::ffi::EGL_EXTENSION_FUNCTIONS;
@@ -50,7 +50,7 @@ pub(crate) enum SurfaceObjects {
     },
 }
 
-impl Device {
+impl HardwareBufferDevice {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
     ///
     /// Only the given context may ever render to the surface, but generic surfaces can be wrapped

@@ -1,6 +1,6 @@
 //! Represents a connection to a display server.
 
-use super::device::{Device, NativeDevice};
+use super::device::{NativeDevice, SurfacelessMesaDevice};
 use crate::base::egl::device::EGL_FUNCTIONS;
 use crate::base::egl::ffi::EGL_PLATFORM_SURFACELESS_MESA;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 /// A no-op connection.
 #[derive(Clone)]
-pub struct Connection {
+pub struct SurfacelessMesaConnection {
     pub(crate) native_connection: Arc<NativeConnectionWrapper>,
 }
 
@@ -30,10 +30,10 @@ pub struct NativeConnectionWrapper {
 unsafe impl Send for NativeConnectionWrapper {}
 unsafe impl Sync for NativeConnectionWrapper {}
 
-impl Connection {
+impl SurfacelessMesaConnection {
     /// Opens a surfaceless Mesa display.
     #[inline]
-    pub fn new() -> Result<Connection, Error> {
+    pub fn new() -> Result<SurfacelessMesaConnection, Error> {
         unsafe {
             EGL_FUNCTIONS.with(|egl| {
                 let egl_display_attributes = [egl::NONE as EGLAttrib];
@@ -56,7 +56,7 @@ impl Connection {
                 let native_connection =
                     NativeConnection(Arc::new(NativeConnectionWrapper { egl_display }));
 
-                Connection::from_native_connection(native_connection)
+                SurfacelessMesaConnection::from_native_connection(native_connection)
             })
         }
     }
@@ -65,8 +65,8 @@ impl Connection {
     #[inline]
     pub unsafe fn from_native_connection(
         native_connection: NativeConnection,
-    ) -> Result<Connection, Error> {
-        Ok(Connection {
+    ) -> Result<SurfacelessMesaConnection, Error> {
+        Ok(SurfacelessMesaConnection {
             native_connection: native_connection.0,
         })
     }
@@ -93,8 +93,8 @@ impl Connection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-        Device::new(self, adapter)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<SurfacelessMesaDevice, Error> {
+        SurfacelessMesaDevice::new(self, adapter)
     }
 
     /// An alias for `connection.create_device()` with the default adapter.
@@ -102,12 +102,14 @@ impl Connection {
     pub unsafe fn create_device_from_native_device(
         &self,
         _: NativeDevice,
-    ) -> Result<Device, Error> {
-        Device::new(self, &self.create_adapter(Default::default())?)
+    ) -> Result<SurfacelessMesaDevice, Error> {
+        SurfacelessMesaDevice::new(self, &self.create_adapter(Default::default())?)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
-    pub fn from_display_handle(_: raw_window_handle::DisplayHandle) -> Result<Connection, Error> {
+    pub fn from_display_handle(
+        _: raw_window_handle::DisplayHandle,
+    ) -> Result<SurfacelessMesaConnection, Error> {
         Err(Error::IncompatibleRawDisplayHandle)
     }
 }

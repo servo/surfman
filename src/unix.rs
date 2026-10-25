@@ -4,11 +4,11 @@
 
 /// Wayland or X11 display server connections.
 pub mod connection {
-    use crate::mesa_surfaceless::device::Device as SWDevice;
+    use crate::mesa_surfaceless::device::SurfacelessMesaDevice as SWDevice;
     use crate::multi::connection::Connection as MultiConnection;
     use crate::multi::device::Device as MultiDevice;
-    use crate::wayland::device::Device as WaylandDevice;
-    use crate::x11::device::Device as X11Device;
+    use crate::wayland::device::WaylandDevice;
+    use crate::x11::device::X11Device;
     type HWDevice = MultiDevice<WaylandDevice, X11Device>;
 
     /// Either a Wayland or an X11 display server connection.
@@ -17,9 +17,9 @@ pub mod connection {
 
 /// Thread-local handles to devices.
 pub mod device {
-    use crate::mesa_surfaceless::device::Device as SWDevice;
-    use crate::wayland::device::Device as WaylandDevice;
-    use crate::x11::device::Device as X11Device;
+    use crate::mesa_surfaceless::device::SurfacelessMesaDevice as SWDevice;
+    use crate::wayland::device::WaylandDevice;
+    use crate::x11::device::X11Device;
 
     use crate::multi::device::Device as MultiDevice;
     type HWDevice = MultiDevice<WaylandDevice, X11Device>;
