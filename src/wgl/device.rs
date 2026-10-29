@@ -47,7 +47,7 @@ use winapi::um::handleapi::INVALID_HANDLE_VALUE;
 use winapi::um::libloaderapi;
 use winapi::um::wingdi::{self, PIXELFORMATDESCRIPTOR};
 use winapi::um::wingdi::{
-    wglDeleteContext, wglGetCurrentContext, wglGetProcAddress, wglMakeCurrent,
+    wglDeleteContext, wglGetCurrentContext, wglGetCurrentDC, wglGetProcAddress, wglMakeCurrent,
 };
 use winapi::um::winuser::{self, COLOR_BACKGROUND, CS_OWNDC, MSG, WM_CLOSE};
 use winapi::um::winuser::{WNDCLASSA, WS_OVERLAPPEDWINDOW};
@@ -405,6 +405,10 @@ impl WglDevice {
         let gl = {
             let hidden_window_dc = hidden_window.get_dc();
             let dc = hidden_window_dc.dc;
+            // `wglMakeCurrent` needs the DC to have the context's pixel format.
+            if wglGetCurrentContext() == native_context.0 {
+                set_dc_pixel_format(dc, wingdi::GetPixelFormat(wglGetCurrentDC()));
+            }
             let _guard = CurrentContextGuard::new();
             let ok = wglMakeCurrent(dc, native_context.0);
             assert_ne!(ok, FALSE);
