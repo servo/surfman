@@ -14,6 +14,3 @@
 //! device that can dynamically switch between Wayland, X11, and OSMesa.
 
 pub mod connection;
-pub mod context;
-pub mod device;
-pub mod surface;

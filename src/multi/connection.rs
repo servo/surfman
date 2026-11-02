@@ -1,54 +1,34 @@
 //! A connection abstraction that allows the choice of backends dynamically.
 
-use super::device::Device;
 use crate::adapter::AdapterPreferences;
 use crate::connection::Connection as ConnectionInterface;
-use crate::device::Device as DeviceInterface;
 use crate::GLApi;
-use crate::{Adapter, Error};
+use crate::{Adapter, Device, Error};
 
 /// A connection to the display server.
+#[derive(Clone)]
 pub enum Connection<Def, Alt>
 where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-    Def::Connection: ConnectionInterface,
-    Alt::Connection: ConnectionInterface,
+    Def: ConnectionInterface,
+    Alt: ConnectionInterface,
 {
     /// The default connection to the display server.
-    Default(Def::Connection),
+    Default(Def),
     /// The alternate connection to the display server.
-    Alternate(Alt::Connection),
-}
-
-impl<Def, Alt> Clone for Connection<Def, Alt>
-where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-    Def::Connection: Clone,
-    Alt::Connection: Clone,
-{
-    fn clone(&self) -> Self {
-        match self {
-            Connection::Default(ref connection) => Connection::Default(connection.clone()),
-            Connection::Alternate(ref connection) => Connection::Alternate(connection.clone()),
-        }
-    }
+    Alternate(Alt),
 }
 
 impl<Def, Alt> Connection<Def, Alt>
 where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-    Def::Connection: ConnectionInterface<Device = Def>,
-    Alt::Connection: ConnectionInterface<Device = Alt>,
+    Def: ConnectionInterface,
+    Alt: ConnectionInterface,
 {
     /// Connects to the default display.
     #[inline]
     pub fn new() -> Result<Connection<Def, Alt>, Error> {
-        match <Def::Connection>::new() {
+        match Def::new() {
             Ok(connection) => Ok(Connection::Default(connection)),
-            Err(_) => <Alt::Connection>::new().map(Connection::Alternate),
+            Err(_) => Alt::new().map(Connection::Alternate),
         }
     }
 
@@ -71,10 +51,10 @@ where
     /// Opens the hardware device corresponding to the given adapter.
     ///
     /// Device handles are local to a single thread.
-    pub fn create_device(&self, adapter: &Adapter) -> Result<Device<Def, Alt>, Error> {
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         match self {
-            Self::Default(connection) => connection.create_device(adapter).map(Device::Default),
-            Self::Alternate(connection) => connection.create_device(adapter).map(Device::Alternate),
+            Self::Default(connection) => connection.create_device(adapter),
+            Self::Alternate(connection) => connection.create_device(adapter),
         }
     }
 
@@ -82,22 +62,18 @@ where
     pub fn from_display_handle(
         handle: raw_window_handle::DisplayHandle,
     ) -> Result<Connection<Def, Alt>, Error> {
-        match <Def::Connection>::from_display_handle(handle) {
+        match Def::from_display_handle(handle) {
             Ok(connection) => Ok(Connection::Default(connection)),
-            Err(_) => <Alt::Connection>::from_display_handle(handle).map(Connection::Alternate),
+            Err(_) => Alt::from_display_handle(handle).map(Connection::Alternate),
         }
     }
 }
 
 impl<Def, Alt> ConnectionInterface for Connection<Def, Alt>
 where
-    Def: DeviceInterface,
-    Alt: DeviceInterface,
-    Def::Connection: ConnectionInterface<Device = Def>,
-    Alt::Connection: ConnectionInterface<Device = Alt>,
+    Def: ConnectionInterface,
+    Alt: ConnectionInterface,
 {
-    type Device = Device<Def, Alt>;
-
     #[inline]
     fn new() -> Result<Connection<Def, Alt>, Error> {
         Connection::new()
@@ -114,7 +90,7 @@ where
     }
 
     #[inline]
-    fn create_device(&self, adapter: &Adapter) -> Result<Device<Def, Alt>, Error> {
+    fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
         Connection::create_device(self, adapter)
     }
 

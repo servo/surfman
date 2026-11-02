@@ -63,6 +63,7 @@ pub use wgl as default;
 
 pub use crate::context::{Context, ContextAttributeFlags, ContextAttributes, ContextID};
 pub use crate::context_descriptor::ContextDescriptor;
+pub use crate::device::Device;
 pub use crate::error::{Error, WindowingApiError};
 pub use crate::info::{GLApi, GLVersion};
 pub use crate::surface::{Surface, SurfaceAccess, SurfaceID, SurfaceInfo, SurfaceType};
@@ -72,19 +73,17 @@ pub(crate) use glow::{self as gl, Context as Gl};
 pub(crate) use macros::implement_interfaces;
 
 #[cfg(all(windows_platform, angle_default))]
-pub use angle::{connection::AngleConnection as Connection, device::AngleDevice as Device};
+pub use angle::connection::AngleConnection as Connection;
 #[cfg(macos_platform)]
-pub use cgl::{connection::CglConnection as Connection, device::CglDevice as Device};
+pub use cgl::connection::CglConnection as Connection;
 #[cfg(any(android_platform, ohos_platform))]
-pub use hardware_buffer::{
-    connection::HardwareBufferConnection as Connection, device::HardwareBufferDevice as Device,
-};
+pub use hardware_buffer::connection::HardwareBufferConnection as Connection;
 #[cfg(all(x11_platform, not(wayland_default)))]
-pub use unix::{connection::Connection, device::Device};
+pub use unix::connection::Connection;
 #[cfg(wayland_default)]
-pub use wayland::{connection::WaylandConnection as Connection, device::WaylandDevice as Device};
+pub use wayland::connection::WaylandConnection as Connection;
 #[cfg(all(windows_platform, not(angle_default)))]
-pub use wgl::{connection::WglConnection as Connection, device::WglDevice as Device};
+pub use wgl::connection::WglConnection as Connection;
 
 // TODO(pcwalton): Fill this in with other OS's.
 #[cfg(target_os = "macos")]

@@ -5,7 +5,7 @@ pub mod context;
 pub mod device;
 pub mod surface;
 
-crate::implement_interfaces!(WaylandConnection, WaylandDevice);
+crate::implement_interfaces!(WaylandConnection);
 
 #[cfg(test)]
 use self::connection::WaylandConnection as Connection;

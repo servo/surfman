@@ -125,7 +125,7 @@ fn main() {
             ..Default::default()
         })
         .unwrap();
-    let device = connection.create_device(&adapter).unwrap();
+    let device = surfman::connection::Connection::create_device(&connection, &adapter).unwrap();
 
     let context_attributes = ContextAttributes {
         version: GLVersion::new(3, 0),

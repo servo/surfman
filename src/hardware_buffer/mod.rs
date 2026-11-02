@@ -12,7 +12,7 @@ mod android_ffi;
 #[cfg(ohos_platform)]
 mod ohos_ffi;
 
-crate::implement_interfaces!(HardwareBufferConnection, HardwareBufferDevice);
+crate::implement_interfaces!(HardwareBufferConnection);
 
 #[cfg(any(test, feature = "sm-test"))]
 use self::connection::HardwareBufferConnection as Connection;

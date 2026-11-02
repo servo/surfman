@@ -92,6 +92,8 @@ pub enum Error {
     IncompatibleNativeContext,
     /// The native device does not match the supplied connection.
     IncompatibleNativeDevice,
+    /// The device is not of the requested backend.
+    IncompatibleDevice,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.
