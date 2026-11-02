@@ -94,6 +94,8 @@ pub enum Error {
     IncompatibleNativeDevice,
     /// The device is not of the requested backend.
     IncompatibleDevice,
+    /// The connection is not of the requested backend.
+    IncompatibleConnection,
 }
 
 /// Abstraction of the errors that EGL, CGL, GLX, CGL, etc. return.

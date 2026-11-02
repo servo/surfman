@@ -35,12 +35,9 @@ mod info;
 pub mod macros;
 #[cfg(free_unix)]
 pub mod mesa_surfaceless;
-pub mod multi;
 mod renderbuffers;
 mod surface;
 mod surface_texture;
-#[cfg(all(x11_platform, not(wayland_default)))]
-pub mod unix;
 #[cfg(wayland_platform)]
 pub mod wayland;
 #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
@@ -48,19 +45,7 @@ pub mod wgl;
 #[cfg(x11_platform)]
 pub mod x11;
 
-#[cfg(all(windows_platform, angle_default))]
-pub use angle as default;
-#[cfg(macos_platform)]
-pub use cgl as default;
-#[cfg(any(android_platform, ohos_platform))]
-pub use hardware_buffer as default;
-#[cfg(all(x11_platform, not(wayland_default)))]
-pub use unix as default;
-#[cfg(wayland_default)]
-pub use wayland as default;
-#[cfg(all(windows_platform, not(angle_default)))]
-pub use wgl as default;
-
+pub use crate::connection::Connection;
 pub use crate::context::{Context, ContextAttributeFlags, ContextAttributes, ContextID};
 pub use crate::context_descriptor::ContextDescriptor;
 pub use crate::device::Device;
@@ -70,20 +55,6 @@ pub use crate::surface::{Surface, SurfaceAccess, SurfaceID, SurfaceInfo, Surface
 pub use crate::surface_texture::SurfaceTexture;
 pub use adapter::{Adapter, AdapterPreferences, PowerPreference, RenderingPreference};
 pub(crate) use glow::{self as gl, Context as Gl};
-pub(crate) use macros::implement_interfaces;
-
-#[cfg(all(windows_platform, angle_default))]
-pub use angle::connection::AngleConnection as Connection;
-#[cfg(macos_platform)]
-pub use cgl::connection::CglConnection as Connection;
-#[cfg(any(android_platform, ohos_platform))]
-pub use hardware_buffer::connection::HardwareBufferConnection as Connection;
-#[cfg(all(x11_platform, not(wayland_default)))]
-pub use unix::connection::Connection;
-#[cfg(wayland_default)]
-pub use wayland::connection::WaylandConnection as Connection;
-#[cfg(all(windows_platform, not(angle_default)))]
-pub use wgl::connection::WglConnection as Connection;
 
 // TODO(pcwalton): Fill this in with other OS's.
 #[cfg(target_os = "macos")]
