@@ -66,8 +66,8 @@ impl WglConnection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<WglDevice, Error> {
-        WglDevice::from_native_device(native_device)
+    ) -> Result<Device, Error> {
+        WglDevice::from_native_device(native_device).map(Device::from)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.

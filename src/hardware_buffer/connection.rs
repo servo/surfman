@@ -64,11 +64,12 @@ impl HardwareBufferConnection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<HardwareBufferDevice, Error> {
+    ) -> Result<Device, Error> {
         Ok(HardwareBufferDevice {
             egl_display: native_device.0,
             display_is_owned: false,
-        })
+        }
+        .into())
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
