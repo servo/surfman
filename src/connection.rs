@@ -173,13 +173,20 @@ impl Connection {
 #[cfg(test)]
 mod tests {
     use super::Connection;
-    use crate::{ContextAttributeFlags, ContextAttributes, GLVersion};
+    use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 
     #[cfg_attr(not(feature = "sm-test"), test)]
     fn test_default_connection_creates_contexts() {
         let connection = Connection::new().unwrap();
         let adapter = connection.create_adapter(Default::default()).unwrap();
-        let device = connection.create_device(&adapter).unwrap();
+        let device = match connection.create_device(&adapter) {
+            Ok(device) => device,
+            Err(Error::RequiredExtensionUnavailable) => {
+                // Can't run this test on this hardware.
+                return;
+            }
+            Err(err) => panic!("Failed to create device: {:?}", err),
+        };
         let descriptor = device
             .create_context_descriptor(&ContextAttributes {
                 version: GLVersion::new(3, 0),
