@@ -1,6 +1,6 @@
 //! Functionality common to backends using EGL contexts.
 
-use super::device::EGL_FUNCTIONS;
+use super::device::{lookup_gles_symbol, EGL_FUNCTIONS};
 use super::error::ToWindowingApiError;
 use super::ffi::EGL_CONTEXT_OPENGL_PROFILE_MASK;
 use super::ffi::{EGL_CONTEXT_MINOR_VERSION_KHR, EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT};
@@ -631,10 +631,14 @@ pub(crate) unsafe fn egl_config_from_id(
 }
 
 pub(crate) fn get_proc_address(symbol_name: &str) -> *const c_void {
-    EGL_FUNCTIONS.with(|egl| unsafe {
-        let symbol_name: CString = CString::new(symbol_name).unwrap();
-        egl.GetProcAddress(symbol_name.as_ptr()).cast()
-    })
+    let symbol_name = CString::new(symbol_name).expect("GL symbol names contain no NUL bytes");
+    let symbol = EGL_FUNCTIONS.with(|egl| unsafe { egl.GetProcAddress(symbol_name.as_ptr()) });
+    if !symbol.is_null() {
+        return symbol.cast();
+    }
+    // Before EGL 1.5, eglGetProcAddress does not have to return core functions.
+    // https://registry.khronos.org/EGL/sdk/docs/man/html/eglGetProcAddress.xhtml
+    lookup_gles_symbol(&symbol_name)
 }
 
 // Creates and returns a dummy pbuffer surface for the given context. This is used as the default
