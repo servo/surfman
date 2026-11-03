@@ -7,11 +7,12 @@
 #![allow(missing_docs)]
 
 use super::context::NativeContext;
-use super::{Connection, Device};
+use super::ConcreteDevice;
+use super::Connection;
 use crate::{
     gl, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
-    ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference, Surface,
-    SurfaceAccess, SurfaceType, WindowingApiError,
+    ContextDescriptor, Device, Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference,
+    Surface, SurfaceAccess, SurfaceType, WindowingApiError,
 };
 
 use euclid::default::Size2D;
@@ -887,8 +888,10 @@ pub fn test_get_native_context() {
     unsafe {
         clear(&env.gl, &[0, 255, 0, 255]);
 
-        let mut other_context = env
-            .device
+        let concrete_device: &mut ConcreteDevice = (&mut env.device)
+            .try_into()
+            .expect("Device should belong to this backend");
+        let mut other_context = concrete_device
             .create_context_from_native_context(native_context)
             .unwrap();
 

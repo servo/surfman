@@ -8,7 +8,9 @@
 use super::adapter::AngleAdapter;
 use super::device::{AngleDevice, NativeDevice, VendorPreference};
 use crate::egl::types::EGLDisplay;
-use crate::{Adapter, AdapterPreferences, Error, GLApi, PowerPreference, RenderingPreference};
+use crate::{
+    Adapter, AdapterPreferences, Device, Error, GLApi, PowerPreference, RenderingPreference,
+};
 
 use winapi::shared::minwindef::UINT;
 use winapi::um::d3dcommon::{D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_WARP};
@@ -76,8 +78,8 @@ impl AngleConnection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<AngleDevice, Error> {
-        AngleDevice::new(adapter.angle()?)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        AngleDevice::new(adapter.angle()?).map(Device::from)
     }
 
     /// Wraps a `NativeDevice` in a `Device` and returns it.

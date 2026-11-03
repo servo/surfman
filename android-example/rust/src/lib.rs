@@ -52,7 +52,7 @@ pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThre
         *app.borrow_mut() = Some(App::new(
             connection,
             adapter,
-            device.into(),
+            device,
             context,
             resource_loader,
             window_size,

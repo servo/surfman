@@ -7,7 +7,7 @@ use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::error::Error;
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
-use crate::{egl, Adapter, AdapterPreferences};
+use crate::{egl, Adapter, AdapterPreferences, Device};
 
 use std::marker::PhantomData;
 use std::os::raw::c_void;
@@ -156,8 +156,8 @@ impl X11Connection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<X11Device, Error> {
-        X11Device::new(self, adapter.free_unix()?)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        X11Device::new(self, adapter.free_unix()?).map(Device::from)
     }
 
     /// Opens the hardware device corresponding to the adapter wrapped in the given native

@@ -13,7 +13,7 @@ crate::implement_interfaces!(CglConnection);
 #[cfg(test)]
 use self::connection::CglConnection as Connection;
 #[cfg(test)]
-use self::device::CglDevice as Device;
+use self::device::CglDevice as ConcreteDevice;
 #[cfg(test)]
 #[path = "../tests.rs"]
 mod tests;

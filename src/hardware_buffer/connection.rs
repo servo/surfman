@@ -4,7 +4,7 @@
 
 use super::adapter::HardwareBufferAdapter;
 use super::device::{HardwareBufferDevice, NativeDevice};
-use crate::{Adapter, AdapterPreferences, Error, GLApi};
+use crate::{Adapter, AdapterPreferences, Device, Error, GLApi};
 
 /// A connection to the display server.
 #[derive(Clone)]
@@ -51,8 +51,8 @@ impl HardwareBufferConnection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, _: &Adapter) -> Result<HardwareBufferDevice, Error> {
-        HardwareBufferDevice::new()
+    pub fn create_device(&self, _: &Adapter) -> Result<Device, Error> {
+        HardwareBufferDevice::new().map(Device::from)
     }
 
     /// Wraps an Android `EGLDisplay` in a device and returns it.

@@ -1,4 +1,4 @@
-//! The abstract interface that all devices conform to.
+//! A platform-independent representation of a display device.
 
 use crate::macros::{dispatch, enum_conversion};
 use crate::{
@@ -80,8 +80,6 @@ enum_conversion!(Device, Wgl, WglDevice, wgl, IncompatibleDevice);
 enum_conversion!(Device, X11, X11Device, x11, IncompatibleDevice);
 
 impl Device {
-    // device.rs
-
     /// Returns the adapter that this device was created with.
     pub fn adapter(&self) -> Adapter {
         dispatch!(Device, self, device => device.adapter())
@@ -91,8 +89,6 @@ impl Device {
     pub fn gl_api(&self) -> GLApi {
         dispatch!(Device, self, device => device.gl_api())
     }
-
-    // context.rs
 
     /// Creates a context descriptor with the given attributes.
     ///
@@ -205,8 +201,6 @@ impl Device {
     pub fn context_surface_info(&self, context: &Context) -> Result<Option<SurfaceInfo>, Error> {
         dispatch!(Device, self, device => device.context_surface_info(context))
     }
-
-    // surface.rs
 
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
     ///

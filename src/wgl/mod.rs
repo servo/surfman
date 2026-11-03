@@ -13,7 +13,7 @@ crate::implement_interfaces!(WglConnection);
 #[cfg(test)]
 use self::connection::WglConnection as Connection;
 #[cfg(test)]
-use self::device::WglDevice as Device;
+use self::device::WglDevice as ConcreteDevice;
 #[cfg(test)]
 #[path = "../tests.rs"]
 mod tests;

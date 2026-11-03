@@ -1,4 +1,4 @@
-//! A macro for use in the top-level crate.
+//! Macros for use in the top-level crate.
 
 /// When using `surfman`, you should place this macro at the top of your crate, like so:
 ///
@@ -30,7 +30,7 @@ macro_rules! declare_surfman {
     };
 }
 
-/// Internal macro used for generating implementations of the `Connection` and `Device` traits.
+/// Internal macro used for generating implementations of the `Connection` trait.
 macro_rules! implement_interfaces {
     ($connection:ident) => {
         mod implementation {
@@ -61,7 +61,7 @@ macro_rules! implement_interfaces {
 
                 #[inline]
                 fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-                    Connection::create_device(self, adapter).map(Device::from)
+                    Connection::create_device(self, adapter)
                 }
 
                 #[inline]
