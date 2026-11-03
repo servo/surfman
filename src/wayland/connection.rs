@@ -6,8 +6,8 @@ use crate::base::egl::ffi::EGL_PLATFORM_WAYLAND_KHR;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
-use crate::Error;
 use crate::{egl, Adapter, AdapterPreferences};
+use crate::{Device, Error};
 
 use std::os::raw::c_void;
 use std::ptr;
@@ -77,8 +77,8 @@ impl WaylandConnection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<WaylandDevice, Error> {
-        WaylandDevice::new(self, adapter.free_unix()?)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        WaylandDevice::new(self, adapter.free_unix()?).map(Device::from)
     }
 
     /// Opens the hardware device corresponding to the adapter wrapped in the given native

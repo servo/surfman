@@ -6,8 +6,8 @@ use crate::base::egl::ffi::EGL_PLATFORM_SURFACELESS_MESA;
 use crate::egl::types::{EGLAttrib, EGLDisplay};
 use crate::free_unix::adapter::FreeUnixAdapter;
 use crate::info::GLApi;
-use crate::Error;
 use crate::{egl, Adapter, AdapterPreferences};
+use crate::{Device, Error};
 
 use std::os::raw::c_void;
 use std::sync::Arc;
@@ -93,8 +93,8 @@ impl SurfacelessMesaConnection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<SurfacelessMesaDevice, Error> {
-        SurfacelessMesaDevice::new(self, adapter)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        SurfacelessMesaDevice::new(self, adapter).map(Device::from)
     }
 
     /// An alias for `connection.create_device()` with the default adapter.

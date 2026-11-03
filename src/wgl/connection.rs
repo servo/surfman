@@ -4,7 +4,7 @@
 
 use super::adapter::WglAdapter;
 use super::device::{NativeDevice, WglDevice};
-use crate::{Adapter, AdapterPreferences, Error, GLApi};
+use crate::{Adapter, AdapterPreferences, Device, Error, GLApi};
 
 /// Represents a connection to the display server.
 ///
@@ -51,8 +51,8 @@ impl WglConnection {
 
     /// Opens a device.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<WglDevice, Error> {
-        WglDevice::new(adapter.wgl()?)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        WglDevice::new(adapter.wgl()?).map(Device::from)
     }
 
     /// Creates a `Device` from a Direct3D 11 device and associated GL/DX interop handle.

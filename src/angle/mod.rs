@@ -6,12 +6,12 @@ pub mod context;
 pub mod device;
 pub mod surface;
 
-crate::implement_interfaces!(AngleConnection, AngleDevice);
+crate::implement_interfaces!(AngleConnection);
 
 #[cfg(test)]
 use self::connection::AngleConnection as Connection;
 #[cfg(test)]
-use self::device::AngleDevice as Device;
+use self::device::AngleDevice as ConcreteDevice;
 #[cfg(test)]
 #[path = "../tests.rs"]
 mod tests;

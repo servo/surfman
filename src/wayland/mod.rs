@@ -5,12 +5,12 @@ pub mod context;
 pub mod device;
 pub mod surface;
 
-crate::implement_interfaces!(WaylandConnection, WaylandDevice);
+crate::implement_interfaces!(WaylandConnection);
 
 #[cfg(test)]
 use self::connection::WaylandConnection as Connection;
 #[cfg(test)]
-use self::device::WaylandDevice as Device;
+use self::device::WaylandDevice as ConcreteDevice;
 #[cfg(test)]
 #[path = "../tests.rs"]
 mod tests;

@@ -7,8 +7,8 @@ use super::device::CglDevice;
 use crate::adapter::{Adapter, AdapterPreferences};
 use crate::base::io_surface::connection::Connection as SystemConnection;
 use crate::base::io_surface::device::NativeDevice;
-use crate::Error;
 use crate::GLApi;
+use crate::{Device, Error};
 
 pub use crate::base::io_surface::connection::NativeConnection;
 
@@ -53,8 +53,11 @@ impl CglConnection {
     ///
     /// Device handles are local to a single thread.
     #[inline]
-    pub fn create_device(&self, adapter: &Adapter) -> Result<CglDevice, Error> {
-        self.0.create_device(adapter.apple()?).map(CglDevice)
+    pub fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
+        self.0
+            .create_device(adapter.apple()?)
+            .map(CglDevice)
+            .map(Device::from)
     }
 
     /// An alias for `connection.create_device()` with the default adapter.

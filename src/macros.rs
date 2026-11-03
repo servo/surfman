@@ -1,4 +1,4 @@
-//! A macro for use in the top-level crate.
+//! Macros for use in the top-level crate.
 
 /// When using `surfman`, you should place this macro at the top of your crate, like so:
 ///
@@ -30,28 +30,17 @@ macro_rules! declare_surfman {
     };
 }
 
-/// Internal macro used for generating implementations of the `Connection` and `Device` traits.
+/// Internal macro used for generating implementations of the `Connection` trait.
 macro_rules! implement_interfaces {
-    ($connection:ident, $device:ident) => {
+    ($connection:ident) => {
         mod implementation {
             use super::connection::$connection as Connection;
-            use super::device::$device as Device;
-            use euclid::default::Size2D;
-            use glow::Texture;
-            use std::os::raw::c_void;
             use $crate::adapter::{Adapter, AdapterPreferences};
             use $crate::connection::Connection as ConnectionInterface;
-            use $crate::device::Device as DeviceInterface;
             use $crate::info::GLApi;
-            use $crate::Error;
-            use $crate::{
-                Context, ContextAttributes, ContextDescriptor, ContextID, Surface, SurfaceAccess,
-                SurfaceInfo, SurfaceTexture, SurfaceType,
-            };
+            use $crate::{Device, Error};
 
             impl ConnectionInterface for Connection {
-                type Device = Device;
-
                 #[inline]
                 fn new() -> Result<Connection, Error> {
                     Connection::new()
@@ -71,7 +60,7 @@ macro_rules! implement_interfaces {
                 }
 
                 #[inline]
-                fn create_device(&self, adapter: &Adapter) -> Result<Self::Device, Error> {
+                fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
                     Connection::create_device(self, adapter)
                 }
 
@@ -80,194 +69,6 @@ macro_rules! implement_interfaces {
                     handle: raw_window_handle::DisplayHandle,
                 ) -> Result<Connection, Error> {
                     Connection::from_display_handle(handle)
-                }
-            }
-
-            impl DeviceInterface for Device {
-                type Connection = Connection;
-
-                // device.rs
-
-                #[inline]
-                fn adapter(&self) -> Adapter {
-                    Device::adapter(self)
-                }
-
-                #[inline]
-                fn gl_api(&self) -> GLApi {
-                    Device::gl_api(self)
-                }
-
-                // context.rs
-
-                #[inline]
-                fn create_context_descriptor(
-                    &self,
-                    attributes: &ContextAttributes,
-                ) -> Result<ContextDescriptor, Error> {
-                    Device::create_context_descriptor(self, attributes)
-                }
-
-                #[inline]
-                fn create_context(
-                    &self,
-                    descriptor: &ContextDescriptor,
-                    share_with: Option<&Context>,
-                ) -> Result<Context, Error> {
-                    Device::create_context(self, descriptor, share_with)
-                }
-
-                #[inline]
-                fn destroy_context(&self, context: &mut Context) -> Result<(), Error> {
-                    Device::destroy_context(self, context)
-                }
-
-                #[inline]
-                fn context_descriptor(&self, context: &Context) -> ContextDescriptor {
-                    Device::context_descriptor(self, context)
-                }
-
-                #[inline]
-                fn make_context_current(&self, context: &Context) -> Result<(), Error> {
-                    Device::make_context_current(self, context)
-                }
-
-                #[inline]
-                fn make_no_context_current(&self) -> Result<(), Error> {
-                    Device::make_no_context_current(self)
-                }
-
-                #[inline]
-                fn context_descriptor_attributes(
-                    &self,
-                    context_descriptor: &ContextDescriptor,
-                ) -> ContextAttributes {
-                    Device::context_descriptor_attributes(self, context_descriptor)
-                }
-
-                #[inline]
-                fn get_proc_address(&self, context: &Context, symbol_name: &str) -> *const c_void {
-                    Device::get_proc_address(self, context, symbol_name)
-                }
-
-                #[inline]
-                fn bind_surface_to_context(
-                    &self,
-                    context: &mut Context,
-                    surface: Surface,
-                ) -> Result<(), (Error, Surface)> {
-                    Device::bind_surface_to_context(self, context, surface)
-                }
-
-                #[inline]
-                fn unbind_surface_from_context(
-                    &self,
-                    context: &mut Context,
-                ) -> Result<Option<Surface>, Error> {
-                    Device::unbind_surface_from_context(self, context)
-                }
-
-                #[inline]
-                fn context_id(&self, context: &Context) -> ContextID {
-                    Device::context_id(self, context)
-                }
-
-                #[inline]
-                fn context_surface_info(
-                    &self,
-                    context: &Context,
-                ) -> Result<Option<SurfaceInfo>, Error> {
-                    Device::context_surface_info(self, context)
-                }
-
-                // surface.rs
-
-                #[inline]
-                fn create_surface(
-                    &self,
-                    context: &Context,
-                    surface_access: SurfaceAccess,
-                    surface_type: SurfaceType<'_>,
-                ) -> Result<Surface, Error> {
-                    Device::create_surface(self, context, surface_access, surface_type)
-                }
-
-                #[inline]
-                fn create_surface_texture(
-                    &self,
-                    context: &mut Context,
-                    surface: Surface,
-                ) -> Result<SurfaceTexture, (Error, Surface)> {
-                    Device::create_surface_texture(self, context, surface)
-                }
-
-                #[inline]
-                fn destroy_surface(
-                    &self,
-                    context: &mut Context,
-                    surface: &mut Surface,
-                ) -> Result<(), Error> {
-                    Device::destroy_surface(self, context, surface)
-                }
-
-                #[inline]
-                fn destroy_surface_texture(
-                    &self,
-                    context: &mut Context,
-                    surface_texture: SurfaceTexture,
-                ) -> Result<Surface, (Error, SurfaceTexture)> {
-                    Device::destroy_surface_texture(self, context, surface_texture)
-                }
-
-                #[inline]
-                fn surface_gl_texture_target(&self) -> u32 {
-                    Device::surface_gl_texture_target(self)
-                }
-
-                #[inline]
-                fn present_bound_surface(&self, context: &mut Context) -> Result<(), Error> {
-                    Device::present_bound_surface(self, context)
-                }
-
-                #[inline]
-                fn present_surface(
-                    &self,
-                    context: &Context,
-                    surface: &mut Surface,
-                ) -> Result<(), Error> {
-                    Device::present_surface(self, context, surface)
-                }
-
-                #[inline]
-                fn resize_bound_surface(
-                    &self,
-                    context: &mut Context,
-                    size: Size2D<i32>,
-                ) -> Result<(), Error> {
-                    Device::resize_bound_surface(self, context, size)
-                }
-
-                #[inline]
-                fn resize_surface(
-                    &self,
-                    context: &Context,
-                    surface: &mut Surface,
-                    size: Size2D<i32>,
-                ) -> Result<(), Error> {
-                    Device::resize_surface(self, context, surface, size)
-                }
-
-                #[inline]
-                fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-                    Device::surface_info(self, surface)
-                }
-
-                #[inline]
-                fn surface_texture_object(
-                    &self,
-                    surface_texture: &SurfaceTexture,
-                ) -> Option<Texture> {
-                    Device::surface_texture_object(self, surface_texture)
                 }
             }
         }
@@ -319,5 +120,28 @@ macro_rules! enum_conversion {
     };
 }
 
+/// A macro that forwards a call to the backend type wrapped by a [`crate::Device`].
+macro_rules! dispatch {
+    ($enum:ident, $value:expr, $inner:ident => $body:expr) => {
+        match $value {
+            #[cfg(all(windows_platform, feature = "sm-angle"))]
+            $enum::Angle($inner) => $body,
+            #[cfg(macos_platform)]
+            $enum::Cgl($inner) => $body,
+            #[cfg(any(android_platform, ohos_platform))]
+            $enum::HardwareBuffer($inner) => $body,
+            #[cfg(free_unix)]
+            $enum::SurfacelessMesa($inner) => $body,
+            #[cfg(wayland_platform)]
+            $enum::Wayland($inner) => $body,
+            #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+            $enum::Wgl($inner) => $body,
+            #[cfg(x11_platform)]
+            $enum::X11($inner) => $body,
+        }
+    };
+}
+
+pub(crate) use dispatch;
 pub(crate) use enum_conversion;
 pub(crate) use implement_interfaces;
