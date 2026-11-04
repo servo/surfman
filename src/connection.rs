@@ -1,9 +1,11 @@
-//! The abstract interface that all connections conform to.
+//! A connection to the display server, which wraps a platform-specific backend connection.
 
 use crate::adapter::AdapterPreferences;
 use crate::macros::{dispatch, enum_conversion};
 use crate::{Adapter, Device, Error, GLApi};
 use raw_window_handle::DisplayHandle;
+#[cfg(all(free_unix, not(wayland_default)))]
+use raw_window_handle::RawDisplayHandle;
 
 #[cfg(all(windows_platform, feature = "sm-angle"))]
 use crate::angle::connection::AngleConnection;
@@ -85,71 +87,49 @@ enum_conversion!(Connection, Wgl, WglConnection, wgl, IncompatibleConnection);
 #[cfg(x11_platform)]
 enum_conversion!(Connection, X11, X11Connection, x11, IncompatibleConnection);
 
-/// The backends a new connection tries, most preferred first.
-const BACKENDS: &[fn() -> Result<Connection, Error>] = &[
-    #[cfg(angle_default)]
-    || AngleConnection::new().map(Connection::Angle),
-    #[cfg(all(windows_platform, not(angle_default)))]
-    || WglConnection::new().map(Connection::Wgl),
-    #[cfg(macos_platform)]
-    || CglConnection::new().map(Connection::Cgl),
-    #[cfg(any(android_platform, ohos_platform))]
-    || HardwareBufferConnection::new().map(Connection::HardwareBuffer),
-    #[cfg(wayland_platform)]
-    || WaylandConnection::new().map(Connection::Wayland),
-    #[cfg(all(x11_platform, not(wayland_default)))]
-    || X11Connection::new().map(Connection::X11),
-    #[cfg(all(free_unix, not(wayland_default)))]
-    || SurfacelessMesaConnection::new().map(Connection::SurfacelessMesa),
-];
-
-type DisplayHandleBackend = fn(DisplayHandle) -> Result<Connection, Error>;
-
-/// The backends a connection to a display handle tries, in the same order as [`BACKENDS`].
-const DISPLAY_HANDLE_BACKENDS: &[DisplayHandleBackend] = &[
-    #[cfg(angle_default)]
-    |handle| AngleConnection::from_display_handle(handle).map(Connection::Angle),
-    #[cfg(all(windows_platform, not(angle_default)))]
-    |handle| WglConnection::from_display_handle(handle).map(Connection::Wgl),
-    #[cfg(macos_platform)]
-    |handle| CglConnection::from_display_handle(handle).map(Connection::Cgl),
-    #[cfg(any(android_platform, ohos_platform))]
-    |handle| HardwareBufferConnection::from_display_handle(handle).map(Connection::HardwareBuffer),
-    #[cfg(wayland_platform)]
-    |handle| WaylandConnection::from_display_handle(handle).map(Connection::Wayland),
-    #[cfg(all(x11_platform, not(wayland_default)))]
-    |handle| X11Connection::from_display_handle(handle).map(Connection::X11),
-    #[cfg(all(free_unix, not(wayland_default)))]
-    |handle| {
-        SurfacelessMesaConnection::from_display_handle(handle).map(Connection::SurfacelessMesa)
-    },
-];
-
 impl Connection {
-    /// Connects to the default display with the default backend of the platform. Builds with X11
-    /// that don't default to Wayland try Wayland, then X11, then surfaceless Mesa.
+    /// Connects to the default display with the default backend of the platform. On Linux and BSD,
+    /// when building without `sm-wayland-default` and with `sm-x11` this will try Wayland, X11, and
+    /// fall back to Surfaceless Mesa. Otherwise, it will only try Wayland.
     pub fn new() -> Result<Connection, Error> {
-        let mut error = Error::ConnectionFailed;
-        for backend in BACKENDS {
-            match backend() {
-                Ok(connection) => return Ok(connection),
-                Err(backend_error) => error = backend_error,
-            }
-        }
-        Err(error)
+        #[cfg(angle_default)]
+        return AngleConnection::new().map(Into::into);
+        #[cfg(all(windows_platform, not(angle_default)))]
+        return WglConnection::new().map(Into::into);
+        #[cfg(macos_platform)]
+        return CglConnection::new().map(Into::into);
+        #[cfg(any(android_platform, ohos_platform))]
+        return HardwareBufferConnection::new().map(Into::into);
+        #[cfg(wayland_default)]
+        return WaylandConnection::new().map(Into::into);
+        #[cfg(all(free_unix, not(wayland_default)))]
+        return WaylandConnection::new()
+            .map(Into::into)
+            .or_else(|_| X11Connection::new().map(Into::into))
+            .or_else(|_| SurfacelessMesaConnection::new().map(Into::into));
     }
 
-    /// Opens the display connection corresponding to the given `DisplayHandle`, with the backends
-    /// [`Connection::new`] tries, in the same order.
+    /// Opens the display connection corresponding to the given `DisplayHandle`. When more than one
+    /// backend is supported, this will examine the type of the handle to return the correct
+    /// [`Connection`] type.
     pub fn from_display_handle(handle: DisplayHandle) -> Result<Connection, Error> {
-        let mut error = Error::IncompatibleRawDisplayHandle;
-        for backend in DISPLAY_HANDLE_BACKENDS {
-            match backend(handle) {
-                Ok(connection) => return Ok(connection),
-                Err(backend_error) => error = backend_error,
+        #[cfg(angle_default)]
+        return AngleConnection::from_display_handle(handle).map(Into::into);
+        #[cfg(all(windows_platform, not(angle_default)))]
+        return WglConnection::from_display_handle(handle).map(Into::into);
+        #[cfg(macos_platform)]
+        return CglConnection::from_display_handle(handle).map(Into::into);
+        #[cfg(any(android_platform, ohos_platform))]
+        return HardwareBufferConnection::from_display_handle(handle).map(Into::into);
+        #[cfg(wayland_default)]
+        return WaylandConnection::from_display_handle(handle).map(Into::into);
+        #[cfg(all(free_unix, not(wayland_default)))]
+        return match handle.as_raw() {
+            RawDisplayHandle::Xlib(..) | RawDisplayHandle::Xcb(..) => {
+                X11Connection::from_display_handle(handle).map(Into::into)
             }
-        }
-        Err(error)
+            _ => WaylandConnection::from_display_handle(handle).map(Into::into),
+        };
     }
 
     /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
@@ -175,7 +155,7 @@ mod tests {
     use super::Connection;
     use crate::{ContextAttributeFlags, ContextAttributes, Error, GLVersion};
 
-    #[cfg_attr(not(feature = "sm-test"), test)]
+    #[test]
     fn test_default_connection_creates_contexts() {
         let connection = Connection::new().unwrap();
         let adapter = connection.create_adapter(Default::default()).unwrap();
