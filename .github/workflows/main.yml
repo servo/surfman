@@ -35,9 +35,6 @@ jobs:
           - features: "sm-x11"
             platform:
               { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
-          - features: "sm-x11 sm-wayland-default"
-            platform:
-              { target: x86_64-unknown-linux-gnu, os: ubuntu-24.04, test: true }
           - features: "sm-angle-builtin"
             platform:
               { target: x86_64-pc-windows-msvc, os: windows-latest, test: true }

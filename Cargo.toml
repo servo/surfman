@@ -23,7 +23,6 @@ sm-angle-builtin = ["mozangle"]
 sm-angle-default = ["sm-angle"]
 sm-no-wgl = ["sm-angle-default"]
 sm-test = []
-sm-wayland-default = []
 sm-x11 = ["x11-dl"]
 
 [dependencies]
