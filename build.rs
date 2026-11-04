@@ -30,7 +30,6 @@ fn main() {
         angle_builtin: { all(windows_platform, feature = "sm-angle-builtin") },
         angle_default: { all(windows_platform, feature = "sm-angle-default") },
         no_wgl: { all(windows_platform, feature = "sm-no-wgl") },
-        wayland_default: { all(wayland_platform, any(not(x11_platform), feature = "sm-wayland-default")) },
     }
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();

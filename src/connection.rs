@@ -4,7 +4,7 @@ use crate::adapter::AdapterPreferences;
 use crate::macros::{dispatch, enum_conversion};
 use crate::{Adapter, Device, Error, GLApi};
 use raw_window_handle::DisplayHandle;
-#[cfg(all(free_unix, not(wayland_default)))]
+#[cfg(x11_platform)]
 use raw_window_handle::RawDisplayHandle;
 
 #[cfg(all(windows_platform, feature = "sm-angle"))]
@@ -88,9 +88,11 @@ enum_conversion!(Connection, Wgl, WglConnection, wgl, IncompatibleConnection);
 enum_conversion!(Connection, X11, X11Connection, x11, IncompatibleConnection);
 
 impl Connection {
-    /// Connects to the default display with the default backend of the platform. On Linux and BSD,
-    /// when building without `sm-wayland-default` and with `sm-x11` this will try Wayland, X11, and
-    /// fall back to Surfaceless Mesa. Otherwise, it will only try Wayland.
+    /// Connects to the default display with the default backend of the platform. Preference
+    /// is given as follows for platforms that support more than one backend:
+    ///
+    /// - Linux and BSD: Wayland, X11 (if `sm-x11` is enabled), surfaceless Mesa.
+    /// - Windows: ANGLE (if `sm-angle-default` is enabled), WGL (if `sm-no-wgl` is not enabled)
     pub fn new() -> Result<Connection, Error> {
         #[cfg(angle_default)]
         return AngleConnection::new().map(Into::into);
@@ -100,13 +102,13 @@ impl Connection {
         return CglConnection::new().map(Into::into);
         #[cfg(any(android_platform, ohos_platform))]
         return HardwareBufferConnection::new().map(Into::into);
-        #[cfg(wayland_default)]
-        return WaylandConnection::new().map(Into::into);
-        #[cfg(all(free_unix, not(wayland_default)))]
-        return WaylandConnection::new()
-            .map(Into::into)
-            .or_else(|_| X11Connection::new().map(Into::into))
-            .or_else(|_| SurfacelessMesaConnection::new().map(Into::into));
+        #[cfg(free_unix)]
+        {
+            let connection = WaylandConnection::new().map(Into::into);
+            #[cfg(x11_platform)]
+            let connection = connection.or_else(|_| X11Connection::new().map(Into::into));
+            connection.or_else(|_| SurfacelessMesaConnection::new().map(Into::into))
+        }
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`. When more than one
@@ -121,15 +123,17 @@ impl Connection {
         return CglConnection::from_display_handle(handle).map(Into::into);
         #[cfg(any(android_platform, ohos_platform))]
         return HardwareBufferConnection::from_display_handle(handle).map(Into::into);
-        #[cfg(wayland_default)]
-        return WaylandConnection::from_display_handle(handle).map(Into::into);
-        #[cfg(all(free_unix, not(wayland_default)))]
-        return match handle.as_raw() {
-            RawDisplayHandle::Xlib(..) | RawDisplayHandle::Xcb(..) => {
-                X11Connection::from_display_handle(handle).map(Into::into)
+        #[cfg(x11_platform)]
+        {
+            if matches!(
+                handle.as_raw(),
+                RawDisplayHandle::Xlib(..) | RawDisplayHandle::Xcb(..)
+            ) {
+                return X11Connection::from_display_handle(handle).map(Into::into);
             }
-            _ => WaylandConnection::from_display_handle(handle).map(Into::into),
-        };
+        }
+        #[cfg(free_unix)]
+        return WaylandConnection::from_display_handle(handle).map(Into::into);
     }
 
     /// Returns the OpenGL API flavor that this connection supports (OpenGL or OpenGL ES).
