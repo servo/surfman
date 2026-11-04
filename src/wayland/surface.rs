@@ -1,7 +1,6 @@
 //! A surface implementation using Wayland surfaces backed by TextureImage.
 
-use crate::base::egl::surface::{EGLBackedSurface, EGLSurfaceTexture};
-use crate::Error;
+use crate::base::egl::surface::{EGLBackedSurface, EGLSurfaceTexture, EGLWindowSurface};
 
 use euclid::default::Size2D;
 use std::marker::PhantomData;
@@ -23,9 +22,9 @@ pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
 }
 
-impl EGLBackedSurface {
-    pub(crate) fn resize_for_wayland(&mut self, size: Size2D<i32>) -> Result<(), Error> {
-        let wayland_egl_window = self.native_window()? as *mut c_void as *mut wl_egl_window;
+impl EGLWindowSurface {
+    pub(crate) fn resize_for_wayland(&mut self, size: Size2D<i32>) {
+        let wayland_egl_window = self.native_window as *mut c_void as *mut wl_egl_window;
         unsafe {
             (wayland_egl_handle().wl_egl_window_resize)(
                 wayland_egl_window,
@@ -36,6 +35,5 @@ impl EGLBackedSurface {
             )
         };
         self.resize(size);
-        Ok(())
     }
 }
