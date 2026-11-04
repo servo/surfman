@@ -6,8 +6,6 @@ pub mod context;
 pub mod device;
 pub mod surface;
 
-crate::implement_interfaces!(AngleConnection);
-
 #[cfg(test)]
 use self::connection::AngleConnection as Connection;
 #[cfg(test)]

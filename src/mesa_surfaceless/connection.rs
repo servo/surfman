@@ -102,8 +102,9 @@ impl SurfacelessMesaConnection {
     pub unsafe fn create_device_from_native_device(
         &self,
         _: NativeDevice,
-    ) -> Result<SurfacelessMesaDevice, Error> {
+    ) -> Result<Device, Error> {
         SurfacelessMesaDevice::new(self, &self.create_adapter(Default::default())?)
+            .map(Device::from)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.

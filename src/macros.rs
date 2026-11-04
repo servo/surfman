@@ -30,51 +30,6 @@ macro_rules! declare_surfman {
     };
 }
 
-/// Internal macro used for generating implementations of the `Connection` trait.
-macro_rules! implement_interfaces {
-    ($connection:ident) => {
-        mod implementation {
-            use super::connection::$connection as Connection;
-            use $crate::adapter::{Adapter, AdapterPreferences};
-            use $crate::connection::Connection as ConnectionInterface;
-            use $crate::info::GLApi;
-            use $crate::{Device, Error};
-
-            impl ConnectionInterface for Connection {
-                #[inline]
-                fn new() -> Result<Connection, Error> {
-                    Connection::new()
-                }
-
-                #[inline]
-                fn gl_api(&self) -> GLApi {
-                    Connection::gl_api(self)
-                }
-
-                #[inline]
-                fn create_adapter(
-                    &self,
-                    preferences: AdapterPreferences,
-                ) -> Result<Adapter, Error> {
-                    Connection::create_adapter(self, preferences)
-                }
-
-                #[inline]
-                fn create_device(&self, adapter: &Adapter) -> Result<Device, Error> {
-                    Connection::create_device(self, adapter)
-                }
-
-                #[inline]
-                fn from_display_handle(
-                    handle: raw_window_handle::DisplayHandle,
-                ) -> Result<Connection, Error> {
-                    Connection::from_display_handle(handle)
-                }
-            }
-        }
-    };
-}
-
 /// A macro that takes care of producing the boilerplate for conversion to and
 /// from an inner type within an enum.
 macro_rules! enum_conversion {
@@ -120,7 +75,8 @@ macro_rules! enum_conversion {
     };
 }
 
-/// A macro that forwards a call to the backend type wrapped by a [`crate::Device`].
+/// A macro that forwards a call to the backend type wrapped by a [`crate::Connection`] or a
+/// [`crate::Device`], which have the same variants.
 macro_rules! dispatch {
     ($enum:ident, $value:expr, $inner:ident => $body:expr) => {
         match $value {
@@ -144,4 +100,3 @@ macro_rules! dispatch {
 
 pub(crate) use dispatch;
 pub(crate) use enum_conversion;
-pub(crate) use implement_interfaces;

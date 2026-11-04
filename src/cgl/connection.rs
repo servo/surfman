@@ -65,10 +65,11 @@ impl CglConnection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<CglDevice, Error> {
+    ) -> Result<Device, Error> {
         self.0
             .create_device_from_native_device(native_device)
             .map(CglDevice)
+            .map(Device::from)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.

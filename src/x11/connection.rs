@@ -168,8 +168,8 @@ impl X11Connection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<X11Device, Error> {
-        X11Device::new(self, &native_device.adapter)
+    ) -> Result<Device, Error> {
+        X11Device::new(self, &native_device.adapter).map(Device::from)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.

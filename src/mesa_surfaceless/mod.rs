@@ -6,8 +6,6 @@ pub mod context;
 pub mod device;
 pub mod surface;
 
-crate::implement_interfaces!(SurfacelessMesaConnection);
-
 #[cfg(test)]
 use self::connection::SurfacelessMesaConnection as Connection;
 #[cfg(test)]

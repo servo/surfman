@@ -5,8 +5,6 @@ pub mod context;
 pub mod device;
 pub mod surface;
 
-crate::implement_interfaces!(X11Connection);
-
 #[cfg(test)]
 use self::connection::X11Connection as Connection;
 #[cfg(test)]

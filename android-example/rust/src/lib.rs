@@ -40,9 +40,13 @@ pub unsafe extern "system" fn Java_org_mozilla_surfmanthreadsexample_SurfmanThre
 
     let connection = Connection::new().unwrap();
     let device = connection
+        .hardware_buffer()
+        .unwrap()
         .create_device_from_native_device(NativeDevice::current())
         .unwrap();
     let context = device
+        .hardware_buffer()
+        .unwrap()
         .create_context_from_native_context(NativeContext::current().unwrap())
         .unwrap();
     let adapter = device.adapter();

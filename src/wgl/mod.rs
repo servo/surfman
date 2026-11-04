@@ -8,8 +8,6 @@ pub mod context;
 pub mod device;
 pub mod surface;
 
-crate::implement_interfaces!(WglConnection);
-
 #[cfg(test)]
 use self::connection::WglConnection as Connection;
 #[cfg(test)]

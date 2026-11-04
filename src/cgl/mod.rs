@@ -8,8 +8,6 @@ pub mod surface;
 mod error;
 mod ffi;
 
-crate::implement_interfaces!(CglConnection);
-
 #[cfg(test)]
 use self::connection::CglConnection as Connection;
 #[cfg(test)]

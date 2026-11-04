@@ -89,8 +89,8 @@ impl WaylandConnection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<WaylandDevice, Error> {
-        WaylandDevice::new(self, &native_device.adapter)
+    ) -> Result<Device, Error> {
+        WaylandDevice::new(self, &native_device.adapter).map(Device::from)
     }
 
     unsafe fn from_wayland_display(

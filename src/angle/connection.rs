@@ -87,8 +87,8 @@ impl AngleConnection {
     pub unsafe fn create_device_from_native_device(
         &self,
         native_device: NativeDevice,
-    ) -> Result<AngleDevice, Error> {
-        AngleDevice::from_native_device(native_device)
+    ) -> Result<Device, Error> {
+        AngleDevice::from_native_device(native_device).map(Device::from)
     }
 
     /// Wraps an ANGLE `EGLDisplay`, along with the associated Direct3D device, in a `Device` and
@@ -101,8 +101,8 @@ impl AngleConnection {
     pub unsafe fn create_device_from_egl_display(
         &self,
         egl_display: EGLDisplay,
-    ) -> Result<AngleDevice, Error> {
-        AngleDevice::from_egl_display(egl_display)
+    ) -> Result<Device, Error> {
+        AngleDevice::from_egl_display(egl_display).map(Device::from)
     }
 
     /// Opens the display connection corresponding to the given `DisplayHandle`.
