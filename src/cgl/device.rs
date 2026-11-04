@@ -285,62 +285,50 @@ impl CglDevice {
 
     pub(crate) fn temporarily_make_context_current(
         &self,
-        context: &Context,
+        context: &CglContext,
     ) -> Result<CurrentContextGuard, Error> {
         let guard = CurrentContextGuard::new();
-        self.make_context_current(context)?;
+        make_cgl_context_current(context.cgl_context)?;
         Ok(guard)
     }
 
-    /// Attaches a surface to a context for rendering.
-    ///
-    /// This function takes ownership of the surface. The surface must have been created with this
-    /// context, or an `IncompatibleSurface` error is returned.
-    ///
-    /// If this function is called with a surface already bound, a `SurfaceAlreadyBound` error is
-    /// returned. To avoid this error, first unbind the existing surface with
-    /// `unbind_surface_from_context`.
-    ///
-    /// If an error is returned, the surface is returned alongside it.
+    /// See [`crate::Device::bind_surface_to_context`].
     pub fn bind_surface_to_context(
         &self,
         context: &mut Context,
         new_surface: Surface,
-    ) -> Result<(), (Error, Surface)> {
+    ) -> Result<Option<Surface>, (Error, Surface)> {
         let context: &mut CglContext = match context.try_into() {
             Ok(context) => context,
             Err(error) => return Err((error, new_surface)),
         };
         let new_surface: CglSurface = new_surface.try_into()?;
-
-        match context.framebuffer {
-            Framebuffer::External(_) => {
-                return Err((Error::ExternalRenderTarget, new_surface.into()))
-            }
-            Framebuffer::Surface(_) => {
-                return Err((Error::SurfaceAlreadyBound, new_surface.into()))
-            }
-            Framebuffer::None => {}
-        }
-
         if new_surface.context_id != context.id {
             return Err((Error::IncompatibleSurface, new_surface.into()));
         }
 
+        let previously_bound_surface = match self.unbind_surface_from_context_inner(context) {
+            Ok(surface) => surface,
+            Err(error) => return Err((error, new_surface.into())),
+        };
+
         context.framebuffer = Framebuffer::Surface(new_surface);
-        Ok(())
+        Ok(previously_bound_surface)
     }
 
-    /// Removes and returns any attached surface from this context.
-    ///
-    /// Any pending OpenGL commands targeting this surface will be automatically flushed, so the
-    /// surface is safe to read from immediately when this function returns.
+    /// See [`crate::Device::unbind_surface_from_context`].
     pub fn unbind_surface_from_context(
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
+        self.unbind_surface_from_context_inner(context.try_into()?)
+    }
+
+    fn unbind_surface_from_context_inner(
+        &self,
+        context: &mut CglContext,
+    ) -> Result<Option<Surface>, Error> {
         let framebuffer = {
-            let context: &mut CglContext = context.try_into()?;
             match context.framebuffer {
                 Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
                 Framebuffer::None | Framebuffer::Surface(_) => {}
@@ -349,7 +337,7 @@ impl CglDevice {
         };
 
         match framebuffer {
-            Framebuffer::External(_) => unreachable!(),
+            Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),
             Framebuffer::None => Ok(None),
             Framebuffer::Surface(surface) => {
                 // Make sure all changes are synchronized. Apple requires this.
@@ -358,7 +346,6 @@ impl CglDevice {
                 // server.
 
                 let _guard = self.temporarily_make_context_current(context)?;
-                let context = context.cgl()?;
                 let gl = &context.gl;
                 unsafe {
                     gl.flush();
@@ -398,11 +385,12 @@ impl CglDevice {
         context: &mut Context,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        let _guard = self.temporarily_make_context_current(context);
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
         let context: &mut CglContext = context.try_into()?;
+        let _guard = self.temporarily_make_context_current(context);
+
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
             return self.resize_inner(surface, size, &context.gl, context_attributes);
         }
@@ -517,11 +505,12 @@ impl CglDevice {
         let mut system_surface = self.0.create_surface(access, surface_type)?;
         self.0.set_surface_flipped(&mut system_surface, true);
 
-        let _guard = self.temporarily_make_context_current(context);
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
 
         let context = context.cgl()?;
+        let _guard = self.temporarily_make_context_current(context);
+
         let gl = &context.gl;
         unsafe {
             let texture_object =
@@ -587,14 +576,12 @@ impl CglDevice {
         if surface.system_surface.view_info.is_some() {
             return Err((Error::WidgetAttached, surface.into()));
         }
-
-        let _guard = self.temporarily_make_context_current(context).unwrap();
-
         let context = match context.cgl() {
             Ok(context) => context,
             Err(error) => return Err((error, surface.into())),
         };
 
+        let _guard = self.temporarily_make_context_current(context).unwrap();
         let texture_object = self.bind_to_gl_texture(
             &context.gl,
             &surface.system_surface.io_surface,
@@ -760,7 +747,7 @@ impl CglDevice {
             return Err(Error::IncompatibleSurface);
         }
 
-        let _guard = self.temporarily_make_context_current(context);
+        let _guard = self.temporarily_make_context_current(context.cgl()?);
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
         self.resize_inner(surface, size, &concrete_context.gl, context_attributes)
