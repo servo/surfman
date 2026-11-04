@@ -12,7 +12,7 @@ use super::Connection;
 use crate::{
     gl, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
     ContextDescriptor, Device, Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference,
-    Surface, SurfaceAccess, SurfaceType, WindowingApiError,
+    Surface, SurfaceAccess, WindowingApiError,
 };
 
 use euclid::default::Size2D;
@@ -309,13 +309,7 @@ pub fn test_generic_surface_creation() {
     .iter()
     .map(|&access| {
         let surface = device
-            .create_surface(
-                &context,
-                access,
-                SurfaceType::Generic {
-                    size: Size2D::new(640, 480),
-                },
-            )
+            .create_offscreen_surface(&context, access, Size2D::new(640, 480))
             .unwrap();
         let info = device.surface_info(&surface);
         assert_eq!(info.size, Size2D::new(640, 480));
@@ -921,13 +915,7 @@ fn context_fbo(device: &Device, context: &Context) -> Option<Framebuffer> {
 
 fn make_surface(device: &mut Device, context: &Context) -> Surface {
     device
-        .create_surface(
-            context,
-            SurfaceAccess::GPUOnly,
-            SurfaceType::Generic {
-                size: Size2D::new(640, 480),
-            },
-        )
+        .create_offscreen_surface(context, SurfaceAccess::GPUOnly, Size2D::new(640, 480))
         .unwrap()
 }
 

@@ -7,6 +7,7 @@ use crate::{
 };
 use euclid::default::Size2D;
 use glow::Texture;
+use raw_window_handle::WindowHandle;
 
 use std::os::raw::c_void;
 
@@ -202,16 +203,34 @@ impl Device {
         dispatch!(Device, self, device => device.context_surface_info(context))
     }
 
-    /// Creates either a generic or a widget surface, depending on the supplied surface type.
+    /// Creates a surface for a native window.
     ///
-    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
-    /// up in a `SurfaceTexture` for reading by other contexts.
-    pub fn create_surface(
+    /// Only the given context may ever render to the surface.
+    pub fn create_window_surface<'a>(
         &self,
         context: &Context,
         surface_access: SurfaceAccess,
-        surface_type: SurfaceType<'_>,
+        window_handle: WindowHandle<'a>,
+        size: Size2D<i32>,
     ) -> Result<Surface, Error> {
+        let surface_type = SurfaceType::Widget {
+            window_handle,
+            size,
+        };
+        dispatch!(Device, self, device => device.create_surface(context, surface_access, surface_type))
+    }
+
+    /// Creates an offscreen surface.
+    ///
+    /// Only the given context may ever render to the surface, but the resulting surface can be
+    /// wrapped up in a `SurfaceTexture` for reading by other contexts.
+    pub fn create_offscreen_surface(
+        &self,
+        context: &Context,
+        surface_access: SurfaceAccess,
+        size: Size2D<i32>,
+    ) -> Result<Surface, Error> {
+        let surface_type = SurfaceType::Generic { size };
         dispatch!(Device, self, device => device.create_surface(context, surface_access, surface_type))
     }
 
