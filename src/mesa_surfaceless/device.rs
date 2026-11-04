@@ -113,7 +113,7 @@ impl SurfacelessMesaDevice {
     ) -> Result<Context, Error> {
         let share_with = share_with.map(Context::surfaceless_mesa).transpose()?;
         unsafe {
-            let context = EGLBackedContext::new(
+            let mut context = EGLBackedContext::new(
                 self.native_connection.egl_display,
                 descriptor.egl()?,
                 share_with.map(|ctx| &ctx.0),
@@ -121,7 +121,10 @@ impl SurfacelessMesaDevice {
                 // Some Mesa software drivers crash creating a pbuffer on this platform.
                 DefaultFramebuffer::None,
             )?;
-            context.make_current(self.native_connection.egl_display)?;
+            if let Err(err) = context.make_current(self.native_connection.egl_display) {
+                context.destroy(self.native_connection.egl_display);
+                return Err(err);
+            }
             Ok(
                 SurfacelessMesaContext(
                     context,
