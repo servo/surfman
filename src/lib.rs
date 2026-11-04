@@ -40,7 +40,7 @@ mod surface;
 mod surface_texture;
 #[cfg(wayland_platform)]
 pub mod wayland;
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 pub mod wgl;
 #[cfg(x11_platform)]
 pub mod x11;
@@ -55,6 +55,9 @@ pub use crate::surface::{Surface, SurfaceAccess, SurfaceID, SurfaceInfo, Surface
 pub use crate::surface_texture::SurfaceTexture;
 pub use adapter::{Adapter, AdapterPreferences, PowerPreference, RenderingPreference};
 pub(crate) use glow::{self as gl, Context as Gl};
+
+#[cfg(all(windows_platform, not(any(wgl, angle))))]
+compile_error!("On Windows, you must enable at least one of `sm-wgl` and `sm-angle`");
 
 // TODO(pcwalton): Fill this in with other OS's.
 #[cfg(target_os = "macos")]

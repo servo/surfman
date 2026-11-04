@@ -26,10 +26,9 @@ fn main() {
         // Features:
         // Here we collect the features that are only valid on certain platforms and
         // we add aliases that include checks for the correct platform.
-        angle: { all(windows, feature = "sm-angle") },
+        angle: { all(windows_platform, feature = "sm-angle") },
         angle_builtin: { all(windows_platform, feature = "sm-angle-builtin") },
-        angle_default: { all(windows_platform, feature = "sm-angle-default") },
-        no_wgl: { all(windows_platform, feature = "sm-no-wgl") },
+        wgl: { all(windows_platform, feature = "sm-wgl") },
     }
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();

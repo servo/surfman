@@ -16,7 +16,7 @@ use crate::hardware_buffer::surface::HardwareBufferSurface;
 use crate::mesa_surfaceless::surface::SurfacelessMesaSurface;
 #[cfg(wayland_platform)]
 use crate::wayland::surface::WaylandSurface;
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 use crate::wgl::surface::WglSurface;
 #[cfg(x11_platform)]
 use crate::x11::surface::X11Surface;
@@ -168,7 +168,7 @@ pub enum Surface {
     #[cfg(wayland_platform)]
     Wayland(WaylandSurface),
     /// A WGL surface for Windows systems.
-    #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+    #[cfg(wgl)]
     Wgl(WglSurface),
     /// A surface for X11 systems.
     #[cfg(x11_platform)]
@@ -203,7 +203,7 @@ enum_conversion!(
     wayland,
     IncompatibleSurface
 );
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 enum_conversion!(Surface, Wgl, WglSurface, wgl, IncompatibleSurface);
 #[cfg(x11_platform)]
 enum_conversion!(Surface, X11, X11Surface, x11, IncompatibleSurface);

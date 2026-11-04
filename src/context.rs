@@ -21,7 +21,7 @@ use crate::hardware_buffer::context::HardwareBufferContext;
 use crate::mesa_surfaceless::context::SurfacelessMesaContext;
 #[cfg(wayland_platform)]
 use crate::wayland::context::WaylandContext;
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 use crate::wgl::context::WglContext;
 #[cfg(x11_platform)]
 use crate::x11::context::X11Context;
@@ -141,7 +141,7 @@ pub enum Context {
     #[cfg(wayland_platform)]
     Wayland(WaylandContext),
     /// A WGL context for Windows systems.
-    #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+    #[cfg(wgl)]
     Wgl(WglContext),
     /// A context for X11 systems.
     #[cfg(x11_platform)]
@@ -176,7 +176,7 @@ enum_conversion!(
     wayland,
     IncompatibleContext
 );
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 enum_conversion!(Context, Wgl, WglContext, wgl, IncompatibleContext);
 #[cfg(x11_platform)]
 enum_conversion!(Context, X11, X11Context, x11, IncompatibleContext);
