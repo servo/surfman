@@ -34,6 +34,7 @@ pub(crate) struct EGLBackedContext {
 
 /// Default framebuffer of a context while no surface is bound to it.
 pub(crate) enum DefaultFramebuffer {
+    /// A small offscreen pbuffer; works on drivers that do not render without a bound surface.
     DummyPbuffer,
     /// No surface; the display must support surfaceless contexts.
     None,
@@ -135,7 +136,6 @@ impl EGLBackedContext {
         )?;
 
         let pbuffer = match default_framebuffer {
-            // Create a dummy pbuffer.
             DefaultFramebuffer::DummyPbuffer => {
                 create_dummy_pbuffer(egl_display, egl_context).unwrap_or(egl::NO_SURFACE)
             }
