@@ -20,7 +20,7 @@ use crate::hardware_buffer::device::HardwareBufferDevice;
 use crate::mesa_surfaceless::device::SurfacelessMesaDevice;
 #[cfg(wayland_platform)]
 use crate::wayland::device::WaylandDevice;
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 use crate::wgl::device::WglDevice;
 #[cfg(x11_platform)]
 use crate::x11::device::X11Device;
@@ -45,7 +45,7 @@ pub enum Device {
     #[cfg(wayland_platform)]
     Wayland(WaylandDevice),
     /// A WGL device for Windows systems.
-    #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+    #[cfg(wgl)]
     Wgl(WglDevice),
     /// A device for X11 systems.
     #[cfg(x11_platform)]
@@ -74,7 +74,7 @@ enum_conversion!(
 );
 #[cfg(wayland_platform)]
 enum_conversion!(Device, Wayland, WaylandDevice, wayland, IncompatibleDevice);
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 enum_conversion!(Device, Wgl, WglDevice, wgl, IncompatibleDevice);
 #[cfg(x11_platform)]
 enum_conversion!(Device, X11, X11Device, x11, IncompatibleDevice);

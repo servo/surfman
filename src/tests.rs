@@ -109,6 +109,11 @@ pub fn test_context_creation() {
         GLApi::GLES => &GL_ES_VERSIONS[..],
     };
 
+    #[cfg(not(angle))]
+    let is_angle = false;
+    #[cfg(angle)]
+    let is_angle = device.angle().is_ok();
+
     for &version in versions {
         for flag_bits in 0..(ContextAttributeFlags::all().bits() + 1) {
             let flags = ContextAttributeFlags::from_bits_truncate(flag_bits);
@@ -156,12 +161,12 @@ pub fn test_context_creation() {
                     // requested GL version.
                 }
                 Err(error) => {
-                    let error = format!(
-                        "Failed to create context ({:?}/{:?}): {:?}",
-                        version, flags, error
-                    );
-                    // This fail on angle
-                    if cfg!(all(feature = "sm-no-wgl", feature = "sm-angle"))
+                    let error =
+                        format!("Failed to create context ({version:?}/{flags:?}): {error:?}");
+
+                    // This always fails on ANGLE, so we must ignore the error
+                    // when we are that kind of Device.
+                    if is_angle
                         && (flags.contains(ContextAttributeFlags::COMPATIBILITY_PROFILE)
                             || version == *GL_ES_VERSIONS.last().unwrap())
                     {

@@ -17,7 +17,7 @@ use crate::hardware_buffer::connection::HardwareBufferConnection;
 use crate::mesa_surfaceless::connection::SurfacelessMesaConnection;
 #[cfg(wayland_platform)]
 use crate::wayland::connection::WaylandConnection;
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 use crate::wgl::connection::WglConnection;
 #[cfg(x11_platform)]
 use crate::x11::connection::X11Connection;
@@ -41,7 +41,7 @@ pub enum Connection {
     #[cfg(wayland_platform)]
     Wayland(WaylandConnection),
     /// A WGL connection for Windows systems.
-    #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+    #[cfg(wgl)]
     Wgl(WglConnection),
     /// A connection to an X11 server.
     #[cfg(x11_platform)]
@@ -82,7 +82,7 @@ enum_conversion!(
     wayland,
     IncompatibleConnection
 );
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 enum_conversion!(Connection, Wgl, WglConnection, wgl, IncompatibleConnection);
 #[cfg(x11_platform)]
 enum_conversion!(Connection, X11, X11Connection, x11, IncompatibleConnection);
@@ -92,12 +92,17 @@ impl Connection {
     /// is given as follows for platforms that support more than one backend:
     ///
     /// - Linux and BSD: Wayland, X11 (if `sm-x11` is enabled), surfaceless Mesa.
-    /// - Windows: ANGLE (if `sm-angle-default` is enabled), WGL (if `sm-no-wgl` is not enabled)
+    /// - Windows: ANGLE (if `sm-angle` is enabled), WGL (if `sm-wgl` is enabled)
     pub fn new() -> Result<Connection, Error> {
-        #[cfg(angle_default)]
-        return AngleConnection::new().map(Into::into);
-        #[cfg(all(windows_platform, not(angle_default)))]
-        return WglConnection::new().map(Into::into);
+        #[cfg(windows_platform)]
+        {
+            let connection = Err(Error::ConnectionFailed);
+            #[cfg(angle)]
+            let connection = connection.or_else(|_| AngleConnection::new().map(Into::into));
+            #[cfg(wgl)]
+            let connection = connection.or_else(|_| WglConnection::new().map(Into::into));
+            connection
+        }
         #[cfg(macos_platform)]
         return CglConnection::new().map(Into::into);
         #[cfg(any(android_platform, ohos_platform))]
@@ -115,10 +120,17 @@ impl Connection {
     /// backend is supported, this will examine the type of the handle to return the correct
     /// [`Connection`] type.
     pub fn from_display_handle(handle: DisplayHandle) -> Result<Connection, Error> {
-        #[cfg(angle_default)]
-        return AngleConnection::from_display_handle(handle).map(Into::into);
-        #[cfg(all(windows_platform, not(angle_default)))]
-        return WglConnection::from_display_handle(handle).map(Into::into);
+        #[cfg(windows_platform)]
+        {
+            let connection = Err(Error::ConnectionFailed);
+            #[cfg(angle)]
+            let connection = connection
+                .or_else(|_| AngleConnection::from_display_handle(handle).map(Into::into));
+            #[cfg(wgl)]
+            let connection =
+                connection.or_else(|_| WglConnection::from_display_handle(handle).map(Into::into));
+            return connection;
+        }
         #[cfg(macos_platform)]
         return CglConnection::from_display_handle(handle).map(Into::into);
         #[cfg(any(android_platform, ohos_platform))]

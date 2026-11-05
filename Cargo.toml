@@ -18,11 +18,11 @@ gl_generator = "0.14"
 cfg_aliases = "0.2.1"
 
 [features]
+default = ["sm-wgl"]
 sm-angle = []
-sm-angle-builtin = ["mozangle"]
-sm-angle-default = ["sm-angle"]
-sm-no-wgl = ["sm-angle-default"]
+sm-angle-builtin = ["sm-angle", "mozangle"]
 sm-test = []
+sm-wgl = []
 sm-x11 = ["x11-dl"]
 
 [dependencies]

@@ -13,7 +13,7 @@ use crate::free_unix::adapter::FreeUnixAdapter;
 #[cfg(any(android_platform, ohos_platform))]
 use crate::hardware_buffer::adapter::HardwareBufferAdapter;
 use crate::macros::enum_conversion;
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 use crate::wgl::adapter::WglAdapter;
 
 /// A power usage preference for selecting an adapter.
@@ -64,7 +64,7 @@ pub enum Adapter {
     #[cfg(any(android_platform, ohos_platform))]
     HardwareBuffer(HardwareBufferAdapter),
     /// A WGL adapter for Windows systems.
-    #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+    #[cfg(wgl)]
     Wgl(WglAdapter),
 }
 
@@ -88,5 +88,5 @@ enum_conversion!(
     hardware_buffer,
     IncompatibleAdapter
 );
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 enum_conversion!(Adapter, Wgl, WglAdapter, wgl, IncompatibleAdapter);

@@ -5,7 +5,7 @@
 #[cfg(macos_platform)]
 use crate::cgl::context::CglContextDescriptor;
 use crate::macros::enum_conversion;
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 use crate::wgl::context::WglContextDescriptor;
 #[cfg(any(android_platform, angle, free_unix, ohos_platform))]
 use crate::EglContextDescriptor;
@@ -22,7 +22,7 @@ pub enum ContextDescriptor {
     #[cfg(any(android_platform, angle, free_unix, ohos_platform))]
     Egl(EglContextDescriptor),
     /// A [`ContextDescriptor`] for WGL platforms.
-    #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+    #[cfg(wgl)]
     Wgl(WglContextDescriptor),
 }
 
@@ -42,7 +42,7 @@ enum_conversion!(
     egl,
     IncompatibleContextDescriptor
 );
-#[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+#[cfg(wgl)]
 enum_conversion!(
     ContextDescriptor,
     Wgl,

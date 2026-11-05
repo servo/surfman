@@ -90,7 +90,7 @@ macro_rules! dispatch {
             $enum::SurfacelessMesa($inner) => $body,
             #[cfg(wayland_platform)]
             $enum::Wayland($inner) => $body,
-            #[cfg(all(windows_platform, not(feature = "sm-no-wgl")))]
+            #[cfg(wgl)]
             $enum::Wgl($inner) => $body,
             #[cfg(x11_platform)]
             $enum::X11($inner) => $body,
