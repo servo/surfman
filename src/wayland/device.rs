@@ -3,7 +3,7 @@
 use super::connection::{NativeConnectionWrapper, WaylandConnection};
 use super::context::{NativeContext, WaylandContext};
 use super::surface::SurfaceDataGuard;
-use crate::base::egl::context::{self, CurrentContextGuard, EGLBackedContext};
+use crate::base::egl::context::{self, CurrentContextGuard, DefaultFramebuffer, EGLBackedContext};
 use crate::base::egl::surface::EGLBackedSurface;
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
@@ -124,6 +124,7 @@ impl WaylandDevice {
                 descriptor.egl()?,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
+                DefaultFramebuffer::DummyPbuffer,
             )?;
             context.make_current(self.native_connection.egl_display)?;
             Ok(WaylandContext(context, Gl::from_loader_function(context::get_proc_address)).into())

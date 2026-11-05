@@ -3,7 +3,7 @@
 use super::connection::{NativeConnectionWrapper, X11Connection};
 use super::context::NativeContext;
 use crate::base::egl::{
-    context::{self, CurrentContextGuard, EGLBackedContext},
+    context::{self, CurrentContextGuard, DefaultFramebuffer, EGLBackedContext},
     surface::EGLBackedSurface,
 };
 use crate::context::ContextID;
@@ -120,6 +120,7 @@ impl X11Device {
                 descriptor.egl()?,
                 share_with.map(|ctx| &ctx.0),
                 self.gl_api(),
+                DefaultFramebuffer::DummyPbuffer,
             )?;
             context.make_current(self.native_connection.egl_display)?;
             Ok(X11Context(context, Gl::from_loader_function(context::get_proc_address)).into())
