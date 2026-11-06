@@ -461,21 +461,12 @@ impl AngleDevice {
         unsafe { context::egl_config_from_id(self.egl_display, context_descriptor.egl_config_id) }
     }
 
-    /// Attaches a surface to a context for rendering.
-    ///
-    /// This function takes ownership of the surface. The surface must have been created with this
-    /// context, or an `IncompatibleSurface` error is returned.
-    ///
-    /// If this function is called with a surface already bound, a `SurfaceAlreadyBound` error is
-    /// returned. To avoid this error, first unbind the existing surface with
-    /// `unbind_surface_from_context`.
-    ///
-    /// If an error is returned, the surface is returned alongside it.
+    /// See [`crate::Device::bind_surface_to_context`].
     pub fn bind_surface_to_context(
         &self,
         context: &mut Context,
         surface: Surface,
-    ) -> Result<(), (Error, Surface)> {
+    ) -> Result<Option<Surface>, (Error, Surface)> {
         let context: &mut AngleContext = match context.try_into() {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
@@ -484,12 +475,10 @@ impl AngleDevice {
         if context.id != surface.context_id {
             return Err((Error::IncompatibleSurface, surface.into()));
         }
-
-        match context.framebuffer {
-            Framebuffer::None => {}
-            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface.into())),
-            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface.into())),
-        }
+        let previously_bound_surface = match self.unbind_surface_from_context_inner(context) {
+            Ok(surface) => surface,
+            Err(error) => return Err((error, surface.into())),
+        };
 
         // If the surface is synchronized with GLFinish, then finish.
         // FIXME(pcwalton): Is this necessary and sufficient?
@@ -521,18 +510,21 @@ impl AngleDevice {
             drop(self.make_context_current_inner(context));
         }
 
-        Ok(())
+        Ok(previously_bound_surface)
     }
 
-    /// Removes and returns any attached surface from this context.
-    ///
-    /// Any pending OpenGL commands targeting this surface will be automatically flushed, so the
-    /// surface is safe to read from immediately when this function returns.
+    /// See [`crate::Device::unbind_surface_from_context`].
     pub fn unbind_surface_from_context(
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
-        let context: &mut AngleContext = context.try_into()?;
+        self.unbind_surface_from_context_inner(context.try_into()?)
+    }
+
+    fn unbind_surface_from_context_inner(
+        &self,
+        context: &mut AngleContext,
+    ) -> Result<Option<Surface>, Error> {
         match context.framebuffer {
             Framebuffer::None => return Ok(None),
             Framebuffer::External(_) => return Err(Error::ExternalRenderTarget),

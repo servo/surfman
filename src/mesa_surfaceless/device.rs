@@ -241,39 +241,31 @@ impl SurfacelessMesaDevice {
         context::get_proc_address(symbol_name)
     }
 
-    /// Attaches a surface to a context for rendering.
-    ///
-    /// This function takes ownership of the surface. The surface must have been created with this
-    /// context, or an `IncompatibleSurface` error is returned.
-    ///
-    /// If this function is called with a surface already bound, a `SurfaceAlreadyBound` error is
-    /// returned. To avoid this error, first unbind the existing surface with
-    /// `unbind_surface_from_context`.
-    ///
-    /// If an error is returned, the surface is returned alongside it.
+    /// See [`crate::Device::bind_surface_to_context`].
     #[inline]
     pub fn bind_surface_to_context(
         &self,
         context: &mut Context,
         surface: Surface,
-    ) -> Result<(), (Error, Surface)> {
+    ) -> Result<Option<Surface>, (Error, Surface)> {
         let context: &mut SurfacelessMesaContext = match context.try_into() {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
         let surface: SurfacelessMesaSurface = surface.try_into()?;
+
         unsafe {
-            context
+            match context
                 .0
-                .bind_surface(self.native_connection.egl_display, surface.0)
-                .map_err(|(err, surface)| (err, SurfacelessMesaSurface(surface).into()))
+                .bind_surface(&context.1, self.native_connection.egl_display, surface.0)
+            {
+                Ok(surface) => Ok(surface.map(|surface| SurfacelessMesaSurface(surface).into())),
+                Err((error, surface)) => Err((error, SurfacelessMesaSurface(surface).into())),
+            }
         }
     }
 
-    /// Removes and returns any attached surface from this context.
-    ///
-    /// Any pending OpenGL commands targeting this surface will be automatically flushed, so the
-    /// surface is safe to read from immediately when this function returns.
+    /// See [`crate::Device::unbind_surface_from_context`].
     pub fn unbind_surface_from_context(
         &self,
         context: &mut Context,

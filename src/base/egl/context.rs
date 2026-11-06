@@ -240,25 +240,26 @@ impl EGLBackedContext {
 
     pub(crate) unsafe fn bind_surface(
         &mut self,
+        gl: &Gl,
         egl_display: EGLDisplay,
         surface: EGLBackedSurface,
-    ) -> Result<(), (Error, EGLBackedSurface)> {
+    ) -> Result<Option<EGLBackedSurface>, (Error, EGLBackedSurface)> {
         if self.id != surface.context_id {
             return Err((Error::IncompatibleSurface, surface));
         }
 
-        match self.framebuffer {
-            Framebuffer::None => self.framebuffer = Framebuffer::Surface(surface),
-            Framebuffer::External(_) => return Err((Error::ExternalRenderTarget, surface)),
-            Framebuffer::Surface(_) => return Err((Error::SurfaceAlreadyBound, surface)),
-        }
+        let previously_bound_surface = match self.unbind_surface(gl, egl_display) {
+            Ok(surface) => surface,
+            Err(error) => return Err((error, surface)),
+        };
+        self.framebuffer = Framebuffer::Surface(surface);
 
         // If we're current, call `make_context_current()` again to switch to the new framebuffer.
         if self.is_current() {
             drop(self.make_current(egl_display))
         }
 
-        Ok(())
+        Ok(previously_bound_surface)
     }
 
     pub(crate) unsafe fn unbind_surface(
