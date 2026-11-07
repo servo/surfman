@@ -432,7 +432,9 @@ impl X11Device {
             EGLBackedSurface::Buffer(surface) => {
                 Ok(X11SurfaceTexture(surface.to_surface_texture(&context.1)).into())
             }
-            surface => Err((Error::WidgetAttached, X11Surface(surface).into())),
+            EGLBackedSurface::Window(..) => {
+                Err((Error::WidgetAttached, X11Surface(surface.0).into()))
+            }
         }
     }
 

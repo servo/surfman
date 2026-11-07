@@ -399,9 +399,9 @@ impl SurfacelessMesaDevice {
             EGLBackedSurface::Buffer(surface) => {
                 Ok(SurfacelessMesaSurfaceTexture(surface.to_surface_texture(&context.1)).into())
             }
-            surface => Err((
+            EGLBackedSurface::Window(..) => Err((
                 Error::WidgetAttached,
-                SurfacelessMesaSurface(surface).into(),
+                SurfacelessMesaSurface(surface.0).into(),
             )),
         }
     }

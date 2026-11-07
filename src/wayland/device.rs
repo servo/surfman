@@ -444,7 +444,9 @@ impl WaylandDevice {
             EGLBackedSurface::Buffer(surface) => {
                 Ok(WaylandSurfaceTexture(surface.to_surface_texture(&context.1)).into())
             }
-            surface => Err((Error::WidgetAttached, WaylandSurface(surface).into())),
+            EGLBackedSurface::Window(..) => {
+                Err((Error::WidgetAttached, WaylandSurface(surface.0).into()))
+            }
         }
     }
 

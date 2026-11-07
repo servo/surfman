@@ -56,13 +56,13 @@ pub(crate) enum EGLBackedSurface {
 
 impl Debug for EGLBufferSurface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:x})", self.id().0)
+        write!(f, "EGLBufferSurface({:x})", self.id().0)
     }
 }
 
 impl Debug for EGLWindowSurface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:x})", self.id().0)
+        write!(f, "EGLWindowSurface({:x})", self.id().0)
     }
 }
 
@@ -215,6 +215,10 @@ impl EGLBufferSurface {
 
     pub(crate) fn id(&self) -> SurfaceID {
         SurfaceID(self.egl_image as usize)
+    }
+
+    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
+        self.size = size;
     }
 }
 
@@ -373,7 +377,7 @@ impl EGLBackedSurface {
     pub(crate) fn resize(&mut self, size: Size2D<i32>) {
         match self {
             EGLBackedSurface::Window(surface) => surface.resize(size),
-            EGLBackedSurface::Buffer(surface) => surface.size = size,
+            EGLBackedSurface::Buffer(surface) => surface.resize(size),
         }
     }
 }

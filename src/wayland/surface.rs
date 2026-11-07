@@ -1,4 +1,4 @@
-//! A surface implementation using Wayland surfaces backed by TextureImage.
+//! A surface implementation for Wayland, using EGL window and buffers surfaces.
 
 use crate::base::egl::surface::{EGLBackedSurface, EGLSurfaceTexture, EGLWindowSurface};
 
