@@ -30,37 +30,47 @@ pub(crate) struct ExternalEGLSurfaces {
     pub(crate) read: EGLSurface,
 }
 
-pub struct EGLBackedSurface {
+pub struct EGLBufferSurface {
     pub(crate) context_id: ContextID,
     pub(crate) size: Size2D<i32>,
-    pub(crate) objects: EGLSurfaceObjects,
+    pub(crate) egl_image: EGLImageKHR,
+    pub(crate) framebuffer_object: Option<Framebuffer>,
+    pub(crate) texture_object: Option<Texture>,
+    pub(crate) renderbuffers: Renderbuffers,
     pub(crate) destroyed: bool,
 }
 
-impl Debug for EGLBackedSurface {
+pub struct EGLWindowSurface {
+    pub(crate) context_id: ContextID,
+    pub(crate) size: Size2D<i32>,
+    pub(crate) native_window: *const c_void,
+    pub(crate) egl_surface: EGLSurface,
+    pub(crate) destroyed: bool,
+}
+
+#[derive(Debug)]
+pub(crate) enum EGLBackedSurface {
+    Window(EGLWindowSurface),
+    Buffer(EGLBufferSurface),
+}
+
+impl Debug for EGLBufferSurface {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:x})", self.id().0)
+        write!(f, "EGLBufferSurface({:x})", self.id().0)
     }
 }
 
-unsafe impl Send for EGLBackedSurface {}
-
-#[allow(dead_code)]
-pub(crate) enum EGLSurfaceObjects {
-    TextureImage {
-        egl_image: EGLImageKHR,
-        framebuffer_object: Option<Framebuffer>,
-        texture_object: Option<Texture>,
-        renderbuffers: Renderbuffers,
-    },
-    Window {
-        native_window: *const c_void,
-        egl_surface: EGLSurface,
-    },
+impl Debug for EGLWindowSurface {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(f, "EGLWindowSurface({:x})", self.id().0)
+    }
 }
 
+unsafe impl Send for EGLBufferSurface {}
+unsafe impl Send for EGLWindowSurface {}
+
 pub(crate) struct EGLSurfaceTexture {
-    pub(crate) surface: EGLBackedSurface,
+    pub(crate) surface: EGLBufferSurface,
     pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
@@ -71,15 +81,15 @@ impl Debug for EGLSurfaceTexture {
     }
 }
 
-impl EGLBackedSurface {
-    pub(crate) fn new_generic(
+impl EGLBufferSurface {
+    pub(crate) fn new(
         gl: &Gl,
         egl_display: EGLDisplay,
         egl_context: EGLContext,
         context_id: ContextID,
         context_attributes: &ContextAttributes,
         size: &Size2D<i32>,
-    ) -> EGLBackedSurface {
+    ) -> EGLBufferSurface {
         let egl_image_attribs = [
             EGL_IMAGE_PRESERVED_KHR as EGLint,
             egl::FALSE as EGLint,
@@ -141,27 +151,85 @@ impl EGLBackedSurface {
                 gl::FRAMEBUFFER_COMPLETE
             );
 
-            EGLBackedSurface {
+            EGLBufferSurface {
                 context_id,
                 size: *size,
-                objects: EGLSurfaceObjects::TextureImage {
-                    egl_image,
-                    framebuffer_object: Some(framebuffer_object),
-                    texture_object,
-                    renderbuffers,
-                },
+                egl_image,
+                framebuffer_object: Some(framebuffer_object),
+                texture_object,
+                renderbuffers,
                 destroyed: false,
             }
         }
     }
 
-    pub(crate) fn new_window(
+    pub(crate) fn to_surface_texture(self, gl: &Gl) -> EGLSurfaceTexture {
+        unsafe {
+            let texture_object = bind_egl_image_to_gl_texture(gl, self.egl_image);
+            EGLSurfaceTexture {
+                surface: self,
+                texture_object: Some(texture_object),
+                phantom: PhantomData,
+            }
+        }
+    }
+
+    pub(crate) fn destroy(
+        &mut self,
+        gl: &Gl,
+        egl_display: EGLDisplay,
+        context_id: ContextID,
+    ) -> Result<(), Error> {
+        if context_id != self.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
+        unsafe {
+            gl.bind_framebuffer(gl::FRAMEBUFFER, None);
+            if let Some(framebuffer) = self.framebuffer_object.take() {
+                gl.delete_framebuffer(framebuffer);
+            }
+            self.renderbuffers.destroy(gl);
+
+            let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display, self.egl_image);
+            assert_ne!(result, egl::FALSE);
+            self.egl_image = EGL_NO_IMAGE_KHR;
+
+            if let Some(texture) = self.texture_object.take() {
+                gl.delete_texture(texture);
+            }
+        }
+
+        self.destroyed = true;
+        Ok(())
+    }
+
+    pub(crate) fn info(&self) -> SurfaceInfo {
+        SurfaceInfo {
+            size: self.size,
+            id: self.id(),
+            context_id: self.context_id,
+            framebuffer_object: self.framebuffer_object,
+        }
+    }
+
+    pub(crate) fn id(&self) -> SurfaceID {
+        SurfaceID(self.egl_image as usize)
+    }
+
+    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
+        self.size = size;
+    }
+}
+
+impl EGLWindowSurface {
+    pub(crate) fn new(
         egl_display: EGLDisplay,
         egl_config: EGLConfig,
         native_window: *mut c_void,
         context_id: ContextID,
         size: &Size2D<i32>,
-    ) -> EGLBackedSurface {
+    ) -> EGLWindowSurface {
         EGL_FUNCTIONS.with(|egl| unsafe {
             let window_surface_attribs = [egl::NONE as EGLAttrib];
             let egl_surface = egl.CreatePlatformWindowSurface(
@@ -172,85 +240,32 @@ impl EGLBackedSurface {
             );
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
-            EGLBackedSurface {
+            EGLWindowSurface {
                 context_id,
                 size: *size,
-                objects: EGLSurfaceObjects::Window {
-                    native_window,
-                    egl_surface,
-                },
+                native_window,
+                egl_surface,
                 destroyed: false,
             }
         })
     }
 
-    pub(crate) fn to_surface_texture(
-        self,
-        gl: &Gl,
-    ) -> Result<EGLSurfaceTexture, (Error, EGLBackedSurface)> {
-        unsafe {
-            let egl_image = match self.objects {
-                EGLSurfaceObjects::TextureImage { egl_image, .. } => egl_image,
-                EGLSurfaceObjects::Window { .. } => return Err((Error::WidgetAttached, self)),
-            };
-            let texture_object = bind_egl_image_to_gl_texture(gl, egl_image);
-            Ok(EGLSurfaceTexture {
-                surface: self,
-                texture_object: Some(texture_object),
-                phantom: PhantomData,
-            })
-        }
-    }
-
     pub(crate) fn destroy(
         &mut self,
-        gl: &Gl,
         egl_display: EGLDisplay,
         context_id: ContextID,
-    ) -> Result<Option<*const c_void>, Error> {
+    ) -> Result<*const c_void, Error> {
         if context_id != self.context_id {
             return Err(Error::IncompatibleSurface);
         }
 
-        unsafe {
-            match self.objects {
-                EGLSurfaceObjects::TextureImage {
-                    ref mut egl_image,
-                    ref mut framebuffer_object,
-                    ref mut texture_object,
-                    ref mut renderbuffers,
-                } => {
-                    gl.bind_framebuffer(gl::FRAMEBUFFER, None);
-                    if let Some(framebuffer) = framebuffer_object.take() {
-                        gl.delete_framebuffer(framebuffer);
-                    }
-                    renderbuffers.destroy(gl);
+        EGL_FUNCTIONS.with(|egl| unsafe {
+            egl.DestroySurface(egl_display, self.egl_surface);
+            self.egl_surface = egl::NO_SURFACE;
+        });
 
-                    let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display, *egl_image);
-                    assert_ne!(result, egl::FALSE);
-                    *egl_image = EGL_NO_IMAGE_KHR;
-
-                    if let Some(texture) = texture_object.take() {
-                        gl.delete_texture(texture);
-                    }
-
-                    self.destroyed = true;
-                    Ok(None)
-                }
-                EGLSurfaceObjects::Window {
-                    ref mut egl_surface,
-                    ref mut native_window,
-                } => {
-                    EGL_FUNCTIONS.with(|egl| {
-                        egl.DestroySurface(egl_display, *egl_surface);
-                        *egl_surface = egl::NO_SURFACE;
-                    });
-
-                    self.destroyed = true;
-                    Ok(Some(mem::replace(native_window, ptr::null())))
-                }
-            }
-        }
+        self.destroyed = true;
+        Ok(mem::replace(&mut self.native_window, ptr::null()))
     }
 
     // TODO(pcwalton): Damage regions.
@@ -260,32 +275,27 @@ impl EGLBackedSurface {
         egl_context: EGLContext,
     ) -> Result<(), Error> {
         unsafe {
-            match self.objects {
-                EGLSurfaceObjects::Window { egl_surface, .. } => {
-                    // The surface must be bound to the current context in EGL 1.4. Temporarily
-                    // make this surface current to enforce this.
-                    let _guard = CurrentContextGuard::new();
+            // The surface must be bound to the current context in EGL 1.4. Temporarily
+            // make this surface current to enforce this.
+            let _guard = CurrentContextGuard::new();
 
-                    EGL_FUNCTIONS.with(|egl| {
-                        let result =
-                            egl.MakeCurrent(egl_display, egl_surface, egl_surface, egl_context);
-                        if result == egl::FALSE {
-                            let err = egl.GetError().to_windowing_api_error();
-                            return Err(Error::MakeCurrentFailed(err));
-                        }
-
-                        let ok = egl.SwapBuffers(egl_display, egl_surface);
-                        if ok != egl::FALSE {
-                            Ok(())
-                        } else {
-                            Err(Error::PresentFailed(
-                                egl.GetError().to_windowing_api_error(),
-                            ))
-                        }
-                    })
+            EGL_FUNCTIONS.with(|egl| {
+                let result =
+                    egl.MakeCurrent(egl_display, self.egl_surface, self.egl_surface, egl_context);
+                if result == egl::FALSE {
+                    let err = egl.GetError().to_windowing_api_error();
+                    return Err(Error::MakeCurrentFailed(err));
                 }
-                EGLSurfaceObjects::TextureImage { .. } => Err(Error::NoWidgetAttached),
-            }
+
+                let ok = egl.SwapBuffers(egl_display, self.egl_surface);
+                if ok != egl::FALSE {
+                    Ok(())
+                } else {
+                    Err(Error::PresentFailed(
+                        egl.GetError().to_windowing_api_error(),
+                    ))
+                }
+            })
         }
     }
 
@@ -294,26 +304,42 @@ impl EGLBackedSurface {
             size: self.size,
             id: self.id(),
             context_id: self.context_id,
-            framebuffer_object: match self.objects {
-                EGLSurfaceObjects::TextureImage {
-                    framebuffer_object, ..
-                } => framebuffer_object,
-                EGLSurfaceObjects::Window { .. } => None,
-            },
+            framebuffer_object: None,
         }
     }
 
     pub(crate) fn id(&self) -> SurfaceID {
-        match self.objects {
-            EGLSurfaceObjects::TextureImage { egl_image, .. } => SurfaceID(egl_image as usize),
-            EGLSurfaceObjects::Window { egl_surface, .. } => SurfaceID(egl_surface as usize),
+        SurfaceID(self.egl_surface as usize)
+    }
+
+    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
+        self.size = size;
+    }
+}
+
+impl EGLBackedSurface {
+    pub(crate) fn context_id(&self) -> ContextID {
+        match self {
+            EGLBackedSurface::Window(surface) => surface.context_id,
+            EGLBackedSurface::Buffer(surface) => surface.context_id,
         }
     }
 
-    pub(crate) fn native_window(&self) -> Result<*const c_void, Error> {
-        match self.objects {
-            EGLSurfaceObjects::TextureImage { .. } => Err(Error::NoWidgetAttached),
-            EGLSurfaceObjects::Window { native_window, .. } => Ok(native_window),
+    pub(crate) fn present(
+        &self,
+        egl_display: EGLDisplay,
+        egl_context: EGLContext,
+    ) -> Result<(), Error> {
+        match self {
+            EGLBackedSurface::Window(surface) => surface.present(egl_display, egl_context),
+            EGLBackedSurface::Buffer(_) => Err(Error::NoWidgetAttached),
+        }
+    }
+
+    pub(crate) fn info(&self) -> SurfaceInfo {
+        match self {
+            EGLBackedSurface::Window(surface) => surface.info(),
+            EGLBackedSurface::Buffer(surface) => surface.info(),
         }
     }
 
@@ -327,36 +353,37 @@ impl EGLBackedSurface {
 
                 egl.MakeCurrent(egl_display, egl::NO_SURFACE, egl::NO_SURFACE, egl_context);
 
-                match self.objects {
-                    EGLSurfaceObjects::TextureImage {
-                        framebuffer_object: Some(framebuffer_object),
-                        ..
-                    } => {
-                        gl_utils::unbind_framebuffer_if_necessary(gl, framebuffer_object);
-                    }
-                    EGLSurfaceObjects::TextureImage { .. } | EGLSurfaceObjects::Window { .. } => {}
+                if let EGLBackedSurface::Buffer(EGLBufferSurface {
+                    framebuffer_object: Some(framebuffer_object),
+                    ..
+                }) = self
+                {
+                    gl_utils::unbind_framebuffer_if_necessary(gl, *framebuffer_object);
                 }
             })
         }
     }
 
     pub(crate) fn egl_surfaces(&self) -> ExternalEGLSurfaces {
-        match self.objects {
-            EGLSurfaceObjects::Window { egl_surface, .. } => ExternalEGLSurfaces {
-                draw: egl_surface,
-                read: egl_surface,
+        match self {
+            EGLBackedSurface::Window(surface) => ExternalEGLSurfaces {
+                draw: surface.egl_surface,
+                read: surface.egl_surface,
             },
-            EGLSurfaceObjects::TextureImage { .. } => ExternalEGLSurfaces::default(),
+            EGLBackedSurface::Buffer(_) => ExternalEGLSurfaces::default(),
         }
     }
 
     pub(crate) fn resize(&mut self, size: Size2D<i32>) {
-        self.size = size;
+        match self {
+            EGLBackedSurface::Window(surface) => surface.resize(size),
+            EGLBackedSurface::Buffer(surface) => surface.resize(size),
+        }
     }
 }
 
 impl EGLSurfaceTexture {
-    pub(crate) fn destroy(mut self, gl: &Gl) -> EGLBackedSurface {
+    pub(crate) fn destroy(mut self, gl: &Gl) -> EGLBufferSurface {
         if let Some(texture) = self.texture_object.take() {
             unsafe {
                 gl.delete_texture(texture);

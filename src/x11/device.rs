@@ -4,7 +4,7 @@ use super::connection::{NativeConnectionWrapper, X11Connection};
 use super::context::NativeContext;
 use crate::base::egl::{
     context::{self, CurrentContextGuard, DefaultFramebuffer, EGLBackedContext},
-    surface::EGLBackedSurface,
+    surface::{EGLBackedSurface, EGLBufferSurface, EGLWindowSurface},
 };
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
@@ -351,14 +351,14 @@ impl X11Device {
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
         let context = context.x11()?;
 
-        Ok(X11Surface(EGLBackedSurface::new_generic(
+        Ok(X11Surface(EGLBackedSurface::Buffer(EGLBufferSurface::new(
             &context.1,
             self.native_connection.egl_display,
             context.0.egl_context,
             context.0.id,
             &context_attributes,
             size,
-        ))
+        )))
         .into())
     }
 
@@ -392,13 +392,13 @@ impl X11Device {
         );
         let size = Size2D::new(width as i32, height as i32);
 
-        Ok(X11Surface(EGLBackedSurface::new_window(
+        Ok(X11Surface(EGLBackedSurface::Window(EGLWindowSurface::new(
             self.native_connection.egl_display,
             egl_config,
             &mut x11_window as *mut Window as *mut c_void,
             context.0.id,
             &size,
-        ))
+        )))
         .into())
     }
 
@@ -428,9 +428,13 @@ impl X11Device {
         };
         let surface: X11Surface = surface.try_into()?;
 
-        match surface.0.to_surface_texture(&context.1) {
-            Ok(surface_texture) => Ok(X11SurfaceTexture(surface_texture).into()),
-            Err((err, surface)) => Err((err, X11Surface(surface).into())),
+        match surface.0 {
+            EGLBackedSurface::Buffer(surface) => {
+                Ok(X11SurfaceTexture(surface.to_surface_texture(&context.1)).into())
+            }
+            EGLBackedSurface::Window(..) => {
+                Err((Error::WidgetAttached, X11Surface(surface.0).into()))
+            }
         }
     }
 
@@ -449,7 +453,14 @@ impl X11Device {
         let egl_display = self.native_connection.egl_display;
         let context = context.x11()?;
         let surface: &mut X11Surface = surface.try_into()?;
-        surface.0.destroy(&context.1, egl_display, context.0.id)?;
+        match surface.0 {
+            EGLBackedSurface::Window(ref mut surface) => {
+                surface.destroy(egl_display, context.0.id)?;
+            }
+            EGLBackedSurface::Buffer(ref mut surface) => {
+                surface.destroy(&context.1, egl_display, context.0.id)?;
+            }
+        }
         Ok(())
     }
 
@@ -472,7 +483,10 @@ impl X11Device {
         let surface_texture: X11SurfaceTexture = surface_texture.try_into()?;
 
         match self.temporarily_make_context_current(context) {
-            Ok(_guard) => Ok(X11Surface(surface_texture.0.destroy(&concrete_context.1)).into()),
+            Ok(_guard) => Ok(X11Surface(EGLBackedSurface::Buffer(
+                surface_texture.0.destroy(&concrete_context.1),
+            ))
+            .into()),
             Err(err) => Err((err, surface_texture.into())),
         }
     }
