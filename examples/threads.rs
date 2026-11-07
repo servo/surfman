@@ -7,7 +7,7 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLenum, GLint, GLuint};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{declare_surfman, ContextDescriptor, SurfaceAccess, SurfaceTexture, SurfaceType};
+use surfman::{declare_surfman, ContextDescriptor, SurfaceAccess, SurfaceTexture};
 use surfman::{Adapter, Connection, Context, Device, GLApi, Surface};
 
 #[cfg(not(target_os = "android"))]
@@ -137,15 +137,12 @@ fn main() {
 
     let window_size = window.inner_size();
     let window_size = Size2D::new(window_size.width as i32, window_size.height as i32);
-    let surface_type = SurfaceType::Widget {
-        window_handle: window
-            .window_handle()
-            .expect("Could not get RawWindowHandle"),
-        size: window_size,
-    };
+    let window_handle = window
+        .window_handle()
+        .expect("Could not get RawWindowHandle");
     let mut context = device.create_context(&context_descriptor, None).unwrap();
     let surface = device
-        .create_surface(&context, SurfaceAccess::GPUOnly, surface_type)
+        .create_window_surface(&context, SurfaceAccess::GPUOnly, window_handle, window_size)
         .unwrap();
     device
         .bind_surface_to_context(&mut context, surface)
@@ -441,11 +438,10 @@ fn worker_thread(
 ) {
     // Open the device, create a context, and make it current.
     let size = Size2D::new(SUBSCREEN_WIDTH, SUBSCREEN_HEIGHT);
-    let surface_type = SurfaceType::Generic { size };
     let device = connection.create_device(&adapter).unwrap();
     let mut context = device.create_context(&context_descriptor, None).unwrap();
     let surface = device
-        .create_surface(&context, SurfaceAccess::GPUOnly, surface_type)
+        .create_offscreen_surface(&context, SurfaceAccess::GPUOnly, size)
         .unwrap();
     device
         .bind_surface_to_context(&mut context, surface)
@@ -477,10 +473,9 @@ fn worker_thread(
     let mut theta_z = INITIAL_ROTATION_Z;
 
     // Send an initial surface back to the main thread.
-    let surface_type = SurfaceType::Generic { size };
     let surface = Some(
         device
-            .create_surface(&context, SurfaceAccess::GPUOnly, surface_type)
+            .create_offscreen_surface(&context, SurfaceAccess::GPUOnly, size)
             .unwrap(),
     );
     worker_to_main_sender

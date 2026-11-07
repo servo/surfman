@@ -24,7 +24,6 @@
 
 use crate::{
     Context, ContextID, Device, Error, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
-    SurfaceType,
 };
 use euclid::default::Size2D;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -173,8 +172,7 @@ impl SwapChainData {
                     "Creating a new surface ({:?}) for context {:?}",
                     self.size, self.context_id
                 );
-                let surface_type = SurfaceType::Generic { size: self.size };
-                device.create_surface(context, self.surface_access, surface_type)
+                device.create_offscreen_surface(context, self.surface_access, self.size)
             })?;
 
         let back_info = device.surface_info(&new_back_buffer);
@@ -266,8 +264,8 @@ impl SwapChainData {
         if (size.width < 1) || (size.height < 1) {
             return Err(Error::Failed);
         }
-        let surface_type = SurfaceType::Generic { size };
-        let new_back_buffer = device.create_surface(context, self.surface_access, surface_type)?;
+        let new_back_buffer =
+            device.create_offscreen_surface(context, self.surface_access, size)?;
         let mut old_back_buffer = self.back_buffer.take_surface(device, context)?;
         self.back_buffer
             .replace_surface(device, context, new_back_buffer)?;
@@ -605,8 +603,7 @@ impl SwapChain {
         surface_access: SurfaceAccess,
         size: Size2D<i32>,
     ) -> Result<SwapChain, Error> {
-        let surface_type = SurfaceType::Generic { size };
-        let surface = device.create_surface(context, surface_access, surface_type)?;
+        let surface = device.create_offscreen_surface(context, surface_access, size)?;
         Ok(SwapChain(Arc::new(Mutex::new(SwapChainData {
             size,
             context_id: device.context_id(context),
