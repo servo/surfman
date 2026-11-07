@@ -122,9 +122,9 @@ impl X11Device {
                 self.gl_api(),
                 DefaultFramebuffer::DummyPbuffer,
             )?;
-            if let Err(err) = context.make_current(self.native_connection.egl_display) {
+            if let Err(error) = context.make_current(self.native_connection.egl_display) {
                 context.destroy(self.native_connection.egl_display);
-                return Err(err);
+                return Err(error);
             }
             Ok(X11Context(context, Gl::from_loader_function(context::get_proc_address)).into())
         }

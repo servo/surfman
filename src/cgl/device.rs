@@ -193,7 +193,10 @@ impl CglDevice {
             }
             debug_assert_ne!(cgl_context, ptr::null_mut());
 
-            make_cgl_context_current(cgl_context)?;
+            if let Err(error) = make_cgl_context_current(cgl_context) {
+                CGLReleaseContext(cgl_context);
+                return Err(error);
+            }
             // Wrap and return the context.
             let context = CglContext {
                 cgl_context,

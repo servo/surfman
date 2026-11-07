@@ -368,8 +368,10 @@ impl WglDevice {
 
                 // Temporarily make the context current.
                 let _guard = CurrentContextGuard::new();
-                let ok = wglMakeCurrent(dc, glrc);
-                assert_ne!(ok, FALSE);
+                if wglMakeCurrent(dc, glrc) == FALSE {
+                    wglDeleteContext(glrc);
+                    return Err(Error::MakeCurrentFailed(WindowingApiError::Failed));
+                }
 
                 // Load the GL functions.
                 gl = Gl::from_loader_function(get_proc_address);
