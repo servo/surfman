@@ -23,8 +23,7 @@
 #![allow(missing_docs)]
 
 use crate::{
-    Context, ContextID, Device, Error, OffscreenSurface, Surface, SurfaceAccess, SurfaceInfo,
-    SurfaceTexture,
+    Context, ContextID, Device, Error, OffscreenSurface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
 };
 use euclid::default::Size2D;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -83,6 +82,7 @@ impl BackBuffer {
             ) {
                 Ok(surface) => surface,
                 Err((error, surface)) => {
+                    *self = BackBuffer::Attached;
                     let _ = device.bind_surface_to_context(context, surface);
                     return Err(error);
                 }
@@ -284,12 +284,12 @@ impl SwapChainData {
         let new_back_buffer = device
             .create_offscreen_surface(context, self.surface_access, size)?
             .into();
-        let old_back_buffer = self.back_buffer.take_surface(device, context)?;
+        let mut old_back_buffer = self.back_buffer.take_surface(device, context)?;
         self.back_buffer
             .replace_surface(device, context, new_back_buffer)?;
-        device.destroy_surface(context, &mut Surface::Offscreen(old_back_buffer))?;
-        for surface in self.recycled_surfaces.drain(..) {
-            device.destroy_surface(context, &mut Surface::Offscreen(surface))?;
+        device.destroy_offscreen_surface(context, &mut old_back_buffer)?;
+        for mut surface in self.recycled_surfaces.drain(..) {
+            device.destroy_offscreen_surface(context, &mut surface)?;
         }
         self.size = size;
         Ok(())
@@ -481,8 +481,8 @@ impl SwapChainData {
             .into_iter()
             .chain(self.back_buffer.take_surface(device, context))
             .chain(self.recycled_surfaces.drain(..));
-        for surface in surfaces {
-            device.destroy_surface(context, &mut Surface::Offscreen(surface))?;
+        for mut surface in surfaces {
+            device.destroy_offscreen_surface(context, &mut surface)?;
         }
         Ok(())
     }
