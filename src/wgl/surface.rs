@@ -6,7 +6,6 @@ use crate::renderbuffers::Renderbuffers;
 use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
 use crate::{ContextID, Error, Surface, SurfaceInfo};
 
-use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::thread;
@@ -129,13 +128,6 @@ impl WglSurface {
         match self {
             WglSurface::Window(surface) => surface.wgl().is_ok(),
             WglSurface::Buffer(surface) => surface.wgl().is_ok(),
-        }
-    }
-
-    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
-        match self {
-            WglSurface::Window(surface) => surface.size = size,
-            WglSurface::Buffer(surface) => surface.size = size,
         }
     }
 

@@ -215,10 +215,6 @@ impl EGLBufferSurface {
     pub(crate) fn id(&self) -> SurfaceID {
         SurfaceID(self.egl_image as usize)
     }
-
-    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
-        self.size = size;
-    }
 }
 
 impl EGLWindowSurface {
@@ -370,13 +366,6 @@ impl EGLBackedSurface {
                 read: surface.egl_surface,
             },
             EGLBackedSurface::Buffer(_) => ExternalEGLSurfaces::default(),
-        }
-    }
-
-    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
-        match self {
-            EGLBackedSurface::Window(surface) => surface.resize(size),
-            EGLBackedSurface::Buffer(surface) => surface.resize(size),
         }
     }
 }

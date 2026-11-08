@@ -169,13 +169,6 @@ impl HardwareBufferSurface {
         }
     }
 
-    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
-        match self {
-            HardwareBufferSurface::Window(surface) => surface.0.size = size,
-            HardwareBufferSurface::Buffer(surface) => surface.0.size = size,
-        }
-    }
-
     pub(crate) fn info(&self) -> SurfaceInfo {
         match self {
             HardwareBufferSurface::Window(surface) => surface.0.info(),

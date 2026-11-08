@@ -339,6 +339,9 @@ impl Device {
     }
 
     /// If the currently bound surface is a widget surface, resize it,
+    ///
+    /// Returns a `NoWidgetAttached` error if the bound surface is an offscreen surface, since
+    /// offscreen surfaces cannot be resized.
     pub fn resize_bound_surface(
         &self,
         context: &mut Context,

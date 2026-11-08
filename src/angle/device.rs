@@ -577,10 +577,14 @@ impl AngleDevice {
         size: Size2D<i32>,
     ) -> Result<(), Error> {
         let context: &mut AngleContext = context.try_into()?;
-        if let Framebuffer::Surface(surface) = &mut context.framebuffer {
-            surface.resize(size);
+        match &mut context.framebuffer {
+            Framebuffer::Surface(AngleSurface::Window(surface)) => {
+                surface.size = size;
+                Ok(())
+            }
+            Framebuffer::Surface(AngleSurface::Buffer(_)) => Err(Error::NoWidgetAttached),
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     /// Returns a unique ID representing a context.

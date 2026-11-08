@@ -8,7 +8,6 @@ use crate::egl::{self};
 use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
 use crate::{EglContextDescriptor, Error, Surface, SurfaceInfo};
 
-use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::thread;
@@ -139,13 +138,6 @@ impl AngleSurface {
         match self {
             AngleSurface::Window(_) => None,
             AngleSurface::Buffer(surface) => Some(&surface.angle().ok()?.synchronization),
-        }
-    }
-
-    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
-        match self {
-            AngleSurface::Window(surface) => surface.size = size,
-            AngleSurface::Buffer(surface) => surface.size = size,
         }
     }
 

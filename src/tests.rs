@@ -345,6 +345,34 @@ pub fn test_generic_surface_creation() {
     device.destroy_context(&mut context).unwrap();
 }
 
+// Tests that resizing a bound offscreen surface fails and leaves its size alone, since offscreen
+// surfaces cannot be resized.
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_resize_bound_offscreen_surface() {
+    let Some(mut environment) = BasicEnvironment::new() else {
+        return;
+    };
+
+    match environment
+        .device
+        .resize_bound_surface(&mut environment.context, Size2D::new(320, 240))
+    {
+        Err(Error::NoWidgetAttached) => {}
+        result => panic!("Expected a `NoWidgetAttached` error, got {result:?}"),
+    }
+    let info = environment
+        .device
+        .context_surface_info(&environment.context)
+        .unwrap()
+        .unwrap();
+    assert_eq!(info.size, Size2D::new(640, 480));
+
+    environment
+        .device
+        .destroy_context(&mut environment.context)
+        .unwrap();
+}
+
 // Tests that basic GL commands work.
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_gl() {

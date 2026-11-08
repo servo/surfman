@@ -385,10 +385,14 @@ impl HardwareBufferDevice {
         size: Size2D<i32>,
     ) -> Result<(), Error> {
         let context: &mut HardwareBufferContext = context.try_into()?;
-        if let Framebuffer::Surface(surface) = &mut context.framebuffer {
-            surface.resize(size);
+        match &mut context.framebuffer {
+            Framebuffer::Surface(HardwareBufferSurface::Window(surface)) => {
+                surface.0.size = size;
+                Ok(())
+            }
+            Framebuffer::Surface(HardwareBufferSurface::Buffer(_)) => Err(Error::NoWidgetAttached),
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     /// Destroys a surface.
