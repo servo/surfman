@@ -287,9 +287,9 @@ impl AngleDevice {
                     egl_context,
                 );
                 if result == egl::FALSE {
-                    return Err(Error::MakeCurrentFailed(
-                        egl.GetError().to_windowing_api_error(),
-                    ));
+                    let error = egl.GetError().to_windowing_api_error();
+                    egl.DestroyContext(self.egl_display, egl_context);
+                    return Err(Error::MakeCurrentFailed(error));
                 }
                 Ok(())
             })?;

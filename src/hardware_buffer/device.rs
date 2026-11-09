@@ -143,8 +143,10 @@ impl HardwareBufferDevice {
 
             EGL_FUNCTIONS.with(|egl| {
                 if egl.MakeCurrent(egl_display, pbuffer, pbuffer, egl_context) == egl::FALSE {
-                    let err = egl.GetError().to_windowing_api_error();
-                    return Err(Error::MakeCurrentFailed(err));
+                    let error = egl.GetError().to_windowing_api_error();
+                    egl.DestroySurface(egl_display, pbuffer);
+                    egl.DestroyContext(egl_display, egl_context);
+                    return Err(Error::MakeCurrentFailed(error));
                 }
                 Ok(())
             })?;
