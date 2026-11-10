@@ -42,6 +42,8 @@ mod surface_texture;
 pub mod wayland;
 #[cfg(wgl)]
 pub mod wgl;
+#[cfg(angle)]
+pub mod windows;
 #[cfg(x11_platform)]
 pub mod x11;
 
