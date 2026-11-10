@@ -2,9 +2,11 @@
 
 use crate::base::egl::ffi::EGLImageKHR;
 use crate::context::ContextID;
+use crate::egl::types::EGLSurface;
 use crate::hardware_buffer::context::HardwareBufferContext;
 use crate::hardware_buffer::device::HardwareBufferDevice;
-use crate::{Context, Error, Surface, SurfaceID, SurfaceInfo};
+use crate::renderbuffers::Renderbuffers;
+use crate::{egl, Context, Error, Surface, SurfaceID, SurfaceInfo};
 
 use crate::base::egl::device::EGL_FUNCTIONS;
 use euclid::default::Size2D;
@@ -25,31 +27,59 @@ mod ohos_surface;
 #[cfg(ohos_platform)]
 pub use ohos_surface::*;
 
-/// An implementation of [`crate::Surface`] for Android and OHOS platforms.
-pub struct HardwareBufferSurface {
+/// A surface displayed in a native window on Android and OHOS platforms.
+pub struct HardwareBufferWindowSurface {
     pub(crate) context_id: ContextID,
     pub(crate) size: Size2D<i32>,
-    pub(crate) objects: SurfaceObjects,
+    pub(crate) egl_surface: EGLSurface,
     pub(crate) destroyed: bool,
+}
+
+/// An offscreen surface backed by a hardware buffer on Android and OHOS platforms.
+pub struct HardwareBufferBufferSurface {
+    pub(crate) context_id: ContextID,
+    pub(crate) size: Size2D<i32>,
+    pub(crate) hardware_buffer: *mut NativeBuffer,
+    pub(crate) egl_image: EGLImageKHR,
+    pub(crate) framebuffer_object: Option<glow::Framebuffer>,
+    pub(crate) texture_object: Option<Texture>,
+    pub(crate) renderbuffers: Renderbuffers,
+    pub(crate) destroyed: bool,
+}
+
+/// An implementation of [`crate::Surface`] for Android and OHOS platforms.
+#[derive(Debug)]
+pub enum HardwareBufferSurface {
+    /// A surface displayed in a native window.
+    Window(HardwareBufferWindowSurface),
+    /// An offscreen surface backed by a hardware buffer.
+    Buffer(HardwareBufferBufferSurface),
 }
 
 /// An implementation of [`crate::SurfaceTexture`] for Android and OHOS platforms.
 pub struct HardwareBufferSurfaceTexture {
-    pub(crate) surface: HardwareBufferSurface,
+    pub(crate) surface: HardwareBufferBufferSurface,
     pub(crate) local_egl_image: EGLImageKHR,
     pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
-unsafe impl Send for HardwareBufferSurface {}
+unsafe impl Send for HardwareBufferWindowSurface {}
+unsafe impl Send for HardwareBufferBufferSurface {}
 
-impl Debug for HardwareBufferSurface {
+impl Debug for HardwareBufferWindowSurface {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "Surface({:x})", self.id().0)
+        write!(formatter, "HardwareBufferWindowSurface({:x})", self.id().0)
     }
 }
 
-impl Drop for HardwareBufferSurface {
+impl Debug for HardwareBufferBufferSurface {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "HardwareBufferBufferSurface({:x})", self.id().0)
+    }
+}
+
+impl Drop for HardwareBufferWindowSurface {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
@@ -57,29 +87,63 @@ impl Drop for HardwareBufferSurface {
     }
 }
 
-impl HardwareBufferSurface {
-    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
-        self.size = size;
+impl Drop for HardwareBufferBufferSurface {
+    fn drop(&mut self) {
+        if !self.destroyed && !thread::panicking() {
+            panic!("Should have destroyed the surface first with `destroy_surface()`!")
+        }
     }
+}
 
+impl HardwareBufferWindowSurface {
     pub(crate) fn info(&self) -> SurfaceInfo {
         SurfaceInfo {
             size: self.size,
             id: self.id(),
             context_id: self.context_id,
-            framebuffer_object: match self.objects {
-                SurfaceObjects::HardwareBuffer {
-                    framebuffer_object, ..
-                } => framebuffer_object,
-                SurfaceObjects::Window { .. } => None,
-            },
+            framebuffer_object: None,
         }
     }
 
     pub(crate) fn id(&self) -> SurfaceID {
-        match self.objects {
-            SurfaceObjects::HardwareBuffer { egl_image, .. } => SurfaceID(egl_image as usize),
-            SurfaceObjects::Window { egl_surface } => SurfaceID(egl_surface as usize),
+        SurfaceID(self.egl_surface as usize)
+    }
+}
+
+impl HardwareBufferBufferSurface {
+    pub(crate) fn info(&self) -> SurfaceInfo {
+        SurfaceInfo {
+            size: self.size,
+            id: self.id(),
+            context_id: self.context_id,
+            framebuffer_object: self.framebuffer_object,
+        }
+    }
+
+    pub(crate) fn id(&self) -> SurfaceID {
+        SurfaceID(self.egl_image as usize)
+    }
+}
+
+impl HardwareBufferSurface {
+    pub(crate) fn context_id(&self) -> ContextID {
+        match self {
+            HardwareBufferSurface::Window(surface) => surface.context_id,
+            HardwareBufferSurface::Buffer(surface) => surface.context_id,
+        }
+    }
+
+    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
+        match self {
+            HardwareBufferSurface::Window(surface) => surface.size = size,
+            HardwareBufferSurface::Buffer(surface) => surface.size = size,
+        }
+    }
+
+    pub(crate) fn info(&self) -> SurfaceInfo {
+        match self {
+            HardwareBufferSurface::Window(surface) => surface.info(),
+            HardwareBufferSurface::Buffer(surface) => surface.info(),
         }
     }
 }
@@ -99,27 +163,26 @@ impl HardwareBufferDevice {
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
-        self.present_surface_inner(context.hardware_buffer()?, surface.hardware_buffer()?)
+        let context = context.hardware_buffer()?;
+        match surface.hardware_buffer()? {
+            HardwareBufferSurface::Window(surface) => self.present_window_surface(context, surface),
+            HardwareBufferSurface::Buffer(_) => Err(Error::NoWidgetAttached),
+        }
     }
 
-    pub(crate) fn present_surface_inner(
+    pub(crate) fn present_window_surface(
         &self,
         context: &HardwareBufferContext,
-        surface: &HardwareBufferSurface,
+        surface: &HardwareBufferWindowSurface,
     ) -> Result<(), Error> {
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
 
         EGL_FUNCTIONS.with(|egl| unsafe {
-            match surface.objects {
-                SurfaceObjects::Window { egl_surface } => {
-                    egl.SwapBuffers(self.egl_display, egl_surface);
-                    Ok(())
-                }
-                _ => Err(Error::NoWidgetAttached),
-            }
-        })
+            egl.SwapBuffers(self.egl_display, surface.egl_surface);
+        });
+        Ok(())
     }
 
     /// Resizes a widget surface.
@@ -131,6 +194,24 @@ impl HardwareBufferDevice {
     ) -> Result<(), Error> {
         let surface: &mut HardwareBufferSurface = surface.try_into()?;
         surface.resize(size);
+        Ok(())
+    }
+
+    pub(crate) fn destroy_native_window_surface(
+        &self,
+        context: &mut HardwareBufferContext,
+        surface: &mut HardwareBufferWindowSurface,
+    ) -> Result<(), Error> {
+        if context.id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
+        }
+
+        EGL_FUNCTIONS.with(|egl| unsafe {
+            egl.DestroySurface(self.egl_display, surface.egl_surface);
+        });
+        surface.egl_surface = egl::NO_SURFACE;
+
+        surface.destroyed = true;
         Ok(())
     }
 }
