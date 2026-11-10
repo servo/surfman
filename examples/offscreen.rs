@@ -120,9 +120,10 @@ fn main() {
             Size2D::new(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT),
         )
         .unwrap();
-    device
+    assert!(device
         .bind_surface_to_context(&mut context, surface)
-        .unwrap();
+        .unwrap()
+        .is_none());
 
     device.make_context_current(&context).unwrap();
     gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));

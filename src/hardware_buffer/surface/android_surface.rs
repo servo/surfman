@@ -77,8 +77,8 @@ impl HardwareBufferDevice {
         context: &Context,
         size: &Size2D<i32>,
     ) -> Result<Surface, Error> {
-        let _guard = self.temporarily_make_context_current(context)?;
         let concrete_context = context.hardware_buffer()?;
+        let _guard = self.temporarily_make_context_current(concrete_context)?;
         let gl = &concrete_context.gl;
         unsafe {
             // Create a native hardware buffer.
@@ -185,6 +185,10 @@ impl HardwareBufferDevice {
         context: &mut Context,
         surface: Surface,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
+        let context: &mut HardwareBufferContext = match context.try_into() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface.into())),
+        };
         let surface: HardwareBufferSurface = surface.try_into()?;
         unsafe {
             match surface.objects {
@@ -195,10 +199,6 @@ impl HardwareBufferDevice {
                     let _guard = match self.temporarily_make_context_current(context) {
                         Ok(guard) => guard,
                         Err(err) => return Err((err, surface.into())),
-                    };
-                    let context: &mut HardwareBufferContext = match context.try_into() {
-                        Ok(context) => context,
-                        Err(error) => return Err((error, surface.into())),
                     };
 
                     let gl = &context.gl;
@@ -317,11 +317,11 @@ impl HardwareBufferDevice {
         context: &mut Context,
         surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
-        let _guard = self.temporarily_make_context_current(context);
         let context: &mut HardwareBufferContext = match context.try_into() {
             Ok(context) => context,
             Err(error) => return Err((error, surface_texture)),
         };
+        let _guard = self.temporarily_make_context_current(context);
         let mut surface_texture: HardwareBufferSurfaceTexture = surface_texture.try_into()?;
         let gl = &context.gl;
 

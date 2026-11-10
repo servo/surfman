@@ -74,7 +74,8 @@ impl HardwareBufferDevice {
         context: &Context,
         size: &Size2D<i32>,
     ) -> Result<Surface, Error> {
-        let _guard = self.temporarily_make_context_current(context)?;
+        let concrete_context = context.hardware_buffer()?;
+        let _guard = self.temporarily_make_context_current(concrete_context)?;
 
         let usage = OH_NativeBuffer_Usage::HW_RENDER | OH_NativeBuffer_Usage::HW_TEXTURE;
 
@@ -86,7 +87,6 @@ impl HardwareBufferDevice {
             stride: 10, // used same magic number as android. I have no idea
         };
 
-        let concrete_context = context.hardware_buffer()?;
         let gl = &concrete_context.gl;
         unsafe {
             let hardware_buffer = OH_NativeBuffer_Alloc(&config as *const _);
@@ -188,6 +188,10 @@ impl HardwareBufferDevice {
         surface: Surface,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
         let surface: HardwareBufferSurface = surface.try_into()?;
+        let context: &mut HardwareBufferContext = match context.try_into() {
+            Ok(context) => context,
+            Err(error) => return Err((error, surface.into())),
+        };
         unsafe {
             match surface.objects {
                 SurfaceObjects::Window { .. } => {
@@ -201,10 +205,6 @@ impl HardwareBufferDevice {
                         Err(err) => return Err((err, surface.into())),
                     };
 
-                    let context: &mut HardwareBufferContext = match context.try_into() {
-                        Ok(context) => context,
-                        Err(error) => return Err((error, surface.into())),
-                    };
                     let gl = &context.gl;
 
                     let local_egl_image = self.create_egl_image(context, hardware_buffer);
@@ -316,12 +316,11 @@ impl HardwareBufferDevice {
         context: &mut Context,
         surface_texture: SurfaceTexture,
     ) -> Result<Surface, (Error, SurfaceTexture)> {
-        let _guard = self.temporarily_make_context_current(context);
-
         let context: &mut HardwareBufferContext = match context.try_into() {
             Ok(context) => context,
             Err(error) => return Err((error, surface_texture)),
         };
+        let _guard = self.temporarily_make_context_current(context);
         let mut surface_texture: HardwareBufferSurfaceTexture = surface_texture.try_into()?;
         let gl = &context.gl;
 

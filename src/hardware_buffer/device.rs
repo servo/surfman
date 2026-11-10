@@ -258,7 +258,10 @@ impl HardwareBufferDevice {
     ///
     /// After calling this function, it is valid to use OpenGL rendering commands.
     pub fn make_context_current(&self, context: &Context) -> Result<(), Error> {
-        let context = context.hardware_buffer()?;
+        self.make_context_current_inner(context.hardware_buffer()?)
+    }
+
+    fn make_context_current_inner(&self, context: &HardwareBufferContext) -> Result<(), Error> {
         unsafe {
             let egl_display = self.egl_display;
             let egl_context = context.egl_context;
@@ -296,54 +299,43 @@ impl HardwareBufferDevice {
         unsafe { context::make_no_context_current(self.egl_display) }
     }
 
-    /// Attaches a surface to a context for rendering.
-    ///
-    /// This function takes ownership of the surface. The surface must have been created with this
-    /// context, or an `IncompatibleSurface` error is returned.
-    ///
-    /// If this function is called with a surface already bound, a `SurfaceAlreadyBound` error is
-    /// returned. To avoid this error, first unbind the existing surface with
-    /// `unbind_surface_from_context`.
-    ///
-    /// If an error is returned, the surface is returned alongside it.
+    /// See [`crate::Device::bind_surface_to_context`].
     pub fn bind_surface_to_context(
         &self,
         context: &mut Context,
         new_surface: Surface,
-    ) -> Result<(), (Error, Surface)> {
+    ) -> Result<Option<Surface>, (Error, Surface)> {
         let context: &mut HardwareBufferContext = match context.try_into() {
             Ok(context) => context,
             Err(error) => return Err((error, new_surface)),
         };
-        let new_surface: HardwareBufferSurface = new_surface.try_into()?;
 
+        let new_surface: HardwareBufferSurface = new_surface.try_into()?;
         if context.id != new_surface.context_id {
             return Err((Error::IncompatibleSurface, new_surface.into()));
         }
-
-        match context.framebuffer {
-            Framebuffer::External { .. } => {
-                return Err((Error::ExternalRenderTarget, new_surface.into()))
-            }
-            Framebuffer::Surface(_) => {
-                return Err((Error::SurfaceAlreadyBound, new_surface.into()))
-            }
-            Framebuffer::None => {}
-        }
+        let previously_bound_surface = match self.unbind_surface_from_context_inner(context) {
+            Ok(surface) => surface,
+            Err(error) => return Err((error, new_surface.into())),
+        };
 
         context.framebuffer = Framebuffer::Surface(new_surface);
-        Ok(())
+        Ok(previously_bound_surface)
     }
 
-    /// Removes and returns any attached surface from this context.
-    ///
-    /// Any pending OpenGL commands targeting this surface will be automatically flushed, so the
-    /// surface is safe to read from immediately when this function returns.
+    /// See [`crate::Device::unbind_surface_from_context`].
     pub fn unbind_surface_from_context(
         &self,
         context: &mut Context,
     ) -> Result<Option<Surface>, Error> {
-        match context.hardware_buffer()?.framebuffer {
+        self.unbind_surface_from_context_inner(context.try_into()?)
+    }
+
+    fn unbind_surface_from_context_inner(
+        &self,
+        context: &mut HardwareBufferContext,
+    ) -> Result<Option<Surface>, Error> {
+        match context.framebuffer {
             Framebuffer::External { .. } => return Err(Error::ExternalRenderTarget),
             Framebuffer::None => return Ok(None),
             Framebuffer::Surface(_) => {}
@@ -353,7 +345,6 @@ impl HardwareBufferDevice {
         //
         // FIXME(pcwalton): Is this necessary?
         let _guard = self.temporarily_make_context_current(context)?;
-        let context: &mut HardwareBufferContext = context.try_into()?;
         unsafe {
             context.gl.flush();
         };
@@ -458,10 +449,10 @@ impl HardwareBufferDevice {
 
     pub(crate) fn temporarily_make_context_current(
         &self,
-        context: &Context,
+        context: &HardwareBufferContext,
     ) -> Result<CurrentContextGuard, Error> {
         let guard = CurrentContextGuard::new();
-        self.make_context_current(context)?;
+        self.make_context_current_inner(context)?;
         Ok(guard)
     }
 

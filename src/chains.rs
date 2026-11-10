@@ -96,10 +96,14 @@ impl BackBuffer {
         &mut self,
         device: &Device,
         context: &mut Context,
-        surface: Surface,
+        mut surface: Surface,
     ) -> Result<(), Error> {
         let new_back_buffer = match self {
             BackBuffer::TakenAttached => {
+                if device.context_surface_info(context)?.is_some() {
+                    let _ = device.destroy_surface(context, &mut surface);
+                    return Err(Error::SurfaceAlreadyBound);
+                }
                 if let Err((err, mut surface)) = device.bind_surface_to_context(context, surface) {
                     debug!("Oh no, destroying surface");
                     let _ = device.destroy_surface(context, &mut surface);
@@ -368,16 +372,14 @@ impl SwapChainData {
             None
         } else {
             let surface = self.back_buffer.take_surface(device, context)?;
-            let mut reattach = device.unbind_surface_from_context(context)?;
-            if let Err((err, mut surface)) = device.bind_surface_to_context(context, surface) {
-                debug!("Oh no, destroying surfaces");
-                let _ = device.destroy_surface(context, &mut surface);
-                if let Some(ref mut reattach) = reattach {
-                    let _ = device.destroy_surface(context, reattach);
+            match device.bind_surface_to_context(context, surface) {
+                Ok(reattach) => reattach,
+                Err((error, mut surface)) => {
+                    debug!("Oh no, destroying surfaces");
+                    let _ = device.destroy_surface(context, &mut surface);
+                    return Err(error);
                 }
-                return Err(err);
             }
-            reattach
         };
 
         // Clear it
@@ -400,15 +402,18 @@ impl SwapChainData {
         }
         // Reattach the old surface
         if let Some(surface) = reattach {
-            let mut old_surface = device.unbind_surface_from_context(context)?.unwrap();
-            if let Err((err, mut surface)) = device.bind_surface_to_context(context, surface) {
-                debug!("Oh no, destroying surface");
-                let _ = device.destroy_surface(context, &mut surface);
-                let _ = device.destroy_surface(context, &mut old_surface);
-                return Err(err);
-            }
-            self.back_buffer
-                .replace_surface(device, context, old_surface)?;
+            match device.bind_surface_to_context(context, surface) {
+                Ok(Some(old_surface)) => {
+                    self.back_buffer
+                        .replace_surface(device, context, old_surface)?;
+                }
+                Ok(None) => unreachable!("Back buffer bound above"),
+                Err((error, mut surface)) => {
+                    debug!("Oh no, destroying surface");
+                    let _ = device.destroy_surface(context, &mut surface);
+                    return Err(error);
+                }
+            };
         }
 
         // Restore the GL state

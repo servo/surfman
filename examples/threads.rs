@@ -144,9 +144,10 @@ fn main() {
     let surface = device
         .create_window_surface(&context, SurfaceAccess::GPUOnly, window_handle, window_size)
         .unwrap();
-    device
+    assert!(device
         .bind_surface_to_context(&mut context, surface)
-        .unwrap();
+        .unwrap()
+        .is_none());
     device.make_context_current(&context).unwrap();
 
     let mut app = App::new(
@@ -420,9 +421,11 @@ impl App {
             self.device
                 .present_surface(&mut self.context, &mut surface)
                 .unwrap();
-            self.device
+            assert!(self
+                .device
                 .bind_surface_to_context(&mut self.context, surface)
-                .unwrap();
+                .unwrap()
+                .is_none());
         }
     }
 }
@@ -443,9 +446,10 @@ fn worker_thread(
     let surface = device
         .create_offscreen_surface(&context, SurfaceAccess::GPUOnly, size)
         .unwrap();
-    device
+    assert!(device
         .bind_surface_to_context(&mut context, surface)
-        .unwrap();
+        .unwrap()
+        .is_none());
     device.make_context_current(&context).unwrap();
 
     // Set up GL objects and state.
@@ -570,13 +574,12 @@ fn worker_thread(
             ck();
         }
 
-        let old_surface = device.unbind_surface_from_context(&mut context).unwrap();
         let new_surface = match worker_from_main_receiver.recv() {
             Ok(surface) => surface,
             Err(_) => break,
         };
 
-        device
+        let old_surface = device
             .bind_surface_to_context(&mut context, new_surface)
             .unwrap();
         worker_to_main_sender

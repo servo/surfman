@@ -164,16 +164,16 @@ impl Device {
     /// This function takes ownership of the surface. The surface must have been created with this
     /// context, or an `IncompatibleSurface` error is returned.
     ///
-    /// If this function is called with a surface already bound, a `SurfaceAlreadyBound` error is
-    /// returned. To avoid this error, first unbind the existing surface with
-    /// `unbind_surface_from_context`.
+    /// If this function is called with a surface already bound, the previously bound surface is
+    /// is returned, otherwise `None`.
     ///
-    /// If an error is returned, the surface is returned alongside it.
+    /// If an error is returned, the surface argument is returned alongside it.
+    #[must_use]
     pub fn bind_surface_to_context(
         &self,
         context: &mut Context,
         surface: Surface,
-    ) -> Result<(), (Error, Surface)> {
+    ) -> Result<Option<Surface>, (Error, Surface)> {
         dispatch!(Device, self, device => device.bind_surface_to_context(context, surface))
     }
 
