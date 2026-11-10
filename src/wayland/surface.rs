@@ -1,21 +1,19 @@
 //! A surface implementation for Wayland, using EGL window and buffers surfaces.
 
-use crate::base::egl::surface::{EGLBackedSurface, EGLSurfaceTexture, EGLWindowSurface};
+use crate::base::egl::surface::{EGLSurfaceTexture, EGLWindowSurface};
 
 use euclid::default::Size2D;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use wayland_sys::egl::{wayland_egl_handle, wl_egl_window};
 
-/// An implementation of [`crate::Surface`] for Wayland platforms.
+/// An implementation of [`crate::WindowSurface`] for Wayland platforms.
 #[derive(Debug)]
-pub struct WaylandSurface(pub(crate) EGLBackedSurface);
+pub struct WaylandWindowSurface(pub(crate) EGLWindowSurface);
 
 /// An implementation of [`crate::SurfaceTexture`] for Wayland platforms.
 #[derive(Debug)]
 pub struct WaylandSurfaceTexture(pub(crate) EGLSurfaceTexture);
-
-unsafe impl Send for WaylandSurface {}
 
 /// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {

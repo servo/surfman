@@ -4,7 +4,7 @@
 
 use crate::renderbuffers::Renderbuffers;
 use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
-use crate::{ContextID, Error, SurfaceInfo};
+use crate::{ContextID, Error, Surface, SurfaceInfo};
 
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
@@ -17,9 +17,8 @@ use winapi::um::wingdi;
 use winapi::um::winuser;
 use wio::com::ComPtr;
 
-/// An implementation of [`crate::Surface`] for WGL platforms.
-#[derive(Debug)]
-pub enum WglSurface {
+/// A surface bound to a WGL context.
+pub(crate) enum WglSurface {
     /// A surface displayed in a Win32 window.
     Window(Win32Surface),
     /// A Direct3D 11 texture shared with OpenGL through `WGL_NV_DX_interop`.
@@ -54,7 +53,7 @@ pub struct WglSurfaceTexture {
 impl Drop for WglWindowBinding {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
-            panic!("Should have destroyed the surface first with `destroy_surface()`!")
+            panic!("Should have destroyed the surface first with `destroy_window_surface()`!")
         }
     }
 }
@@ -62,7 +61,7 @@ impl Drop for WglWindowBinding {
 impl Drop for WglBufferBinding {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
-            panic!("Should have destroyed the surface first with `destroy_surface()`!")
+            panic!("Should have destroyed the surface first with `destroy_offscreen_surface()`!")
         }
     }
 }
@@ -119,15 +118,6 @@ impl Direct3dSurface {
 }
 
 impl WglSurface {
-    /// Returns the DXGI share handle if it has one.
-    #[inline]
-    pub fn share_handle(&self) -> Option<HANDLE> {
-        match self {
-            WglSurface::Window(_) => None,
-            WglSurface::Buffer(surface) => Some(surface.share_handle),
-        }
-    }
-
     pub(crate) fn context_id(&self) -> ContextID {
         match self {
             WglSurface::Window(surface) => surface.context_id,
@@ -153,6 +143,15 @@ impl WglSurface {
         match self {
             WglSurface::Window(surface) => surface.info(),
             WglSurface::Buffer(surface) => surface.info(),
+        }
+    }
+}
+
+impl From<WglSurface> for Surface {
+    fn from(surface: WglSurface) -> Surface {
+        match surface {
+            WglSurface::Window(surface) => Surface::Window(surface.into()),
+            WglSurface::Buffer(surface) => Surface::Offscreen(surface.into()),
         }
     }
 }

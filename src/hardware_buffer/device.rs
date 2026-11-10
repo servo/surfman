@@ -8,10 +8,14 @@ use crate::base::egl::error::ToWindowingApiError;
 use crate::base::egl::surface::ExternalEGLSurfaces;
 use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::egl::types::{EGLConfig, EGLDisplay, EGLint};
-use crate::hardware_buffer::surface::HardwareBufferSurface;
+use crate::hardware_buffer::surface::{
+    HardwareBufferSurface, PlatformBufferSurface, PlatformWindowSurface,
+};
 use crate::surface::Framebuffer;
 use crate::Adapter;
-use crate::{egl, ContextDescriptor, EglContextDescriptor, Surface};
+use crate::{
+    egl, ContextDescriptor, EglContextDescriptor, OffscreenSurface, Surface, WindowSurface,
+};
 use crate::{Context, ContextAttributes, Error, GLApi, Gl, SurfaceInfo};
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -394,21 +398,25 @@ impl HardwareBufferDevice {
     ///
     /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
     /// the `drop` method.
-    pub fn destroy_surface(
+    pub fn destroy_window_surface(
         &self,
         context: &mut Context,
-        surface: &mut Surface,
+        surface: &mut WindowSurface,
     ) -> Result<(), Error> {
         let context: &mut HardwareBufferContext = context.try_into()?;
-        let surface: &mut HardwareBufferSurface = surface.try_into()?;
-        match surface {
-            HardwareBufferSurface::Window(surface) => {
-                self.destroy_native_window_surface(context, &mut surface.0)
-            }
-            HardwareBufferSurface::Buffer(surface) => {
-                self.destroy_native_buffer_surface(context, &mut surface.0)
-            }
-        }
+        let surface: &mut PlatformWindowSurface = surface.try_into()?;
+        self.destroy_native_window_surface(context, &mut surface.0)
+    }
+
+    /// See [`crate::Device::destroy_offscreen_surface`].
+    pub fn destroy_offscreen_surface(
+        &self,
+        context: &mut Context,
+        surface: &mut OffscreenSurface,
+    ) -> Result<(), Error> {
+        let context: &mut HardwareBufferContext = context.try_into()?;
+        let surface: &mut PlatformBufferSurface = surface.try_into()?;
+        self.destroy_native_buffer_surface(context, &mut surface.0)
     }
 
     /// Returns the attributes that the context descriptor was created with.

@@ -23,7 +23,8 @@
 #![allow(missing_docs)]
 
 use crate::{
-    Context, ContextID, Device, Error, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
+    Context, ContextID, Device, Error, OffscreenSurface, Surface, SurfaceAccess, SurfaceInfo,
+    SurfaceTexture,
 };
 use euclid::default::Size2D;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -84,11 +85,17 @@ impl BackBuffer {
         device: &Device,
         context: &mut Context,
     ) -> Result<SurfaceTexture, Error> {
-        let surface = self.take_surface(device, context)?;
+        let surface = match OffscreenSurface::try_from(self.take_surface(device, context)?) {
+            Ok(surface) => surface,
+            Err((error, surface)) => {
+                let _ = self.replace_surface(device, context, surface);
+                return Err(error);
+            }
+        };
         device
             .create_surface_texture(context, surface)
             .map_err(|(err, surface)| {
-                let _ = self.replace_surface(device, context, surface);
+                let _ = self.replace_surface(device, context, surface.into());
                 err
             })
     }
@@ -126,7 +133,7 @@ impl BackBuffer {
         let surface = device
             .destroy_surface_texture(context, surface_texture)
             .map_err(|(err, _)| err)?;
-        self.replace_surface(device, context, surface)
+        self.replace_surface(device, context, surface.into())
     }
 }
 
@@ -176,7 +183,9 @@ impl SwapChainData {
                     "Creating a new surface ({:?}) for context {:?}",
                     self.size, self.context_id
                 );
-                device.create_offscreen_surface(context, self.surface_access, self.size)
+                device
+                    .create_offscreen_surface(context, self.surface_access, self.size)
+                    .map(Surface::from)
             })?;
 
         let back_info = new_back_buffer.info();
@@ -268,8 +277,9 @@ impl SwapChainData {
         if (size.width < 1) || (size.height < 1) {
             return Err(Error::Failed);
         }
-        let new_back_buffer =
-            device.create_offscreen_surface(context, self.surface_access, size)?;
+        let new_back_buffer = device
+            .create_offscreen_surface(context, self.surface_access, size)?
+            .into();
         let mut old_back_buffer = self.back_buffer.take_surface(device, context)?;
         self.back_buffer
             .replace_surface(device, context, new_back_buffer)?;
@@ -608,7 +618,9 @@ impl SwapChain {
         surface_access: SurfaceAccess,
         size: Size2D<i32>,
     ) -> Result<SwapChain, Error> {
-        let surface = device.create_offscreen_surface(context, surface_access, size)?;
+        let surface = device
+            .create_offscreen_surface(context, surface_access, size)?
+            .into();
         Ok(SwapChain(Arc::new(Mutex::new(SwapChainData {
             size,
             context_id: device.context_id(context),

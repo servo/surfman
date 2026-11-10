@@ -241,7 +241,10 @@ impl App {
         };
         let texture = Some(
             device
-                .create_surface_texture(&mut context, frame.surface.take().unwrap())
+                .create_surface_texture(
+                    &mut context,
+                    frame.surface.take().unwrap().try_into().unwrap(),
+                )
                 .unwrap(),
         );
 
@@ -264,7 +267,7 @@ impl App {
             .device
             .destroy_surface_texture(&mut self.context, self.texture.take().unwrap())
             .unwrap();
-        self.main_to_worker_sender.send(surface).unwrap();
+        self.main_to_worker_sender.send(surface.into()).unwrap();
 
         // Fetch a new frame.
         self.frame = self.main_from_worker_receiver.recv().unwrap();
@@ -272,7 +275,10 @@ impl App {
         // Wrap it in a texture.
         self.texture = Some(
             self.device
-                .create_surface_texture(&mut self.context, self.frame.surface.take().unwrap())
+                .create_surface_texture(
+                    &mut self.context,
+                    self.frame.surface.take().unwrap().try_into().unwrap(),
+                )
                 .unwrap(),
         );
 
@@ -418,9 +424,11 @@ impl App {
                 .unbind_surface_from_context(&mut self.context)
                 .unwrap()
                 .unwrap();
-            self.device
-                .present_surface(&mut self.context, &mut surface)
-                .unwrap();
+            if let Surface::Window(ref mut window_surface) = surface {
+                self.device
+                    .present_surface(&mut self.context, window_surface)
+                    .unwrap();
+            }
             assert!(self
                 .device
                 .bind_surface_to_context(&mut self.context, surface)
@@ -480,7 +488,8 @@ fn worker_thread(
     let surface = Some(
         device
             .create_offscreen_surface(&context, SurfaceAccess::GPUOnly, size)
-            .unwrap(),
+            .unwrap()
+            .into(),
     );
     worker_to_main_sender
         .send(Frame {

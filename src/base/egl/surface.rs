@@ -48,7 +48,6 @@ pub struct EGLWindowSurface {
     pub(crate) destroyed: bool,
 }
 
-#[derive(Debug)]
 pub(crate) enum EGLBackedSurface {
     Window(EGLWindowSurface),
     Buffer(EGLBufferSurface),

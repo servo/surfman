@@ -6,7 +6,7 @@ use crate::context::ContextID;
 use crate::egl::types::EGLSurface;
 use crate::egl::{self};
 use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
-use crate::{EglContextDescriptor, Error, SurfaceInfo};
+use crate::{EglContextDescriptor, Error, Surface, SurfaceInfo};
 
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
@@ -14,12 +14,10 @@ use std::marker::PhantomData;
 use std::thread;
 use winapi::shared::dxgi::IDXGIKeyedMutex;
 use winapi::um::d3d11;
-use winapi::um::winnt::HANDLE;
 use wio::com::ComPtr;
 
-/// An implementation of [`crate::Surface`] for Angle on Windows.
-#[derive(Debug)]
-pub enum AngleSurface {
+/// A surface bound to an ANGLE context.
+pub(crate) enum AngleSurface {
     /// A surface displayed in a Win32 window.
     Window(Win32Surface),
     /// A pbuffer surface backed by a Direct3D 11 texture.
@@ -52,7 +50,7 @@ pub struct AngleSurfaceTexture {
 impl Drop for AngleWindowBinding {
     fn drop(&mut self) {
         if self.egl_surface != egl::NO_SURFACE && !thread::panicking() {
-            panic!("Should have destroyed the surface first with `destroy_surface()`!")
+            panic!("Should have destroyed the surface first with `destroy_window_surface()`!")
         }
     }
 }
@@ -60,7 +58,7 @@ impl Drop for AngleWindowBinding {
 impl Drop for AngleBufferBinding {
     fn drop(&mut self) {
         if self.egl_surface != egl::NO_SURFACE && !thread::panicking() {
-            panic!("Should have destroyed the surface first with `destroy_surface()`!")
+            panic!("Should have destroyed the surface first with `destroy_offscreen_surface()`!")
         }
     }
 }
@@ -123,15 +121,6 @@ impl Direct3dSurface {
 }
 
 impl AngleSurface {
-    /// Returns the DXGI share handle if it has one.
-    #[inline]
-    pub fn share_handle(&self) -> Option<HANDLE> {
-        match self {
-            AngleSurface::Window(_) => None,
-            AngleSurface::Buffer(surface) => Some(surface.share_handle),
-        }
-    }
-
     pub(crate) fn context_id(&self) -> ContextID {
         match self {
             AngleSurface::Window(surface) => surface.context_id,
@@ -164,6 +153,15 @@ impl AngleSurface {
         match self {
             AngleSurface::Window(surface) => surface.info(),
             AngleSurface::Buffer(surface) => surface.info(),
+        }
+    }
+}
+
+impl From<AngleSurface> for Surface {
+    fn from(surface: AngleSurface) -> Surface {
+        match surface {
+            AngleSurface::Window(surface) => Surface::Window(surface.into()),
+            AngleSurface::Buffer(surface) => Surface::Offscreen(surface.into()),
         }
     }
 }

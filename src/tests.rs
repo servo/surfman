@@ -11,8 +11,8 @@ use super::ConcreteDevice;
 use super::Connection;
 use crate::{
     gl, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
-    ContextDescriptor, Device, Error, GLApi, GLVersion, Gl, PowerPreference, RenderingPreference,
-    Surface, SurfaceAccess, WindowingApiError,
+    ContextDescriptor, Device, Error, GLApi, GLVersion, Gl, OffscreenSurface, PowerPreference,
+    RenderingPreference, SurfaceAccess, WindowingApiError,
 };
 
 use euclid::default::Size2D;
@@ -228,9 +228,11 @@ pub fn test_newly_created_contexts_are_current() {
         assert_eq!(get_pixel_from_bottom_row(&gl), [0, 255, 0, 255]);
 
         // Remove the surface.
-        let mut surface = device
+        let mut surface: OffscreenSurface = device
             .unbind_surface_from_context(&mut context)
             .unwrap()
+            .unwrap()
+            .try_into()
             .unwrap();
         device.make_no_context_current().unwrap();
 
@@ -239,7 +241,9 @@ pub fn test_newly_created_contexts_are_current() {
         assert_ne!(get_pixel_from_bottom_row(&gl), [255, 0, 0, 255]);
 
         // Clean up.
-        device.destroy_surface(&mut context, &mut surface).unwrap();
+        device
+            .destroy_offscreen_surface(&mut context, &mut surface)
+            .unwrap();
         device.destroy_context(&mut context).unwrap();
     }
 }
@@ -333,7 +337,9 @@ pub fn test_generic_surface_creation() {
     }
 
     for mut surface in surfaces.into_iter() {
-        device.destroy_surface(&mut context, &mut surface).unwrap();
+        device
+            .destroy_offscreen_surface(&mut context, &mut surface)
+            .unwrap();
     }
 
     device.destroy_context(&mut context).unwrap();
@@ -413,10 +419,12 @@ pub fn test_gl() {
         env.gl.clear(gl::COLOR_BUFFER_BIT);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
-        let mut red_surface = env
+        let mut red_surface: OffscreenSurface = env
             .device
             .unbind_surface_from_context(&mut env.context)
             .unwrap()
+            .unwrap()
+            .try_into()
             .unwrap();
         env.device
             .bind_surface_to_context(&mut env.context, green_surface)
@@ -426,7 +434,7 @@ pub fn test_gl() {
 
         // Clean up.
         env.device
-            .destroy_surface(&mut env.context, &mut red_surface)
+            .destroy_offscreen_surface(&mut env.context, &mut red_surface)
             .unwrap();
     }
 
@@ -451,7 +459,7 @@ pub fn test_surface_texture_blit_framebuffer() {
             .unwrap();
         let green_surface_texture = env
             .device
-            .create_surface_texture(&mut env.context, green_surface)
+            .create_surface_texture(&mut env.context, green_surface.try_into().unwrap())
             .unwrap();
 
         let main_surface = make_surface(&mut env.device, &env.context);
@@ -497,7 +505,7 @@ pub fn test_surface_texture_blit_framebuffer() {
             .destroy_surface_texture(&mut env.context, green_surface_texture)
             .unwrap();
         env.device
-            .destroy_surface(&mut env.context, &mut green_surface)
+            .destroy_offscreen_surface(&mut env.context, &mut green_surface)
             .unwrap();
         env.device.destroy_context(&mut env.context).unwrap();
     }
@@ -537,7 +545,7 @@ pub fn test_cross_device_surface_texture_blit_framebuffer() {
             .unwrap();
         let green_surface_texture = env
             .device
-            .create_surface_texture(&mut env.context, green_surface)
+            .create_surface_texture(&mut env.context, green_surface.try_into().unwrap())
             .unwrap();
 
         env.device.make_context_current(&env.context).unwrap();
@@ -568,7 +576,7 @@ pub fn test_cross_device_surface_texture_blit_framebuffer() {
             .destroy_surface_texture(&mut env.context, green_surface_texture)
             .unwrap();
         other_device
-            .destroy_surface(&mut other_context, &mut green_surface)
+            .destroy_offscreen_surface(&mut other_context, &mut green_surface)
             .unwrap();
         other_device.destroy_context(&mut other_context).unwrap();
         env.device.destroy_context(&mut env.context).unwrap();
@@ -606,14 +614,18 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
         clear(&gl, &[0, 255, 0, 255]);
         assert_eq!(get_pixel_from_bottom_row(&gl), [0, 255, 0, 255]);
 
-        let surface = device
+        let surface: OffscreenSurface = device
             .unbind_surface_from_context(&mut context)
             .unwrap()
+            .unwrap()
+            .try_into()
             .unwrap();
         to_main_sender.send(surface).unwrap();
 
         let mut surface = to_worker_receiver.recv().unwrap();
-        device.destroy_surface(&mut context, &mut surface).unwrap();
+        device
+            .destroy_offscreen_surface(&mut context, &mut surface)
+            .unwrap();
         device.destroy_context(&mut context).unwrap();
     });
 
@@ -621,7 +633,7 @@ pub fn test_cross_thread_surface_texture_blit_framebuffer() {
         clear(&env.gl, &[255, 0, 0, 255]);
         assert_eq!(get_pixel_from_bottom_row(&env.gl), [255, 0, 0, 255]);
 
-        let green_surface = to_main_receiver.recv().unwrap();
+        let green_surface: OffscreenSurface = to_main_receiver.recv().unwrap();
         let green_surface_texture = env
             .device
             .create_surface_texture(&mut env.context, green_surface)
@@ -684,7 +696,7 @@ pub fn test_surface_texture_right_side_up() {
             .unwrap();
         let subsurface_texture = env
             .device
-            .create_surface_texture(&mut env.context, subsurface)
+            .create_surface_texture(&mut env.context, subsurface.try_into().unwrap())
             .unwrap();
 
         let main_surface = make_surface(&mut env.device, &env.context);
@@ -734,7 +746,7 @@ pub fn test_surface_texture_right_side_up() {
             .destroy_surface_texture(&mut env.context, subsurface_texture)
             .unwrap();
         env.device
-            .destroy_surface(&mut env.context, &mut subsurface)
+            .destroy_offscreen_surface(&mut env.context, &mut subsurface)
             .unwrap();
         env.device.destroy_context(&mut env.context).unwrap();
     }
@@ -915,7 +927,7 @@ fn context_fbo(device: &Device, context: &Context) -> Option<Framebuffer> {
         .framebuffer_object
 }
 
-fn make_surface(device: &mut Device, context: &Context) -> Surface {
+fn make_surface(device: &mut Device, context: &Context) -> OffscreenSurface {
     device
         .create_offscreen_surface(context, SurfaceAccess::GPUOnly, Size2D::new(640, 480))
         .unwrap()
