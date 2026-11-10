@@ -12,11 +12,11 @@ use std::fs::File;
 use std::mem;
 use std::path::Path;
 use std::slice;
+use surfman::SurfaceAccess;
 use surfman::{
     AdapterPreferences, Connection, ContextAttributeFlags, ContextAttributes, GLApi, GLVersion,
     RenderingPreference,
 };
-use surfman::{SurfaceAccess, SurfaceType};
 
 mod common;
 
@@ -114,12 +114,10 @@ fn main() {
         .unwrap();
     let mut context = device.create_context(&context_descriptor, None).unwrap();
     let surface = device
-        .create_surface(
+        .create_offscreen_surface(
             &context,
             SurfaceAccess::GPUOnly,
-            SurfaceType::Generic {
-                size: Size2D::new(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT),
-            },
+            Size2D::new(FRAMEBUFFER_WIDTH, FRAMEBUFFER_HEIGHT),
         )
         .unwrap();
     device
