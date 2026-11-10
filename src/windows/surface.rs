@@ -1,7 +1,9 @@
-//! Surfaces for the Windows backends.
+//! Surfaces shared by the ANGLE and WGL backends.
 
 #[cfg(angle)]
 use crate::angle::surface::{AngleBufferBinding, AngleWindowBinding};
+#[cfg(wgl)]
+use crate::wgl::surface::{WglBufferBinding, WglWindowBinding};
 use crate::{ContextID, SurfaceID, SurfaceInfo};
 
 use euclid::default::Size2D;
@@ -23,6 +25,8 @@ pub struct Direct3dSurface {
 pub(crate) enum Direct3dBinding {
     #[cfg(angle)]
     Angle(AngleBufferBinding),
+    #[cfg(wgl)]
+    Wgl(WglBufferBinding),
 }
 
 /// A surface displayed in a Win32 window.
@@ -37,6 +41,8 @@ pub struct Win32Surface {
 pub(crate) enum Win32Binding {
     #[cfg(angle)]
     Angle(AngleWindowBinding),
+    #[cfg(wgl)]
+    Wgl(WglWindowBinding),
 }
 
 unsafe impl Send for Direct3dSurface {}
@@ -59,6 +65,8 @@ impl Direct3dSurface {
         match self.binding {
             #[cfg(angle)]
             Direct3dBinding::Angle(ref binding) => SurfaceID(binding.egl_surface as usize),
+            #[cfg(wgl)]
+            Direct3dBinding::Wgl(ref binding) => SurfaceID(binding.d3d11_texture.as_raw() as usize),
         }
     }
 
@@ -70,6 +78,8 @@ impl Direct3dSurface {
             framebuffer_object: match self.binding {
                 #[cfg(angle)]
                 Direct3dBinding::Angle(_) => None,
+                #[cfg(wgl)]
+                Direct3dBinding::Wgl(ref binding) => binding.gl_framebuffer,
             },
         }
     }
@@ -92,6 +102,8 @@ impl Win32Surface {
         match self.binding {
             #[cfg(angle)]
             Win32Binding::Angle(ref binding) => SurfaceID(binding.egl_surface as usize),
+            #[cfg(wgl)]
+            Win32Binding::Wgl(_) => SurfaceID(self.window as usize),
         }
     }
 
@@ -106,13 +118,13 @@ impl Win32Surface {
 }
 
 impl Debug for Direct3dSurface {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:x})", self.id().0)
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "Direct3dSurface({:x})", self.id().0)
     }
 }
 
 impl Debug for Win32Surface {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:x})", self.id().0)
+    fn fmt(&self, formatter: &mut Formatter) -> Result<(), fmt::Error> {
+        write!(formatter, "Win32Surface({:x})", self.id().0)
     }
 }
