@@ -210,10 +210,10 @@ impl HardwareBufferDevice {
 
             match framebuffer {
                 Framebuffer::Surface(HardwareBufferSurface::Window(mut target)) => {
-                    self.destroy_native_window_surface(context, &mut target)?;
+                    self.destroy_native_window_surface(context, &mut target.0)?;
                 }
                 Framebuffer::Surface(HardwareBufferSurface::Buffer(mut target)) => {
-                    self.destroy_native_buffer_surface(context, &mut target)?;
+                    self.destroy_native_buffer_surface(context, &mut target.0)?;
                 }
                 Framebuffer::External(_) | Framebuffer::None => {}
             }
@@ -274,7 +274,7 @@ impl HardwareBufferDevice {
 
             let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
                 Framebuffer::Surface(HardwareBufferSurface::Window(ref surface)) => {
-                    (surface.egl_surface, surface.egl_surface)
+                    (surface.0.egl_surface, surface.0.egl_surface)
                 }
                 Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
                 Framebuffer::Surface(HardwareBufferSurface::Buffer(_)) => {
@@ -367,7 +367,7 @@ impl HardwareBufferDevice {
         let context = context.hardware_buffer()?;
         match &context.framebuffer {
             Framebuffer::Surface(HardwareBufferSurface::Window(surface)) => {
-                self.present_window_surface(context, surface)
+                self.present_window_surface(context, &surface.0)
             }
             Framebuffer::Surface(HardwareBufferSurface::Buffer(_)) => Err(Error::NoWidgetAttached),
             _ => Ok(()),
@@ -403,10 +403,10 @@ impl HardwareBufferDevice {
         let surface: &mut HardwareBufferSurface = surface.try_into()?;
         match surface {
             HardwareBufferSurface::Window(surface) => {
-                self.destroy_native_window_surface(context, surface)
+                self.destroy_native_window_surface(context, &mut surface.0)
             }
             HardwareBufferSurface::Buffer(surface) => {
-                self.destroy_native_buffer_surface(context, surface)
+                self.destroy_native_buffer_surface(context, &mut surface.0)
             }
         }
     }
@@ -500,7 +500,7 @@ impl HardwareBufferDevice {
             .expect("Passed incorrect context type");
         let (egl_draw_surface, egl_read_surface) = match context.framebuffer {
             Framebuffer::Surface(HardwareBufferSurface::Window(ref surface)) => {
-                (surface.egl_surface, surface.egl_surface)
+                (surface.0.egl_surface, surface.0.egl_surface)
             }
             Framebuffer::External(ExternalEGLSurfaces { draw, read }) => (draw, read),
             Framebuffer::Surface(HardwareBufferSurface::Buffer(_)) => {
