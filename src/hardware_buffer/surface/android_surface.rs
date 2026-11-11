@@ -18,11 +18,14 @@ use crate::base::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 use crate::base::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
 use crate::base::egl::ffi::EGL_NATIVE_BUFFER_ANDROID;
 use crate::base::egl::ffi::EGL_NO_IMAGE_KHR;
-use crate::egl::types::{EGLSurface, EGLint};
+use crate::egl::types::EGLint;
 use crate::gl;
 use crate::gl_utils;
 use crate::hardware_buffer::context::HardwareBufferContext;
-use crate::hardware_buffer::surface::{HardwareBufferSurface, HardwareBufferSurfaceTexture};
+use crate::hardware_buffer::surface::{
+    HardwareBufferBufferSurface, HardwareBufferSurface, HardwareBufferSurfaceTexture,
+    HardwareBufferWindowSurface,
+};
 use crate::renderbuffers::Renderbuffers;
 use crate::{egl, Context};
 use crate::{Error, SurfaceAccess, SurfaceType, WindowingApiError};
@@ -37,18 +40,7 @@ use std::ptr;
 
 const SURFACE_GL_TEXTURE_TARGET: u32 = crate::gl::TEXTURE_2D;
 
-pub(crate) enum SurfaceObjects {
-    HardwareBuffer {
-        hardware_buffer: *mut AHardwareBuffer,
-        egl_image: EGLImageKHR,
-        framebuffer_object: Option<glow::Framebuffer>,
-        texture_object: Option<Texture>,
-        renderbuffers: Renderbuffers,
-    },
-    Window {
-        egl_surface: EGLSurface,
-    },
-}
+pub(crate) type NativeBuffer = AHardwareBuffer;
 
 impl HardwareBufferDevice {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
@@ -126,18 +118,16 @@ impl HardwareBufferDevice {
                 gl::FRAMEBUFFER_COMPLETE
             );
 
-            Ok(HardwareBufferSurface {
+            Ok(HardwareBufferSurface::Buffer(HardwareBufferBufferSurface {
                 size: *size,
                 context_id: concrete_context.id,
-                objects: SurfaceObjects::HardwareBuffer {
-                    hardware_buffer,
-                    egl_image,
-                    framebuffer_object: Some(framebuffer_object),
-                    texture_object: Some(texture_object),
-                    renderbuffers,
-                },
+                hardware_buffer,
+                egl_image,
+                framebuffer_object: Some(framebuffer_object),
+                texture_object: Some(texture_object),
+                renderbuffers,
                 destroyed: false,
-            }
+            })
             .into())
         }
     }
@@ -160,12 +150,12 @@ impl HardwareBufferDevice {
             );
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
-            Ok(HardwareBufferSurface {
+            Ok(HardwareBufferSurface::Window(HardwareBufferWindowSurface {
                 context_id: context.id,
                 size: Size2D::new(width, height),
-                objects: SurfaceObjects::Window { egl_surface },
+                egl_surface,
                 destroyed: false,
-            }
+            })
             .into())
         })
     }
@@ -185,39 +175,30 @@ impl HardwareBufferDevice {
         context: &mut Context,
         surface: Surface,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
+        let surface = match surface.try_into()? {
+            HardwareBufferSurface::Buffer(surface) => surface,
+            surface => return Err((Error::WidgetAttached, surface.into())),
+        };
         let context: &mut HardwareBufferContext = match context.try_into() {
             Ok(context) => context,
-            Err(error) => return Err((error, surface.into())),
+            Err(error) => return Err((error, HardwareBufferSurface::Buffer(surface).into())),
         };
-        let surface: HardwareBufferSurface = surface.try_into()?;
-        unsafe {
-            match surface.objects {
-                SurfaceObjects::Window { .. } => Err((Error::WidgetAttached, surface.into())),
-                SurfaceObjects::HardwareBuffer {
-                    hardware_buffer, ..
-                } => {
-                    let _guard = match self.temporarily_make_context_current(context) {
-                        Ok(guard) => guard,
-                        Err(err) => return Err((err, surface.into())),
-                    };
+        let _guard = match self.temporarily_make_context_current(context) {
+            Ok(guard) => guard,
+            Err(error) => return Err((error, HardwareBufferSurface::Buffer(surface).into())),
+        };
 
-                    let gl = &context.gl;
-
-                    let local_egl_image = self.create_egl_image(context, hardware_buffer);
-                    let texture_object = crate::base::egl::surface::bind_egl_image_to_gl_texture(
-                        gl,
-                        local_egl_image,
-                    );
-                    Ok(HardwareBufferSurfaceTexture {
-                        surface,
-                        local_egl_image,
-                        texture_object: Some(texture_object),
-                        phantom: PhantomData,
-                    }
-                    .into())
-                }
-            }
+        let gl = &context.gl;
+        let local_egl_image = unsafe { self.create_egl_image(context, surface.hardware_buffer) };
+        let texture_object =
+            unsafe { crate::base::egl::surface::bind_egl_image_to_gl_texture(gl, local_egl_image) };
+        Ok(HardwareBufferSurfaceTexture {
+            surface,
+            local_egl_image,
+            texture_object: Some(texture_object),
+            phantom: PhantomData,
         }
+        .into())
     }
 
     #[allow(non_snake_case)]
@@ -254,52 +235,33 @@ impl HardwareBufferDevice {
         egl_image
     }
 
-    pub(crate) fn destroy_surface_inner(
+    pub(crate) fn destroy_native_buffer_surface(
         &self,
         context: &mut HardwareBufferContext,
-        surface: &mut HardwareBufferSurface,
+        surface: &mut HardwareBufferBufferSurface,
     ) -> Result<(), Error> {
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
 
-        unsafe {
-            match surface.objects {
-                SurfaceObjects::HardwareBuffer {
-                    ref mut hardware_buffer,
-                    ref mut egl_image,
-                    ref mut framebuffer_object,
-                    ref mut texture_object,
-                    ref mut renderbuffers,
-                } => {
-                    let gl = &context.gl;
-                    gl.bind_framebuffer(gl::FRAMEBUFFER, None);
-                    if let Some(framebuffer) = framebuffer_object.take() {
-                        gl.delete_framebuffer(framebuffer);
-                    }
-
-                    renderbuffers.destroy(gl);
-
-                    if let Some(texture) = texture_object.take() {
-                        gl.delete_texture(texture);
-                    }
-
-                    let egl_display = self.egl_display;
-                    let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(egl_display, *egl_image);
-                    assert_ne!(result, egl::FALSE);
-                    *egl_image = EGL_NO_IMAGE_KHR;
-
-                    AHardwareBuffer_release(*hardware_buffer);
-                    *hardware_buffer = ptr::null_mut();
-                }
-                SurfaceObjects::Window {
-                    ref mut egl_surface,
-                } => EGL_FUNCTIONS.with(|egl| {
-                    egl.DestroySurface(self.egl_display, *egl_surface);
-                    *egl_surface = egl::NO_SURFACE;
-                }),
-            }
+        let gl = &context.gl;
+        unsafe { gl.bind_framebuffer(gl::FRAMEBUFFER, None) };
+        if let Some(framebuffer) = surface.framebuffer_object.take() {
+            unsafe { gl.delete_framebuffer(framebuffer) };
         }
+
+        surface.renderbuffers.destroy(gl);
+
+        if let Some(texture) = surface.texture_object.take() {
+            unsafe { gl.delete_texture(texture) };
+        }
+
+        let result = (EGL_EXTENSION_FUNCTIONS.DestroyImageKHR)(self.egl_display, surface.egl_image);
+        assert_ne!(result, egl::FALSE);
+        surface.egl_image = EGL_NO_IMAGE_KHR;
+
+        unsafe { AHardwareBuffer_release(surface.hardware_buffer) };
+        surface.hardware_buffer = ptr::null_mut();
 
         surface.destroyed = true;
         Ok(())
@@ -339,7 +301,7 @@ impl HardwareBufferDevice {
             surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
         }
 
-        Ok(surface_texture.surface.into())
+        Ok(HardwareBufferSurface::Buffer(surface_texture.surface).into())
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
