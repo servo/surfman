@@ -1,5 +1,6 @@
 //! Surface management for OpenHarmony OS using EGL.
 
+use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
@@ -13,13 +14,12 @@ use crate::base::egl::ffi::EGLImageKHR;
 use crate::base::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 use crate::base::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
 use crate::base::egl::ffi::EGL_NO_IMAGE_KHR;
-use crate::egl::types::EGLint;
+use crate::context::ContextID;
+use crate::egl::types::{EGLSurface, EGLint};
 use crate::hardware_buffer::context::HardwareBufferContext;
 use crate::hardware_buffer::device::HardwareBufferDevice;
+use crate::hardware_buffer::surface::HardwareBufferSurface;
 use crate::hardware_buffer::surface::HardwareBufferSurfaceTexture;
-use crate::hardware_buffer::surface::{
-    HardwareBufferBufferSurface, HardwareBufferSurface, HardwareBufferWindowSurface,
-};
 use crate::renderbuffers::Renderbuffers;
 use crate::{
     egl, gl, gl_utils, Context, Error, Surface, SurfaceAccess, SurfaceTexture, SurfaceType,
@@ -35,7 +35,37 @@ use raw_window_handle::RawWindowHandle;
 
 const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
 
-pub(crate) type NativeBuffer = OH_NativeBuffer;
+/// A surface displayed in an OpenHarmony native window.
+pub struct OhosWindowSurface {
+    pub(crate) context_id: ContextID,
+    pub(crate) size: Size2D<i32>,
+    pub(crate) egl_surface: EGLSurface,
+    pub(crate) destroyed: bool,
+}
+
+/// An offscreen surface backed by an OpenHarmony `OH_NativeBuffer`.
+pub struct OhosBufferSurface {
+    pub(crate) context_id: ContextID,
+    pub(crate) size: Size2D<i32>,
+    pub(crate) hardware_buffer: *mut OH_NativeBuffer,
+    pub(crate) egl_image: EGLImageKHR,
+    pub(crate) framebuffer_object: Option<glow::Framebuffer>,
+    pub(crate) texture_object: Option<Texture>,
+    pub(crate) renderbuffers: Renderbuffers,
+    pub(crate) destroyed: bool,
+}
+
+impl Debug for OhosWindowSurface {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "OhosWindowSurface({:x})", self.id().0)
+    }
+}
+
+impl Debug for OhosBufferSurface {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "OhosBufferSurface({:x})", self.id().0)
+    }
+}
 
 impl HardwareBufferDevice {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
@@ -107,7 +137,7 @@ impl HardwareBufferDevice {
                 gl::FRAMEBUFFER_COMPLETE
             );
 
-            Ok(HardwareBufferSurface::Buffer(HardwareBufferBufferSurface {
+            Ok(HardwareBufferSurface::Buffer(OhosBufferSurface {
                 size: *size,
                 context_id: concrete_context.id,
                 hardware_buffer,
@@ -150,7 +180,7 @@ impl HardwareBufferDevice {
             );
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
-            Ok(HardwareBufferSurface::Window(HardwareBufferWindowSurface {
+            Ok(HardwareBufferSurface::Window(OhosWindowSurface {
                 context_id: context.id,
                 size: Size2D::new(width, height),
                 egl_surface,
@@ -232,7 +262,7 @@ impl HardwareBufferDevice {
     pub(crate) fn destroy_native_buffer_surface(
         &self,
         context: &mut HardwareBufferContext,
-        surface: &mut HardwareBufferBufferSurface,
+        surface: &mut OhosBufferSurface,
     ) -> Result<(), Error> {
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);

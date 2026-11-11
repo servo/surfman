@@ -18,14 +18,13 @@ use crate::base::egl::ffi::EGL_EXTENSION_FUNCTIONS;
 use crate::base::egl::ffi::EGL_IMAGE_PRESERVED_KHR;
 use crate::base::egl::ffi::EGL_NATIVE_BUFFER_ANDROID;
 use crate::base::egl::ffi::EGL_NO_IMAGE_KHR;
+use crate::context::ContextID;
+use crate::egl::types::EGLSurface;
 use crate::egl::types::EGLint;
 use crate::gl;
 use crate::gl_utils;
 use crate::hardware_buffer::context::HardwareBufferContext;
-use crate::hardware_buffer::surface::{
-    HardwareBufferBufferSurface, HardwareBufferSurface, HardwareBufferSurfaceTexture,
-    HardwareBufferWindowSurface,
-};
+use crate::hardware_buffer::surface::{HardwareBufferSurface, HardwareBufferSurfaceTexture};
 use crate::renderbuffers::Renderbuffers;
 use crate::{egl, Context};
 use crate::{Error, SurfaceAccess, SurfaceType, WindowingApiError};
@@ -34,13 +33,44 @@ use crate::{Surface, SurfaceTexture};
 use euclid::default::Size2D;
 use glow::{HasContext, Texture};
 use raw_window_handle::RawWindowHandle;
+use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::ptr;
 
 const SURFACE_GL_TEXTURE_TARGET: u32 = crate::gl::TEXTURE_2D;
 
-pub(crate) type NativeBuffer = AHardwareBuffer;
+/// A surface displayed in an Android native window.
+pub struct AndroidWindowSurface {
+    pub(crate) context_id: ContextID,
+    pub(crate) size: Size2D<i32>,
+    pub(crate) egl_surface: EGLSurface,
+    pub(crate) destroyed: bool,
+}
+
+/// An offscreen surface backed by an Android `AHardwareBuffer`.
+pub struct AndroidBufferSurface {
+    pub(crate) context_id: ContextID,
+    pub(crate) size: Size2D<i32>,
+    pub(crate) hardware_buffer: *mut AHardwareBuffer,
+    pub(crate) egl_image: EGLImageKHR,
+    pub(crate) framebuffer_object: Option<glow::Framebuffer>,
+    pub(crate) texture_object: Option<Texture>,
+    pub(crate) renderbuffers: Renderbuffers,
+    pub(crate) destroyed: bool,
+}
+
+impl Debug for AndroidWindowSurface {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "AndroidWindowSurface({:x})", self.id().0)
+    }
+}
+
+impl Debug for AndroidBufferSurface {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        write!(formatter, "AndroidBufferSurface({:x})", self.id().0)
+    }
+}
 
 impl HardwareBufferDevice {
     /// Creates either a generic or a widget surface, depending on the supplied surface type.
@@ -118,7 +148,7 @@ impl HardwareBufferDevice {
                 gl::FRAMEBUFFER_COMPLETE
             );
 
-            Ok(HardwareBufferSurface::Buffer(HardwareBufferBufferSurface {
+            Ok(HardwareBufferSurface::Buffer(AndroidBufferSurface {
                 size: *size,
                 context_id: concrete_context.id,
                 hardware_buffer,
@@ -150,7 +180,7 @@ impl HardwareBufferDevice {
             );
             assert_ne!(egl_surface, egl::NO_SURFACE);
 
-            Ok(HardwareBufferSurface::Window(HardwareBufferWindowSurface {
+            Ok(HardwareBufferSurface::Window(AndroidWindowSurface {
                 context_id: context.id,
                 size: Size2D::new(width, height),
                 egl_surface,
@@ -238,7 +268,7 @@ impl HardwareBufferDevice {
     pub(crate) fn destroy_native_buffer_surface(
         &self,
         context: &mut HardwareBufferContext,
-        surface: &mut HardwareBufferBufferSurface,
+        surface: &mut AndroidBufferSurface,
     ) -> Result<(), Error> {
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);

@@ -2,10 +2,8 @@
 
 use crate::base::egl::ffi::EGLImageKHR;
 use crate::context::ContextID;
-use crate::egl::types::EGLSurface;
 use crate::hardware_buffer::context::HardwareBufferContext;
 use crate::hardware_buffer::device::HardwareBufferDevice;
-use crate::renderbuffers::Renderbuffers;
 use crate::{egl, Context, Error, Surface, SurfaceID, SurfaceInfo};
 
 use crate::base::egl::device::EGL_FUNCTIONS;
@@ -27,59 +25,36 @@ mod ohos_surface;
 #[cfg(ohos_platform)]
 pub use ohos_surface::*;
 
-/// A surface displayed in a native window on Android and OHOS platforms.
-pub struct HardwareBufferWindowSurface {
-    pub(crate) context_id: ContextID,
-    pub(crate) size: Size2D<i32>,
-    pub(crate) egl_surface: EGLSurface,
-    pub(crate) destroyed: bool,
-}
-
-/// An offscreen surface backed by a hardware buffer on Android and OHOS platforms.
-pub struct HardwareBufferBufferSurface {
-    pub(crate) context_id: ContextID,
-    pub(crate) size: Size2D<i32>,
-    pub(crate) hardware_buffer: *mut NativeBuffer,
-    pub(crate) egl_image: EGLImageKHR,
-    pub(crate) framebuffer_object: Option<glow::Framebuffer>,
-    pub(crate) texture_object: Option<Texture>,
-    pub(crate) renderbuffers: Renderbuffers,
-    pub(crate) destroyed: bool,
-}
+#[cfg(android_platform)]
+use android_surface::{
+    AndroidBufferSurface as NativeBufferSurface, AndroidWindowSurface as NativeWindowSurface,
+};
+#[cfg(ohos_platform)]
+use ohos_surface::{
+    OhosBufferSurface as NativeBufferSurface, OhosWindowSurface as NativeWindowSurface,
+};
 
 /// An implementation of [`crate::Surface`] for Android and OHOS platforms.
 #[derive(Debug)]
 pub enum HardwareBufferSurface {
     /// A surface displayed in a native window.
-    Window(HardwareBufferWindowSurface),
+    Window(NativeWindowSurface),
     /// An offscreen surface backed by a hardware buffer.
-    Buffer(HardwareBufferBufferSurface),
+    Buffer(NativeBufferSurface),
 }
 
 /// An implementation of [`crate::SurfaceTexture`] for Android and OHOS platforms.
 pub struct HardwareBufferSurfaceTexture {
-    pub(crate) surface: HardwareBufferBufferSurface,
+    pub(crate) surface: NativeBufferSurface,
     pub(crate) local_egl_image: EGLImageKHR,
     pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
-unsafe impl Send for HardwareBufferWindowSurface {}
-unsafe impl Send for HardwareBufferBufferSurface {}
+unsafe impl Send for NativeWindowSurface {}
+unsafe impl Send for NativeBufferSurface {}
 
-impl Debug for HardwareBufferWindowSurface {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "HardwareBufferWindowSurface({:x})", self.id().0)
-    }
-}
-
-impl Debug for HardwareBufferBufferSurface {
-    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "HardwareBufferBufferSurface({:x})", self.id().0)
-    }
-}
-
-impl Drop for HardwareBufferWindowSurface {
+impl Drop for NativeWindowSurface {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
@@ -87,7 +62,7 @@ impl Drop for HardwareBufferWindowSurface {
     }
 }
 
-impl Drop for HardwareBufferBufferSurface {
+impl Drop for NativeBufferSurface {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
@@ -95,7 +70,7 @@ impl Drop for HardwareBufferBufferSurface {
     }
 }
 
-impl HardwareBufferWindowSurface {
+impl NativeWindowSurface {
     pub(crate) fn info(&self) -> SurfaceInfo {
         SurfaceInfo {
             size: self.size,
@@ -110,7 +85,7 @@ impl HardwareBufferWindowSurface {
     }
 }
 
-impl HardwareBufferBufferSurface {
+impl NativeBufferSurface {
     pub(crate) fn info(&self) -> SurfaceInfo {
         SurfaceInfo {
             size: self.size,
@@ -173,7 +148,7 @@ impl HardwareBufferDevice {
     pub(crate) fn present_window_surface(
         &self,
         context: &HardwareBufferContext,
-        surface: &HardwareBufferWindowSurface,
+        surface: &NativeWindowSurface,
     ) -> Result<(), Error> {
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
@@ -200,7 +175,7 @@ impl HardwareBufferDevice {
     pub(crate) fn destroy_native_window_surface(
         &self,
         context: &mut HardwareBufferContext,
-        surface: &mut HardwareBufferWindowSurface,
+        surface: &mut NativeWindowSurface,
     ) -> Result<(), Error> {
         if context.id != surface.context_id {
             return Err(Error::IncompatibleSurface);
