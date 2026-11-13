@@ -109,7 +109,7 @@ impl HardwareBufferDevice {
                     egl::SURFACE_TYPE as EGLint,
                     egl::PBUFFER_BIT as EGLint,
                     egl::RENDERABLE_TYPE as EGLint,
-                    egl::OPENGL_ES2_BIT as EGLint,
+                    context::renderable_type(self.gl_api(), attributes.version),
                 ],
             )
             .map(Into::into)

@@ -23,6 +23,7 @@ use std::thread;
 #[allow(dead_code)]
 const DUMMY_PBUFFER_SIZE: EGLint = 16;
 const RGB_CHANNEL_BIT_DEPTH: EGLint = 8;
+const GLES3_MAJOR_VERSION: u8 = 3;
 
 pub(crate) struct EGLBackedContext {
     pub(crate) egl_context: EGLContext,
@@ -520,6 +521,16 @@ impl EglContextDescriptor {
     }
 }
 
+/// Returns the `EGL_RENDERABLE_TYPE` bit a config needs for a context of this API and version.
+pub(crate) fn renderable_type(gl_api: GLApi, version: GLVersion) -> EGLint {
+    let bit = match gl_api {
+        GLApi::GL => egl::OPENGL_BIT,
+        GLApi::GLES if version.major >= GLES3_MAJOR_VERSION => egl::OPENGL_ES3_BIT,
+        GLApi::GLES => egl::OPENGL_ES2_BIT,
+    };
+    bit as EGLint
+}
+
 pub(crate) unsafe fn create_context(
     egl_display: EGLDisplay,
     descriptor: &EglContextDescriptor,
@@ -685,4 +696,30 @@ pub(crate) unsafe fn create_dummy_pbuffer(
             Some(pbuffer)
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::renderable_type;
+    use crate::egl;
+    use crate::egl::types::EGLint;
+    use crate::{GLApi, GLVersion};
+
+    #[test]
+    fn test_renderable_type() {
+        let cases = [
+            (GLApi::GL, GLVersion::new(2, 1), egl::OPENGL_BIT),
+            (GLApi::GL, GLVersion::new(4, 6), egl::OPENGL_BIT),
+            (GLApi::GLES, GLVersion::new(2, 0), egl::OPENGL_ES2_BIT),
+            (GLApi::GLES, GLVersion::new(3, 0), egl::OPENGL_ES3_BIT),
+            (GLApi::GLES, GLVersion::new(3, 2), egl::OPENGL_ES3_BIT),
+        ];
+        for (gl_api, version, expected) in cases {
+            assert_eq!(
+                renderable_type(gl_api, version),
+                expected as EGLint,
+                "{gl_api:?} {version:?}"
+            );
+        }
+    }
 }

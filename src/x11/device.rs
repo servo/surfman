@@ -96,7 +96,7 @@ impl X11Device {
                     egl::SURFACE_TYPE as EGLint,
                     egl::WINDOW_BIT as EGLint,
                     egl::RENDERABLE_TYPE as EGLint,
-                    egl::OPENGL_BIT as EGLint,
+                    context::renderable_type(self.gl_api(), attributes.version),
                 ],
             )
             .map(Into::into)
