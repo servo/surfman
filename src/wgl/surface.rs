@@ -3,7 +3,8 @@
 //! An implementation of the GPU device for Windows using WGL/Direct3D interoperability.
 
 use crate::renderbuffers::Renderbuffers;
-use crate::{ContextID, Error, SurfaceID, SurfaceInfo};
+use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
+use crate::{ContextID, Error, SurfaceInfo};
 
 use euclid::default::Size2D;
 use std::fmt::{self, Debug, Formatter};
@@ -11,37 +12,38 @@ use std::marker::PhantomData;
 use std::thread;
 use winapi::shared::minwindef::FALSE;
 use winapi::shared::ntdef::HANDLE;
-use winapi::shared::windef::HWND;
 use winapi::um::d3d11::ID3D11Texture2D;
 use winapi::um::wingdi;
 use winapi::um::winuser;
 use wio::com::ComPtr;
 
 /// An implementation of [`crate::Surface`] for WGL platforms.
-pub struct WglSurface {
-    pub(crate) size: Size2D<i32>,
-    pub(crate) context_id: ContextID,
-    pub(crate) win32_objects: Win32Objects,
+#[derive(Debug)]
+pub enum WglSurface {
+    /// A surface displayed in a Win32 window.
+    Window(Win32Surface),
+    /// A Direct3D 11 texture shared with OpenGL through `WGL_NV_DX_interop`.
+    Buffer(Direct3dSurface),
+}
+
+/// The WGL objects of a [`Win32Surface`].
+pub(crate) struct WglWindowBinding {
     pub(crate) destroyed: bool,
 }
 
-pub(crate) enum Win32Objects {
-    Texture {
-        d3d11_texture: ComPtr<ID3D11Texture2D>,
-        dxgi_share_handle: HANDLE,
-        gl_dx_interop_object: HANDLE,
-        gl_texture: Option<glow::Texture>,
-        gl_framebuffer: Option<glow::Framebuffer>,
-        renderbuffers: Renderbuffers,
-    },
-    Widget {
-        window_handle: HWND,
-    },
+/// The WGL objects of a [`Direct3dSurface`].
+pub(crate) struct WglBufferBinding {
+    pub(crate) d3d11_texture: ComPtr<ID3D11Texture2D>,
+    pub(crate) gl_dx_interop_object: HANDLE,
+    pub(crate) gl_texture: Option<glow::Texture>,
+    pub(crate) gl_framebuffer: Option<glow::Framebuffer>,
+    pub(crate) renderbuffers: Renderbuffers,
+    pub(crate) destroyed: bool,
 }
 
 /// An implementation of [`crate::SurfaceTexture`] for WGL platforms.
 pub struct WglSurfaceTexture {
-    pub(crate) surface: WglSurface,
+    pub(crate) surface: Direct3dSurface,
     #[allow(dead_code)]
     pub(crate) local_d3d11_texture: ComPtr<ID3D11Texture2D>,
     pub(crate) local_gl_dx_interop_object: HANDLE,
@@ -49,15 +51,15 @@ pub struct WglSurfaceTexture {
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
-unsafe impl Send for WglSurface {}
-
-impl Debug for WglSurface {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
-        write!(f, "Surface({:x})", self.id().0)
+impl Drop for WglWindowBinding {
+    fn drop(&mut self) {
+        if !self.destroyed && !thread::panicking() {
+            panic!("Should have destroyed the surface first with `destroy_surface()`!")
+        }
     }
 }
 
-impl Drop for WglSurface {
+impl Drop for WglBufferBinding {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
             panic!("Should have destroyed the surface first with `destroy_surface()`!")
@@ -71,55 +73,86 @@ impl Debug for WglSurfaceTexture {
     }
 }
 
-impl WglSurface {
-    pub(crate) fn id(&self) -> SurfaceID {
-        match self.win32_objects {
-            Win32Objects::Texture {
-                ref d3d11_texture, ..
-            } => SurfaceID((*d3d11_texture).as_raw() as usize),
-            Win32Objects::Widget { window_handle } => SurfaceID(window_handle as usize),
+impl Win32Surface {
+    pub(crate) fn wgl(&self) -> Result<&WglWindowBinding, Error> {
+        #[allow(unreachable_patterns)]
+        match self.binding {
+            Win32Binding::Wgl(ref binding) => Ok(binding),
+            _ => Err(Error::IncompatibleSurface),
         }
     }
 
+    pub(crate) fn wgl_mut(&mut self) -> Result<&mut WglWindowBinding, Error> {
+        #[allow(unreachable_patterns)]
+        match self.binding {
+            Win32Binding::Wgl(ref mut binding) => Ok(binding),
+            _ => Err(Error::IncompatibleSurface),
+        }
+    }
+
+    pub(crate) fn present_wgl(&self) -> Result<(), Error> {
+        self.wgl()?;
+        let dc = unsafe { winuser::GetDC(self.window) };
+        let ok = unsafe { wingdi::SwapBuffers(dc) };
+        assert_ne!(ok, FALSE);
+        unsafe { winuser::ReleaseDC(self.window, dc) };
+        Ok(())
+    }
+}
+
+impl Direct3dSurface {
+    pub(crate) fn wgl(&self) -> Result<&WglBufferBinding, Error> {
+        #[allow(unreachable_patterns)]
+        match self.binding {
+            Direct3dBinding::Wgl(ref binding) => Ok(binding),
+            _ => Err(Error::IncompatibleSurface),
+        }
+    }
+
+    pub(crate) fn wgl_mut(&mut self) -> Result<&mut WglBufferBinding, Error> {
+        #[allow(unreachable_patterns)]
+        match self.binding {
+            Direct3dBinding::Wgl(ref mut binding) => Ok(binding),
+            _ => Err(Error::IncompatibleSurface),
+        }
+    }
+}
+
+impl WglSurface {
     /// Returns the DXGI share handle if it has one.
     #[inline]
     pub fn share_handle(&self) -> Option<HANDLE> {
-        match self.win32_objects {
-            Win32Objects::Texture {
-                dxgi_share_handle, ..
-            } => Some(dxgi_share_handle),
-            _ => None,
+        match self {
+            WglSurface::Window(_) => None,
+            WglSurface::Buffer(surface) => Some(surface.share_handle),
         }
     }
 
-    pub(crate) fn present(&self) -> Result<(), Error> {
-        let window_handle = match self.win32_objects {
-            Win32Objects::Widget { window_handle } => window_handle,
-            _ => return Err(Error::NoWidgetAttached),
-        };
+    pub(crate) fn context_id(&self) -> ContextID {
+        match self {
+            WglSurface::Window(surface) => surface.context_id,
+            WglSurface::Buffer(surface) => surface.context_id,
+        }
+    }
 
-        unsafe {
-            let dc = winuser::GetDC(window_handle);
-            let ok = wingdi::SwapBuffers(dc);
-            assert_ne!(ok, FALSE);
-            winuser::ReleaseDC(window_handle, dc);
-            Ok(())
+    pub(crate) fn is_wgl(&self) -> bool {
+        match self {
+            WglSurface::Window(surface) => surface.wgl().is_ok(),
+            WglSurface::Buffer(surface) => surface.wgl().is_ok(),
         }
     }
 
     pub(crate) fn resize(&mut self, size: Size2D<i32>) {
-        self.size = size;
+        match self {
+            WglSurface::Window(surface) => surface.size = size,
+            WglSurface::Buffer(surface) => surface.size = size,
+        }
     }
 
     pub(crate) fn info(&self) -> SurfaceInfo {
-        SurfaceInfo {
-            size: self.size,
-            id: self.id(),
-            context_id: self.context_id,
-            framebuffer_object: match self.win32_objects {
-                Win32Objects::Texture { gl_framebuffer, .. } => gl_framebuffer,
-                Win32Objects::Widget { .. } => None,
-            },
+        match self {
+            WglSurface::Window(surface) => surface.info(),
+            WglSurface::Buffer(surface) => surface.info(),
         }
     }
 }
