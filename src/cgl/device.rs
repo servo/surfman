@@ -6,7 +6,8 @@ use crate::cgl::context::{CurrentContextGuard, NativeContext};
 use crate::cgl::error::ToWindowingApiError;
 use crate::cgl::ffi::{CGLReleaseContext, CGLRetainContext};
 use crate::cgl::surface::{
-    surface_bind_to_gl_texture, CglSurface, CglSurfaceTexture, NativeSurface,
+    surface_bind_to_gl_texture, CglBinding, CglSurface, CglSurfaceTexture, CglWindowSurface,
+    NativeSurface,
 };
 use crate::context::{ContextID, CREATE_CONTEXT_MUTEX};
 use crate::renderbuffers::Renderbuffers;
@@ -306,7 +307,7 @@ impl CglDevice {
             Err(error) => return Err((error, new_surface)),
         };
         let new_surface: CglSurface = new_surface.try_into()?;
-        if new_surface.context_id != context.id {
+        if new_surface.context_id() != context.id {
             return Err((Error::IncompatibleSurface, new_surface.into()));
         }
 
@@ -354,7 +355,7 @@ impl CglDevice {
                     gl.flush();
                 }
 
-                if let Some(framebuffer) = surface.framebuffer_object {
+                if let Some(framebuffer) = surface.info().framebuffer_object {
                     gl_utils::unbind_framebuffer_if_necessary(gl, framebuffer);
                 }
                 Ok(Some(surface.into()))
@@ -376,8 +377,11 @@ impl CglDevice {
             // here ensures that doesn't happen.
             unsafe { context.gl.flush() };
 
-            self.0.present_surface(&mut surface.system_surface)?;
-            surface.bind_to_texture(&context.gl);
+            let CglSurface::Window(CglWindowSurface(binding)) = surface else {
+                return Err(Error::NoWidgetAttached);
+            };
+            self.0.present_surface(&mut binding.system_surface)?;
+            binding.bind_to_texture(&context.gl);
         }
         Ok(())
     }
@@ -395,7 +399,10 @@ impl CglDevice {
         let _guard = self.temporarily_make_context_current(context);
 
         if let Framebuffer::Surface(surface) = &mut context.framebuffer {
-            return self.resize_inner(surface, size, &context.gl, context_attributes);
+            let CglSurface::Window(CglWindowSurface(binding)) = surface else {
+                return Err(Error::NoWidgetAttached);
+            };
+            return self.resize_inner(binding, size, &context.gl, context_attributes);
         }
         Ok(())
     }
@@ -515,7 +522,7 @@ impl CglDevice {
         let _guard = self.temporarily_make_context_current(context);
 
         let gl = &context.gl;
-        unsafe {
+        let (framebuffer_object, texture_object, renderbuffers) = unsafe {
             let texture_object =
                 self.bind_to_gl_texture(gl, &system_surface.io_surface, &system_surface.size);
 
@@ -549,15 +556,23 @@ impl CglDevice {
                 return Err(Error::SurfaceCreationFailed(WindowingApiError::Failed));
             }
 
-            Ok(CglSurface {
-                system_surface,
-                context_id: context.id,
-                framebuffer_object: Some(framebuffer_object),
-                texture_object: Some(texture_object),
-                renderbuffers,
-            }
-            .into())
-        }
+            (framebuffer_object, texture_object, renderbuffers)
+        };
+
+        let is_window = system_surface.view_info.is_some();
+        let binding = CglBinding {
+            system_surface,
+            context_id: context.id,
+            framebuffer_object: Some(framebuffer_object),
+            texture_object: Some(texture_object),
+            renderbuffers,
+        };
+        let surface = if is_window {
+            CglSurface::Window(CglWindowSurface(binding))
+        } else {
+            CglSurface::Buffer(binding.into())
+        };
+        Ok(surface.into())
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.
@@ -575,21 +590,18 @@ impl CglDevice {
         context: &mut Context,
         surface: Surface,
     ) -> Result<SurfaceTexture, (Error, Surface)> {
-        let surface: CglSurface = surface.try_into()?;
-        if surface.system_surface.view_info.is_some() {
-            return Err((Error::WidgetAttached, surface.into()));
-        }
+        let surface = match surface.try_into()? {
+            CglSurface::Buffer(surface) => surface,
+            surface => return Err((Error::WidgetAttached, surface.into())),
+        };
         let context = match context.cgl() {
             Ok(context) => context,
-            Err(error) => return Err((error, surface.into())),
+            Err(error) => return Err((error, CglSurface::Buffer(surface).into())),
         };
 
         let _guard = self.temporarily_make_context_current(context).unwrap();
-        let texture_object = self.bind_to_gl_texture(
-            &context.gl,
-            &surface.system_surface.io_surface,
-            &surface.system_surface.size,
-        );
+        let texture_object =
+            self.bind_to_gl_texture(&context.gl, &surface.io_surface, &surface.size());
         Ok(CglSurfaceTexture {
             surface,
             texture_object: Some(texture_object),
@@ -645,22 +657,23 @@ impl CglDevice {
         surface: &mut CglSurface,
     ) -> Result<(), Error> {
         let gl = &context.gl;
-        if context.id != surface.context_id {
+        if context.id != surface.context_id() {
             return Err(Error::IncompatibleSurface);
         }
+        let binding = surface.binding_mut()?;
 
         unsafe {
-            if let Some(fbo) = surface.framebuffer_object.take() {
+            if let Some(fbo) = binding.framebuffer_object.take() {
                 gl_utils::destroy_framebuffer(gl, fbo);
             }
 
-            surface.renderbuffers.destroy(gl);
-            if let Some(texture) = surface.texture_object.take() {
+            binding.renderbuffers.destroy(gl);
+            if let Some(texture) = binding.texture_object.take() {
                 gl.delete_texture(texture);
             }
         }
 
-        self.0.destroy_surface(&mut surface.system_surface)
+        self.0.destroy_surface(&mut binding.system_surface)
     }
 
     /// Destroys a surface.
@@ -703,7 +716,7 @@ impl CglDevice {
             }
         }
 
-        Ok(surface_texture.surface.into())
+        Ok(CglSurface::Buffer(surface_texture.surface).into())
     }
 
     /// Returns the OpenGL texture object containing the contents of this surface.
@@ -732,8 +745,11 @@ impl CglDevice {
     pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
         let context = context.cgl()?;
         let surface: &mut CglSurface = surface.try_into()?;
-        self.0.present_surface(&mut surface.system_surface)?;
-        surface.bind_to_texture(&context.gl);
+        let CglSurface::Window(CglWindowSurface(binding)) = surface else {
+            return Err(Error::NoWidgetAttached);
+        };
+        self.0.present_surface(&mut binding.system_surface)?;
+        binding.bind_to_texture(&context.gl);
         Ok(())
     }
 
@@ -746,19 +762,22 @@ impl CglDevice {
     ) -> Result<(), Error> {
         let concrete_context = context.cgl()?;
         let surface: &mut CglSurface = surface.try_into()?;
-        if concrete_context.id != surface.context_id {
+        if concrete_context.id != surface.context_id() {
             return Err(Error::IncompatibleSurface);
         }
+        let CglSurface::Window(CglWindowSurface(binding)) = surface else {
+            return Err(Error::NoWidgetAttached);
+        };
 
         let _guard = self.temporarily_make_context_current(context.cgl()?);
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
-        self.resize_inner(surface, size, &concrete_context.gl, context_attributes)
+        self.resize_inner(binding, size, &concrete_context.gl, context_attributes)
     }
 
     pub(crate) fn resize_inner(
         &self,
-        surface: &mut CglSurface,
+        surface: &mut CglBinding,
         size: Size2D<i32>,
         gl: &Rc<gl::Context>,
         context_attributes: ContextAttributes,
@@ -836,8 +855,11 @@ impl CglDevice {
     /// The reference count is increased on the `IOSurface` before returning.
     #[inline]
     pub fn native_surface(&self, surface: &Surface) -> NativeSurface {
-        let surface = surface.cgl().expect("Incompatible surface type");
-        self.0.native_surface(&surface.system_surface)
+        let binding = surface
+            .cgl()
+            .and_then(CglSurface::binding)
+            .expect("Incompatible surface type");
+        self.0.native_surface(&binding.system_surface)
     }
 }
 
