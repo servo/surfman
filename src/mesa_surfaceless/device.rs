@@ -12,9 +12,10 @@ use crate::mesa_surfaceless::surface::{SurfacelessMesaSurface, SurfacelessMesaSu
 use crate::{egl, Adapter, Context, EglContextDescriptor, Surface, SurfaceTexture};
 use crate::{gl, ContextDescriptor};
 use crate::{ContextAttributes, Gl, SurfaceInfo};
-use crate::{Error, GLApi, SurfaceAccess, SurfaceType};
+use crate::{Error, GLApi, SurfaceAccess};
 use euclid::default::Size2D;
 use glow::Texture;
+use raw_window_handle::WindowHandle;
 use std::os::raw::c_void;
 use std::sync::Arc;
 
@@ -325,26 +326,23 @@ impl SurfacelessMesaDevice {
         context.0.surface_info()
     }
 
-    /// Creates either a generic or a widget surface, depending on the supplied surface type.
-    ///
-    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
-    /// up in a `SurfaceTexture` for reading by other contexts.
-    pub fn create_surface(
+    /// See [`crate::Device::create_window_surface`].
+    pub fn create_window_surface(
+        &self,
+        _: &Context,
+        _: SurfaceAccess,
+        _: WindowHandle<'_>,
+        _: Size2D<i32>,
+    ) -> Result<Surface, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    /// See [`crate::Device::create_offscreen_surface`].
+    pub fn create_offscreen_surface(
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<'_>,
-    ) -> Result<Surface, Error> {
-        match surface_type {
-            SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { .. } => Err(Error::UnsupportedOnThisPlatform),
-        }
-    }
-
-    fn create_generic_surface(
-        &self,
-        context: &Context,
-        size: &Size2D<i32>,
+        size: Size2D<i32>,
     ) -> Result<Surface, Error> {
         let _guard = self.temporarily_make_context_current(context)?;
         let context_descriptor = self.context_descriptor(context);
@@ -358,7 +356,7 @@ impl SurfacelessMesaDevice {
                 context.0.egl_context,
                 context.0.id,
                 &context_attributes,
-                size,
+                &size,
             )))
             .into(),
         )

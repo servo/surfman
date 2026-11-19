@@ -2,7 +2,7 @@
 
 use super::device::Device;
 use super::ffi::{kIOMapDefaultCache, kIOMapWriteCombineCache};
-use crate::{Error, SurfaceAccess, SurfaceID, SurfaceType};
+use crate::{Error, SurfaceAccess, SurfaceID};
 
 use euclid::default::Size2D;
 use libc::KERN_SUCCESS;
@@ -14,7 +14,7 @@ use objc2_core_foundation::{
     kCFAllocatorDefault, kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks,
     CFDictionary, CFIndex, CFNumber, CFRetained, CFString, CGPoint, CGRect, CGSize,
 };
-use raw_window_handle::RawWindowHandle;
+use raw_window_handle::{RawWindowHandle, WindowHandle};
 // CVDisplayLink is deprecated, but the replaced APIs are only available
 // on newer OS versions.
 #[allow(deprecated)]
@@ -103,39 +103,50 @@ pub struct SurfaceDataGuard<'a> {
 }
 
 impl Device {
-    /// Creates either a generic or a widget surface, depending on the supplied surface type.
-    pub fn create_surface(
+    /// Creates a surface displayed in an `NSView`.
+    pub fn create_window_surface(
         &self,
         access: SurfaceAccess,
-        surface_type: SurfaceType<'_>,
+        window_handle: WindowHandle<'_>,
     ) -> Result<Surface, Error> {
-        let (view_info, size) = match surface_type {
-            SurfaceType::Generic { size } => (None, size),
-            SurfaceType::Widget { window_handle, .. } => {
-                let RawWindowHandle::AppKit(handle) = window_handle.as_raw() else {
-                    return Err(Error::IncompatibleSurfaceType);
-                };
-
-                assert!(
-                    MainThreadMarker::new().is_some(),
-                    "NSView is only usable on the main thread"
-                );
-
-                // SAFETY: The pointer is valid for as long as the handle is,
-                // and we just checked that we're on the main thread.
-                let view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
-                let (view_info, size) = unsafe { self.create_view_info(access, view) };
-                (Some(view_info), size)
-            }
+        let RawWindowHandle::AppKit(handle) = window_handle.as_raw() else {
+            return Err(Error::IncompatibleSurfaceType);
         };
 
-        Ok(Surface {
+        assert!(
+            MainThreadMarker::new().is_some(),
+            "NSView is only usable on the main thread"
+        );
+
+        // SAFETY: The pointer is valid for as long as the handle is,
+        // and we just checked that we're on the main thread.
+        let view = unsafe { handle.ns_view.cast::<NSView>().as_ref() };
+        let (view_info, size) = unsafe { self.create_view_info(access, view) };
+        Ok(self.create_surface(access, size, Some(view_info)))
+    }
+
+    /// Creates an offscreen surface.
+    pub fn create_offscreen_surface(
+        &self,
+        access: SurfaceAccess,
+        size: Size2D<i32>,
+    ) -> Result<Surface, Error> {
+        Ok(self.create_surface(access, size, None))
+    }
+
+    fn create_surface(
+        &self,
+        access: SurfaceAccess,
+        size: Size2D<i32>,
+        view_info: Option<ViewInfo>,
+    ) -> Surface {
+        Surface {
             io_surface: self.create_io_surface(&size, access),
             size,
             access,
             destroyed: false,
             view_info,
-        })
+        }
     }
 
     pub(crate) fn set_surface_flipped(&self, surface: &mut Surface, flipped: bool) {

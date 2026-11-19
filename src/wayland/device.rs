@@ -12,11 +12,11 @@ use crate::surface::Framebuffer;
 use crate::wayland::surface::{WaylandSurface, WaylandSurfaceTexture};
 use crate::{
     egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
-    GLApi, Gl, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture, SurfaceType,
+    GLApi, Gl, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
 };
 use euclid::default::Size2D;
 use glow::Texture;
-use raw_window_handle::RawWindowHandle;
+use raw_window_handle::{RawWindowHandle, WindowHandle};
 use std::os::raw::c_void;
 use std::sync::Arc;
 use wayland_sys::client::wl_proxy;
@@ -325,40 +325,32 @@ impl WaylandDevice {
         context.0.surface_info()
     }
 
-    /// Creates either a generic or a widget surface, depending on the supplied surface type.
-    ///
-    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
-    /// up in a `SurfaceTexture` for reading by other contexts.
-    pub fn create_surface(
+    /// See [`crate::Device::create_window_surface`].
+    pub fn create_window_surface(
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<'_>,
+        window_handle: WindowHandle<'_>,
+        size: Size2D<i32>,
     ) -> Result<Surface, Error> {
-        match surface_type {
-            SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget {
-                window_handle,
-                size,
-            } => {
-                let RawWindowHandle::Wayland(handle) = window_handle.as_raw() else {
-                    return Err(Error::IncompatibleSurfaceType);
-                };
-                unsafe {
-                    self.create_window_surface(
-                        context,
-                        handle.surface.as_ptr() as *mut wl_proxy,
-                        &size,
-                    )
-                }
-            }
+        let RawWindowHandle::Wayland(handle) = window_handle.as_raw() else {
+            return Err(Error::IncompatibleSurfaceType);
+        };
+        unsafe {
+            self.create_wayland_window_surface(
+                context,
+                handle.surface.as_ptr() as *mut wl_proxy,
+                &size,
+            )
         }
     }
 
-    fn create_generic_surface(
+    /// See [`crate::Device::create_offscreen_surface`].
+    pub fn create_offscreen_surface(
         &self,
         context: &Context,
-        size: &Size2D<i32>,
+        _: SurfaceAccess,
+        size: Size2D<i32>,
     ) -> Result<Surface, Error> {
         let _guard = self.temporarily_make_context_current(context)?;
         let context_descriptor = self.context_descriptor(context);
@@ -372,13 +364,13 @@ impl WaylandDevice {
                 context.0.egl_context,
                 context.0.id,
                 &context_attributes,
-                size,
+                &size,
             )))
             .into(),
         )
     }
 
-    unsafe fn create_window_surface(
+    unsafe fn create_wayland_window_surface(
         &self,
         context: &Context,
         wayland_surface: *mut wl_proxy,

@@ -23,11 +23,11 @@ use crate::surface::Framebuffer;
 use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
 use crate::{
     egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
-    GLApi, Gl, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture, SurfaceType,
+    GLApi, Gl, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
-use raw_window_handle::RawWindowHandle;
+use raw_window_handle::{RawWindowHandle, WindowHandle};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::c_void;
@@ -616,27 +616,29 @@ impl AngleDevice {
         }
     }
 
-    /// Creates either a generic or a widget surface, depending on the supplied surface type.
-    ///
-    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
-    /// up in a `SurfaceTexture` for reading by other contexts.
-    pub fn create_surface(
+    /// See [`crate::Device::create_window_surface`].
+    pub fn create_window_surface(
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<'_>,
+        window_handle: WindowHandle<'_>,
+        _: Size2D<i32>,
     ) -> Result<Surface, Error> {
-        match surface_type {
-            SurfaceType::Generic { ref size } => self
-                .create_pbuffer_surface(context, size, None)
-                .map(|surface| AngleSurface::Buffer(surface).into()),
-            SurfaceType::Widget { window_handle, .. } => {
-                let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
-                    return Err(Error::IncompatibleSurfaceType);
-                };
-                self.create_hwnd_surface(context, handle.hwnd.get() as HWND)
-            }
-        }
+        let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
+            return Err(Error::IncompatibleSurfaceType);
+        };
+        self.create_hwnd_surface(context, handle.hwnd.get() as HWND)
+    }
+
+    /// See [`crate::Device::create_offscreen_surface`].
+    pub fn create_offscreen_surface(
+        &self,
+        context: &Context,
+        _: SurfaceAccess,
+        size: Size2D<i32>,
+    ) -> Result<Surface, Error> {
+        self.create_pbuffer_surface(context, &size, None)
+            .map(|surface| AngleSurface::Buffer(surface).into())
     }
 
     #[allow(non_snake_case)]

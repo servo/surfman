@@ -3,7 +3,7 @@
 use crate::macros::{dispatch, enum_conversion};
 use crate::{
     Adapter, Context, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi, Surface,
-    SurfaceAccess, SurfaceInfo, SurfaceTexture, SurfaceType,
+    SurfaceAccess, SurfaceInfo, SurfaceTexture,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -206,18 +206,16 @@ impl Device {
     /// Creates a surface for a native window.
     ///
     /// Only the given context may ever render to the surface.
-    pub fn create_window_surface<'a>(
+    pub fn create_window_surface(
         &self,
         context: &Context,
         surface_access: SurfaceAccess,
-        window_handle: WindowHandle<'a>,
+        window_handle: WindowHandle<'_>,
         size: Size2D<i32>,
     ) -> Result<Surface, Error> {
-        let surface_type = SurfaceType::Widget {
-            window_handle,
-            size,
-        };
-        dispatch!(Device, self, device => device.create_surface(context, surface_access, surface_type))
+        dispatch!(Device, self, device => {
+            device.create_window_surface(context, surface_access, window_handle, size)
+        })
     }
 
     /// Creates an offscreen surface.
@@ -230,8 +228,9 @@ impl Device {
         surface_access: SurfaceAccess,
         size: Size2D<i32>,
     ) -> Result<Surface, Error> {
-        let surface_type = SurfaceType::Generic { size };
-        dispatch!(Device, self, device => device.create_surface(context, surface_access, surface_type))
+        dispatch!(Device, self, device => {
+            device.create_offscreen_surface(context, surface_access, size)
+        })
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.
