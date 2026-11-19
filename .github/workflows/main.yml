@@ -53,7 +53,9 @@ jobs:
         if: ${{ !contains(matrix.platform.os, 'macos') }}
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "20"
+          # The MSVC STL on Windows runners requires Clang 22 or newer, which `install-llvm-action` does not list yet, so download it directly.
+          version: ${{ contains(matrix.platform.os, 'windows') && '22.1.8' || '20' }}
+          force-url: ${{ contains(matrix.platform.os, 'windows') && 'https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe' || '' }}
       - name: Install rust
         id: toolchain
         uses: dtolnay/rust-toolchain@1.91.0
