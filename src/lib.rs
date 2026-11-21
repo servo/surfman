@@ -32,8 +32,6 @@ mod gl_utils;
 #[cfg(any(android_platform, ohos_platform))]
 pub mod hardware_buffer;
 mod info;
-#[cfg(macos_platform)]
-pub mod macos;
 pub mod macros;
 #[cfg(free_unix)]
 pub mod mesa_surfaceless;

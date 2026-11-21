@@ -1,8 +1,8 @@
 //! Surface management for macOS.
 
+use crate::base::io_surface::buffer::IoSurfaceBinding;
 use crate::base::io_surface::surface::Surface as SystemSurface;
 use crate::context::ContextID;
-use crate::macos::surface::{IoSurfaceBinding, IoSurfaceSurface};
 use crate::renderbuffers::Renderbuffers;
 use crate::{gl, Error, SurfaceID, SurfaceInfo};
 use cgl::{kCGLNoError, CGLErrorString, CGLGetCurrentContext, CGLTexImageIOSurface2D, GLenum};
@@ -15,6 +15,7 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+pub use crate::base::io_surface::buffer::IoSurfaceBuffer;
 pub use crate::base::io_surface::surface::NativeSurface;
 
 /// An implementation of [`crate::Surface`] for CGL platforms.
@@ -23,7 +24,7 @@ pub enum CglSurface {
     /// A surface displayed in an AppKit view.
     Window(CglWindowSurface),
     /// An `IOSurface` that can be bound to a texture.
-    Buffer(IoSurfaceSurface),
+    Buffer(IoSurfaceBuffer),
 }
 
 /// A CGL surface displayed in an AppKit view.
@@ -40,7 +41,7 @@ pub(crate) struct CglBinding {
 
 /// An implementation of [`crate::SurfaceTexture`] for CGL platforms.
 pub struct CglSurfaceTexture {
-    pub(crate) surface: IoSurfaceSurface,
+    pub(crate) surface: IoSurfaceBuffer,
     pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
@@ -53,9 +54,9 @@ impl Debug for CglWindowSurface {
     }
 }
 
-impl From<CglBinding> for IoSurfaceSurface {
-    fn from(binding: CglBinding) -> IoSurfaceSurface {
-        IoSurfaceSurface {
+impl From<CglBinding> for IoSurfaceBuffer {
+    fn from(binding: CglBinding) -> IoSurfaceBuffer {
+        IoSurfaceBuffer {
             io_surface: binding.system_surface.io_surface.clone(),
             binding: IoSurfaceBinding::Cgl(binding),
         }

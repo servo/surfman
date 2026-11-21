@@ -1,4 +1,4 @@
-//! Surfaces shared by the macOS backends.
+//! Offscreen buffer surface used by the Apple backends.
 
 use crate::cgl::surface::CglBinding;
 use crate::{ContextID, Error, SurfaceID, SurfaceInfo};
@@ -11,19 +11,19 @@ use std::fmt::{self, Debug, Formatter};
 /// A surface backed by an `IOSurface`, which can be bound to a texture.
 ///
 /// The `IOSurface` can be used by other devices, graphics APIs and processes.
-pub struct IoSurfaceSurface {
+pub struct IoSurfaceBuffer {
     pub(crate) io_surface: CFRetained<IOSurfaceRef>,
     pub(crate) binding: IoSurfaceBinding,
 }
 
-/// The objects that bind an [`IoSurfaceSurface`] to the context of the backend that created it.
+/// The objects that bind an [`IoSurfaceBuffer`] to the context of the backend that created it.
 pub(crate) enum IoSurfaceBinding {
     Cgl(CglBinding),
 }
 
-unsafe impl Send for IoSurfaceSurface {}
+unsafe impl Send for IoSurfaceBuffer {}
 
-impl IoSurfaceSurface {
+impl IoSurfaceBuffer {
     /// Returns the size of the surface.
     #[inline]
     pub fn size(&self) -> Size2D<i32> {
@@ -77,8 +77,8 @@ impl IoSurfaceSurface {
     }
 }
 
-impl Debug for IoSurfaceSurface {
+impl Debug for IoSurfaceBuffer {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "IoSurfaceSurface({:x})", self.id().0)
+        write!(formatter, "IoSurfaceBuffer({:x})", self.id().0)
     }
 }
