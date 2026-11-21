@@ -1,9 +1,10 @@
 //! Surface management for macOS.
 
+use crate::base::io_surface::buffer::IoSurfaceBinding;
 use crate::base::io_surface::surface::Surface as SystemSurface;
 use crate::context::ContextID;
 use crate::renderbuffers::Renderbuffers;
-use crate::{gl, SurfaceID, SurfaceInfo};
+use crate::{gl, Error, SurfaceID, SurfaceInfo};
 use cgl::{kCGLNoError, CGLErrorString, CGLGetCurrentContext, CGLTexImageIOSurface2D, GLenum};
 use glow::Context as Gl;
 
@@ -14,10 +15,23 @@ use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+pub use crate::base::io_surface::buffer::IoSurfaceBuffer;
 pub use crate::base::io_surface::surface::NativeSurface;
 
 /// An implementation of [`crate::Surface`] for CGL platforms.
-pub struct CglSurface {
+#[derive(Debug)]
+pub enum CglSurface {
+    /// A surface displayed in an AppKit view.
+    Window(CglWindowSurface),
+    /// An `IOSurface` that can be bound to a texture.
+    Buffer(IoSurfaceBuffer),
+}
+
+/// A CGL surface displayed in an AppKit view.
+pub struct CglWindowSurface(pub(crate) CglBinding);
+
+/// The CGL objects that render to the `IOSurface` of a surface.
+pub(crate) struct CglBinding {
     pub(crate) system_surface: SystemSurface,
     pub(crate) context_id: ContextID,
     pub(crate) framebuffer_object: Option<glow::Framebuffer>,
@@ -27,16 +41,25 @@ pub struct CglSurface {
 
 /// An implementation of [`crate::SurfaceTexture`] for CGL platforms.
 pub struct CglSurfaceTexture {
-    pub(crate) surface: CglSurface,
+    pub(crate) surface: IoSurfaceBuffer,
     pub(crate) texture_object: Option<Texture>,
     pub(crate) phantom: PhantomData<*const ()>,
 }
 
-unsafe impl Send for CglSurface {}
+unsafe impl Send for CglWindowSurface {}
 
-impl Debug for CglSurface {
+impl Debug for CglWindowSurface {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-        write!(formatter, "Surface({:x})", self.id().0)
+        write!(formatter, "CglWindowSurface({:x})", self.0.id().0)
+    }
+}
+
+impl From<CglBinding> for IoSurfaceBuffer {
+    fn from(binding: CglBinding) -> IoSurfaceBuffer {
+        IoSurfaceBuffer {
+            io_surface: binding.system_surface.io_surface.clone(),
+            binding: IoSurfaceBinding::Cgl(binding),
+        }
     }
 }
 
@@ -84,6 +107,38 @@ pub(crate) fn surface_bind_to_gl_texture(
 }
 
 impl CglSurface {
+    pub(crate) fn binding(&self) -> Result<&CglBinding, Error> {
+        match self {
+            CglSurface::Window(surface) => Ok(&surface.0),
+            CglSurface::Buffer(surface) => surface.cgl(),
+        }
+    }
+
+    pub(crate) fn binding_mut(&mut self) -> Result<&mut CglBinding, Error> {
+        match self {
+            CglSurface::Window(surface) => Ok(&mut surface.0),
+            CglSurface::Buffer(surface) => surface.cgl_mut(),
+        }
+    }
+
+    pub(crate) fn context_id(&self) -> ContextID {
+        match self {
+            CglSurface::Window(surface) => surface.0.context_id,
+            CglSurface::Buffer(surface) => surface.context_id(),
+        }
+    }
+
+    /// Returns various information about the surface.
+    #[inline]
+    pub fn info(&self) -> SurfaceInfo {
+        match self {
+            CglSurface::Window(surface) => surface.0.info(),
+            CglSurface::Buffer(surface) => surface.info(),
+        }
+    }
+}
+
+impl CglBinding {
     #[inline]
     pub(crate) fn id(&self) -> SurfaceID {
         SurfaceID(&*self.system_surface.io_surface as *const IOSurfaceRef as usize)
@@ -101,9 +156,7 @@ impl CglSurface {
         unsafe { gl.bind_texture(gl::TEXTURE_RECTANGLE, None) };
     }
 
-    /// Returns various information about the surface.
-    #[inline]
-    pub fn info(&self) -> SurfaceInfo {
+    pub(crate) fn info(&self) -> SurfaceInfo {
         SurfaceInfo {
             size: self.system_surface.size,
             id: self.id(),
