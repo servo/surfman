@@ -18,12 +18,12 @@ use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Wi
 use crate::{
     gl, gl_utils, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
     ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, Surface, SurfaceAccess,
-    SurfaceInfo, SurfaceTexture, SurfaceType,
+    SurfaceInfo, SurfaceTexture,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
 use libc::c_uint;
-use raw_window_handle::RawWindowHandle;
+use raw_window_handle::{RawWindowHandle, WindowHandle};
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::mem;
@@ -741,25 +741,28 @@ impl WglDevice {
         NativeContext(context.glrc)
     }
 
-    /// Creates either a generic or a widget surface, depending on the supplied surface type.
-    ///
-    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
-    /// up in a `SurfaceTexture` for reading by other contexts.
-    pub fn create_surface(
+    /// See [`crate::Device::create_window_surface`].
+    pub fn create_window_surface(
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<'_>,
+        window_handle: WindowHandle<'_>,
+        _: Size2D<i32>,
     ) -> Result<Surface, Error> {
-        match surface_type {
-            SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { window_handle, .. } => {
-                let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
-                    return Err(Error::IncompatibleSurfaceType);
-                };
-                self.create_widget_surface(context, handle.hwnd.get() as HWND)
-            }
-        }
+        let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
+            return Err(Error::IncompatibleSurfaceType);
+        };
+        self.create_widget_surface(context, handle.hwnd.get() as HWND)
+    }
+
+    /// See [`crate::Device::create_offscreen_surface`].
+    pub fn create_offscreen_surface(
+        &self,
+        context: &Context,
+        _: SurfaceAccess,
+        size: Size2D<i32>,
+    ) -> Result<Surface, Error> {
+        self.create_generic_surface(context, &size)
     }
 
     fn create_generic_surface(

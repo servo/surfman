@@ -2,6 +2,7 @@
 
 use super::context::{CglContext, CglContextDescriptor};
 use crate::base::io_surface::device::Device as SystemDevice;
+use crate::base::io_surface::surface::Surface as SystemSurface;
 use crate::cgl::context::{CurrentContextGuard, NativeContext};
 use crate::cgl::error::ToWindowingApiError;
 use crate::cgl::ffi::{CGLReleaseContext, CGLRetainContext};
@@ -14,7 +15,7 @@ use crate::renderbuffers::Renderbuffers;
 use crate::surface::Framebuffer;
 use crate::{
     gl, gl_utils, Adapter, Context, GLVersion, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
-    SurfaceType, WindowingApiError,
+    WindowingApiError,
 };
 use crate::{ContextAttributeFlags, ContextAttributes, ContextDescriptor, Error, GLApi, Gl};
 use cgl::{
@@ -28,6 +29,7 @@ use glow::HasContext;
 use glow::Texture;
 use objc2_core_foundation::{CFBundle, CFRetained, CFString};
 use objc2_io_surface::IOSurfaceRef;
+use raw_window_handle::WindowHandle;
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 use std::rc::Rc;
@@ -502,17 +504,36 @@ impl CglDevice {
         unsafe { NativeContext(CGLRetainContext(context.cgl_context)) }
     }
 
-    /// Creates either a generic or a widget surface, depending on the supplied surface type.
-    ///
-    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
-    /// up in a `SurfaceTexture` for reading by other contexts.
-    pub fn create_surface(
+    /// See [`crate::Device::create_window_surface`].
+    pub fn create_window_surface(
         &self,
         context: &Context,
         access: SurfaceAccess,
-        surface_type: SurfaceType<'_>,
+        window_handle: WindowHandle<'_>,
+        _: Size2D<i32>,
     ) -> Result<Surface, Error> {
-        let mut system_surface = self.0.create_surface(access, surface_type)?;
+        let system_surface = self.0.create_window_surface(access, window_handle)?;
+        let binding = self.create_cgl_binding(context, system_surface)?;
+        Ok(CglSurface::Window(CglWindowSurface(binding)).into())
+    }
+
+    /// See [`crate::Device::create_offscreen_surface`].
+    pub fn create_offscreen_surface(
+        &self,
+        context: &Context,
+        access: SurfaceAccess,
+        size: Size2D<i32>,
+    ) -> Result<Surface, Error> {
+        let system_surface = self.0.create_offscreen_surface(access, size)?;
+        let binding = self.create_cgl_binding(context, system_surface)?;
+        Ok(CglSurface::Buffer(binding.into()).into())
+    }
+
+    fn create_cgl_binding(
+        &self,
+        context: &Context,
+        mut system_surface: SystemSurface,
+    ) -> Result<CglBinding, Error> {
         self.0.set_surface_flipped(&mut system_surface, true);
 
         let context_descriptor = self.context_descriptor(context);
@@ -559,20 +580,13 @@ impl CglDevice {
             (framebuffer_object, texture_object, renderbuffers)
         };
 
-        let is_window = system_surface.view_info.is_some();
-        let binding = CglBinding {
+        Ok(CglBinding {
             system_surface,
             context_id: context.id,
             framebuffer_object: Some(framebuffer_object),
             texture_object: Some(texture_object),
             renderbuffers,
-        };
-        let surface = if is_window {
-            CglSurface::Window(CglWindowSurface(binding))
-        } else {
-            CglSurface::Buffer(binding.into())
-        };
-        Ok(surface.into())
+        })
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.

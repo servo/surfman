@@ -3,7 +3,6 @@
 use crate::context::ContextID;
 use crate::macros::enum_conversion;
 use euclid::default::Size2D;
-use raw_window_handle::WindowHandle;
 use std::fmt::{self, Display, Formatter};
 
 #[cfg(all(windows_platform, feature = "sm-angle"))]
@@ -95,32 +94,6 @@ pub enum SurfaceAccess {
     ///
     /// The driver is free to treat this as identical to `GPUCPU`.
     GPUCPUWriteCombined,
-}
-
-/// Information specific to the type of surface: generic or widget.
-#[derive(Clone)]
-pub enum SurfaceType<'a> {
-    /// An off-screen surface that has a pixel size. Generic surfaces can sometimes be shown on
-    /// screen using platform-specific APIs, but `surfman` itself provides no way to draw their
-    /// contents on screen. Only generic surfaces can be bound to textures.
-    Generic {
-        /// The size of the surface.
-        ///
-        /// For HiDPI screens, this is a physical size, not a logical size.
-        size: Size2D<i32>,
-    },
-    /// A surface displayed inside a native widget (window or view). The size of a widget surface
-    /// is automatically determined based on the size of the widget. (For example, if the widget is
-    /// a window, the size of the surface will be the physical size of the window.) Widget surfaces
-    /// cannot be bound to textures.
-    Widget {
-        /// A [`WindowHandle`] which identifies the widget to make this surface for.
-        window_handle: WindowHandle<'a>,
-        /// The size of the window to create this surface for.
-        ///
-        /// Note: This is currently only used for Wayland.
-        size: Size2D<i32>,
-    },
 }
 
 impl SurfaceAccess {

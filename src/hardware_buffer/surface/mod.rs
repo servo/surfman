@@ -12,11 +12,12 @@ use crate::hardware_buffer::device::HardwareBufferDevice;
 use crate::renderbuffers::Renderbuffers;
 use crate::{
     egl, gl, gl_utils, Context, Error, Surface, SurfaceAccess, SurfaceID, SurfaceInfo,
-    SurfaceTexture, SurfaceType,
+    SurfaceTexture,
 };
 
 use euclid::default::Size2D;
 use glow::{HasContext, Texture};
+use raw_window_handle::WindowHandle;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
@@ -164,23 +165,26 @@ impl Debug for HardwareBufferSurfaceTexture {
 }
 
 impl HardwareBufferDevice {
-    /// Creates either a generic or a widget surface, depending on the supplied surface type.
-    ///
-    /// Only the given context may ever render to the surface, but generic surfaces can be wrapped
-    /// up in a `SurfaceTexture` for reading by other contexts.
-    pub fn create_surface(
+    /// See [`crate::Device::create_window_surface`].
+    pub fn create_window_surface(
         &self,
         context: &Context,
         _: SurfaceAccess,
-        surface_type: SurfaceType<'_>,
+        window_handle: WindowHandle<'_>,
+        _: Size2D<i32>,
     ) -> Result<Surface, Error> {
-        match surface_type {
-            SurfaceType::Generic { size } => self.create_generic_surface(context, &size),
-            SurfaceType::Widget { window_handle, .. } => {
-                let native_window = platform::native_window(window_handle.as_raw())?;
-                unsafe { self.create_window_surface(context, native_window) }
-            }
-        }
+        let native_window = platform::native_window(window_handle.as_raw())?;
+        unsafe { self.create_native_window_surface(context, native_window) }
+    }
+
+    /// See [`crate::Device::create_offscreen_surface`].
+    pub fn create_offscreen_surface(
+        &self,
+        context: &Context,
+        _: SurfaceAccess,
+        size: Size2D<i32>,
+    ) -> Result<Surface, Error> {
+        self.create_generic_surface(context, &size)
     }
 
     fn create_generic_surface(
@@ -233,7 +237,7 @@ impl HardwareBufferDevice {
         )
     }
 
-    unsafe fn create_window_surface(
+    unsafe fn create_native_window_surface(
         &self,
         context: &Context,
         native_window: *mut platform::NativeWindow,

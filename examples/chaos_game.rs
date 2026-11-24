@@ -7,10 +7,10 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn main() {
-    use euclid::default::{Point2D, Size2D};
+    use euclid::default::Point2D;
     use rand::{self, Rng};
+    use surfman::SurfaceAccess;
     use surfman::SystemConnection;
-    use surfman::{SurfaceAccess, SurfaceType};
     use winit::dpi::PhysicalSize;
     use winit::event::WindowEvent::KeyboardInput;
     use winit::event::{DeviceEvent, ElementState, Event, KeyEvent, RawKeyEvent, WindowEvent};
@@ -52,17 +52,9 @@ fn main() {
 
     window.set_visible(true);
 
-    let size = window.inner_size();
-    let size = Size2D::new(size.width as i32, size.height as i32);
     let window_handle = window.window_handle().unwrap();
     let mut surface = device
-        .create_surface(
-            SurfaceAccess::GPUCPU,
-            SurfaceType::Widget {
-                window_handle,
-                size,
-            },
-        )
+        .create_window_surface(SurfaceAccess::GPUCPU, window_handle)
         .unwrap();
 
     let mut rng = rand::thread_rng();
