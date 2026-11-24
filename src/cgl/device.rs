@@ -852,18 +852,6 @@ impl CglDevice {
         }
     }
 
-    /// Returns various information about the surface, including the framebuffer object needed to
-    /// render to this surface.
-    ///
-    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
-    /// on the framebuffer object returned by this function. This framebuffer object may or not be
-    /// 0, the default framebuffer, depending on platform.
-    #[inline]
-    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        let surface = surface.cgl().expect("Incompatible surface type");
-        surface.info()
-    }
-
     /// Returns the native `IOSurface` corresponding to this surface.
     ///
     /// The reference count is increased on the `IOSurface` before returning.

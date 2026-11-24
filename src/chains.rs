@@ -154,7 +154,7 @@ impl SwapChainData {
 
         // Recycle the old front buffer
         if let Some(old_front_buffer) = self.pending_surface.take() {
-            let SurfaceInfo { id, size, .. } = device.surface_info(&old_front_buffer);
+            let SurfaceInfo { id, size, .. } = old_front_buffer.info();
             debug!(
                 "Recycling surface {:?} ({:?}) for context {:?}",
                 id, size, self.context_id
@@ -166,7 +166,7 @@ impl SwapChainData {
         let new_back_buffer = self
             .recycled_surfaces
             .iter()
-            .position(|surface| device.surface_info(surface).size == self.size)
+            .position(|surface| surface.info().size == self.size)
             .map(|index| {
                 debug!("Recycling surface for context {:?}", self.context_id);
                 Ok(self.recycled_surfaces.swap_remove(index))
@@ -179,12 +179,12 @@ impl SwapChainData {
                 device.create_offscreen_surface(context, self.surface_access, self.size)
             })?;
 
-        let back_info = device.surface_info(&new_back_buffer);
+        let back_info = new_back_buffer.info();
 
         // Swap the buffers
         debug!(
             "Surface {:?} is the new back buffer for context {:?}",
-            device.surface_info(&new_back_buffer).id,
+            new_back_buffer.info().id,
             self.context_id
         );
         let new_front_buffer = self.back_buffer.take_surface(device, context)?;
@@ -192,7 +192,7 @@ impl SwapChainData {
             .replace_surface(device, context, new_back_buffer)?;
 
         if let PreserveBuffer::Yes(gl) = preserve_buffer {
-            let front_info = device.surface_info(&new_front_buffer);
+            let front_info = new_front_buffer.info();
             unsafe {
                 gl.bind_framebuffer(gl::READ_FRAMEBUFFER, front_info.framebuffer_object);
                 debug_assert_eq!(gl.get_error(), gl::NO_ERROR);
@@ -217,7 +217,7 @@ impl SwapChainData {
         // Update the state
         debug!(
             "Surface {:?} is the new front buffer for context {:?}",
-            device.surface_info(&new_front_buffer).id,
+            new_front_buffer.info().id,
             self.context_id
         );
         self.pending_surface = Some(new_front_buffer);

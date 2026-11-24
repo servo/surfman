@@ -180,3 +180,30 @@ enum_conversion!(
 enum_conversion!(Surface, Wgl, WglSurface, wgl, IncompatibleSurface);
 #[cfg(x11_platform)]
 enum_conversion!(Surface, X11, X11Surface, x11, IncompatibleSurface);
+
+impl Surface {
+    /// Returns various information about the surface, including the framebuffer object needed to
+    /// render to this surface.
+    ///
+    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
+    /// on the framebuffer object returned by this function. This framebuffer object may or not be
+    /// 0, the default framebuffer, depending on platform.
+    pub fn info(&self) -> SurfaceInfo {
+        match self {
+            #[cfg(all(windows_platform, feature = "sm-angle"))]
+            Surface::Angle(surface) => surface.info(),
+            #[cfg(macos_platform)]
+            Surface::Cgl(surface) => surface.info(),
+            #[cfg(any(android_platform, ohos_platform))]
+            Surface::HardwareBuffer(surface) => surface.info(),
+            #[cfg(free_unix)]
+            Surface::SurfacelessMesa(surface) => surface.0.info(),
+            #[cfg(wayland_platform)]
+            Surface::Wayland(surface) => surface.0.info(),
+            #[cfg(wgl)]
+            Surface::Wgl(surface) => surface.info(),
+            #[cfg(x11_platform)]
+            Surface::X11(surface) => surface.0.info(),
+        }
+    }
+}

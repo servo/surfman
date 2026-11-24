@@ -316,7 +316,7 @@ pub fn test_generic_surface_creation() {
         let surface = device
             .create_offscreen_surface(&context, access, Size2D::new(640, 480))
             .unwrap();
-        let info = device.surface_info(&surface);
+        let info = surface.info();
         assert_eq!(info.size, Size2D::new(640, 480));
         assert_eq!(info.context_id, context_id);
         surface
@@ -327,10 +327,7 @@ pub fn test_generic_surface_creation() {
     for (surface_index, surface) in surfaces.iter().enumerate() {
         for (other_surface_index, other_surface) in surfaces.iter().enumerate() {
             if surface_index != other_surface_index {
-                assert_ne!(
-                    device.surface_info(surface).id,
-                    device.surface_info(other_surface).id
-                );
+                assert_ne!(surface.info().id, other_surface.info().id);
             }
         }
     }

@@ -411,19 +411,6 @@ impl HardwareBufferDevice {
         }
     }
 
-    /// Returns various information about the surface, including the framebuffer object needed to
-    /// render to this surface.
-    ///
-    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
-    /// on the framebuffer object returned by this function. This framebuffer object may or not be
-    /// 0, the default framebuffer, depending on platform.
-    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        surface
-            .hardware_buffer()
-            .expect("Incompatible surface type")
-            .info()
-    }
-
     /// Returns the attributes that the context descriptor was created with.
     pub fn context_descriptor_attributes(
         &self,
