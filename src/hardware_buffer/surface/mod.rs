@@ -90,13 +90,6 @@ pub struct HardwareBufferSurfaceTexture {
 unsafe impl Send for NativeWindowSurface {}
 unsafe impl Send for NativeBufferSurface {}
 
-pub(crate) fn window_surface(surface: &WindowSurface) -> Result<&PlatformWindowSurface, Error> {
-    #[cfg(android_platform)]
-    return surface.android();
-    #[cfg(ohos_platform)]
-    return surface.ohos();
-}
-
 impl TryFrom<Surface> for HardwareBufferSurface {
     type Error = (Error, Surface);
     fn try_from(surface: Surface) -> Result<HardwareBufferSurface, Self::Error> {
@@ -368,7 +361,8 @@ impl HardwareBufferDevice {
         context: &Context,
         surface: &mut WindowSurface,
     ) -> Result<(), Error> {
-        self.present_window_surface(context.hardware_buffer()?, &window_surface(surface)?.0)
+        let surface: &mut PlatformWindowSurface = surface.try_into()?;
+        self.present_window_surface(context.hardware_buffer()?, &surface.0)
     }
 
     pub(crate) fn present_window_surface(

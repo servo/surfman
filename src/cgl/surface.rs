@@ -20,7 +20,7 @@ pub use crate::base::io_surface::surface::NativeSurface;
 
 /// An implementation of [`crate::Surface`] for CGL platforms.
 #[derive(Debug)]
-pub enum CglSurface {
+pub(crate) enum CglSurface {
     /// A surface displayed in an AppKit view.
     Window(CglWindowSurface),
     /// An `IOSurface` that can be bound to a texture.

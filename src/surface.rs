@@ -113,10 +113,10 @@ impl SurfaceAccess {
 /// Represents a hardware buffer of pixels that can be rendered to via the CPU or GPU and either
 /// displayed in a native widget or bound to a texture for reading.
 ///
-/// Surfaces come in two varieties: generic and widget surfaces. Generic surfaces can be bound to a
-/// texture but cannot be displayed in a widget (without using other APIs such as Core Animation,
-/// DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be displayed in a
-/// widget but not bound to a texture.
+/// Surfaces come in two varieties: `WindowSurface` and `OffscreenSurface`. Generic surfaces can be
+/// bound to a texture but cannot be displayed in a widget (without using other APIs such as Core
+/// Animation, DirectComposition, or XPRESENT). Widget surfaces are the opposite: they can be
+/// displayed in a widget but not bound to a texture.
 ///
 /// Surfaces are specific to a given context and cannot be rendered to from any context other than
 /// the one they were created with. However, they can be *read* from any context on any thread (as
@@ -278,8 +278,8 @@ impl Surface {
     /// Returns various information about the surface, including the framebuffer object needed to
     /// render to this surface.
     ///
-    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
-    /// on the framebuffer object returned by this function. This framebuffer object may or not be
+    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()` on
+    /// the framebuffer object returned by this function. This framebuffer object may or may not be
     /// 0, the default framebuffer, depending on platform.
     pub fn info(&self) -> SurfaceInfo {
         match self {
