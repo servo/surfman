@@ -391,6 +391,21 @@ impl Device {
         }
     }
 
+    /// Creates a generic surface whose pixels are those of an existing `IOSurfaceRef`.
+    pub(crate) fn create_surface_from_io_surface(
+        &self,
+        io_surface: CFRetained<IOSurfaceRef>,
+    ) -> Surface {
+        let size = Size2D::new(io_surface.width() as i32, io_surface.height() as i32);
+        Surface {
+            io_surface,
+            size,
+            access: SurfaceAccess::GPUOnly,
+            destroyed: false,
+            view_info: None,
+        }
+    }
+
     /// Returns the native `IOSurfaceRef` corresponding to this surface.
     #[inline]
     pub fn native_surface(&self, surface: &Surface) -> NativeSurface {

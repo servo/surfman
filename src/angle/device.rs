@@ -22,9 +22,9 @@ use crate::egl::types::{
 use crate::surface::Framebuffer;
 use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
 use crate::{
-    egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
-    GLApi, Gl, OffscreenSurface, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
-    WindowSurface,
+    egl, gl, Adapter, BufferHandle, Context, ContextAttributes, ContextDescriptor,
+    EglContextDescriptor, Error, GLApi, Gl, OffscreenSurface, Surface, SurfaceAccess, SurfaceInfo,
+    SurfaceTexture, WindowSurface, WindowingApiError,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -1117,6 +1117,39 @@ impl AngleDevice {
         surface_texture: &SurfaceTexture,
     ) -> Option<glow::Texture> {
         surface_texture.angle().ok()?.gl_texture
+    }
+
+    /// Returns the DXGI share handle of the Direct3D 11 texture behind a buffer surface, which
+    /// other devices, graphics APIs or processes can open.
+    pub fn buffer_handle(&self, surface: &OffscreenSurface) -> Result<BufferHandle, Error> {
+        Ok(BufferHandle::D3DTexture(surface.direct3d()?.share_handle))
+    }
+
+    /// Creates a buffer surface of the given context that renders into the Direct3D 11 texture
+    /// behind a DXGI share handle.
+    pub fn import_buffer_handle(
+        &self,
+        context: &Context,
+        handle: &BufferHandle,
+    ) -> Result<OffscreenSurface, Error> {
+        let BufferHandle::D3DTexture(share_handle) = *handle;
+        unsafe {
+            let mut texture = ptr::null_mut();
+            let result = self.d3d11_device.OpenSharedResource(
+                share_handle,
+                &d3d11::ID3D11Texture2D::uuidof(),
+                &mut texture,
+            );
+            if !winerror::SUCCEEDED(result) || texture.is_null() {
+                return Err(Error::SurfaceImportFailed(WindowingApiError::Failed));
+            }
+            let texture = ComPtr::from_raw(texture as *mut d3d11::ID3D11Texture2D);
+            let mut texture_desc = mem::zeroed();
+            texture.GetDesc(&mut texture_desc);
+            let size = Size2D::new(texture_desc.Width as i32, texture_desc.Height as i32);
+            self.create_pbuffer_surface(context, &size, Some(texture))
+                .map(Into::into)
+        }
     }
 }
 

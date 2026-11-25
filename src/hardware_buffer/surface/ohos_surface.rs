@@ -4,8 +4,8 @@
 use super::super::ohos_ffi::{
     eglGetNativeClientBufferANDROID, NativeWindowOperation, OHNativeWindow, OH_NativeBuffer,
     OH_NativeBuffer_Alloc, OH_NativeBuffer_Config, OH_NativeBuffer_Format,
-    OH_NativeBuffer_Unreference, OH_NativeBuffer_Usage, OH_NativeWindow_NativeWindowHandleOpt,
-    EGL_NATIVE_BUFFER_OHOS,
+    OH_NativeBuffer_GetConfig, OH_NativeBuffer_Reference, OH_NativeBuffer_Unreference,
+    OH_NativeBuffer_Usage, OH_NativeWindow_NativeWindowHandleOpt, EGL_NATIVE_BUFFER_OHOS,
 };
 use super::{NativeBufferSurface, NativeWindowSurface};
 use crate::base::egl::ffi::EGLClientBuffer;
@@ -66,6 +66,30 @@ pub(crate) fn allocate_native_buffer(size: &Size2D<i32>) -> Result<*mut NativeBu
 pub(crate) unsafe fn release_native_buffer(buffer: *mut NativeBuffer) {
     let result = unsafe { OH_NativeBuffer_Unreference(buffer) };
     assert_eq!(result, 0, "OH_NativeBuffer_Unreference failed");
+}
+
+/// Takes a new reference to a native buffer.
+///
+/// # Safety
+///
+/// `buffer` must point to a live native buffer.
+pub(crate) unsafe fn acquire_native_buffer(buffer: *mut NativeBuffer) {
+    unsafe { OH_NativeBuffer_Reference(buffer) };
+}
+
+/// # Safety
+///
+/// `buffer` must point to a live native buffer.
+pub(crate) unsafe fn native_buffer_size(buffer: *mut NativeBuffer) -> Size2D<i32> {
+    let mut config = OH_NativeBuffer_Config {
+        width: 0,
+        height: 0,
+        format: OH_NativeBuffer_Format::RGBA_8888,
+        usage: OH_NativeBuffer_Usage::empty(),
+        stride: 0,
+    };
+    unsafe { OH_NativeBuffer_GetConfig(buffer, &mut config) };
+    Size2D::new(config.width, config.height)
 }
 
 /// # Safety

@@ -752,6 +752,83 @@ pub fn test_surface_texture_right_side_up() {
     }
 }
 
+// Tests that a surface imported from another surface's buffer handle shows its pixels.
+#[cfg_attr(not(feature = "sm-test"), test)]
+pub fn test_buffer_handle_import() {
+    let Some(mut environment) = BasicEnvironment::new() else {
+        return;
+    };
+
+    unsafe {
+        clear(&environment.gl, &[0, 255, 0, 255]);
+        environment.gl.finish();
+
+        let green_surface: OffscreenSurface = environment
+            .device
+            .unbind_surface_from_context(&mut environment.context)
+            .unwrap()
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let handle = match environment.device.buffer_handle(&green_surface) {
+            Ok(handle) => Some(handle),
+            Err(Error::RequiredExtensionUnavailable | Error::UnsupportedOnThisPlatform) => None,
+            Err(error) => panic!("Failed to export the surface: {error:?}"),
+        };
+
+        if let Some(handle) = handle {
+            let mut other_context = environment
+                .device
+                .create_context(&environment.context_descriptor, None)
+                .unwrap();
+            let imported_surface = environment
+                .device
+                .import_buffer_handle(&other_context, &handle)
+                .unwrap();
+            environment
+                .device
+                .bind_surface_to_context(&mut other_context, imported_surface)
+                .unwrap();
+            environment
+                .device
+                .make_context_current(&other_context)
+                .unwrap();
+            let other_gl = Gl::from_loader_function(|symbol| {
+                environment.device.get_proc_address(&other_context, symbol)
+            });
+            bind_context_fbo(&other_gl, &environment.device, &other_context);
+            assert_eq!(get_pixel_from_bottom_row(&other_gl), [0, 255, 0, 255]);
+
+            let mut imported_surface = environment
+                .device
+                .unbind_surface_from_context(&mut other_context)
+                .unwrap()
+                .unwrap();
+            environment
+                .device
+                .destroy_surface(&mut other_context, &mut imported_surface)
+                .unwrap();
+            environment
+                .device
+                .destroy_context(&mut other_context)
+                .unwrap();
+        }
+
+        environment
+            .device
+            .make_context_current(&environment.context)
+            .unwrap();
+        environment
+            .device
+            .destroy_surface(&mut environment.context, &mut green_surface.into())
+            .unwrap();
+        environment
+            .device
+            .destroy_context(&mut environment.context)
+            .unwrap();
+    }
+}
+
 #[cfg(not(any(target_os = "android", target_env = "ohos")))]
 #[cfg_attr(not(feature = "sm-test"), test)]
 pub fn test_depth_and_stencil() {

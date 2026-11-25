@@ -2,11 +2,11 @@
 //! `ANativeWindow`.
 
 use super::super::android_ffi::{
-    AHardwareBuffer, AHardwareBuffer_Desc, AHardwareBuffer_allocate, AHardwareBuffer_release,
-    ANativeWindow, ANativeWindow_getHeight, ANativeWindow_getWidth,
-    AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM, AHARDWAREBUFFER_USAGE_CPU_READ_NEVER,
-    AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER, AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER,
-    AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+    AHardwareBuffer, AHardwareBuffer_Desc, AHardwareBuffer_acquire, AHardwareBuffer_allocate,
+    AHardwareBuffer_describe, AHardwareBuffer_release, ANativeWindow, ANativeWindow_getHeight,
+    ANativeWindow_getWidth, AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM,
+    AHARDWAREBUFFER_USAGE_CPU_READ_NEVER, AHARDWAREBUFFER_USAGE_CPU_WRITE_NEVER,
+    AHARDWAREBUFFER_USAGE_GPU_FRAMEBUFFER, AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
 };
 use super::{NativeBufferSurface, NativeWindowSurface};
 use crate::base::egl::ffi::{EGLClientBuffer, EGL_EXTENSION_FUNCTIONS, EGL_NATIVE_BUFFER_ANDROID};
@@ -16,6 +16,7 @@ use crate::{Error, WindowingApiError};
 use euclid::default::Size2D;
 use raw_window_handle::RawWindowHandle;
 use std::fmt::{self, Debug, Formatter};
+use std::mem;
 use std::ptr;
 
 pub(crate) type NativeBuffer = AHardwareBuffer;
@@ -74,6 +75,24 @@ pub(crate) fn allocate_native_buffer(size: &Size2D<i32>) -> Result<*mut NativeBu
 /// `buffer` must be a buffer returned by [`allocate_native_buffer`] that is not released yet.
 pub(crate) unsafe fn release_native_buffer(buffer: *mut NativeBuffer) {
     unsafe { AHardwareBuffer_release(buffer) };
+}
+
+/// Takes a new reference to a native buffer.
+///
+/// # Safety
+///
+/// `buffer` must point to a live native buffer.
+pub(crate) unsafe fn acquire_native_buffer(buffer: *mut NativeBuffer) {
+    unsafe { AHardwareBuffer_acquire(buffer) };
+}
+
+/// # Safety
+///
+/// `buffer` must point to a live native buffer.
+pub(crate) unsafe fn native_buffer_size(buffer: *mut NativeBuffer) -> Size2D<i32> {
+    let mut desc: AHardwareBuffer_Desc = unsafe { mem::zeroed() };
+    unsafe { AHardwareBuffer_describe(buffer, &mut desc) };
+    Size2D::new(desc.width as i32, desc.height as i32)
 }
 
 /// # Safety

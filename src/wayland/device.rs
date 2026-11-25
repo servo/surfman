@@ -12,9 +12,9 @@ use crate::free_unix::surface::PbufferSurface;
 use crate::surface::Framebuffer;
 use crate::wayland::surface::{WaylandSurfaceTexture, WaylandWindowSurface};
 use crate::{
-    egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
-    GLApi, Gl, OffscreenSurface, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
-    WindowSurface,
+    egl, gl, Adapter, BufferHandle, Context, ContextAttributes, ContextDescriptor,
+    EglContextDescriptor, Error, GLApi, Gl, OffscreenSurface, Surface, SurfaceAccess, SurfaceInfo,
+    SurfaceTexture, WindowSurface,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -547,6 +547,22 @@ impl WaylandDevice {
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.wayland().ok()?.0.texture_object
+    }
+
+    /// Returns a native handle to the memory of a buffer surface. Buffer surfaces can't be shared
+    /// on this platform yet, so an `UnsupportedOnThisPlatform` error is returned.
+    pub fn buffer_handle(&self, _: &OffscreenSurface) -> Result<BufferHandle, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    /// Creates a buffer surface that renders into the memory behind a native handle. There are no
+    /// native handles on this platform yet.
+    pub fn import_buffer_handle(
+        &self,
+        _: &Context,
+        handle: &BufferHandle,
+    ) -> Result<OffscreenSurface, Error> {
+        match *handle {}
     }
 }
 

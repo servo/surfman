@@ -11,8 +11,8 @@ use crate::hardware_buffer::context::HardwareBufferContext;
 use crate::hardware_buffer::device::HardwareBufferDevice;
 use crate::renderbuffers::Renderbuffers;
 use crate::{
-    egl, gl, gl_utils, Context, Error, OffscreenSurface, Surface, SurfaceAccess, SurfaceID,
-    SurfaceInfo, SurfaceTexture, WindowSurface,
+    egl, gl, gl_utils, BufferHandle, Context, Error, OffscreenSurface, Surface, SurfaceAccess,
+    SurfaceID, SurfaceInfo, SurfaceTexture, WindowSurface, WindowingApiError,
 };
 
 use euclid::default::Size2D;
@@ -21,7 +21,7 @@ use raw_window_handle::WindowHandle;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
-use std::ptr;
+use std::ptr::{self, NonNull};
 use std::thread;
 
 #[cfg(android_platform)]
@@ -218,11 +218,21 @@ impl HardwareBufferDevice {
         context: &Context,
         size: &Size2D<i32>,
     ) -> Result<OffscreenSurface, Error> {
+        let hardware_buffer = platform::allocate_native_buffer(size)?;
+        unsafe { self.create_surface_from_native_buffer(context, size, hardware_buffer) }
+            .map(Into::into)
+    }
+
+    // Renders to a native buffer, taking over one reference to it.
+    unsafe fn create_surface_from_native_buffer(
+        &self,
+        context: &Context,
+        size: &Size2D<i32>,
+        hardware_buffer: *mut platform::NativeBuffer,
+    ) -> Result<PlatformBufferSurface, Error> {
         let concrete_context = context.hardware_buffer()?;
         let _guard = self.temporarily_make_context_current(concrete_context)?;
         let gl = &concrete_context.gl;
-
-        let hardware_buffer = platform::allocate_native_buffer(size)?;
 
         // Create an EGL image, and bind it to a texture.
         let egl_image = unsafe { self.create_egl_image(concrete_context, hardware_buffer) };
@@ -257,8 +267,7 @@ impl HardwareBufferDevice {
             texture_object: Some(texture_object),
             renderbuffers,
             destroyed: false,
-        })
-        .into())
+        }))
     }
 
     unsafe fn create_native_window_surface(
@@ -498,9 +507,74 @@ impl HardwareBufferDevice {
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.hardware_buffer().ok()?.texture_object
     }
+
+    /// Returns the native buffer behind a buffer surface (an `AHardwareBuffer` on Android, an
+    /// `OH_NativeBuffer` on OHOS), which other devices, graphics APIs or processes can use.
+    pub fn buffer_handle(&self, surface: &OffscreenSurface) -> Result<BufferHandle, Error> {
+        #[cfg(android_platform)]
+        let surface = surface.android()?;
+        #[cfg(ohos_platform)]
+        let surface = surface.ohos()?;
+        match NonNull::new(surface.0.hardware_buffer) {
+            Some(hardware_buffer) => unsafe {
+                Ok(BufferHandle::HardwareBuffer(
+                    NativeHardwareBuffer::from_raw(hardware_buffer.cast()),
+                ))
+            },
+            None => Err(Error::SurfaceExportFailed(WindowingApiError::Failed)),
+        }
+    }
+
+    /// Creates a buffer surface of the given context that renders into a native buffer (an
+    /// `AHardwareBuffer` on Android, an `OH_NativeBuffer` on OHOS).
+    pub fn import_buffer_handle(
+        &self,
+        context: &Context,
+        handle: &BufferHandle,
+    ) -> Result<OffscreenSurface, Error> {
+        let BufferHandle::HardwareBuffer(buffer) = handle;
+        let hardware_buffer = buffer.0.as_ptr();
+        unsafe {
+            let size = platform::native_buffer_size(hardware_buffer);
+            platform::acquire_native_buffer(hardware_buffer);
+            self.create_surface_from_native_buffer(context, &size, hardware_buffer)
+                .map(Into::into)
+                .inspect_err(|_| platform::release_native_buffer(hardware_buffer))
+        }
+    }
 }
 
 /// Represents the CPU view of the pixel data of this surface.
 pub struct SurfaceDataGuard<'a> {
     phantom: PhantomData<&'a ()>,
+}
+
+/// A reference to a native buffer (an `AHardwareBuffer` on Android, an `OH_NativeBuffer` on
+/// OHOS), released when dropped.
+#[derive(Debug)]
+pub struct NativeHardwareBuffer(NonNull<platform::NativeBuffer>);
+
+unsafe impl Send for NativeHardwareBuffer {}
+
+impl NativeHardwareBuffer {
+    /// Takes a new reference to a native buffer.
+    ///
+    /// # Safety
+    ///
+    /// `buffer` must point to a live native buffer.
+    pub unsafe fn from_raw(buffer: NonNull<c_void>) -> NativeHardwareBuffer {
+        unsafe { platform::acquire_native_buffer(buffer.as_ptr().cast()) };
+        NativeHardwareBuffer(buffer.cast())
+    }
+
+    /// Returns the native buffer, which stays valid while this reference lives.
+    pub fn as_ptr(&self) -> *mut c_void {
+        self.0.as_ptr().cast()
+    }
+}
+
+impl Drop for NativeHardwareBuffer {
+    fn drop(&mut self) {
+        unsafe { platform::release_native_buffer(self.0.as_ptr()) }
+    }
 }

@@ -37,6 +37,11 @@ extern "C" {
         desc: *const AHardwareBuffer_Desc,
         outBuffer: *mut *mut AHardwareBuffer,
     ) -> c_int;
+    pub(crate) fn AHardwareBuffer_acquire(buffer: *mut AHardwareBuffer);
+    pub(crate) fn AHardwareBuffer_describe(
+        buffer: *const AHardwareBuffer,
+        outDesc: *mut AHardwareBuffer_Desc,
+    );
     pub(crate) fn AHardwareBuffer_release(buffer: *mut AHardwareBuffer);
 
     pub(crate) fn ANativeWindow_getWidth(window: *mut ANativeWindow) -> i32;
