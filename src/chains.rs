@@ -628,9 +628,7 @@ impl SwapChain {
         surface_access: SurfaceAccess,
         size: Size2D<i32>,
     ) -> Result<SwapChain, Error> {
-        let surface = device
-            .create_offscreen_surface(context, surface_access, size)?
-            .into();
+        let surface = device.create_offscreen_surface(context, surface_access, size)?;
         Ok(SwapChain(Arc::new(Mutex::new(SwapChainData {
             size,
             context_id: device.context_id(context),

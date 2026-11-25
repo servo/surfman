@@ -7,7 +7,9 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLenum, GLint, GLuint};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{declare_surfman, ContextDescriptor, SurfaceAccess, SurfaceTexture};
+use surfman::{
+    declare_surfman, ContextDescriptor, OffscreenSurface, SurfaceAccess, SurfaceTexture,
+};
 use surfman::{Adapter, Connection, Context, Device, GLApi, Surface};
 
 #[cfg(not(target_os = "android"))]
@@ -241,10 +243,7 @@ impl App {
         };
         let texture = Some(
             device
-                .create_surface_texture(
-                    &mut context,
-                    frame.surface.take().unwrap().try_into().unwrap(),
-                )
+                .create_surface_texture(&mut context, frame.surface.take().unwrap())
                 .unwrap(),
         );
 
@@ -275,10 +274,7 @@ impl App {
         // Wrap it in a texture.
         self.texture = Some(
             self.device
-                .create_surface_texture(
-                    &mut self.context,
-                    self.frame.surface.take().unwrap().try_into().unwrap(),
-                )
+                .create_surface_texture(&mut self.context, self.frame.surface.take().unwrap())
                 .unwrap(),
         );
 
@@ -593,7 +589,7 @@ fn worker_thread(
             .unwrap();
         worker_to_main_sender
             .send(Frame {
-                surface: old_surface,
+                surface: old_surface.map(|surface| OffscreenSurface::try_from(surface).unwrap()),
                 viewport_origin: ball_rect.origin - subscreen_offset,
                 sphere_position: ball_rect.center(),
             })
@@ -627,7 +623,7 @@ fn worker_thread(
 }
 
 struct Frame {
-    surface: Option<Surface>,
+    surface: Option<OffscreenSurface>,
     viewport_origin: Point2D<f32>,
     sphere_position: Point2D<f32>,
 }
