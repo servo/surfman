@@ -5,3 +5,4 @@
 //! Functionality common to Wayland / X11 backends.
 
 pub mod adapter;
+pub mod surface;

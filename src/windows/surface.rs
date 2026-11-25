@@ -98,6 +98,10 @@ impl Win32Surface {
         self.window
     }
 
+    pub(crate) fn resize(&mut self, size: Size2D<i32>) {
+        self.size = size;
+    }
+
     pub(crate) fn id(&self) -> SurfaceID {
         match self.binding {
             #[cfg(angle)]

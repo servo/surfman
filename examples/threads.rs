@@ -7,7 +7,9 @@ use euclid::default::{Point2D, Rect, Size2D, Vector2D};
 use gl::types::{GLenum, GLint, GLuint};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use surfman::{declare_surfman, ContextDescriptor, SurfaceAccess, SurfaceTexture};
+use surfman::{
+    declare_surfman, ContextDescriptor, OffscreenSurface, SurfaceAccess, SurfaceTexture,
+};
 use surfman::{Adapter, Connection, Context, Device, GLApi, Surface};
 
 #[cfg(not(target_os = "android"))]
@@ -264,7 +266,7 @@ impl App {
             .device
             .destroy_surface_texture(&mut self.context, self.texture.take().unwrap())
             .unwrap();
-        self.main_to_worker_sender.send(surface).unwrap();
+        self.main_to_worker_sender.send(surface.into()).unwrap();
 
         // Fetch a new frame.
         self.frame = self.main_from_worker_receiver.recv().unwrap();
@@ -418,9 +420,11 @@ impl App {
                 .unbind_surface_from_context(&mut self.context)
                 .unwrap()
                 .unwrap();
-            self.device
-                .present_surface(&mut self.context, &mut surface)
-                .unwrap();
+            if let Surface::Window(ref mut window_surface) = surface {
+                self.device
+                    .present_surface(&mut self.context, window_surface)
+                    .unwrap();
+            }
             assert!(self
                 .device
                 .bind_surface_to_context(&mut self.context, surface)
@@ -480,7 +484,8 @@ fn worker_thread(
     let surface = Some(
         device
             .create_offscreen_surface(&context, SurfaceAccess::GPUOnly, size)
-            .unwrap(),
+            .unwrap()
+            .into(),
     );
     worker_to_main_sender
         .send(Frame {
@@ -584,7 +589,7 @@ fn worker_thread(
             .unwrap();
         worker_to_main_sender
             .send(Frame {
-                surface: old_surface,
+                surface: old_surface.map(|surface| OffscreenSurface::try_from(surface).unwrap()),
                 viewport_origin: ball_rect.origin - subscreen_offset,
                 sphere_position: ball_rect.center(),
             })
@@ -618,7 +623,7 @@ fn worker_thread(
 }
 
 struct Frame {
-    surface: Option<Surface>,
+    surface: Option<OffscreenSurface>,
     viewport_origin: Point2D<f32>,
     sphere_position: Point2D<f32>,
 }

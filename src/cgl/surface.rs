@@ -4,7 +4,7 @@ use crate::base::io_surface::buffer::IoSurfaceBinding;
 use crate::base::io_surface::surface::Surface as SystemSurface;
 use crate::context::ContextID;
 use crate::renderbuffers::Renderbuffers;
-use crate::{gl, Error, SurfaceID, SurfaceInfo};
+use crate::{gl, Error, OffscreenSurface, Surface, SurfaceID, SurfaceInfo, WindowSurface};
 use cgl::{kCGLNoError, CGLErrorString, CGLGetCurrentContext, CGLTexImageIOSurface2D, GLenum};
 use glow::Context as Gl;
 
@@ -20,7 +20,7 @@ pub use crate::base::io_surface::surface::NativeSurface;
 
 /// An implementation of [`crate::Surface`] for CGL platforms.
 #[derive(Debug)]
-pub enum CglSurface {
+pub(crate) enum CglSurface {
     /// A surface displayed in an AppKit view.
     Window(CglWindowSurface),
     /// An `IOSurface` that can be bound to a texture.
@@ -51,6 +51,29 @@ unsafe impl Send for CglWindowSurface {}
 impl Debug for CglWindowSurface {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         write!(formatter, "CglWindowSurface({:x})", self.0.id().0)
+    }
+}
+
+impl TryFrom<Surface> for CglSurface {
+    type Error = (Error, Surface);
+    fn try_from(surface: Surface) -> Result<CglSurface, Self::Error> {
+        #[allow(unreachable_patterns)]
+        match surface {
+            Surface::Window(WindowSurface::AppKit(surface)) => Ok(CglSurface::Window(surface)),
+            Surface::Offscreen(OffscreenSurface::IoSurface(surface)) if surface.cgl().is_ok() => {
+                Ok(CglSurface::Buffer(surface))
+            }
+            surface => Err((Error::IncompatibleSurface, surface)),
+        }
+    }
+}
+
+impl From<CglSurface> for Surface {
+    fn from(surface: CglSurface) -> Surface {
+        match surface {
+            CglSurface::Window(surface) => Surface::Window(surface.into()),
+            CglSurface::Buffer(surface) => Surface::Offscreen(surface.into()),
+        }
     }
 }
 
@@ -107,13 +130,6 @@ pub(crate) fn surface_bind_to_gl_texture(
 }
 
 impl CglSurface {
-    pub(crate) fn binding(&self) -> Result<&CglBinding, Error> {
-        match self {
-            CglSurface::Window(surface) => Ok(&surface.0),
-            CglSurface::Buffer(surface) => surface.cgl(),
-        }
-    }
-
     pub(crate) fn binding_mut(&mut self) -> Result<&mut CglBinding, Error> {
         match self {
             CglSurface::Window(surface) => Ok(&mut surface.0),

@@ -17,8 +17,8 @@ use crate::wgl::surface::{
 use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
 use crate::{
     gl, gl_utils, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
-    ContextDescriptor, Error, GLApi, GLVersion, Gl, PowerPreference, Surface, SurfaceAccess,
-    SurfaceInfo, SurfaceTexture,
+    ContextDescriptor, Error, GLApi, GLVersion, Gl, OffscreenSurface, PowerPreference, Surface,
+    SurfaceAccess, SurfaceInfo, SurfaceTexture, WindowSurface,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -625,7 +625,12 @@ impl WglDevice {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
-        let surface: WglSurface = surface.try_into()?;
+        #[allow(unreachable_patterns)]
+        let surface = match surface {
+            Surface::Window(WindowSurface::Win32(surface)) => WglSurface::Window(surface),
+            Surface::Offscreen(OffscreenSurface::Direct3d(surface)) => WglSurface::Buffer(surface),
+            surface => return Err((Error::IncompatibleSurface, surface)),
+        };
 
         if context.id != surface.context_id() || !surface.is_wgl() {
             return Err((Error::IncompatibleSurface, surface.into()));
@@ -748,7 +753,7 @@ impl WglDevice {
         _: SurfaceAccess,
         window_handle: WindowHandle<'_>,
         _: Size2D<i32>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<WindowSurface, Error> {
         let RawWindowHandle::Win32(handle) = window_handle.as_raw() else {
             return Err(Error::IncompatibleSurfaceType);
         };
@@ -761,7 +766,7 @@ impl WglDevice {
         context: &Context,
         _: SurfaceAccess,
         size: Size2D<i32>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<OffscreenSurface, Error> {
         self.create_generic_surface(context, &size)
     }
 
@@ -769,7 +774,7 @@ impl WglDevice {
         &self,
         context: &Context,
         size: &Size2D<i32>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<OffscreenSurface, Error> {
         let dx_interop_functions = match WGL_EXTENSION_FUNCTIONS.dx_interop_functions {
             None => return Err(Error::RequiredExtensionUnavailable),
             Some(ref dx_interop_functions) => dx_interop_functions,
@@ -874,7 +879,7 @@ impl WglDevice {
             // FIXME(pcwalton): Do we need to acquire the keyed mutex, or does the GL driver do
             // that?
 
-            Ok(WglSurface::Buffer(Direct3dSurface {
+            Ok(Direct3dSurface {
                 size: *size,
                 context_id: concrete_context.id,
                 share_handle: dxgi_share_handle,
@@ -886,7 +891,7 @@ impl WglDevice {
                     renderbuffers,
                     destroyed: false,
                 }),
-            })
+            }
             .into())
         }
     }
@@ -895,7 +900,7 @@ impl WglDevice {
         &self,
         context: &Context,
         window_handle: HWND,
-    ) -> Result<Surface, Error> {
+    ) -> Result<WindowSurface, Error> {
         let context = context.wgl()?;
         unsafe {
             // Get the bounds of the native HWND.
@@ -913,7 +918,7 @@ impl WglDevice {
                 set_dc_pixel_format(window_dc, pixel_format);
             }
 
-            Ok(WglSurface::Window(Win32Surface {
+            Ok(Win32Surface {
                 size: Size2D::new(
                     widget_rect.right - widget_rect.left,
                     widget_rect.bottom - widget_rect.top,
@@ -921,7 +926,7 @@ impl WglDevice {
                 context_id: context.id,
                 window: window_handle,
                 binding: Win32Binding::Wgl(WglWindowBinding { destroyed: false }),
-            })
+            }
             .into())
         }
     }
@@ -933,35 +938,32 @@ impl WglDevice {
     ///
     /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
     /// the `drop` method.
-    pub fn destroy_surface(
+    pub fn destroy_window_surface(
         &self,
         context: &mut Context,
-        surface: &mut Surface,
+        surface: &mut WindowSurface,
     ) -> Result<(), Error> {
         let context_id = context.wgl()?.id;
-        let surface: &mut WglSurface = surface.try_into()?;
-        match surface {
-            WglSurface::Window(surface) => {
-                if context_id != surface.context_id {
-                    return Err(Error::IncompatibleSurface);
-                }
-                surface.wgl_mut()?.destroyed = true;
-                Ok(())
-            }
-            WglSurface::Buffer(surface) => self.destroy_direct3d_surface(context, surface),
+        let surface: &mut Win32Surface = surface.try_into()?;
+        if context_id != surface.context_id {
+            return Err(Error::IncompatibleSurface);
         }
+        surface.wgl_mut()?.destroyed = true;
+        Ok(())
     }
 
-    fn destroy_direct3d_surface(
+    /// See [`crate::Device::destroy_offscreen_surface`].
+    pub fn destroy_offscreen_surface(
         &self,
         context: &mut Context,
-        surface: &mut Direct3dSurface,
+        surface: &mut OffscreenSurface,
     ) -> Result<(), Error> {
         let dx_interop_functions = WGL_EXTENSION_FUNCTIONS
             .dx_interop_functions
             .as_ref()
             .expect("How did you make a surface without DX interop?");
         let context_id = context.wgl()?.id;
+        let surface: &mut Direct3dSurface = surface.try_into()?;
         if context_id != surface.context_id {
             return Err(Error::IncompatibleSurface);
         }
@@ -993,6 +995,13 @@ impl WglDevice {
         Ok(())
     }
 
+    fn destroy_surface(&self, context: &mut Context, surface: &mut Surface) -> Result<(), Error> {
+        match surface {
+            Surface::Window(surface) => self.destroy_window_surface(context, surface),
+            Surface::Offscreen(surface) => self.destroy_offscreen_surface(context, surface),
+        }
+    }
+
     /// Creates a surface texture from an existing generic surface for use with the given context.
     ///
     /// The surface texture is local to the supplied context and takes ownership of the surface.
@@ -1001,17 +1010,12 @@ impl WglDevice {
     /// *The supplied context does not have to be the same context that the surface is associated
     /// with.* This allows you to render to a surface in one context and sample from that surface
     /// in another context.
-    ///
-    /// Calling this method on a widget surface returns a `WidgetAttached` error.
     pub fn create_surface_texture(
         &self,
         context: &mut Context,
-        surface: Surface,
-    ) -> Result<SurfaceTexture, (Error, Surface)> {
-        let surface = match surface.try_into()? {
-            WglSurface::Buffer(surface) => surface,
-            surface => return Err((Error::WidgetAttached, surface.into())),
-        };
+        surface: OffscreenSurface,
+    ) -> Result<SurfaceTexture, (Error, OffscreenSurface)> {
+        let surface: Direct3dSurface = surface.try_into()?;
         let dxgi_share_handle = surface.share_handle;
 
         let dx_interop_functions = WGL_EXTENSION_FUNCTIONS
@@ -1021,11 +1025,11 @@ impl WglDevice {
 
         let _guard = match self.temporarily_make_context_current(context) {
             Ok(guard) => guard,
-            Err(error) => return Err((error, WglSurface::Buffer(surface).into())),
+            Err(error) => return Err((error, surface.into())),
         };
         let context = match context.wgl() {
             Ok(context) => context,
-            Err(error) => return Err((error, WglSurface::Buffer(surface).into())),
+            Err(error) => return Err((error, surface.into())),
         };
 
         // Create a new texture wrapping the shared handle.
@@ -1040,7 +1044,7 @@ impl WglDevice {
         if !winerror::SUCCEEDED(result) || local_d3d11_texture.is_null() {
             return Err((
                 Error::SurfaceImportFailed(WindowingApiError::Failed),
-                WglSurface::Buffer(surface).into(),
+                surface.into(),
             ));
         }
         let local_d3d11_texture =
@@ -1120,7 +1124,7 @@ impl WglDevice {
         &self,
         context: &mut Context,
         surface_texture: SurfaceTexture,
-    ) -> Result<Surface, (Error, SurfaceTexture)> {
+    ) -> Result<OffscreenSurface, (Error, SurfaceTexture)> {
         let dx_interop_functions = WGL_EXTENSION_FUNCTIONS
             .dx_interop_functions
             .as_ref()
@@ -1128,7 +1132,7 @@ impl WglDevice {
 
         let _guard = match self.temporarily_make_context_current(context) {
             Ok(guard) => guard,
-            Err(err) => return Err((err, surface_texture)),
+            Err(error) => return Err((error, surface_texture)),
         };
         let context = match context.wgl() {
             Ok(context) => context,
@@ -1136,30 +1140,32 @@ impl WglDevice {
         };
         let mut surface_texture: WglSurfaceTexture = surface_texture.try_into()?;
 
-        unsafe {
-            // Unlock the texture.
-            let ok = (dx_interop_functions.DXUnlockObjectsNV)(
+        // Unlock the texture.
+        let ok = unsafe {
+            (dx_interop_functions.DXUnlockObjectsNV)(
                 self.gl_dx_interop_device,
                 1,
                 &mut surface_texture.local_gl_dx_interop_object,
-            );
-            assert_ne!(ok, FALSE);
+            )
+        };
+        assert_ne!(ok, FALSE);
 
-            // Unregister the texture from GL/DX interop.
-            let ok = (dx_interop_functions.DXUnregisterObjectNV)(
+        // Unregister the texture from GL/DX interop.
+        let ok = unsafe {
+            (dx_interop_functions.DXUnregisterObjectNV)(
                 self.gl_dx_interop_device,
                 surface_texture.local_gl_dx_interop_object,
-            );
-            assert_ne!(ok, FALSE);
-            surface_texture.local_gl_dx_interop_object = INVALID_HANDLE_VALUE;
+            )
+        };
+        assert_ne!(ok, FALSE);
+        surface_texture.local_gl_dx_interop_object = INVALID_HANDLE_VALUE;
 
-            // Destroy the GL texture.
-            if let Some(texture) = surface_texture.gl_texture.take() {
-                context.gl.delete_texture(texture);
-            }
+        // Destroy the GL texture.
+        if let Some(texture) = surface_texture.gl_texture.take() {
+            unsafe { context.gl.delete_texture(texture) };
         }
 
-        Ok(WglSurface::Buffer(surface_texture.surface).into())
+        Ok(surface_texture.surface.into())
     }
 
     pub(crate) fn lock_surface(&self, surface: &WglSurface) {
@@ -1176,14 +1182,14 @@ impl WglDevice {
             .as_ref()
             .expect("How did you make a surface without DX interop?");
 
-        unsafe {
-            let ok = (dx_interop_functions.DXLockObjectsNV)(
+        let ok = unsafe {
+            (dx_interop_functions.DXLockObjectsNV)(
                 self.gl_dx_interop_device,
                 1,
                 &mut gl_dx_interop_object,
-            );
-            assert_ne!(ok, FALSE);
-        }
+            )
+        };
+        assert_ne!(ok, FALSE);
     }
 
     pub(crate) fn unlock_surface(&self, surface: &WglSurface) {
@@ -1200,14 +1206,14 @@ impl WglDevice {
             .as_ref()
             .expect("How did you make a surface without DX interop?");
 
-        unsafe {
-            let ok = (dx_interop_functions.DXUnlockObjectsNV)(
+        let ok = unsafe {
+            (dx_interop_functions.DXUnlockObjectsNV)(
                 self.gl_dx_interop_device,
                 1,
                 &mut gl_dx_interop_object,
-            );
-            assert_ne!(ok, FALSE);
-        }
+            )
+        };
+        assert_ne!(ok, FALSE);
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.
@@ -1234,34 +1240,21 @@ impl WglDevice {
     ///
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(&self, _: &Context, surface: &mut Surface) -> Result<(), Error> {
-        match surface.wgl()? {
-            WglSurface::Window(surface) => surface.present_wgl(),
-            WglSurface::Buffer(_) => Err(Error::NoWidgetAttached),
-        }
+    pub fn present_surface(&self, _: &Context, surface: &mut WindowSurface) -> Result<(), Error> {
+        let surface: &mut Win32Surface = surface.try_into()?;
+        surface.present_wgl()
     }
 
     /// Resizes a widget surface.
     pub fn resize_surface(
         &self,
         _scontext: &Context,
-        surface: &mut Surface,
+        surface: &mut WindowSurface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        let surface: &mut WglSurface = surface.try_into()?;
+        let surface: &mut Win32Surface = surface.try_into()?;
         surface.resize(size);
         Ok(())
-    }
-
-    /// Returns various information about the surface, including the framebuffer object needed to
-    /// render to this surface.
-    ///
-    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
-    /// on the framebuffer object returned by this function. This framebuffer object may or not be
-    /// 0, the default framebuffer, depending on platform.
-    #[inline]
-    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        surface.wgl().expect("Incompatible surface type").info()
     }
 
     /// Returns the OpenGL texture object containing the contents of this surface.

@@ -11,8 +11,8 @@ use crate::hardware_buffer::context::HardwareBufferContext;
 use crate::hardware_buffer::device::HardwareBufferDevice;
 use crate::renderbuffers::Renderbuffers;
 use crate::{
-    egl, gl, gl_utils, Context, Error, Surface, SurfaceAccess, SurfaceID, SurfaceInfo,
-    SurfaceTexture,
+    egl, gl, gl_utils, Context, Error, OffscreenSurface, Surface, SurfaceAccess, SurfaceID,
+    SurfaceInfo, SurfaceTexture, WindowSurface,
 };
 
 use euclid::default::Size2D;
@@ -37,14 +37,16 @@ mod ohos_surface;
 pub use ohos_surface::*;
 
 #[cfg(android_platform)]
-use android_surface::{
-    self as platform, AndroidBufferSurface as PlatformBufferSurface,
-    AndroidWindowSurface as PlatformWindowSurface,
+use android_surface as platform;
+#[cfg(android_platform)]
+pub(crate) use android_surface::{
+    AndroidBufferSurface as PlatformBufferSurface, AndroidWindowSurface as PlatformWindowSurface,
 };
 #[cfg(ohos_platform)]
-use ohos_surface::{
-    self as platform, OhosBufferSurface as PlatformBufferSurface,
-    OhosWindowSurface as PlatformWindowSurface,
+use ohos_surface as platform;
+#[cfg(ohos_platform)]
+pub(crate) use ohos_surface::{
+    OhosBufferSurface as PlatformBufferSurface, OhosWindowSurface as PlatformWindowSurface,
 };
 
 const SURFACE_GL_TEXTURE_TARGET: u32 = gl::TEXTURE_2D;
@@ -69,9 +71,8 @@ pub(crate) struct NativeBufferSurface {
     pub(crate) destroyed: bool,
 }
 
-/// An implementation of [`crate::Surface`] for Android and OHOS platforms.
-#[derive(Debug)]
-pub enum HardwareBufferSurface {
+/// A surface bound to a hardware buffer context.
+pub(crate) enum HardwareBufferSurface {
     /// A surface displayed in a native window.
     Window(PlatformWindowSurface),
     /// An offscreen surface backed by a hardware buffer.
@@ -89,10 +90,35 @@ pub struct HardwareBufferSurfaceTexture {
 unsafe impl Send for NativeWindowSurface {}
 unsafe impl Send for NativeBufferSurface {}
 
+impl TryFrom<Surface> for HardwareBufferSurface {
+    type Error = (Error, Surface);
+    fn try_from(surface: Surface) -> Result<HardwareBufferSurface, Self::Error> {
+        match surface {
+            Surface::Window(surface) => surface
+                .try_into()
+                .map(HardwareBufferSurface::Window)
+                .map_err(|(error, surface)| (error, Surface::Window(surface))),
+            Surface::Offscreen(surface) => surface
+                .try_into()
+                .map(HardwareBufferSurface::Buffer)
+                .map_err(|(error, surface)| (error, Surface::Offscreen(surface))),
+        }
+    }
+}
+
+impl From<HardwareBufferSurface> for Surface {
+    fn from(surface: HardwareBufferSurface) -> Surface {
+        match surface {
+            HardwareBufferSurface::Window(surface) => Surface::Window(surface.into()),
+            HardwareBufferSurface::Buffer(surface) => Surface::Offscreen(surface.into()),
+        }
+    }
+}
+
 impl Drop for NativeWindowSurface {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
-            panic!("Should have destroyed the surface first with `destroy_surface()`!")
+            panic!("Should have destroyed the surface first with `destroy_window_surface()`!")
         }
     }
 }
@@ -100,7 +126,7 @@ impl Drop for NativeWindowSurface {
 impl Drop for NativeBufferSurface {
     fn drop(&mut self) {
         if !self.destroyed && !thread::panicking() {
-            panic!("Should have destroyed the surface first with `destroy_surface()`!")
+            panic!("Should have destroyed the surface first with `destroy_offscreen_surface()`!")
         }
     }
 }
@@ -172,7 +198,7 @@ impl HardwareBufferDevice {
         _: SurfaceAccess,
         window_handle: WindowHandle<'_>,
         _: Size2D<i32>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<WindowSurface, Error> {
         let native_window = platform::native_window(window_handle.as_raw())?;
         unsafe { self.create_native_window_surface(context, native_window) }
     }
@@ -183,7 +209,7 @@ impl HardwareBufferDevice {
         context: &Context,
         _: SurfaceAccess,
         size: Size2D<i32>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<OffscreenSurface, Error> {
         self.create_generic_surface(context, &size)
     }
 
@@ -191,7 +217,7 @@ impl HardwareBufferDevice {
         &self,
         context: &Context,
         size: &Size2D<i32>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<OffscreenSurface, Error> {
         let concrete_context = context.hardware_buffer()?;
         let _guard = self.temporarily_make_context_current(concrete_context)?;
         let gl = &concrete_context.gl;
@@ -222,26 +248,24 @@ impl HardwareBufferDevice {
             gl::FRAMEBUFFER_COMPLETE
         );
 
-        Ok(
-            HardwareBufferSurface::Buffer(PlatformBufferSurface(NativeBufferSurface {
-                size: *size,
-                context_id: concrete_context.id,
-                hardware_buffer,
-                egl_image,
-                framebuffer_object: Some(framebuffer_object),
-                texture_object: Some(texture_object),
-                renderbuffers,
-                destroyed: false,
-            }))
-            .into(),
-        )
+        Ok(PlatformBufferSurface(NativeBufferSurface {
+            size: *size,
+            context_id: concrete_context.id,
+            hardware_buffer,
+            egl_image,
+            framebuffer_object: Some(framebuffer_object),
+            texture_object: Some(texture_object),
+            renderbuffers,
+            destroyed: false,
+        })
+        .into())
     }
 
     unsafe fn create_native_window_surface(
         &self,
         context: &Context,
         native_window: *mut platform::NativeWindow,
-    ) -> Result<Surface, Error> {
+    ) -> Result<WindowSurface, Error> {
         let size = unsafe { platform::native_window_size(native_window) };
         let context = context.hardware_buffer()?;
 
@@ -255,15 +279,13 @@ impl HardwareBufferDevice {
         });
         assert_ne!(egl_surface, egl::NO_SURFACE);
 
-        Ok(
-            HardwareBufferSurface::Window(PlatformWindowSurface(NativeWindowSurface {
-                context_id: context.id,
-                size,
-                egl_surface,
-                destroyed: false,
-            }))
-            .into(),
-        )
+        Ok(PlatformWindowSurface(NativeWindowSurface {
+            context_id: context.id,
+            size,
+            egl_surface,
+            destroyed: false,
+        })
+        .into())
     }
 
     /// Creates a surface texture from an existing generic surface for use with the given context.
@@ -274,24 +296,19 @@ impl HardwareBufferDevice {
     /// *The supplied context does not have to be the same context that the surface is associated
     /// with.* This allows you to render to a surface in one context and sample from that surface
     /// in another context.
-    ///
-    /// Calling this method on a widget surface returns a `WidgetAttached` error.
     pub fn create_surface_texture(
         &self,
         context: &mut Context,
-        surface: Surface,
-    ) -> Result<SurfaceTexture, (Error, Surface)> {
-        let surface = match surface.try_into()? {
-            HardwareBufferSurface::Buffer(surface) => surface,
-            surface => return Err((Error::WidgetAttached, surface.into())),
-        };
+        surface: OffscreenSurface,
+    ) -> Result<SurfaceTexture, (Error, OffscreenSurface)> {
+        let surface: PlatformBufferSurface = surface.try_into()?;
         let context: &mut HardwareBufferContext = match context.try_into() {
             Ok(context) => context,
-            Err(error) => return Err((error, HardwareBufferSurface::Buffer(surface).into())),
+            Err(error) => return Err((error, surface.into())),
         };
         let _guard = match self.temporarily_make_context_current(context) {
             Ok(guard) => guard,
-            Err(error) => return Err((error, HardwareBufferSurface::Buffer(surface).into())),
+            Err(error) => return Err((error, surface.into())),
         };
 
         let gl = &context.gl;
@@ -339,14 +356,13 @@ impl HardwareBufferDevice {
     ///
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
-        let context = context.hardware_buffer()?;
-        match surface.hardware_buffer()? {
-            HardwareBufferSurface::Window(surface) => {
-                self.present_window_surface(context, &surface.0)
-            }
-            HardwareBufferSurface::Buffer(_) => Err(Error::NoWidgetAttached),
-        }
+    pub fn present_surface(
+        &self,
+        context: &Context,
+        surface: &mut WindowSurface,
+    ) -> Result<(), Error> {
+        let surface: &mut PlatformWindowSurface = surface.try_into()?;
+        self.present_window_surface(context.hardware_buffer()?, &surface.0)
     }
 
     pub(crate) fn present_window_surface(
@@ -368,11 +384,11 @@ impl HardwareBufferDevice {
     pub fn resize_surface(
         &self,
         _context: &Context,
-        surface: &mut Surface,
+        surface: &mut WindowSurface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        let surface: &mut HardwareBufferSurface = surface.try_into()?;
-        surface.resize(size);
+        let surface: &mut PlatformWindowSurface = surface.try_into()?;
+        surface.0.size = size;
         Ok(())
     }
 
@@ -437,7 +453,7 @@ impl HardwareBufferDevice {
         &self,
         context: &mut Context,
         surface_texture: SurfaceTexture,
-    ) -> Result<Surface, (Error, SurfaceTexture)> {
+    ) -> Result<OffscreenSurface, (Error, SurfaceTexture)> {
         let context: &mut HardwareBufferContext = match context.try_into() {
             Ok(context) => context,
             Err(error) => return Err((error, surface_texture)),
@@ -457,7 +473,7 @@ impl HardwareBufferDevice {
         assert_ne!(result, egl::FALSE);
         surface_texture.local_egl_image = EGL_NO_IMAGE_KHR;
 
-        Ok(HardwareBufferSurface::Buffer(surface_texture.surface).into())
+        Ok(surface_texture.surface.into())
     }
 
     /// Returns a pointer to the underlying surface data for reading or writing by the CPU.

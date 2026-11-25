@@ -9,11 +9,13 @@ use crate::base::egl::{
 use crate::context::ContextID;
 use crate::egl::types::EGLint;
 use crate::free_unix::adapter::FreeUnixAdapter;
+use crate::free_unix::surface::PbufferSurface;
 use crate::x11::context::X11Context;
-use crate::x11::surface::{SurfaceDataGuard, X11Surface, X11SurfaceTexture};
+use crate::x11::surface::{SurfaceDataGuard, X11SurfaceTexture, X11WindowSurface};
 use crate::{
     egl, gl, Adapter, Context, ContextAttributes, ContextDescriptor, EglContextDescriptor, Error,
-    GLApi, Gl, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
+    GLApi, Gl, OffscreenSurface, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture,
+    WindowSurface,
 };
 use euclid::default::Size2D;
 use glow::Texture;
@@ -246,16 +248,22 @@ impl X11Device {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
-        let surface: X11Surface = surface.try_into()?;
+        let surface = match surface {
+            Surface::Window(WindowSurface::X11(X11WindowSurface(surface))) => {
+                EGLBackedSurface::Window(surface)
+            }
+            Surface::Offscreen(OffscreenSurface::Pbuffer(PbufferSurface(surface))) => {
+                EGLBackedSurface::Buffer(surface)
+            }
+            surface => return Err((Error::IncompatibleSurface, surface)),
+        };
 
         unsafe {
-            match context
+            context
                 .0
-                .bind_surface(&context.1, self.native_connection.egl_display, surface.0)
-            {
-                Ok(surface) => Ok(surface.map(|surface| X11Surface(surface).into())),
-                Err((error, surface)) => Err((error, X11Surface(surface).into())),
-            }
+                .bind_surface(&context.1, self.native_connection.egl_display, surface)
+                .map(|surface| surface.map(egl_surface_into_surface))
+                .map_err(|(error, surface)| (error, egl_surface_into_surface(surface)))
         }
     }
 
@@ -269,7 +277,7 @@ impl X11Device {
             context
                 .0
                 .unbind_surface(&context.1, self.native_connection.egl_display)
-                .map(|maybe_surface| maybe_surface.map(X11Surface).map(Into::into))
+                .map(|maybe_surface| maybe_surface.map(egl_surface_into_surface))
         }
     }
 
@@ -321,7 +329,7 @@ impl X11Device {
         _: SurfaceAccess,
         window_handle: WindowHandle<'_>,
         _: Size2D<i32>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<WindowSurface, Error> {
         let RawWindowHandle::Xlib(handle) = window_handle.as_raw() else {
             return Err(Error::IncompatibleSurfaceType);
         };
@@ -334,20 +342,20 @@ impl X11Device {
         context: &Context,
         _: SurfaceAccess,
         size: Size2D<i32>,
-    ) -> Result<Surface, Error> {
+    ) -> Result<OffscreenSurface, Error> {
         let _guard = self.temporarily_make_context_current(context)?;
         let context_descriptor = self.context_descriptor(context);
         let context_attributes = self.context_descriptor_attributes(&context_descriptor);
         let context = context.x11()?;
 
-        Ok(X11Surface(EGLBackedSurface::Buffer(EGLBufferSurface::new(
+        Ok(PbufferSurface(EGLBufferSurface::new(
             &context.1,
             self.native_connection.egl_display,
             context.0.egl_context,
             context.0.id,
             &context_attributes,
             &size,
-        )))
+        ))
         .into())
     }
 
@@ -355,7 +363,7 @@ impl X11Device {
         &self,
         context: &Context,
         mut x11_window: Window,
-    ) -> Result<Surface, Error> {
+    ) -> Result<WindowSurface, Error> {
         let context = context.x11()?;
         let egl_config_id = context::get_context_attr(
             self.native_connection.egl_display,
@@ -381,13 +389,13 @@ impl X11Device {
         );
         let size = Size2D::new(width as i32, height as i32);
 
-        Ok(X11Surface(EGLBackedSurface::Window(EGLWindowSurface::new(
+        Ok(X11WindowSurface(EGLWindowSurface::new(
             self.native_connection.egl_display,
             egl_config,
             &mut x11_window as *mut Window as *mut c_void,
             context.0.id,
             &size,
-        )))
+        ))
         .into())
     }
 
@@ -399,13 +407,11 @@ impl X11Device {
     /// *The supplied context does not have to be the same context that the surface is associated
     /// with.* This allows you to render to a surface in one context and sample from that surface
     /// in another context.
-    ///
-    /// Calling this method on a widget surface returns a `WidgetAttached` error.
     pub fn create_surface_texture(
         &self,
         context: &mut Context,
-        surface: Surface,
-    ) -> Result<SurfaceTexture, (Error, Surface)> {
+        surface: OffscreenSurface,
+    ) -> Result<SurfaceTexture, (Error, OffscreenSurface)> {
         let _guard = match self.temporarily_make_context_current(context) {
             Ok(guard) => guard,
             Err(err) => return Err((err, surface)),
@@ -415,16 +421,9 @@ impl X11Device {
             Ok(context) => context,
             Err(error) => return Err((error, surface)),
         };
-        let surface: X11Surface = surface.try_into()?;
+        let PbufferSurface(surface): PbufferSurface = surface.try_into()?;
 
-        match surface.0 {
-            EGLBackedSurface::Buffer(surface) => {
-                Ok(X11SurfaceTexture(surface.to_surface_texture(&context.1)).into())
-            }
-            EGLBackedSurface::Window(..) => {
-                Err((Error::WidgetAttached, X11Surface(surface.0).into()))
-            }
-        }
+        Ok(X11SurfaceTexture(surface.to_surface_texture(&context.1)).into())
     }
 
     /// Destroys a surface.
@@ -434,23 +433,35 @@ impl X11Device {
     ///
     /// You must explicitly call this method to dispose of a surface. Otherwise, a panic occurs in
     /// the `drop` method.
-    pub fn destroy_surface(
+    pub fn destroy_window_surface(
         &self,
         context: &mut Context,
-        surface: &mut Surface,
+        surface: &mut WindowSurface,
     ) -> Result<(), Error> {
         let egl_display = self.native_connection.egl_display;
         let context = context.x11()?;
-        let surface: &mut X11Surface = surface.try_into()?;
-        match surface.0 {
-            EGLBackedSurface::Window(ref mut surface) => {
-                surface.destroy(egl_display, context.0.id)?;
-            }
-            EGLBackedSurface::Buffer(ref mut surface) => {
-                surface.destroy(&context.1, egl_display, context.0.id)?;
-            }
-        }
+        let surface: &mut X11WindowSurface = surface.try_into()?;
+        surface.0.destroy(egl_display, context.0.id)?;
         Ok(())
+    }
+
+    /// See [`crate::Device::destroy_offscreen_surface`].
+    pub fn destroy_offscreen_surface(
+        &self,
+        context: &mut Context,
+        surface: &mut OffscreenSurface,
+    ) -> Result<(), Error> {
+        let egl_display = self.native_connection.egl_display;
+        let context = context.x11()?;
+        let surface: &mut PbufferSurface = surface.try_into()?;
+        surface.0.destroy(&context.1, egl_display, context.0.id)
+    }
+
+    fn destroy_surface(&self, context: &mut Context, surface: &mut Surface) -> Result<(), Error> {
+        match surface {
+            Surface::Window(surface) => self.destroy_window_surface(context, surface),
+            Surface::Offscreen(surface) => self.destroy_offscreen_surface(context, surface),
+        }
     }
 
     /// Destroys a surface texture and returns the underlying surface.
@@ -464,7 +475,7 @@ impl X11Device {
         &self,
         context: &mut Context,
         surface_texture: SurfaceTexture,
-    ) -> Result<Surface, (Error, SurfaceTexture)> {
+    ) -> Result<OffscreenSurface, (Error, SurfaceTexture)> {
         let concrete_context = match context.x11() {
             Ok(concrete_context) => concrete_context,
             Err(error) => return Err((error, surface_texture)),
@@ -472,10 +483,7 @@ impl X11Device {
         let surface_texture: X11SurfaceTexture = surface_texture.try_into()?;
 
         match self.temporarily_make_context_current(context) {
-            Ok(_guard) => Ok(X11Surface(EGLBackedSurface::Buffer(
-                surface_texture.0.destroy(&concrete_context.1),
-            ))
-            .into()),
+            Ok(_guard) => Ok(PbufferSurface(surface_texture.0.destroy(&concrete_context.1)).into()),
             Err(err) => Err((err, surface_texture.into())),
         }
     }
@@ -487,23 +495,25 @@ impl X11Device {
     ///
     /// The supplied context must match the context the surface was created with, or an
     /// `IncompatibleSurface` error is returned.
-    pub fn present_surface(&self, context: &Context, surface: &mut Surface) -> Result<(), Error> {
+    pub fn present_surface(
+        &self,
+        context: &Context,
+        surface: &mut WindowSurface,
+    ) -> Result<(), Error> {
         let context = context.x11()?;
-        let surface: &mut X11Surface = surface.try_into()?;
-        surface
-            .0
-            .present(self.native_connection.egl_display, context.0.egl_context)
+        let X11WindowSurface(surface): &mut X11WindowSurface = surface.try_into()?;
+        surface.present(self.native_connection.egl_display, context.0.egl_context)
     }
 
     /// Resizes a widget surface.
     pub fn resize_surface(
         &self,
         _context: &Context,
-        surface: &mut Surface,
+        surface: &mut WindowSurface,
         size: Size2D<i32>,
     ) -> Result<(), Error> {
-        let surface: &mut X11Surface = surface.try_into()?;
-        surface.0.resize(size);
+        let X11WindowSurface(surface): &mut X11WindowSurface = surface.try_into()?;
+        surface.resize(size);
         Ok(())
     }
 
@@ -521,22 +531,18 @@ impl X11Device {
         SURFACE_GL_TEXTURE_TARGET
     }
 
-    /// Returns various information about the surface, including the framebuffer object needed to
-    /// render to this surface.
-    ///
-    /// Before rendering to a surface attached to a context, you must call `glBindFramebuffer()`
-    /// on the framebuffer object returned by this function. This framebuffer object may or not be
-    /// 0, the default framebuffer, depending on platform.
-    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
-        let surface = surface.x11().expect("Incompatible surface type");
-        surface.0.info()
-    }
-
     /// Returns the OpenGL texture object containing the contents of this surface.
     ///
     /// It is only legal to read from, not write to, this texture object.
     #[inline]
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         surface_texture.x11().ok()?.0.texture_object
+    }
+}
+
+fn egl_surface_into_surface(surface: EGLBackedSurface) -> Surface {
+    match surface {
+        EGLBackedSurface::Window(surface) => Surface::Window(X11WindowSurface(surface).into()),
+        EGLBackedSurface::Buffer(surface) => Surface::Offscreen(PbufferSurface(surface).into()),
     }
 }
