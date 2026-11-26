@@ -16,9 +16,9 @@ use crate::wgl::surface::{
 };
 use crate::windows::surface::{Direct3dBinding, Direct3dSurface, Win32Binding, Win32Surface};
 use crate::{
-    gl, gl_utils, Adapter, AdapterPreferences, Context, ContextAttributeFlags, ContextAttributes,
-    ContextDescriptor, Error, GLApi, GLVersion, Gl, OffscreenSurface, PowerPreference, Surface,
-    SurfaceAccess, SurfaceInfo, SurfaceTexture, WindowSurface,
+    gl, gl_utils, Adapter, AdapterPreferences, BufferHandle, Context, ContextAttributeFlags,
+    ContextAttributes, ContextDescriptor, Error, GLApi, GLVersion, Gl, OffscreenSurface,
+    PowerPreference, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture, WindowSurface,
 };
 use euclid::default::Size2D;
 use glow::HasContext;
@@ -775,10 +775,9 @@ impl WglDevice {
         context: &Context,
         size: &Size2D<i32>,
     ) -> Result<OffscreenSurface, Error> {
-        let dx_interop_functions = match WGL_EXTENSION_FUNCTIONS.dx_interop_functions {
-            None => return Err(Error::RequiredExtensionUnavailable),
-            Some(ref dx_interop_functions) => dx_interop_functions,
-        };
+        if WGL_EXTENSION_FUNCTIONS.dx_interop_functions.is_none() {
+            return Err(Error::RequiredExtensionUnavailable);
+        }
 
         unsafe {
             let _guard = self.temporarily_make_context_current(context)?;
@@ -828,6 +827,26 @@ impl WglDevice {
             assert!(winerror::SUCCEEDED(result));
             assert_ne!(dxgi_share_handle, INVALID_HANDLE_VALUE);
 
+            self.create_surface_from_d3d11_texture(context, size, d3d11_texture, dxgi_share_handle)
+                .map(Into::into)
+        }
+    }
+
+    // Wraps a shareable Direct3D 11 texture in a surface that GL renders to through
+    // `WGL_NV_DX_interop`. The context must be current.
+    unsafe fn create_surface_from_d3d11_texture(
+        &self,
+        context: &Context,
+        size: &Size2D<i32>,
+        d3d11_texture: ComPtr<ID3D11Texture2D>,
+        dxgi_share_handle: HANDLE,
+    ) -> Result<Direct3dSurface, Error> {
+        let dx_interop_functions = WGL_EXTENSION_FUNCTIONS
+            .dx_interop_functions
+            .as_ref()
+            .ok_or(Error::RequiredExtensionUnavailable)?;
+
+        unsafe {
             // Tell GL about the share handle.
             let ok = (dx_interop_functions.DXSetResourceShareHandleNV)(
                 d3d11_texture.as_raw() as *mut c_void,
@@ -891,8 +910,7 @@ impl WglDevice {
                     renderbuffers,
                     destroyed: false,
                 }),
-            }
-            .into())
+            })
         }
     }
 
@@ -1266,6 +1284,51 @@ impl WglDevice {
         surface_texture: &SurfaceTexture,
     ) -> Option<glow::Texture> {
         surface_texture.wgl().ok()?.gl_texture
+    }
+
+    /// Returns the DXGI share handle of the Direct3D 11 texture behind a buffer surface, which
+    /// other devices, graphics APIs or processes can open.
+    pub fn buffer_handle(&self, surface: &OffscreenSurface) -> Result<BufferHandle, Error> {
+        #[allow(unreachable_patterns)]
+        match surface {
+            OffscreenSurface::Direct3d(surface) => {
+                Ok(BufferHandle::D3DTexture(surface.share_handle))
+            }
+            _ => Err(Error::IncompatibleSurface),
+        }
+    }
+
+    /// Creates a buffer surface of the given context that renders into the Direct3D 11 texture
+    /// behind a DXGI share handle.
+    pub fn import_buffer_handle(
+        &self,
+        context: &Context,
+        handle: &BufferHandle,
+    ) -> Result<OffscreenSurface, Error> {
+        let BufferHandle::D3DTexture(dxgi_share_handle) = *handle;
+
+        unsafe {
+            let mut d3d11_texture = ptr::null_mut();
+            let result = self.d3d11_device.OpenSharedResource(
+                dxgi_share_handle,
+                &ID3D11Texture2D::uuidof(),
+                &mut d3d11_texture,
+            );
+            if !winerror::SUCCEEDED(result) || d3d11_texture.is_null() {
+                return Err(Error::SurfaceImportFailed(WindowingApiError::Failed));
+            }
+            let d3d11_texture = ComPtr::from_raw(d3d11_texture as *mut ID3D11Texture2D);
+            let mut d3d11_texture2d_desc = mem::zeroed();
+            d3d11_texture.GetDesc(&mut d3d11_texture2d_desc);
+            let size = Size2D::new(
+                d3d11_texture2d_desc.Width as i32,
+                d3d11_texture2d_desc.Height as i32,
+            );
+
+            let _guard = self.temporarily_make_context_current(context)?;
+            self.create_surface_from_d3d11_texture(context, &size, d3d11_texture, dxgi_share_handle)
+                .map(Into::into)
+        }
     }
 }
 

@@ -18,6 +18,7 @@ pub mod adapter;
 #[cfg(all(windows_platform, feature = "sm-angle"))]
 pub mod angle;
 pub(crate) mod base;
+pub mod buffer_handle;
 #[cfg(macos_platform)]
 pub mod cgl;
 pub mod chains;
@@ -47,6 +48,7 @@ pub mod windows;
 #[cfg(x11_platform)]
 pub mod x11;
 
+pub use crate::buffer_handle::BufferHandle;
 pub use crate::connection::Connection;
 pub use crate::context::{Context, ContextAttributeFlags, ContextAttributes, ContextID};
 pub use crate::context_descriptor::ContextDescriptor;

@@ -2,7 +2,7 @@
 
 use crate::macros::{dispatch, enum_conversion};
 use crate::{
-    Adapter, Context, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi,
+    Adapter, BufferHandle, Context, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi,
     OffscreenSurface, Surface, SurfaceAccess, SurfaceInfo, SurfaceTexture, WindowSurface,
 };
 use euclid::default::Size2D;
@@ -362,5 +362,30 @@ impl Device {
     /// It is only legal to read from, not write to, this texture object.
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         dispatch!(Device, self, device => device.surface_texture_object(surface_texture))
+    }
+
+    // buffer_handle.rs
+
+    /// Returns a native handle to the memory of a buffer surface, which other devices, graphics
+    /// APIs or processes can import.
+    ///
+    /// Not every buffer surface can be shared this way. When this one can't, an
+    /// `UnsupportedOnThisPlatform` or `RequiredExtensionUnavailable` error is returned.
+    pub fn buffer_handle(&self, surface: &OffscreenSurface) -> Result<BufferHandle, Error> {
+        dispatch!(Device, self, device => device.buffer_handle(surface))
+    }
+
+    /// Creates a buffer surface of the given context that renders into the memory behind a native
+    /// handle.
+    ///
+    /// The surface can be bound to the context, or wrapped in a surface texture to read the
+    /// handle's contents. It must be destroyed with `destroy_offscreen_surface()` like any other
+    /// offscreen surface.
+    pub fn import_buffer_handle(
+        &self,
+        context: &Context,
+        handle: &BufferHandle,
+    ) -> Result<OffscreenSurface, Error> {
+        dispatch!(Device, self, device => device.import_buffer_handle(context, handle))
     }
 }

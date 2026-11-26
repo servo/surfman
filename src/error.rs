@@ -47,6 +47,8 @@ pub enum Error {
     SurfaceCreationFailed(WindowingApiError),
     /// The system couldn't import a surface from another thread.
     SurfaceImportFailed(WindowingApiError),
+    /// The system couldn't export a native handle to a surface.
+    SurfaceExportFailed(WindowingApiError),
     /// The system couldn't create a surface texture from a surface.
     SurfaceTextureCreationFailed(WindowingApiError),
     /// The system couldn't present a widget surface.

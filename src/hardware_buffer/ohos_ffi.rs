@@ -124,6 +124,17 @@ extern "C" {
     /// A new `OH_NativeBuffer` instance is created each time this function is called.
     /// NULL is returned if allocation fails.
     pub fn OH_NativeBuffer_Alloc(config: *const OH_NativeBuffer_Config) -> *mut OH_NativeBuffer;
+    /// Gets the config of an `OH_NativeBuffer`.
+    ///
+    /// Since API-9
+    pub fn OH_NativeBuffer_GetConfig(
+        buffer: *mut OH_NativeBuffer,
+        config: *mut OH_NativeBuffer_Config,
+    );
+    /// Increases the reference count of an `OH_NativeBuffer`.
+    ///
+    /// Since API-9
+    pub fn OH_NativeBuffer_Reference(buffer: *mut OH_NativeBuffer) -> i32;
     /// Decreases the reference count of a OH_NativeBuffer and, when the reference count reaches 0,
     /// destroys this OH_NativeBuffer.
     ///
