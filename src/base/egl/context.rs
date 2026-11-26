@@ -296,10 +296,14 @@ impl EGLBackedContext {
     }
 
     pub(crate) fn resize_bound_surface(&mut self, size: Size2D<i32>) -> Result<(), Error> {
-        if let Framebuffer::Surface(surface) = &mut self.framebuffer {
-            surface.resize(size);
+        match &mut self.framebuffer {
+            Framebuffer::Surface(EGLBackedSurface::Window(surface)) => {
+                surface.resize(size);
+                Ok(())
+            }
+            Framebuffer::Surface(EGLBackedSurface::Buffer(_)) => Err(Error::NoWidgetAttached),
+            Framebuffer::None | Framebuffer::External(_) => Ok(()),
         }
-        Ok(())
     }
 
     pub(crate) fn surface_info(&self) -> Result<Option<SurfaceInfo>, Error> {

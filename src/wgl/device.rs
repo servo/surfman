@@ -696,10 +696,14 @@ impl WglDevice {
         size: Size2D<i32>,
     ) -> Result<(), Error> {
         let context: &mut WglContext = context.try_into()?;
-        if let Framebuffer::Surface(surface) = &mut context.framebuffer {
-            surface.resize(size);
+        match &mut context.framebuffer {
+            Framebuffer::Surface(WglSurface::Window(surface)) => {
+                surface.size = size;
+                Ok(())
+            }
+            Framebuffer::Surface(WglSurface::Buffer(_)) => Err(Error::NoWidgetAttached),
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     pub(crate) fn get_context_dc<'a>(&self, context: &'a WglContext) -> DCGuard<'a> {

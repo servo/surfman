@@ -406,14 +406,12 @@ impl Surface {
     }
 
     fn present(&mut self) -> Result<(), Error> {
+        let view_info = self.view_info.as_mut().ok_or(Error::NoWidgetAttached)?;
+
         unsafe {
             CATransaction::begin();
             CATransaction::setDisableActions(true);
 
-            let view_info = match self.view_info {
-                None => return Err(Error::NoWidgetAttached),
-                Some(ref mut view_info) => view_info,
-            };
             mem::swap(&mut view_info.front_surface, &mut self.io_surface);
             view_info
                 .layer
