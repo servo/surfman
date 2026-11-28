@@ -1,5 +1,7 @@
 //! A platform-independent representation of a display device.
 
+#[cfg(any(android_platform, angle, free_unix, ohos_platform))]
+use crate::base::egl::device::EglDevice;
 use crate::macros::{dispatch, enum_conversion};
 use crate::{
     Adapter, Context, ContextAttributes, ContextDescriptor, ContextID, Error, GLApi,
@@ -365,5 +367,54 @@ impl Device {
     /// It is only legal to read from, not write to, this texture object.
     pub fn surface_texture_object(&self, surface_texture: &SurfaceTexture) -> Option<Texture> {
         dispatch!(Device, self, device => device.surface_texture_object(surface_texture))
+    }
+}
+
+#[cfg(any(android_platform, angle, free_unix, ohos_platform))]
+impl EglDevice for Device {
+    fn egl_display(&self) -> *const c_void {
+        match self {
+            #[cfg(all(windows_platform, feature = "sm-angle"))]
+            Device::Angle(device) => device.egl_display,
+            #[cfg(any(android_platform, ohos_platform))]
+            Device::HardwareBuffer(device) => device.egl_display,
+            #[cfg(free_unix)]
+            Device::SurfacelessMesa(device) => device.native_connection.egl_display,
+            #[cfg(wayland_platform)]
+            Device::Wayland(device) => device.native_connection.egl_display,
+            #[cfg(x11_platform)]
+            Device::X11(device) => device.native_connection.egl_display,
+            #[allow(unreachable_patterns)]
+            _ => panic!("Device is not EGL-backed"),
+        }
+    }
+
+    fn egl_context(&self, context: &Context) -> *const c_void {
+        match self {
+            #[cfg(all(windows_platform, feature = "sm-angle"))]
+            Device::Angle(device) => device.native_context(context).egl_context,
+            #[cfg(any(android_platform, ohos_platform))]
+            Device::HardwareBuffer(device) => device.native_context(context).egl_context,
+            #[cfg(free_unix)]
+            Device::SurfacelessMesa(device) => device.native_context(context).egl_context,
+            #[cfg(wayland_platform)]
+            Device::Wayland(device) => device.native_context(context).egl_context,
+            #[cfg(x11_platform)]
+            Device::X11(device) => device.native_context(context).egl_context,
+            #[allow(unreachable_patterns)]
+            _ => panic!("Device is not EGL-backed"),
+        }
+    }
+
+    fn egl_config(&self, context: &Context) -> *const c_void {
+        use crate::base::egl::context::{egl_config_from_id, get_context_attr};
+        use crate::egl::{EGLint, CONFIG_ID};
+
+        let display = self.egl_display();
+        let egl_context = self.egl_context(context);
+        unsafe {
+            let config_id = get_context_attr(display, egl_context, CONFIG_ID as EGLint);
+            egl_config_from_id(display, config_id)
+        }
     }
 }
