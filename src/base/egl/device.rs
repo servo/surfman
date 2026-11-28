@@ -114,6 +114,17 @@ pub(crate) fn lookup_gles_symbol(_: &CStr) -> *const c_void {
     ptr::null()
 }
 
-pub(crate) unsafe fn lookup_egl_extension(name: &CStr) -> *mut c_void {
+/// Get pointer to EGL extension if present
+pub unsafe fn lookup_egl_extension(name: &CStr) -> *mut c_void {
     EGL_FUNCTIONS.with(|egl| mem::transmute(egl.GetProcAddress(name.as_ptr())))
+}
+
+/// Access to the raw EGL objects backing a Surfman device/context.
+pub trait EglDevice {
+    /// Returns the `EGLDisplay` used by this device.
+    fn egl_display(&self) -> *const c_void;
+    /// Returns the `EGLContext` for `context`.
+    fn egl_context(&self, context: &crate::Context) -> *const c_void;
+    /// Returns the `EGLConfig` for `context`.
+    fn egl_config(&self, context: &crate::Context) -> *const c_void;
 }

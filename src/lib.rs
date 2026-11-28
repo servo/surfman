@@ -98,3 +98,6 @@ mod egl {
     pub type NativeWindowType = EGLNativeWindowType;
     include!(concat!(env!("OUT_DIR"), "/egl_bindings.rs"));
 }
+
+#[cfg(any(android_platform, angle, free_unix, ohos_platform))]
+pub use crate::base::egl::device::{lookup_egl_extension, EglDevice};
